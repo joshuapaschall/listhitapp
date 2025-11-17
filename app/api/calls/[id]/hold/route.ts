@@ -3,7 +3,7 @@ import { TELNYX_API_URL, telnyxHeaders } from "@/lib/telnyx"
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const body = await req.json().catch(() => ({} as any))
-  const { hold } = body || {}
+  const { hold, action } = body || {}
   const id = params.id
 
   if (!id)
@@ -11,10 +11,13 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       { error: "Missing session id" },
       { status: 400 }
     )
-  const callMap = global.callMap || (global.callMap = new Map());
-  const callControlId = callMap.get(id);
 
-  if (hold) {
+  const callMap = global.callMap || (global.callMap = new Map());
+  const callControlId = callMap.get(id) || id;
+
+  const shouldHold = typeof hold === "boolean" ? hold : action === "hold";
+
+  if (shouldHold) {
     const r = await fetch(`${TELNYX_API_URL}/calls/${callControlId}/actions/playback_start`, {
       method: "POST",
       headers: telnyxHeaders(),

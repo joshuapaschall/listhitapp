@@ -1247,15 +1247,28 @@ export function AgentTelnyxProvider({
   //   return null;
   // };
   const toggleHold = async () => {
-    // if (!activeCall || !customerLegId) return;
     if (!activeCall) return;
-    console.log("----------------------------", activeCall.telnyxIDs.telnyxSessionId)
+
+    const telnyxSessionId = (activeCall as any)?.telnyxIDs?.telnyxSessionId || (activeCall as any)?.telnyxSessionId;
+    const callControlId = (activeCall as any)?.telnyxIDs?.telnyxCallControlId || telnyxSessionId || activeCall.id;
+
+    if (!callControlId) {
+      console.error("❌ No call identifier available for hold toggle");
+      return;
+    }
+
     try {
-      await fetch(`/api/calls/${activeCall.telnyxIDs.telnyxSessionId}/hold`, {
+      const response = await fetch(`/api/calls/${callControlId}/hold`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ hold: !isOnHold }),
       });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || "Failed to toggle hold music");
+      }
+
       if (isOnHold) {
         await activeCall.unhold();
         setIsOnHold(false);
