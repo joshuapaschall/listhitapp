@@ -1,0 +1,2 @@
+ALTER TABLE calls
+ADD COLUMN IF NOT EXISTS notes text;

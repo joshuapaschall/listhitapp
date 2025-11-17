@@ -1,0 +1,117 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222.2 84% 4.9%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 142 71% 45%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 240 5% 10%;
+    --foreground: 210 40% 98%;
+    --card: 240 5% 12%;
+    --card-foreground: 210 40% 98%;
+    --popover: 240 4% 16%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 209 100% 50%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4% 20%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 240 4% 25%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 180 70% 40%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 72% 50%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 240 5% 26%;
+    --input: 240 5% 26%;
+    --ring: 212 91% 69%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: Arial, Helvetica, sans-serif;
+  }
+}
+
+@layer utilities {
+  .text-primary {
+    @apply text-gray-900 dark:text-gray-200;
+  }
+  .text-secondary {
+    @apply text-gray-500 dark:text-gray-400;
+  }
+  .text-heading {
+    @apply text-gray-900 dark:text-gray-50 font-semibold;
+  }
+  .text-body {
+    @apply text-gray-700 dark:text-gray-300;
+  }
+  .text-muted {
+    @apply text-gray-400 dark:text-gray-500;
+  }
+  .row-base {
+    @apply even:bg-white odd:bg-gray-50 hover:bg-gray-100 dark:hover:bg-white/5 dark:even:bg-transparent dark:odd:bg-transparent transition-colors;
+  }
+  .tr-hover {
+    @apply hover:bg-white/5 transition-colors;
+  }
+  .divider-row {
+    @apply border-t border-white/10;
+  }
+  .sidebar-panel {
+    @apply bg-gray-100 border-r border-gray-200 dark:bg-gray-950 dark:border-gray-800;
+  }
+  .sidebar-dark {
+    @apply dark:bg-gray-950 shadow-lg;
+  }
+  .btn-primary {
+    @apply px-4 py-3 bg-sky-600 text-white hover:bg-sky-700 active:scale-95 active:shadow-none shadow-sm transition;
+  }
+  .btn-secondary {
+    @apply px-4 py-3 bg-sky-50 text-sky-700 hover:bg-sky-100 active:scale-95 active:shadow-none shadow-sm transition;
+  }
+  .btn-ghost {
+    @apply px-4 py-3 border border-gray-300 text-gray-700 hover:bg-gray-50 active:scale-95 active:shadow-none transition;
+  }
+  .chip {
+    @apply rounded-full px-2 py-0.5 text-xs font-medium transition-opacity duration-150;
+  }
+  .chip-blue {
+    @apply bg-sky-100 text-sky-700 dark:bg-blue-900 dark:text-sky-100;
+  }
+  .chip-green {
+    @apply bg-emerald-100 text-emerald-700;
+  }
+  .chip-orange {
+    @apply bg-orange-100 text-orange-700;
+  }
+  .card-shadow {
+    @apply shadow-[0_1px_3px_rgba(0,0,0,0.06),0_1px_2px_rgba(0,0,0,0.04)];
+  }
+}

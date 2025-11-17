@@ -1,0 +1,998 @@
+"use client";
+
+import { useState, useEffect, useRef, useCallback } from "react";
+import EmojiPicker from "emoji-picker-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import { TemplateService } from "@/services/template-service";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Mic,
+  Image as ImageIcon,
+  Tag,
+  Clipboard,
+  Smile,
+  Clock,
+  X,
+  AlertCircle,
+} from "lucide-react";
+import Image from "next/image";
+import { insertText, cn } from "@/lib/utils";
+import { calculateSmsSegments } from "@/lib/sms-utils";
+import {
+  supabase,
+  type MessageThread,
+  type Message,
+  type Buyer,
+} from "@/lib/supabase";
+import EditBuyerModal from "@/components/buyers/edit-buyer-modal";
+import AddBuyerModal from "@/components/buyers/add-buyer-modal";
+import { toast } from "sonner";
+import useHotkeys from "@/hooks/use-hotkeys";
+import CampaignService from "@/services/campaign-service";
+import { BuyerService } from "@/services/buyer-service";
+import { type ThreadWithBuyer } from "@/services/message-service";
+import {
+  ALLOWED_MMS_EXTENSIONS,
+  MAX_MMS_SIZE,
+  uploadMediaFile,
+} from "@/utils/uploadMedia";
+import VoiceRecorder from "@/components/voice/VoiceRecorder";
+import UploadModal from "./upload-modal";
+
+function parseMedia(val: any): string[] {
+  if (!val) return [];
+  if (Array.isArray(val)) return val;
+  if (typeof val === "string") {
+    try {
+      const arr = JSON.parse(val);
+      if (Array.isArray(arr)) return arr;
+    } catch {}
+    const cleaned = val.replace(/[{}\"]/g, "");
+    if (!cleaned) return [];
+    return cleaned.split(/,\s*/);
+  }
+  return [];
+}
+
+function isPlayableAudioUrl(u: string) {
+  try {
+    const base = u.split("?")[0].toLowerCase()
+    return /(\.mp3|\.m4a|\.wav|\.ogg|\.opus|\.oga|\.webm|\.weba)(\?.*)?$/.test(base)
+  } catch {
+    return false
+  }
+}
+
+function isMp3Url(u: string) {
+  try {
+    return u.split("?")[0].toLowerCase().endsWith(".mp3")
+  } catch {
+    return false
+  }
+}
+
+function parseAudioUrl(val: any): string | null {
+  if (!val) return null
+  const tryUrl = (u: string) => (isMp3Url(u) ? u : null)
+  if (Array.isArray(val)) return tryUrl(val[0])
+  if (typeof val === "string") {
+    const trimmed = val.trim()
+    if (!trimmed) return null
+    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+      try {
+        const arr = JSON.parse(trimmed)
+        if (Array.isArray(arr) && arr[0]) return tryUrl(arr[0])
+      } catch {}
+    }
+    return tryUrl(trimmed)
+  }
+  return null
+}
+
+function MediaAttachment({ url }: { url: string }) {
+  const [src, setSrc] = useState(url)
+  const [error, setError] = useState<string | null>(null)
+  const isImage = /(\.jpg|\.jpeg|\.png|\.gif|\.bmp|\.webp)$/i.test(src)
+  const isVideo = /(\.mp4|\.webm)$/i.test(src)
+  const isMp3 = isMp3Url(src)
+  const needsConvert = /(\.amr|\.webm|\.weba|\.3gp|\.wav|\.ogg|\.opus|\.oga)(\?.*)?$/i.test(src)
+
+  useEffect(() => {
+    const convert = async () => {
+      try {
+        const res = await fetch("/api/media/convert", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url, direction: "incoming" }),
+        })
+        if (res.ok) {
+          const data = await res.json()
+          if (data.url) setSrc(data.url)
+        } else {
+          const data = await res.json().catch(() => ({}))
+          setError(data.error || "Media conversion failed")
+        }
+      } catch (err) {
+        console.error(err)
+        setError("Media conversion failed")
+        toast.error("Media conversion failed")
+      }
+    }
+    if (needsConvert) convert()
+  }, [needsConvert, url])
+
+  let content
+  if (isImage) {
+    content = (
+      <Image
+        src={src}
+        alt="attachment"
+        width={300}
+        height={300}
+        loading="lazy"
+        className="rounded-md max-w-[300px]"
+      />
+    )
+  } else if (isVideo) {
+    content = (
+      <video controls src={src} className="w-full mt-2" crossOrigin="anonymous" />
+    )
+  } else if (isMp3) {
+    content = (
+      <audio
+        controls
+        src={src}
+        preload="none"
+        style={{ maxWidth: "100%" }}
+        className="rounded-xl w-full bg-white shadow"
+      />
+    )
+  } else {
+    content = src.endsWith(".mp3") ? (
+      <audio
+        controls
+        src={src}
+        preload="none"
+        style={{ maxWidth: "100%" }}
+        className="rounded-xl w-full bg-white shadow"
+      />
+    ) : (
+      <a href={src} target="_blank" rel="noopener noreferrer">
+        Download
+      </a>
+    )
+  }
+
+  return (
+    <div>
+      {content}
+      {error && (
+        <div
+          data-testid="convert-error"
+          className="mt-1 flex items-center gap-1 text-sm text-destructive"
+        >
+          <AlertCircle className="h-4 w-4" />
+          <span>{error}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+interface ConversationPaneProps {
+  thread: MessageThread | null;
+}
+
+interface LocalMessage extends Message {
+  status?: "sending" | "failed";
+  localId?: string;
+  error?: string;
+  subject?: string | null;
+  type?: "sms" | "email" | "event" | string;
+}
+
+export default function ConversationPane({ thread }: ConversationPaneProps) {
+  const [messages, setMessages] = useState<LocalMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [templates, setTemplates] = useState<
+    { id: string; name: string; message: string }[]
+  >([]);
+  const [showEmoji, setShowEmoji] = useState(false);
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const hasOversize = attachments.some((f) => f.size > MAX_MMS_SIZE);
+  const [buyer, setBuyer] = useState<Buyer | null>(null);
+  const [showEdit, setShowEdit] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState<Date | null>(null);
+  const [scheduleTime, setScheduleTime] = useState("");
+  const [schedulePicker, setSchedulePicker] = useState(false);
+  const [showRecorder, setShowRecorder] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [showUpload, setShowUpload] = useState(false);
+  const endRef = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    TemplateService.listTemplates().then(setTemplates);
+  }, []);
+
+  useEffect(() => {
+    if (!thread) {
+      setBuyer(null);
+      return;
+    }
+    const loadBuyer = async () => {
+      const { data, error } = await supabase
+        .from("buyers")
+        .select("id,fname,lname,full_name,can_receive_sms,status")
+        .eq("id", thread.buyer_id);
+      if (!error && data && data[0]) setBuyer(data[0] as Buyer);
+    };
+    loadBuyer();
+  }, [thread]);
+
+  useEffect(() => {
+    if (!thread || !thread.unread) return;
+    supabase
+      .from("message_threads")
+      .update({ unread: false })
+      .eq("id", thread.id)
+      .then(() => {
+        const tabs = ["inbox", "unread", "starred", "sent", "autosent"];
+        tabs.forEach((t) => {
+          queryClient.setQueryData<ThreadWithBuyer[]>(
+            ["message-threads", t],
+            (old) =>
+              old
+                ? old.map((th) =>
+                    th.id === thread.id ? { ...th, unread: false } : th,
+                  )
+                : old,
+          );
+        });
+        queryClient.invalidateQueries({ queryKey: ["message-threads"] });
+      });
+  }, [thread, queryClient]);
+
+  useEffect(() => {
+    if (!thread) return;
+    const load = async () => {
+      const { data, error } = await supabase
+        .from("messages")
+        .select("*")
+        .eq("thread_id", thread.id)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: true });
+      let msgs: LocalMessage[] = [];
+      if (!error) msgs = data as LocalMessage[];
+
+      const { data: emails } = await supabase
+        .from("email_messages")
+        .select("id,thread_id,buyer_id,subject,preview,sent_at")
+        .eq("buyer_id", thread.buyer_id)
+        .order("sent_at", { ascending: true });
+      const emailMsgs = (emails || []).map((e) => ({
+        id: e.id,
+        thread_id: thread.id,
+        buyer_id: e.buyer_id,
+        direction: "email",
+        from_number: null,
+        to_number: null,
+        body: e.preview,
+        provider_id: null,
+        is_bulk: false,
+        filtered: false,
+        created_at: e.sent_at,
+        deleted_at: null,
+        subject: e.subject,
+        type: "email",
+      })) as LocalMessage[];
+
+      const all = [...msgs, ...emailMsgs]
+        .map((m) => ({ ...m, media_urls: parseMedia((m as any).media_urls) }))
+        .sort(
+          (a, b) =>
+            new Date(a.created_at).getTime() -
+            new Date(b.created_at).getTime(),
+        );
+
+      if (
+        thread.campaign_id &&
+        all.length &&
+        all[0].direction === "inbound" &&
+        !all.some((m) => m.is_bulk)
+      ) {
+        const nums = [thread.phone_number];
+        if (thread.phone_number.length === 10)
+          nums.push(`+1${thread.phone_number}`);
+        else nums.push(`+${thread.phone_number}`);
+
+        const { data: bulk } = await supabase
+          .from("messages")
+          .select("*")
+          .eq("buyer_id", thread.buyer_id)
+          .eq("is_bulk", true)
+          .in("to_number", nums)
+          .lt("created_at", all[0].created_at)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (bulk && !all.find((m) => m.id === bulk.id)) {
+          all.unshift(bulk as LocalMessage);
+        }
+      }
+
+      setMessages(all);
+    };
+    load();
+
+    const channel = supabase
+      .channel(`thread-${thread.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `thread_id=eq.${thread.id}`,
+        },
+        (payload) => {
+          const msg = payload.new as Message;
+          const parsed = {
+            ...msg,
+            media_urls: parseMedia((msg as any).media_urls),
+          } as Message;
+          setMessages((prev) => {
+            const idx = prev.findIndex(
+              (m) => m.provider_id && m.provider_id === msg.provider_id,
+            );
+            if (idx >= 0) {
+              const arr = [...prev];
+              arr[idx] = parsed as LocalMessage;
+              return arr;
+            }
+            return [...prev, parsed as LocalMessage];
+          });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [thread]);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const insertPlaceholder = (text: string) => {
+    if (!textareaRef.current) return;
+    const { value, position } = insertText(
+      input,
+      text,
+      textareaRef.current.selectionStart,
+      textareaRef.current.selectionEnd,
+    );
+    setInput(value);
+    requestAnimationFrame(() => {
+      textareaRef.current?.setSelectionRange(position, position);
+      textareaRef.current?.focus();
+    });
+  };
+
+
+  const removeAttachment = (idx: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const sendMessage = useCallback(async () => {
+    if (!thread || (!input.trim() && attachments.length === 0)) return;
+    for (const file of attachments) {
+      const ext = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
+      if (!ALLOWED_MMS_EXTENSIONS.includes(ext)) {
+        toast.error(`Unsupported file type: ${file.name}`);
+        return;
+      }
+      if (file.size > MAX_MMS_SIZE) {
+        toast.error(`File ${file.name} exceeds 1MB limit`);
+        return;
+      }
+    }
+
+    const uploadFiles = async () => {
+      const urls: string[] = []
+      for (const file of attachments) {
+        let url = await uploadMediaFile(file, "outgoing")
+        const lower = file.name.toLowerCase()
+        const needsConvert =
+          /(\.amr|\.webm|\.weba|\.3gp|\.wav|\.ogg|\.opus|\.oga)$/.test(lower)
+        if (needsConvert) {
+          try {
+            const res = await fetch("/api/media/convert", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ url, direction: "outgoing" }),
+            })
+            if (res.ok) {
+              const data = await res.json()
+              if (data.url) url = data.url
+            }
+          } catch (err) {
+            console.error("convert failed", err)
+            toast.error("Media conversion failed")
+          }
+        }
+        urls.push(url)
+      }
+      return urls
+    }
+
+    if (scheduleDate) {
+      try {
+        const mediaUrls = await uploadFiles();
+        const name =
+          buyer?.full_name ||
+          `${buyer?.fname || ""} ${buyer?.lname || ""}`.trim() ||
+          "Unnamed";
+        const campaign = await CampaignService.createCampaign({
+          name: `SMS to ${name}`,
+          channel: "sms",
+          message: input.trim(),
+          mediaUrls,
+          buyerIds: [thread.buyer_id],
+          groupIds: [],
+          sendToAllNumbers: true,
+        });
+        const dtString = `${scheduleDate
+          .toISOString()
+          .split("T")[0]}T${scheduleTime || "00:00"}:00`;
+        await CampaignService.schedule(
+          campaign.id,
+          new Date(dtString).toISOString(),
+        );
+        toast.success("Message scheduled");
+        setInput("");
+        setAttachments([]);
+        setScheduleDate(null);
+        setScheduleTime("");
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to schedule message");
+      }
+      return;
+    }
+
+    const mediaUrls = await uploadFiles();
+    const tempId = `temp-${Date.now()}`;
+    const pending: LocalMessage = {
+      id: tempId,
+      localId: tempId,
+      thread_id: thread.id,
+      buyer_id: thread.buyer_id,
+      direction: "outbound",
+      from_number: null,
+      to_number: thread.phone_number,
+      body: input.trim(),
+      provider_id: null,
+      is_bulk: false,
+      filtered: false,
+      created_at: new Date().toISOString(),
+      status: "sending",
+      media_urls: mediaUrls.length ? mediaUrls : null,
+    };
+    setMessages((prev) => [...prev, pending]);
+    setInput("");
+    setAttachments([]);
+    try {
+      const res = await fetch("/api/messages/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          buyerId: thread.buyer_id,
+          to: thread.phone_number,
+          body: pending.body,
+          mediaUrls,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed");
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.localId === tempId ? { ...m, provider_id: data.sid } : m,
+        ),
+      );
+    } catch (err) {
+      console.error(err);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.localId === tempId
+            ? { ...m, status: "failed", error: (err as Error).message }
+            : m,
+        ),
+      );
+      toast.error((err as Error).message || "Failed to send message");
+    }
+  }, [thread, input, scheduleDate, scheduleTime, buyer, attachments]);
+
+  const retryMessage = async (msg: LocalMessage) => {
+    if (!thread) return;
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.localId === msg.localId ? { ...m, status: "sending" } : m,
+      ),
+    );
+    try {
+      const res = await fetch("/api/messages/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          buyerId: thread.buyer_id,
+          to: thread.phone_number,
+          body: msg.body,
+          mediaUrls: msg.media_urls || [],
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed");
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.localId === msg.localId ? { ...m, provider_id: data.sid } : m,
+        ),
+      );
+    } catch (err) {
+      console.error(err);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.localId === msg.localId
+            ? { ...m, status: "failed", error: (err as Error).message }
+            : m,
+        ),
+      );
+      toast.error((err as Error).message || "Failed to send message");
+    }
+  };
+
+  useHotkeys("mod+enter", () => sendMessage(), [sendMessage]);
+
+  if (!thread) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-muted-foreground">
+        Select a conversation
+      </div>
+    );
+  }
+
+  const name = buyer
+    ? buyer.full_name || `${buyer.fname || ""} ${buyer.lname || ""}`.trim() || "Unnamed"
+    : thread.phone_number;
+  const { segments: smsSegments, remaining } = calculateSmsSegments(input);
+
+  const handleBlock = async () => {
+    if (!thread || !thread.buyer_id) return;
+    const { error } = await supabase
+      .from("buyers")
+      .update({ status: "blocked" })
+      .eq("id", thread.buyer_id);
+    if (error) {
+      console.error(error);
+      toast.error("Failed to block buyer");
+    } else {
+      setBuyer((b) => (b ? { ...b, status: "blocked" } : b));
+      toast.success("Buyer blocked");
+    }
+  };
+
+  const handleUnsubscribe = async () => {
+    if (!thread || !thread.buyer_id) return;
+    try {
+      await BuyerService.unsubscribeBuyer(thread.buyer_id);
+      setBuyer((b) =>
+        b ? { ...b, can_receive_sms: false, can_receive_email: false } : b,
+      );
+      toast.success("Buyer unsubscribed");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to unsubscribe");
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!thread) return;
+    const ts = new Date().toISOString();
+    const { error: msgErr } = await supabase
+      .from("messages")
+      .update({ deleted_at: ts })
+      .eq("thread_id", thread.id);
+    const { error: threadErr } = await supabase
+      .from("message_threads")
+      .update({ deleted_at: ts })
+      .eq("id", thread.id);
+    if (msgErr || threadErr) {
+      console.error(msgErr || threadErr);
+      toast.error("Failed to delete conversation");
+    } else {
+      setMessages([]);
+      toast.success("Conversation deleted");
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-full min-h-0">
+      <div className="border-b p-2 flex items-center justify-between sticky top-0 bg-background z-10">
+        <span className="font-medium">{name}</span>
+        <div className="flex items-center gap-2">
+          {buyer ? (
+            <Button variant="outline" size="sm" onClick={() => setShowEdit(true)}>
+              Info
+            </Button>
+          ) : (
+            <Button variant="outline" size="sm" onClick={() => setShowAdd(true)}>
+              Add Buyer
+            </Button>
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon">
+                <span className="sr-only">Actions</span>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
+                  <path d="M12 7a2 2 0 110-4 2 2 0 010 4zm0 2a2 2 0 100 4 2 2 0 000-4zm0 6a2 2 0 100 4 2 2 0 000-4z" />
+                </svg>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={handleBlock}>Block</DropdownMenuItem>
+              <DropdownMenuItem onSelect={handleUnsubscribe}>
+                Unsubscribe
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="text-destructive focus:bg-destructive/20"
+                onSelect={handleDelete}
+              >
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2">
+        {messages.map((m) => {
+          if (m.direction === "event") {
+            const upper = m.body.toUpperCase();
+            let eventText = m.body;
+            if (upper.startsWith("UNSUBSCRIBED")) {
+              eventText = `${name} unsubscribed`;
+            } else if (upper.startsWith("MISSED CALL")) {
+              eventText = `Missed call from ${name}`;
+            } else if (upper.startsWith("CALL")) {
+              const match = m.body.match(/\(([^)]+)\)/);
+              const dur = match ? match[1] : "";
+              eventText = `${name} called you${dur ? ` (${dur})` : ""}`;
+            }
+            return (
+              <div
+                key={m.id}
+                className="mx-auto flex w-fit max-w-[75%] flex-col items-center rounded-md bg-muted px-2 py-1"
+              >
+                <span className="text-[10px] uppercase text-muted-foreground">{eventText}</span>
+                <span className="mt-1 text-xs text-muted-foreground">
+                  {new Date(m.created_at).toLocaleString()}
+                </span>
+              </div>
+            );
+          }
+          if (m.direction === "email") {
+            return (
+              <div
+                key={m.id}
+                className="mx-auto flex w-fit max-w-[75%] flex-col items-center rounded-md bg-muted px-2 py-1"
+              >
+                <span className="text-[10px] uppercase text-muted-foreground">EMAIL SENT</span>
+                {m.subject && <span className="text-xs font-medium">{m.subject}</span>}
+                {m.body && (
+                  <span className="text-xs text-muted-foreground">{m.body}</span>
+                )}
+                <span className="mt-1 text-xs text-muted-foreground">
+                  {new Date(m.created_at).toLocaleString()}
+                </span>
+              </div>
+            );
+          }
+          const isOutbound = m.direction === "outbound";
+          const time = new Date(m.created_at).toLocaleTimeString([], {
+            hour: "numeric",
+            minute: "2-digit",
+          });
+          const prefix = isOutbound ? "You" : buyer?.fname || name.split(" ")[0];
+          const bubbleClass = cn(
+            "w-fit max-w-[75%] break-words rounded-xl px-3 py-2 text-sm",
+            isOutbound
+              ? m.status === "failed"
+                ? "ml-auto bg-red-200 text-red-900"
+                : "ml-auto bg-primary text-primary-foreground"
+              : "bg-muted text-foreground",
+          );
+          const audioSrc = parseAudioUrl((m as any).audioUrl || (m as any).audio_url)
+          const Status = (
+            <>
+              {m.status === "sending" && (
+                <span className="ml-2 text-xs text-muted-foreground">Sending...</span>
+              )}
+              {m.status === "failed" && (
+                <button
+                  className="ml-2 text-xs underline"
+                  onClick={() => retryMessage(m)}
+                >
+                  Retry
+                </button>
+              )}
+              {m.error && (
+                <div className="mt-1 text-xs text-red-700">{m.error}</div>
+              )}
+            </>
+          );
+          return (
+            <div key={m.id} className="flex flex-col">
+              {(m.media_urls && m.media_urls.length > 0) || audioSrc ? (
+                <div className={bubbleClass}>
+                  <div className="space-y-1">
+                    {audioSrc && (
+                      <audio controls className="rounded-xl w-full max-w-xs bg-white shadow">
+                        <source src={audioSrc} type="audio/mpeg" />
+                        Your browser does not support the audio element.
+                      </audio>
+                    )}
+                    {m.media_urls?.map((url, idx) => (
+                      <MediaAttachment key={idx} url={url} />
+                    ))}
+                  </div>
+                  {!m.body && Status}
+                </div>
+              ) : null}
+              {m.body && (
+                <div className={cn(bubbleClass, m.media_urls?.length ? "mt-1" : "")}>
+                  <span>{m.body}</span>
+                  {Status}
+                </div>
+              )}
+              <div
+                className={cn(
+                  "mt-1 text-xs text-muted-foreground",
+                  isOutbound && "text-right",
+                )}
+              >
+                {prefix} • {time}
+              </div>
+            </div>
+              );
+        })}
+        <div ref={endRef} />
+      </div>
+      <div className="border-t p-2 space-y-2 sticky bottom-0 bg-background">
+        <Textarea
+          ref={textareaRef}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          rows={3}
+          className="w-full min-h-[96px]"
+        />
+        <div className="border-t pt-2 flex gap-2 flex-wrap">
+          <DropdownMenu open={showEmoji} onOpenChange={setShowEmoji}>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon">
+                <Smile className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="p-0">
+              <EmojiPicker
+                onEmojiClick={(e) => insertPlaceholder(e.emoji)}
+                width="100%"
+                height={300}
+                searchDisabled
+                lazyLoadEmojis
+              />
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon">
+                <Clipboard className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              {templates.map((t) => (
+                <DropdownMenuItem
+                  key={t.id}
+                  onSelect={() => setInput(t.message)}
+                >
+                  {t.name}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon">
+                <Tag className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem
+                onSelect={() => insertPlaceholder("{{first_name}}")}
+              >
+                First Name
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => insertPlaceholder("{{last_name}}")}
+              >
+                Last Name
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button
+            aria-label="Upload files"
+            variant="outline"
+            size="icon"
+            onClick={() => setShowUpload(true)}
+          >
+            <ImageIcon className="h-4 w-4" />
+          </Button>
+          <Button
+            aria-label="Record voice"
+            variant="outline"
+            size="icon"
+            onClick={() => setShowRecorder(true)}
+          >
+            <Mic className="h-4 w-4" />
+          </Button>
+          <Popover open={schedulePicker} onOpenChange={setSchedulePicker}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="icon">
+                <Clock className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 space-y-2">
+              <Calendar
+                mode="single"
+                selected={scheduleDate ?? undefined}
+                onSelect={setScheduleDate}
+              />
+              <Input
+                id="schedule-time"
+                name="schedule-time"
+                type="time"
+                value={scheduleTime}
+                onChange={(e) => setScheduleTime(e.target.value)}
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
+        {attachments.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-2">
+          {attachments.map((file, idx) => {
+            const lower = file.name.toLowerCase();
+            const isImg =
+              file.type.startsWith("image/") || /(jpg|jpeg|png|gif|bmp|webp)$/.test(lower);
+            const isVideo =
+              file.type.startsWith("video/") ||
+              (!file.type.startsWith("audio/") && /(mp4|webm)$/.test(lower));
+            // use isPlayableAudioUrl so webm recordings preview correctly
+            const isPlayableAudio = isPlayableAudioUrl(lower);
+            const isAudio =
+              file.type.startsWith("audio/") ||
+              /(m4a|mp3|wav|ogg|opus|oga|webm|mp4)$/.test(lower);
+            const url = URL.createObjectURL(file);
+            return (
+              <div key={idx} className="relative inline-block">
+                {isImg ? (
+                  <Image
+                    src={url}
+                    alt="preview"
+                    width={128}
+                    height={128}
+                    className="max-h-32 rounded-md"
+                  />
+                ) : isVideo ? (
+                  <video controls className="max-h-32" src={url} crossOrigin="anonymous" />
+                ) : isPlayableAudio ? (
+                  <audio controls className="max-h-32" src={url} crossOrigin="anonymous" />
+                ) : isAudio ? (
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-xs underline"
+                  >
+                    {file.name}
+                  </a>
+                ) : (
+                  <span className="block text-xs">{file.name}</span>
+                )}
+                <X
+                  className="h-4 w-4 absolute -right-2 -top-2 bg-white dark:bg-gray-800 rounded-full cursor-pointer"
+                  onClick={() => removeAttachment(idx)}
+                />
+              </div>
+            );
+          })}
+          </div>
+        )}
+        <div
+          className={`flex justify-between text-xs ${smsSegments > 1 ? "text-red-600" : "text-muted-foreground"}`}
+        >
+          <span>
+            {remaining} characters remaining · {smsSegments} segment
+            {smsSegments > 1 ? "s" : ""}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          {hasOversize && (
+            <span className="text-xs text-red-600 mr-2">Remove files over 1MB</span>
+          )}
+          <Button
+            size="sm"
+            onClick={sendMessage}
+            disabled={!input.trim() && attachments.length === 0 || hasOversize}
+          >
+            Send
+          </Button>
+        </div>
+      </div>
+      <EditBuyerModal
+        open={showEdit}
+        onOpenChange={setShowEdit}
+        buyer={buyer}
+        onSuccess={() => {
+          if (buyer) setBuyer(buyer);
+        }}
+      />
+      <AddBuyerModal
+        open={showAdd}
+        onOpenChange={setShowAdd}
+        initialPhone={thread.phone_number}
+        onSuccessAction={async (b) => {
+          if (!thread) return;
+          await supabase
+            .from("message_threads")
+            .update({ buyer_id: b.id })
+            .eq("id", thread.id);
+          setBuyer(b);
+          queryClient.invalidateQueries({ queryKey: ["message-threads"] });
+        }}
+      />
+      <VoiceRecorder
+        open={showRecorder}
+        onOpenChange={setShowRecorder}
+        onSave={(file) =>
+          setAttachments((prev) => [...prev, file])
+        }
+      />
+      <UploadModal
+        open={showUpload}
+        onOpenChange={setShowUpload}
+        onAddFiles={(files) =>
+          setAttachments((prev) => [...prev, ...files])
+        }
+      />
+    </div>
+  );
+}

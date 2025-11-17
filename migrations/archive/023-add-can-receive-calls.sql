@@ -1,0 +1,3 @@
+ALTER TABLE buyers
+ADD COLUMN IF NOT EXISTS can_receive_calls BOOLEAN DEFAULT TRUE;
+
