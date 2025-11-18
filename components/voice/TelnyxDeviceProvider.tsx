@@ -58,7 +58,6 @@ function TelnyxDeviceProvider({ children }: { children: ReactNode }) {
 
   const activeCallRef = useRef(activeCall);
   const holdMusicRef = useRef<HTMLAudioElement | null>(null);
-  const playbackIdRef = useRef<string | null>(null);
   const clientIdRef = useRef<string | null>(null);
   useEffect(() => { activeCallRef.current = activeCall; }, [activeCall]);
 
@@ -475,11 +474,6 @@ function TelnyxDeviceProvider({ children }: { children: ReactNode }) {
                 holdMusicRef.current.pause();
                 holdMusicRef.current.currentTime = 0;
                 console.log("🔕 Stopped hold music on call end");
-              }
-              
-              // Clear playback ID
-              if (playbackIdRef.current) {
-                playbackIdRef.current = null;
               }
               
               // Clean up remote audio element
@@ -1125,49 +1119,21 @@ function TelnyxDeviceProvider({ children }: { children: ReactNode }) {
     
     try {
       console.log("⏸️ Putting call on hold");
-      
-      // Step 1: Put the call on hold (mutes the connection)
+
       const holdResponse = await fetch(`/api/calls/${callControlId}/hold`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "hold" }),
       });
-      
+
       if (!holdResponse.ok) {
         const error = await holdResponse.json();
         throw new Error(error.error || "Failed to hold call");
       }
-      
-      console.log("✅ Call on hold");
-      
-      // Step 2: Start playing hold music to the OTHER party
-      // Option 1: Use environment variable for public URL (ngrok, production domain, etc)
-      // Option 2: Use a direct CDN URL for the hold music
-      const publicHoldMusicUrl = process.env.HOLD_MUSIC_URL || 
-                                process.env.NEXT_PUBLIC_BASE_URL 
-                                  ? `${process.env.NEXT_PUBLIC_BASE_URL}/sounds/hold-music.mp3`
-                                  : `${window.location.origin}/sounds/hold-music.mp3`;
-      
-      const playbackResponse = await fetch(`/api/calls/${callControlId}/playback`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          action: "start",
-          audio_url: publicHoldMusicUrl,
-          loop: "infinity",
-          target_legs: "opposite" // Play to the other party only
-        }),
-      });
-      
-      if (playbackResponse.ok) {
-        const playbackData = await playbackResponse.json();
-        playbackIdRef.current = playbackData.playback_id;
-        console.log("🎵 Playing hold music to other party, playback ID:", playbackIdRef.current);
-      } else {
-        console.warn("Failed to start hold music playback");
-      }
-      
-      // Step 3: Also play hold music locally for the agent (optional)
+
+      console.log("✅ Call on hold with hold music started");
+
+      // Step 2: Also play hold music locally for the agent (optional)
       if (!holdMusicRef.current) {
         try {
           const holdMusic = new Audio('/sounds/hold-music.mp3');
@@ -1236,25 +1202,7 @@ function TelnyxDeviceProvider({ children }: { children: ReactNode }) {
     try {
       console.log("▶️ Resuming call");
       
-      // Step 1: Stop the hold music playback to the other party
-      if (playbackIdRef.current) {
-        try {
-          const stopPlaybackResponse = await fetch(`/api/calls/${callControlId}/playback`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "stop" }),
-          });
-          
-          if (stopPlaybackResponse.ok) {
-            console.log("🔕 Stopped hold music for other party");
-          }
-        } catch (err) {
-          console.warn("Failed to stop playback:", err);
-        }
-        playbackIdRef.current = null;
-      }
-      
-      // Step 2: Unhold the call
+      // Unhold the call and stop remote hold music
       const response = await fetch(`/api/calls/${callControlId}/hold`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
