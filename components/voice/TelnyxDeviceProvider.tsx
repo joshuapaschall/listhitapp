@@ -58,7 +58,6 @@ function TelnyxDeviceProvider({ children }: { children: ReactNode }) {
 
   const activeCallRef = useRef(activeCall);
   const holdMusicRef = useRef<HTMLAudioElement | null>(null);
-  const playbackIdRef = useRef<string | null>(null);
   const clientIdRef = useRef<string | null>(null);
   useEffect(() => { activeCallRef.current = activeCall; }, [activeCall]);
 
@@ -476,12 +475,7 @@ function TelnyxDeviceProvider({ children }: { children: ReactNode }) {
                 holdMusicRef.current.currentTime = 0;
                 console.log("🔕 Stopped hold music on call end");
               }
-              
-              // Clear playback ID
-              if (playbackIdRef.current) {
-                playbackIdRef.current = null;
-              }
-              
+
               // Clean up remote audio element
               const remoteAudio = document.getElementById('telnyx-remote-audio') as HTMLAudioElement;
               if (remoteAudio) {
@@ -1089,186 +1083,96 @@ function TelnyxDeviceProvider({ children }: { children: ReactNode }) {
   const toggleHold = async () => {
     const currentCall = activeCallRef.current;
     if (!currentCall) return;
-    
-    // Try SDK hold first for WebRTC calls
-    if (currentCall.hold) {
-      try {
-        console.log("⏸️ Using SDK hold");
-        await currentCall.hold();
-        console.log("✅ Call on hold via SDK");
-        
-        // Play hold music locally
-        if (!holdMusicRef.current) {
-          try {
-            const holdMusic = new Audio('/sounds/hold-music.mp3');
-            holdMusic.loop = true;
-            holdMusic.volume = 0.3;
-            await holdMusic.play();
-            holdMusicRef.current = holdMusic;
-            console.log("🎵 Playing local hold music");
-          } catch (err) {
-            console.warn("Failed to play local hold music:", err);
-          }
-        }
-        return;
-      } catch (err) {
-        console.error("SDK hold failed:", err);
-      }
-    }
-    
-    // Fallback to Call Control API
-    const callControlId = currentCall?.telnyxIDs?.telnyxCallControlId;
-    if (!callControlId) {
-      console.error("❌ No call control ID - cannot use Call Control API for hold");
+
+    // Prefer Telnyx session id from telnyxIDs, fall back to raw sessionId
+    const sessionId =
+      (currentCall as any).telnyxIDs?.telnyxSessionId ||
+      (currentCall as any).sessionId;
+
+    if (!sessionId) {
+      console.error("❌ No Telnyx session id - cannot start hold");
       return;
     }
-    
+
     try {
-      console.log("⏸️ Putting call on hold");
-      
-      // Step 1: Put the call on hold (mutes the connection)
-      const holdResponse = await fetch(`/api/calls/${callControlId}/hold`, {
+      console.log("⏸️ Putting call on hold via API + SDK", { sessionId });
+
+      // 1) Tell backend to start hold music for the remote party
+      const resp = await fetch(`/api/calls/${sessionId}/hold`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "hold" }),
+        body: JSON.stringify({ hold: true }),
       });
-      
-      if (!holdResponse.ok) {
-        const error = await holdResponse.json();
-        throw new Error(error.error || "Failed to hold call");
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        console.error("Hold API failed", err);
       }
-      
-      console.log("✅ Call on hold");
-      
-      // Step 2: Start playing hold music to the OTHER party
-      // Option 1: Use environment variable for public URL (ngrok, production domain, etc)
-      // Option 2: Use a direct CDN URL for the hold music
-      const publicHoldMusicUrl = process.env.HOLD_MUSIC_URL || 
-                                process.env.NEXT_PUBLIC_BASE_URL 
-                                  ? `${process.env.NEXT_PUBLIC_BASE_URL}/sounds/hold-music.mp3`
-                                  : `${window.location.origin}/sounds/hold-music.mp3`;
-      
-      const playbackResponse = await fetch(`/api/calls/${callControlId}/playback`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          action: "start",
-          audio_url: publicHoldMusicUrl,
-          loop: "infinity",
-          target_legs: "opposite" // Play to the other party only
-        }),
-      });
-      
-      if (playbackResponse.ok) {
-        const playbackData = await playbackResponse.json();
-        playbackIdRef.current = playbackData.playback_id;
-        console.log("🎵 Playing hold music to other party, playback ID:", playbackIdRef.current);
-      } else {
-        console.warn("Failed to start hold music playback");
+
+      // 2) Use Telnyx SDK to actually put the call on hold (mute us)
+      if (typeof (currentCall as any).hold === "function") {
+        await (currentCall as any).hold();
       }
-      
-      // Step 3: Also play hold music locally for the agent (optional)
+
+      // 3) Local hold tone for the agent (optional)
       if (!holdMusicRef.current) {
         try {
-          const holdMusic = new Audio('/sounds/hold-music.mp3');
+          const holdMusic = new Audio("/sounds/on-hold.mp3");
           holdMusic.loop = true;
-          holdMusic.volume = 0.3; // Lower volume for local playback
-          
-          await new Promise((resolve, reject) => {
-            holdMusic.addEventListener('canplay', resolve, { once: true });
-            holdMusic.addEventListener('error', reject, { once: true });
-            setTimeout(() => reject(new Error('Audio load timeout')), 3000);
-          });
-          
+          holdMusic.volume = 0.3;
+          await holdMusic.play();
           holdMusicRef.current = holdMusic;
+          console.log("🎵 Playing local hold music");
         } catch (err) {
-          console.warn("Local hold music not available:", err);
+          console.warn("Failed to play local hold music:", err);
         }
-      }
-      
-      if (holdMusicRef.current) {
-        holdMusicRef.current.play().catch(err => {
-          console.warn("Local hold music play failed:", err);
-        });
-        console.log("🎵 Playing hold music locally");
+      } else {
+        holdMusicRef.current
+          .play()
+          .then(() => console.log("🎵 Resumed local hold music"))
+          .catch((err) =>
+            console.warn("Failed to resume local hold music:", err),
+          );
       }
     } catch (err) {
       console.error("Hold failed:", err);
-      // Fallback to SDK hold method
-      try {
-        await currentCall.hold();
-      } catch (fallbackErr) {
-        console.error("Fallback hold also failed:", fallbackErr);
-      }
     }
   };
 
   const unhold = async () => {
     const currentCall = activeCallRef.current;
     if (!currentCall) return;
-    
-    // Stop local hold music first
-    if (holdMusicRef.current) {
-      holdMusicRef.current.pause();
-      holdMusicRef.current.currentTime = 0;
-      console.log("🔕 Stopped local hold music");
-    }
-    
-    // Try SDK unhold first for WebRTC calls
-    if (currentCall.unhold) {
-      try {
-        console.log("▶️ Using SDK unhold");
-        await currentCall.unhold();
-        console.log("✅ Call resumed via SDK");
-        return;
-      } catch (err) {
-        console.error("SDK unhold failed:", err);
-      }
-    }
-    
-    // Fallback to Call Control API
-    const callControlId = currentCall?.telnyxIDs?.telnyxCallControlId;
-    if (!callControlId) {
-      console.error("❌ No call control ID - cannot use Call Control API for unhold");
+
+    const sessionId =
+      (currentCall as any).telnyxIDs?.telnyxSessionId ||
+      (currentCall as any).sessionId;
+
+    if (!sessionId) {
+      console.error("❌ No Telnyx session id - cannot resume from hold");
       return;
     }
-    
+
     try {
-      console.log("▶️ Resuming call");
-      
-      // Step 1: Stop the hold music playback to the other party
-      if (playbackIdRef.current) {
-        try {
-          const stopPlaybackResponse = await fetch(`/api/calls/${callControlId}/playback`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "stop" }),
-          });
-          
-          if (stopPlaybackResponse.ok) {
-            console.log("🔕 Stopped hold music for other party");
-          }
-        } catch (err) {
-          console.warn("Failed to stop playback:", err);
-        }
-        playbackIdRef.current = null;
-      }
-      
-      // Step 2: Unhold the call
-      const response = await fetch(`/api/calls/${callControlId}/hold`, {
+      console.log("▶️ Resuming call from hold via API + SDK", { sessionId });
+
+      // 1) Stop hold music for the remote party
+      const resp = await fetch(`/api/calls/${sessionId}/hold`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "unhold" }),
+        body: JSON.stringify({ hold: false }),
       });
-      
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to unhold call");
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        console.error("Unhold API failed", err);
       }
-      
-      console.log("✅ Call resumed");
-      
-      // Step 3: Stop local hold music
+
+      // 2) Use Telnyx SDK to resume the call
+      if (typeof (currentCall as any).unhold === "function") {
+        await (currentCall as any).unhold();
+      }
+
+      // 3) Stop local hold music
       if (holdMusicRef.current) {
         holdMusicRef.current.pause();
         holdMusicRef.current.currentTime = 0;
@@ -1276,12 +1180,6 @@ function TelnyxDeviceProvider({ children }: { children: ReactNode }) {
       }
     } catch (err) {
       console.error("Unhold failed:", err);
-      // Fallback to SDK unhold method
-      try {
-        await currentCall.unhold();
-      } catch (fallbackErr) {
-        console.error("Fallback unhold also failed:", fallbackErr);
-      }
     }
   };
 
@@ -1380,7 +1278,7 @@ function TelnyxDeviceProvider({ children }: { children: ReactNode }) {
           callControlId,
           command: "join",
           conferenceId: conferenceId || `conf_${Date.now()}`,
-          holdMusicUrl: "/sounds/hold-music.mp3", // Use the hold music for conference
+          holdMusicUrl: "/sounds/on-hold.mp3", // Use the hold music for conference
         }),
       });
       
