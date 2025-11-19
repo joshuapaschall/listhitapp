@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase"
 import { assertServer } from "@/utils/assert-server"
 import { ensurePublicMediaUrls } from "@/utils/mms.server"
-import { normalizePhone } from "@/lib/dedup-utils"
+import { normalizePhone, formatPhoneE164 } from "@/lib/dedup-utils"
 import { verifyTelnyxRequest } from "@/lib/telnyx"
 import { upsertAnonThread } from "@/services/thread-utils"
 import { getTelnyxApiKey } from "@/lib/voice-env"
@@ -60,6 +60,7 @@ export async function POST(request: NextRequest) {
     : typeof payload.to === "string"
     ? payload.to
     : payload.to?.phone_number
+  const preferredDid = to ? formatPhoneE164(to) || to : null
   const text = (payload.text as string | undefined)?.trim() ?? ""
   const rawMediaUrls = [
     ...(Array.isArray(payload.media)
@@ -168,12 +169,13 @@ export async function POST(request: NextRequest) {
               unread: true,
               updated_at: new Date().toISOString(),
               deleted_at: null,
+              preferred_from_number: preferredDid,
             },
             { onConflict: "buyer_id,phone_number" }
           )
           .select("id")
           .single()
-      : await upsertAnonThread(fromDigits)
+      : await upsertAnonThread(fromDigits, preferredDid)
 
     if (threadErr || !thread) {
       console.error("❌ Thread upsert error", threadErr)
