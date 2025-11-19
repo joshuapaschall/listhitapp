@@ -29,6 +29,21 @@ export async function POST(request: NextRequest) {
   }
 
   const url = `${TELNYX_API_URL}/messages`
+  let fromNumber: string | null = null
+  if (buyerId) {
+    try {
+      const { data: sticky } = await supabase
+        .from("buyer_sms_senders")
+        .select("from_number")
+        .eq("buyer_id", buyerId)
+        .maybeSingle()
+      if (sticky?.from_number) {
+        fromNumber = formatPhoneE164(sticky.from_number) || sticky.from_number
+      }
+    } catch (err) {
+      console.error("Failed to load sticky sender", err)
+    }
+  }
   const formatted = formatPhoneE164(to)
   if (!formatted) {
     return new Response(JSON.stringify({ error: "Invalid phone number" }), {
@@ -48,6 +63,9 @@ export async function POST(request: NextRequest) {
     to: formatted,
     text: body,
     messaging_profile_id: messagingProfileId,
+  }
+  if (fromNumber) {
+    payload.from = fromNumber
   }
   if (finalMediaUrls && finalMediaUrls.length) {
     payload.media_urls = finalMediaUrls
@@ -121,6 +139,19 @@ export async function POST(request: NextRequest) {
           return new Response(JSON.stringify({ error: "Database error" }), {
             status: 500,
           })
+        }
+        if (buyerId && data.from) {
+          try {
+            const normalizedFrom = formatPhoneE164(data.from) || data.from
+            await supabase
+              .from("buyer_sms_senders")
+              .upsert(
+                { buyer_id: buyerId, from_number: normalizedFrom },
+                { onConflict: "buyer_id" },
+              )
+          } catch (err) {
+            console.error("Failed to persist sticky sender", err)
+          }
         }
       }
     }

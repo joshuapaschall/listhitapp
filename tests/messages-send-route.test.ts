@@ -4,6 +4,7 @@ import { POST } from "../app/api/messages/send/route"
 
 let messages: any[] = []
 let threads: any[] = []
+let buyerSmsSenders: any[] = []
 let threadId = 1
 let threadError: any = null
 let messageError: any = null
@@ -90,6 +91,30 @@ jest.mock("../lib/supabase", () => {
           }
         }
       }
+      if (table === "buyer_sms_senders") {
+        return {
+          select: () => ({
+            eq: (_col: string, val: any) => ({
+              maybeSingle: async () => ({
+                data: buyerSmsSenders.find((row) => row.buyer_id === val) || null,
+                error: null,
+              })
+            })
+          }),
+          upsert: async (payload: any) => {
+            const rows = Array.isArray(payload) ? payload : [payload]
+            for (const row of rows) {
+              const existing = buyerSmsSenders.find((s) => s.buyer_id === row.buyer_id)
+              if (existing) {
+                existing.from_number = row.from_number
+              } else {
+                buyerSmsSenders.push({ buyer_id: row.buyer_id, from_number: row.from_number })
+              }
+            }
+            return { data: rows, error: null }
+          }
+        }
+      }
       throw new Error(`Unexpected table ${table}`)
     }
   }
@@ -100,6 +125,7 @@ describe("messages send route", () => {
   beforeEach(() => {
     messages = []
     threads = []
+    buyerSmsSenders = []
     threadId = 1
     threadError = null
     messageError = null
@@ -261,5 +287,27 @@ describe("messages send route", () => {
     await POST(req)
     expect(typeof messages[0].from_number).toBe("string")
     expect(messages[0].from_number).toBe("+1888")
+  })
+
+  test("uses sticky from number when available", async () => {
+    buyerSmsSenders.push({ buyer_id: "b1", from_number: "+1999" })
+    const req = new NextRequest("http://test", {
+      method: "POST",
+      body: JSON.stringify({ buyerId: "b1", to: "+1222", body: "hi" })
+    })
+    await POST(req)
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string)
+    expect(body.from).toBe("+1999")
+    expect(buyerSmsSenders).toHaveLength(1)
+    expect(buyerSmsSenders[0].from_number).toBe("+1999")
+  })
+
+  test("persists sticky sender after send", async () => {
+    const req = new NextRequest("http://test", {
+      method: "POST",
+      body: JSON.stringify({ buyerId: "b2", to: "+1222", body: "hi" })
+    })
+    await POST(req)
+    expect(buyerSmsSenders).toEqual([{ buyer_id: "b2", from_number: "+1555" }])
   })
 })

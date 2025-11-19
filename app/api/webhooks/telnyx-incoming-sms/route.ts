@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase"
 import { assertServer } from "@/utils/assert-server"
 import { ensurePublicMediaUrls } from "@/utils/mms.server"
-import { normalizePhone } from "@/lib/dedup-utils"
+import { normalizePhone, formatPhoneE164 } from "@/lib/dedup-utils"
 import { verifyTelnyxRequest } from "@/lib/telnyx"
 import { upsertAnonThread } from "@/services/thread-utils"
 import { getTelnyxApiKey } from "@/lib/voice-env"
@@ -198,6 +198,20 @@ export async function POST(request: NextRequest) {
         detail: msgErr.details,
       })
       return new NextResponse("Supabase error", { status: 500 })
+    }
+
+    if (buyerId && to) {
+      try {
+        const normalizedTo = formatPhoneE164(to) || to
+        await supabase
+          .from("buyer_sms_senders")
+          .upsert(
+            { buyer_id: buyerId, from_number: normalizedTo },
+            { onConflict: "buyer_id" },
+          )
+      } catch (err) {
+        console.error("❌ Failed to persist sticky sender", err)
+      }
     }
   }
 

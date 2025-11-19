@@ -15,6 +15,7 @@ let messages: any[] = []
 let threads: any[] = []
 let threadId = 1
 let recipients: any[] = []
+let buyerSmsSenders: any[] = []
 
 jest.mock("../lib/supabase", () => {
   const client = {
@@ -128,6 +129,22 @@ jest.mock("../lib/supabase", () => {
           }
         }
       }
+      if (table === "buyer_sms_senders") {
+        return {
+          upsert: async (payload: any) => {
+            const rows = Array.isArray(payload) ? payload : [payload]
+            for (const row of rows) {
+              const existing = buyerSmsSenders.find((s) => s.buyer_id === row.buyer_id)
+              if (existing) {
+                existing.from_number = row.from_number
+              } else {
+                buyerSmsSenders.push({ buyer_id: row.buyer_id, from_number: row.from_number })
+              }
+            }
+            return { data: rows, error: null }
+          }
+        }
+      }
       throw new Error(`Unexpected table ${table}`)
     }
   }
@@ -143,6 +160,7 @@ describe.skip("Telnyx incoming SMS webhook", () => {
     threads = []
     threadId = 1
     recipients = []
+    buyerSmsSenders = []
     fetchMock.mockReset()
     fetchMock.mockResolvedValue({
       ok: true,
