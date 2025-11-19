@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { supabase, supabaseAdmin } from "@/lib/supabase"
 import { scheduleSMS, lookupCarrier } from "@/lib/sms-rate-limiter"
 import { normalizePhone, formatPhoneE164 } from "@/lib/dedup-utils"
 import { upsertAnonThread } from "@/services/thread-utils"
@@ -8,7 +8,8 @@ import { TELNYX_API_URL, telnyxHeaders } from "@/lib/telnyx"
 import { getTelnyxApiKey } from "@/lib/voice-env"
 
 export async function POST(request: NextRequest) {
-  const { buyerId, to, body, mediaUrls } = await request.json()
+  const { buyerId, threadId, to, body, mediaUrls, from: overrideFrom } =
+    await request.json()
 
   if (
     !to ||
@@ -44,7 +45,136 @@ export async function POST(request: NextRequest) {
       return new Response(JSON.stringify({ error: err.message }), { status: 400 })
     }
   }
+  const digits = normalizePhone(formatted)
+  if (!digits) {
+    return new Response(JSON.stringify({ error: "Invalid phone number" }), {
+      status: 400,
+    })
+  }
+
+  let thread: { id: string; preferred_from_number: string | null } | null =
+    null
+  if (threadId) {
+    const { data, error } = await supabase
+      .from("message_threads")
+      .select("id, preferred_from_number")
+      .eq("id", threadId)
+      .maybeSingle()
+    if (error) {
+      console.error("Failed to fetch thread by id", error)
+      return new Response(JSON.stringify({ error: "Database error" }), {
+        status: 500,
+      })
+    }
+    thread = data
+  }
+
+  if (!thread) {
+    const q = supabase
+      .from("message_threads")
+      .select("id, preferred_from_number, updated_at")
+      .eq("phone_number", digits)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+    const { data, error } =
+      buyerId == null
+        ? await q.is("buyer_id", null).maybeSingle()
+        : await q.eq("buyer_id", buyerId).maybeSingle()
+    if (error) {
+      console.error("Failed to resolve thread", error)
+      return new Response(JSON.stringify({ error: "Database error" }), {
+        status: 500,
+      })
+    }
+    thread = data
+  }
+
+  let fromDid: string | null = null
+  if (overrideFrom) {
+    const owned = normalizePhone(overrideFrom)
+    if (owned) {
+      let ok = true
+      if (supabaseAdmin) {
+        ok = false
+        const formattedOwned = formatPhoneE164(owned)
+        if (formattedOwned) {
+          const { data: inbound, error: inboundErr } = await supabaseAdmin
+            .from("inbound_numbers")
+            .select("e164")
+            .eq("enabled", true)
+            .in("e164", [formattedOwned])
+          if (!inboundErr && inbound && inbound.length) {
+            ok = true
+          }
+        }
+        if (!ok) {
+          const matchValues = Array.from(
+            new Set(
+              [owned, formattedOwned].filter(
+                (num): num is string => typeof num === "string",
+              ),
+            ),
+          )
+          if (matchValues.length) {
+            const { data: voice, error: voiceErr } = await supabaseAdmin
+              .from("voice_numbers")
+              .select("phone_number")
+              .in("phone_number", matchValues)
+            if (!voiceErr && voice && voice.length) {
+              ok = true
+            }
+          }
+        }
+      }
+      if (ok) fromDid = owned
+    }
+  }
+
+  if (!fromDid && thread?.preferred_from_number) {
+    const norm = normalizePhone(thread.preferred_from_number)
+    if (norm) fromDid = norm
+  }
+
+  if (!fromDid && thread?.id) {
+    const { data: lastIn, error } = await supabase
+      .from("messages")
+      .select("to_number")
+      .eq("thread_id", thread.id)
+      .eq("direction", "inbound")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (error) {
+      console.error("Failed to inspect inbound history", error)
+    }
+    const norm = normalizePhone(lastIn?.to_number)
+    if (norm) fromDid = norm
+  }
+
+  if (!fromDid && buyerId) {
+    const { data: sticky } = await supabase
+      .from("buyer_sms_senders")
+      .select("from_number")
+      .eq("buyer_id", buyerId)
+      .maybeSingle()
+    const norm = normalizePhone(sticky?.from_number)
+    if (norm) fromDid = norm
+  }
+
+  if (!fromDid && process.env.DEFAULT_OUTBOUND_DID) {
+    fromDid = normalizePhone(process.env.DEFAULT_OUTBOUND_DID)
+  }
+
+  if (!fromDid) {
+    return new Response(JSON.stringify({ error: "No from number resolved" }), {
+      status: 400,
+    })
+  }
+
+  const replyFrom = formatPhoneE164(fromDid)!
+
   const payload: Record<string, any> = {
+    from: replyFrom,
     to: formatted,
     text: body,
     messaging_profile_id: messagingProfileId,
@@ -80,49 +210,77 @@ export async function POST(request: NextRequest) {
   try {
     const data = await scheduleSMS(carrier, body, sendRequest)
 
-    const digits = normalizePhone(formatted)
-    if (digits) {
-      const { data: thread, error: threadErr } =
-        buyerId == null
-        ? await upsertAnonThread(digits)
-        : await supabase
-            .from("message_threads")
-            .upsert(
-              {
-                buyer_id: buyerId,
-                phone_number: digits,
-                campaign_id: null,
-                updated_at: new Date().toISOString(),
-              },
-              { onConflict: "buyer_id,phone_number" },
-            )
-            .select("id")
-            .single()
-      if (threadErr) {
-        console.error("Failed to upsert thread", threadErr)
-        return new Response(JSON.stringify({ error: "Database error" }), {
-          status: 500,
-        })
-      }
-      if (thread) {
-        const { error: insertErr } = await supabase.from("messages").insert({
-          thread_id: thread.id,
-          buyer_id: buyerId ?? null,
-          direction: "outbound",
-          from_number: formatPhoneE164(data.from) || data.from,
-          to_number: formatted,
-          body,
-          provider_id: data.id,
-          is_bulk: false,
-          media_urls: finalMediaUrls && finalMediaUrls.length ? finalMediaUrls : null,
-        })
-        if (insertErr) {
-          console.error("Failed to record message", insertErr)
-          return new Response(JSON.stringify({ error: "Database error" }), {
-            status: 500,
+    const ensureThread = async () => {
+      if (thread?.id) {
+        const needsUpdate = thread.preferred_from_number !== replyFrom
+        const { data, error } = await supabase
+          .from("message_threads")
+          .update({
+            updated_at: new Date().toISOString(),
+            preferred_from_number: replyFrom,
           })
+          .eq("id", thread.id)
+          .select("id, preferred_from_number")
+          .single()
+        if (error || !data) throw error || new Error("Thread update failed")
+        thread = data
+        if (!needsUpdate && data.preferred_from_number !== replyFrom) {
+          thread = { ...data, preferred_from_number: replyFrom }
         }
+        return data
       }
+
+      if (buyerId == null) {
+        const res = await upsertAnonThread(digits, replyFrom)
+        if (res.error || !res.data)
+          throw res.error || new Error("Thread upsert failed")
+        thread = {
+          id: res.data.id,
+          preferred_from_number: res.data.preferred_from_number,
+        }
+        return thread
+      }
+
+      const res = await supabase
+        .from("message_threads")
+        .upsert(
+          {
+            buyer_id: buyerId,
+            phone_number: digits,
+            campaign_id: null,
+            updated_at: new Date().toISOString(),
+            preferred_from_number: replyFrom,
+          },
+          { onConflict: "buyer_id,phone_number" },
+        )
+        .select("id, preferred_from_number")
+        .single()
+      if (res.error || !res.data) {
+        console.error("Thread upsert failed", res.error)
+        throw new Error("Database error")
+      }
+      thread = res.data
+      return res.data
+    }
+
+    const activeThread = await ensureThread()
+
+    const { error: insertErr } = await supabase.from("messages").insert({
+      thread_id: activeThread.id,
+      buyer_id: buyerId ?? null,
+      direction: "outbound",
+      from_number: formatPhoneE164(data.from) || data.from,
+      to_number: formatted,
+      body,
+      provider_id: data.id,
+      is_bulk: false,
+      media_urls: finalMediaUrls && finalMediaUrls.length ? finalMediaUrls : null,
+    })
+    if (insertErr) {
+      console.error("Failed to record message", insertErr)
+      return new Response(JSON.stringify({ error: "Database error" }), {
+        status: 500,
+      })
     }
 
     return new Response(JSON.stringify({ sid: data.id }), { status: 200 })

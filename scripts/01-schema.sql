@@ -159,6 +159,7 @@ CREATE TABLE IF NOT EXISTS message_threads (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   buyer_id uuid REFERENCES buyers(id) ON DELETE CASCADE,
   phone_number text NOT NULL,
+  preferred_from_number text,
   campaign_id uuid,
   starred boolean NOT NULL DEFAULT false,
   unread boolean NOT NULL DEFAULT false,
@@ -832,6 +833,17 @@ BEGIN
     ) THEN
       CREATE UNIQUE INDEX unique_buyer_phone ON message_threads (buyer_id, phone_number);
     END IF;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_indexes
+    WHERE tablename = 'message_threads'
+      AND indexname = 'idx_message_threads_preferred_from'
+  ) THEN
+    CREATE INDEX idx_message_threads_preferred_from ON message_threads (preferred_from_number);
   END IF;
 END $$;
 
