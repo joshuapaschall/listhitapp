@@ -1,10 +1,17 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import EmojiPicker from "emoji-picker-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   DropdownMenu,
@@ -32,6 +39,7 @@ import {
 import Image from "next/image";
 import { insertText, cn } from "@/lib/utils";
 import { calculateSmsSegments } from "@/lib/sms-utils";
+import { formatPhoneE164, normalizePhone } from "@/lib/dedup-utils";
 import {
   supabase,
   type MessageThread,
@@ -101,6 +109,23 @@ function parseAudioUrl(val: any): string | null {
     return tryUrl(trimmed)
   }
   return null
+}
+
+const normalizeDid = (val?: string | null) => normalizePhone(val) || null
+
+const formatDidE164 = (val?: string | null) => {
+  const norm = normalizeDid(val)
+  if (!norm) return null
+  return formatPhoneE164(norm) || null
+}
+
+const formatDidDisplay = (val?: string | null) => {
+  const norm = normalizeDid(val)
+  if (!norm) return val || ""
+  if (norm.length === 10) {
+    return `(${norm.slice(0, 3)}) ${norm.slice(3, 6)}-${norm.slice(6)}`
+  }
+  return `+${norm}`
 }
 
 function MediaAttachment({ url }: { url: string }) {
@@ -225,9 +250,38 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
   const [showUpload, setShowUpload] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
+  const [selectedDid, setSelectedDid] = useState<string | null>(
+    normalizeDid(thread?.preferred_from_number),
+  );
+  const [ownedDids, setOwnedDids] = useState<string[]>([]);
+  const [preferredFrom, setPreferredFrom] = useState<string | null>(
+    normalizeDid(thread?.preferred_from_number),
+  );
+  const [bannerDid, setBannerDid] = useState<string | null>(null);
+  const manualDidRef = useRef(false);
+  const dismissedBannerIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     TemplateService.listTemplates().then(setTemplates);
+  }, []);
+
+  useEffect(() => {
+    const loadVoiceNumbers = async () => {
+      try {
+        const res = await fetch("/api/voice-numbers");
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && Array.isArray(data.numbers)) {
+          setOwnedDids(
+            data.numbers
+              .map((num: string) => normalizeDid(num))
+              .filter((num): num is string => Boolean(num)),
+          );
+        }
+      } catch (err) {
+        console.error("Failed to load voice numbers", err);
+      }
+    };
+    loadVoiceNumbers();
   }, []);
 
   useEffect(() => {
@@ -244,6 +298,23 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
     };
     loadBuyer();
   }, [thread]);
+
+  useEffect(() => {
+    if (!thread) {
+      setPreferredFrom(null);
+      setSelectedDid(null);
+      setBannerDid(null);
+      manualDidRef.current = false;
+      return;
+    }
+    const normalized = normalizeDid(thread.preferred_from_number);
+    setPreferredFrom(normalized);
+    if (!manualDidRef.current) {
+      setSelectedDid(normalized);
+    }
+    setBannerDid(null);
+    manualDidRef.current = false;
+  }, [thread?.id, thread?.preferred_from_number]);
 
   useEffect(() => {
     if (!thread || !thread.unread) return;
@@ -376,6 +447,63 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
     };
   }, [thread]);
 
+  const lastInbound = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const msg = messages[i];
+      if (msg.direction === "inbound" && msg.to_number) {
+        const did = normalizeDid(msg.to_number);
+        if (did) return { id: msg.id, did };
+      }
+    }
+    return { id: null as string | null, did: null as string | null };
+  }, [messages]);
+
+  useEffect(() => {
+    if (!thread) return;
+    const inboundDid = lastInbound.did;
+    const sticky = preferredFrom;
+    if (inboundDid && sticky && inboundDid !== sticky) {
+      if (dismissedBannerIdRef.current === lastInbound.id) {
+        setBannerDid(null);
+        return;
+      }
+      setBannerDid(inboundDid);
+      manualDidRef.current = false;
+      setSelectedDid(inboundDid);
+      return;
+    }
+    dismissedBannerIdRef.current = null;
+    if (!manualDidRef.current) {
+      if (inboundDid) setSelectedDid(inboundDid);
+      else if (sticky) setSelectedDid(sticky);
+    }
+    if (!inboundDid || inboundDid === sticky) {
+      setBannerDid(null);
+    }
+  }, [thread?.id, preferredFrom, lastInbound.did, lastInbound.id]);
+
+  useEffect(() => {
+    if (
+      !thread ||
+      selectedDid ||
+      preferredFrom ||
+      lastInbound.did ||
+      ownedDids.length === 0
+    ) {
+      return;
+    }
+    setSelectedDid(ownedDids[0]);
+  }, [thread, selectedDid, preferredFrom, lastInbound.did, ownedDids]);
+
+  const didOptions = useMemo(() => {
+    const set = new Set<string>();
+    ownedDids.forEach((num) => num && set.add(num));
+    if (preferredFrom) set.add(preferredFrom);
+    if (selectedDid) set.add(selectedDid);
+    if (bannerDid) set.add(bannerDid);
+    return Array.from(set);
+  }, [ownedDids, preferredFrom, selectedDid, bannerDid]);
+
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -399,6 +527,64 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
   const removeAttachment = (idx: number) => {
     setAttachments(prev => prev.filter((_, i) => i !== idx));
   };
+
+  const persistPreferredDid = useCallback(
+    async (did: string | null) => {
+      if (!thread) return false;
+      const formatted = did ? formatDidE164(did) || did : null;
+      const { error } = await supabase
+        .from("message_threads")
+        .update({
+          preferred_from_number: formatted,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", thread.id);
+      if (error) {
+        console.error("Failed to update preferred DID", error);
+        toast.error("Failed to update number");
+        return false;
+      }
+      setPreferredFrom(did);
+      queryClient.invalidateQueries({ queryKey: ["message-threads"] });
+      return true;
+    },
+    [thread, queryClient],
+  );
+
+  const handleDidChange = useCallback(
+    async (value: string) => {
+      const normalized = normalizeDid(value);
+      if (!normalized) return;
+      setSelectedDid(normalized);
+      manualDidRef.current = true;
+      setBannerDid(null);
+      if (normalized !== preferredFrom) {
+        const success = await persistPreferredDid(normalized);
+        if (!success) {
+          setSelectedDid(preferredFrom);
+        }
+      }
+    },
+    [preferredFrom, persistPreferredDid],
+  );
+
+  const handleBannerSwitch = useCallback(async () => {
+    if (!bannerDid) return;
+    const success = await persistPreferredDid(bannerDid);
+    if (success) {
+      dismissedBannerIdRef.current = null;
+      setSelectedDid(bannerDid);
+      setBannerDid(null);
+      manualDidRef.current = true;
+    }
+  }, [bannerDid, persistPreferredDid]);
+
+  const handleBannerKeep = useCallback(() => {
+    manualDidRef.current = true;
+    dismissedBannerIdRef.current = lastInbound.id;
+    setSelectedDid(preferredFrom);
+    setBannerDid(null);
+  }, [preferredFrom, lastInbound.id]);
 
   const sendMessage = useCallback(async () => {
     if (!thread || (!input.trim() && attachments.length === 0)) return;
@@ -441,6 +627,8 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
       }
       return urls
     }
+
+    const currentFrom = selectedDid || preferredFrom || null;
 
     if (scheduleDate) {
       try {
@@ -485,7 +673,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
       thread_id: thread.id,
       buyer_id: thread.buyer_id,
       direction: "outbound",
-      from_number: null,
+      from_number: currentFrom ? formatDidE164(currentFrom) : null,
       to_number: thread.phone_number,
       body: input.trim(),
       provider_id: null,
@@ -504,7 +692,9 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           buyerId: thread.buyer_id,
+          threadId: thread.id,
           to: thread.phone_number,
+          from: currentFrom || undefined,
           body: pending.body,
           mediaUrls,
         }),
@@ -527,13 +717,31 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
       );
       toast.error((err as Error).message || "Failed to send message");
     }
-  }, [thread, input, scheduleDate, scheduleTime, buyer, attachments]);
+  }, [
+    thread,
+    input,
+    scheduleDate,
+    scheduleTime,
+    buyer,
+    attachments,
+    selectedDid,
+    preferredFrom,
+  ]);
 
   const retryMessage = async (msg: LocalMessage) => {
     if (!thread) return;
+    const retryFrom =
+      normalizeDid(msg.from_number) || selectedDid || preferredFrom || null;
+    const formattedRetryFrom = retryFrom ? formatDidE164(retryFrom) : null;
     setMessages((prev) =>
       prev.map((m) =>
-        m.localId === msg.localId ? { ...m, status: "sending" } : m,
+        m.localId === msg.localId
+          ? {
+              ...m,
+              status: "sending",
+              from_number: formattedRetryFrom || m.from_number,
+            }
+          : m,
       ),
     );
     try {
@@ -542,7 +750,9 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           buyerId: thread.buyer_id,
+          threadId: thread.id,
           to: thread.phone_number,
+          from: retryFrom || undefined,
           body: msg.body,
           mediaUrls: msg.media_urls || [],
         }),
@@ -581,6 +791,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
     ? buyer.full_name || `${buyer.fname || ""} ${buyer.lname || ""}`.trim() || "Unnamed"
     : thread.phone_number;
   const { segments: smsSegments, remaining } = calculateSmsSegments(input);
+  const selectValue = selectedDid || preferredFrom || undefined;
 
   const handleBlock = async () => {
     if (!thread || !thread.buyer_id) return;
@@ -750,30 +961,53 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
               )}
             </>
           );
+          const didLabel = isOutbound
+            ? formatDidDisplay(m.from_number)
+            : formatDidDisplay(m.to_number);
+          const pillLabel = didLabel
+            ? `${isOutbound ? "From" : "To"}: ${didLabel}`
+            : null;
           return (
             <div key={m.id} className="flex flex-col">
-              {(m.media_urls && m.media_urls.length > 0) || audioSrc ? (
-                <div className={bubbleClass}>
-                  <div className="space-y-1">
-                    {audioSrc && (
-                      <audio controls className="rounded-xl w-full max-w-xs bg-white shadow">
-                        <source src={audioSrc} type="audio/mpeg" />
-                        Your browser does not support the audio element.
-                      </audio>
+              <div
+                className={cn(
+                  "relative flex flex-col gap-1 pt-3",
+                  isOutbound ? "items-end" : "items-start",
+                )}
+              >
+                {pillLabel && (
+                  <span
+                    className={cn(
+                      "absolute -top-1 rounded-full border bg-background px-2 py-0.5 text-[10px] text-muted-foreground shadow-sm",
+                      isOutbound ? "right-0" : "left-0",
                     )}
-                    {m.media_urls?.map((url, idx) => (
-                      <MediaAttachment key={idx} url={url} />
-                    ))}
+                  >
+                    {pillLabel}
+                  </span>
+                )}
+                {(m.media_urls && m.media_urls.length > 0) || audioSrc ? (
+                  <div className={bubbleClass}>
+                    <div className="space-y-1">
+                      {audioSrc && (
+                        <audio controls className="rounded-xl w-full max-w-xs bg-white shadow">
+                          <source src={audioSrc} type="audio/mpeg" />
+                          Your browser does not support the audio element.
+                        </audio>
+                      )}
+                      {m.media_urls?.map((url, idx) => (
+                        <MediaAttachment key={idx} url={url} />
+                      ))}
+                    </div>
+                    {!m.body && Status}
                   </div>
-                  {!m.body && Status}
-                </div>
-              ) : null}
-              {m.body && (
-                <div className={cn(bubbleClass, m.media_urls?.length ? "mt-1" : "")}>
-                  <span>{m.body}</span>
-                  {Status}
-                </div>
-              )}
+                ) : null}
+                {m.body && (
+                  <div className={cn(bubbleClass, m.media_urls?.length ? "mt-1" : "")}>
+                    <span>{m.body}</span>
+                    {Status}
+                  </div>
+                )}
+              </div>
               <div
                 className={cn(
                   "mt-1 text-xs text-muted-foreground",
@@ -783,7 +1017,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
                 {prefix} • {time}
               </div>
             </div>
-              );
+          );
         })}
         <div ref={endRef} />
       </div>
@@ -936,6 +1170,24 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
           })}
           </div>
         )}
+        {bannerDid && (
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            <p>
+              {thread.campaign_id && preferredFrom
+                ? `Campaign sticky is ${formatDidDisplay(preferredFrom)}. `
+                : ""}
+              They texted your other line {formatDidDisplay(bannerDid)}. Switch reply DID?
+            </p>
+            <div className="mt-2 flex gap-2">
+              <Button size="sm" onClick={handleBannerSwitch}>
+                Switch
+              </Button>
+              <Button size="sm" variant="outline" onClick={handleBannerKeep}>
+                Keep Sticky
+              </Button>
+            </div>
+          </div>
+        )}
         <div
           className={`flex justify-between text-xs ${smsSegments > 1 ? "text-red-600" : "text-muted-foreground"}`}
         >
@@ -944,17 +1196,40 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
             {smsSegments > 1 ? "s" : ""}
           </span>
         </div>
-        <div className="flex items-center gap-2">
-          {hasOversize && (
-            <span className="text-xs text-red-600 mr-2">Remove files over 1MB</span>
-          )}
-          <Button
-            size="sm"
-            onClick={sendMessage}
-            disabled={!input.trim() && attachments.length === 0 || hasOversize}
-          >
-            Send
-          </Button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-xs uppercase text-muted-foreground">From</span>
+            <Select
+              value={selectValue}
+              onValueChange={(value) => {
+                void handleDidChange(value)
+              }}
+              disabled={didOptions.length === 0}
+            >
+              <SelectTrigger className="h-8 min-w-[160px] text-xs">
+                <SelectValue placeholder={didOptions.length ? "Select number" : "No numbers"} />
+              </SelectTrigger>
+              <SelectContent>
+                {didOptions.map((num) => (
+                  <SelectItem key={num} value={num}>
+                    {formatDidDisplay(num)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2">
+            {hasOversize && (
+              <span className="text-xs text-red-600 mr-2">Remove files over 1MB</span>
+            )}
+            <Button
+              size="sm"
+              onClick={sendMessage}
+              disabled={(!input.trim() && attachments.length === 0) || hasOversize}
+            >
+              Send
+            </Button>
+          </div>
         </div>
       </div>
       <EditBuyerModal

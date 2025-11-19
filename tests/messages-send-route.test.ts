@@ -1,173 +1,233 @@
 import { describe, beforeEach, test, expect, jest } from "@jest/globals"
 import { NextRequest } from "next/server"
-import { POST } from "../app/api/messages/send/route"
 
 let messages: any[] = []
 let threads: any[] = []
 let threadId = 1
 let threadError: any = null
 let messageError: any = null
+let inboundDidRows: string[] = []
+let voiceDidRows: string[] = []
 const fetchMock = jest.fn()
 const uploadMock = jest.fn().mockResolvedValue({ data: { path: "p" }, error: null })
 // @ts-ignore
 global.fetch = fetchMock
 
-jest.mock("../lib/sms-rate-limiter", () => ({
-  scheduleSMS: jest.fn((_c: string, _b: string, fn: () => Promise<any>) => fn()),
+const smsRateLimiterMock = {
+  scheduleSMS: jest.fn(
+    (_c: string, _b: string, fn: () => Promise<any>) => fn(),
+  ),
   lookupCarrier: jest.fn(async () => "verizon"),
+}
+
+const matchFilters = (record: any, filters: Record<string, any>) => {
+  return Object.entries(filters).every(([key, value]) => {
+    if (value === null) {
+      return record[key] == null
+    }
+    return record[key] === value
+  })
+}
+
+const createThreadQuery = () => {
+  const filters: Record<string, any> = {}
+  let limitCount: number | null = null
+  let orderColumn: string | null = null
+  let ascending = true
+  const builder: any = {
+    eq(column: string, value: any) {
+      filters[column] = value
+      return builder
+    },
+    is(column: string, value: any) {
+      filters[column] = value
+      return builder
+    },
+    order(column: string, options?: { ascending?: boolean }) {
+      orderColumn = column
+      ascending = options?.ascending ?? true
+      return builder
+    },
+    limit(count?: number) {
+      if (typeof count === "number") {
+        limitCount = count
+      }
+      return builder
+    },
+    async maybeSingle() {
+      let rows = threads.filter((thread) => matchFilters(thread, filters))
+      if (orderColumn) {
+        rows = [...rows].sort((a, b) => {
+          const aVal = new Date(a[orderColumn] || 0).getTime()
+          const bVal = new Date(b[orderColumn] || 0).getTime()
+          return ascending ? aVal - bVal : bVal - aVal
+        })
+      }
+      if (typeof limitCount === "number") {
+        rows = rows.slice(0, limitCount)
+      }
+      const row = rows[0] ?? null
+      return { data: row, error: null }
+    },
+  }
+  return builder
+}
+
+const createMessageQuery = () => {
+  const filters: Record<string, any> = {}
+  let orderColumn: string | null = null
+  let ascending = true
+  let limitCount: number | null = null
+  const builder: any = {
+    eq(column: string, value: any) {
+      filters[column] = value
+      return builder
+    },
+    order(column: string, options?: { ascending?: boolean }) {
+      orderColumn = column
+      ascending = options?.ascending ?? true
+      return builder
+    },
+    limit(count: number) {
+      limitCount = count
+      return builder
+    },
+    async maybeSingle() {
+      let rows = messages.filter((message) => matchFilters(message, filters))
+      if (orderColumn) {
+        rows = [...rows].sort((a, b) => {
+          const aVal = new Date(a[orderColumn] || 0).getTime()
+          const bVal = new Date(b[orderColumn] || 0).getTime()
+          return ascending ? aVal - bVal : bVal - aVal
+        })
+      }
+      if (typeof limitCount === "number") {
+        rows = rows.slice(0, limitCount)
+      }
+      return { data: rows[0] ?? null, error: null }
+    },
+  }
+  return builder
+}
+
+const createSupabaseClient = () => ({
+  storage: {
+    from: () => ({
+      upload: uploadMock,
+      getPublicUrl: () => ({
+        data: { publicUrl: "https://cdn/storage/v1/object/public/public-media/p" },
+      }),
+    }),
+  },
+  from: (table: string) => {
+    if (table === "message_threads") {
+      return {
+        upsert: (rows: any) => ({
+          select: () => ({
+            single: async () => {
+              const row = Array.isArray(rows) ? rows[0] : rows
+              let existing = threads.find(
+                (t) =>
+                  t.buyer_id === row.buyer_id &&
+                  t.phone_number === row.phone_number,
+              )
+              if (!existing) {
+                existing = { id: "t" + threadId++, ...row }
+                threads.push(existing)
+              } else {
+                Object.assign(existing, row)
+              }
+              return { data: existing, error: threadError }
+            },
+          }),
+        }),
+        select: () => createThreadQuery(),
+        update: (data: any) => ({
+          eq: (_col: string, id: string) => ({
+            select: () => ({
+              single: async () => {
+                const t = threads.find((th) => th.id === id)
+                Object.assign(t || {}, data)
+                return { data: t ?? null, error: null }
+              },
+            }),
+          }),
+        }),
+        insert: (rows: any) => ({
+          select: () => ({
+            single: async () => {
+              const row = Array.isArray(rows) ? rows[0] : rows
+              const t = { id: "t" + threadId++, ...row }
+              threads.push(t)
+              return { data: t, error: null }
+            },
+          }),
+        }),
+      }
+    }
+    if (table === "messages") {
+      return {
+        insert: async (rows: any) => {
+          const arr = Array.isArray(rows) ? rows : [rows]
+          const enriched = arr.map((row) => ({
+            created_at: row.created_at ?? new Date().toISOString(),
+            ...row,
+          }))
+          messages.push(...enriched)
+          return { data: enriched, error: messageError }
+        },
+        select: () => createMessageQuery(),
+      }
+    }
+    if (table === "inbound_numbers") {
+      return {
+        select: () => ({
+          eq: () => ({
+            in: async (_col: string, values: string[]) => ({
+              data: inboundDidRows
+                .filter((num) => values.includes(num))
+                .map((num) => ({ e164: num })),
+              error: null,
+            }),
+          }),
+        }),
+      }
+    }
+    if (table === "voice_numbers") {
+      return {
+        select: () => ({
+          in: async (_col: string, values: string[]) => ({
+            data: voiceDidRows
+              .filter((num) => values.includes(num))
+              .map((num) => ({ phone_number: num })),
+            error: null,
+          }),
+        }),
+      }
+    }
+    if (table === "buyer_sms_senders") {
+      return {
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({ data: null, error: null }),
+          }),
+        }),
+      }
+    }
+    throw new Error(`Unexpected table ${table}`)
+  },
+})
+
+const supabaseClient = createSupabaseClient()
+
+jest.unstable_mockModule("@/lib/sms-rate-limiter", () => smsRateLimiterMock)
+jest.unstable_mockModule("@/lib/supabase", () => ({
+  supabase: supabaseClient,
+  supabaseAdmin: supabaseClient,
 }))
 
-jest.mock("../lib/supabase", () => {
-  const matchFilters = (record: any, filters: Record<string, any>) => {
-    return Object.entries(filters).every(([key, value]) => {
-      if (value === null) {
-        return record[key] == null
-      }
-      return record[key] === value
-    })
-  }
-
-  const createThreadQuery = () => {
-    const filters: Record<string, any> = {}
-    let limitCount: number | null = null
-    const builder: any = {
-      eq(column: string, value: any) {
-        filters[column] = value
-        return builder
-      },
-      is(column: string, value: any) {
-        filters[column] = value
-        return builder
-      },
-      limit(count?: number) {
-        if (typeof count === "number") {
-          limitCount = count
-        }
-        return builder
-      },
-      async maybeSingle() {
-        let rows = threads.filter((thread) => matchFilters(thread, filters))
-        if (typeof limitCount === "number") {
-          rows = rows.slice(0, limitCount)
-        }
-        const row = rows[0] ?? null
-        return { data: row, error: null }
-      },
-    }
-    return builder
-  }
-
-  const createMessageQuery = () => {
-    const filters: Record<string, any> = {}
-    let orderColumn: string | null = null
-    let ascending = true
-    let limitCount: number | null = null
-    const builder: any = {
-      eq(column: string, value: any) {
-        filters[column] = value
-        return builder
-      },
-      order(column: string, options?: { ascending?: boolean }) {
-        orderColumn = column
-        ascending = options?.ascending ?? true
-        return builder
-      },
-      limit(count: number) {
-        limitCount = count
-        return builder
-      },
-      async maybeSingle() {
-        let rows = messages.filter((message) => matchFilters(message, filters))
-        if (orderColumn) {
-          rows = [...rows].sort((a, b) => {
-            const aVal = new Date(a[orderColumn] || 0).getTime()
-            const bVal = new Date(b[orderColumn] || 0).getTime()
-            return ascending ? aVal - bVal : bVal - aVal
-          })
-        }
-        if (typeof limitCount === "number") {
-          rows = rows.slice(0, limitCount)
-        }
-        return { data: rows[0] ?? null, error: null }
-      },
-    }
-    return builder
-  }
-
-  const client = {
-    storage: {
-      from: () => ({
-        upload: uploadMock,
-        getPublicUrl: () => ({
-          data: { publicUrl: "https://cdn/storage/v1/object/public/public-media/p" },
-        }),
-      }),
-    },
-    from: (table: string) => {
-      if (table === "message_threads") {
-        return {
-          upsert: (rows: any) => ({
-            select: () => ({
-              single: async () => {
-                const row = Array.isArray(rows) ? rows[0] : rows
-                let existing = threads.find(
-                  (t) =>
-                    t.buyer_id === row.buyer_id &&
-                    t.phone_number === row.phone_number,
-                )
-                if (!existing) {
-                  existing = { id: "t" + threadId++, ...row }
-                  threads.push(existing)
-                } else {
-                  Object.assign(existing, row)
-                }
-                return { data: existing, error: threadError }
-              },
-            }),
-          }),
-          select: () => createThreadQuery(),
-          update: (data: any) => ({
-            eq: (_col: string, id: string) => ({
-              select: () => ({
-                single: async () => {
-                  const t = threads.find((th) => th.id === id)
-                  Object.assign(t || {}, data)
-                  return { data: t ?? null, error: null }
-                },
-              }),
-            }),
-          }),
-          insert: (rows: any) => ({
-            select: () => ({
-              single: async () => {
-                const row = Array.isArray(rows) ? rows[0] : rows
-                const t = { id: "t" + threadId++, ...row }
-                threads.push(t)
-                return { data: t, error: null }
-              },
-            }),
-          }),
-        }
-      }
-      if (table === "messages") {
-        return {
-          insert: async (rows: any) => {
-            const arr = Array.isArray(rows) ? rows : [rows]
-            const enriched = arr.map((row) => ({
-              created_at: row.created_at ?? new Date().toISOString(),
-              ...row,
-            }))
-            messages.push(...enriched)
-            return { data: enriched, error: messageError }
-          },
-          select: () => createMessageQuery(),
-        }
-      }
-      throw new Error(`Unexpected table ${table}`)
-    },
-  }
-  return { supabase: client, supabaseAdmin: client }
-})
+const mod = await import("../app/api/messages/send/route")
+const { POST } = mod
 
 describe("messages send route", () => {
   beforeEach(() => {
@@ -176,6 +236,8 @@ describe("messages send route", () => {
     threadId = 1
     threadError = null
     messageError = null
+    inboundDidRows = []
+    voiceDidRows = []
     fetchMock.mockReset()
     fetchMock.mockResolvedValue({
       ok: true,
@@ -204,6 +266,23 @@ describe("messages send route", () => {
     expect(messages[0].is_bulk).toBe(false)
     expect(messages[0].media_urls).toBeNull()
     expect(threads.length).toBe(1)
+  })
+
+  test("honors override when DID exists", async () => {
+    inboundDidRows = ["+15556667777"]
+    const req = new NextRequest("http://test", {
+      method: "POST",
+      body: JSON.stringify({
+        buyerId: "b1",
+        threadId: "t1",
+        to: "+1222",
+        from: "+1 (555) 666-7777",
+        body: "hi",
+      })
+    })
+    await POST(req)
+    const body = JSON.parse(fetchMock.mock.calls.at(-1)[1].body as string)
+    expect(body.from).toBe("+15556667777")
   })
 
   test("sends sms without buyer id", async () => {
@@ -258,7 +337,7 @@ describe("messages send route", () => {
     threads.push({
       id: "t1",
       buyer_id: "b3",
-      phone_number: "+1444",
+      phone_number: "1444",
       campaign_id: null,
       preferred_from_number: "+1888",
     })
@@ -275,7 +354,7 @@ describe("messages send route", () => {
     threads.push({
       id: "t2",
       buyer_id: "b4",
-      phone_number: "+1555",
+      phone_number: "1555",
       campaign_id: null,
       preferred_from_number: null,
     })
