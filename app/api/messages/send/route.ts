@@ -151,6 +151,25 @@ export async function POST(request: NextRequest) {
     if (norm) fromDid = norm
   }
 
+  if (!fromDid && thread?.id) {
+    const { data: lastMessage, error } = await supabase
+      .from("messages")
+      .select("direction, from_number, to_number")
+      .eq("thread_id", thread.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (error) {
+      console.error("Failed to inspect thread history", error)
+    }
+    const candidate =
+      lastMessage?.direction === "outbound"
+        ? lastMessage?.from_number
+        : lastMessage?.to_number
+    const norm = normalizePhone(candidate)
+    if (norm) fromDid = norm
+  }
+
   if (!fromDid && buyerId) {
     const { data: sticky } = await supabase
       .from("buyer_sms_senders")
