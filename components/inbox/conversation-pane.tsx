@@ -504,21 +504,6 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
     return Array.from(set);
   }, [ownedDids, preferredFrom, selectedDid, bannerDid]);
 
-  const hasMultipleDids = useMemo(() => {
-    const used = new Set<string>();
-    if (preferredFrom) used.add(preferredFrom);
-    messages.forEach((m) => {
-      if (m.direction === "outbound") {
-        const norm = normalizeDid(m.from_number);
-        if (norm) used.add(norm);
-      } else if (m.direction === "inbound") {
-        const norm = normalizeDid(m.to_number);
-        if (norm) used.add(norm);
-      }
-    });
-    return used.size > 1;
-  }, [messages, preferredFrom]);
-
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -976,10 +961,11 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
               )}
             </>
           );
-          const pillLabel = hasMultipleDids
-            ? isOutbound
-              ? formatDidDisplay(m.from_number)
-              : formatDidDisplay(m.to_number)
+          const didLabel = isOutbound
+            ? formatDidDisplay(m.from_number)
+            : formatDidDisplay(m.to_number);
+          const pillLabel = didLabel
+            ? `${isOutbound ? "From" : "To"}: ${didLabel}`
             : null;
           return (
             <div key={m.id} className="flex flex-col">
@@ -996,7 +982,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
                       isOutbound ? "right-0" : "left-0",
                     )}
                   >
-                    • {isOutbound ? pillLabel : `to ${pillLabel}`}
+                    {pillLabel}
                   </span>
                 )}
                 {(m.media_urls && m.media_urls.length > 0) || audioSrc ? (
