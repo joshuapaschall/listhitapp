@@ -468,8 +468,9 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
         return;
       }
       setBannerDid(inboundDid);
-      manualDidRef.current = false;
-      setSelectedDid(inboundDid);
+      if (!manualDidRef.current || selectedDid === sticky) {
+        setSelectedDid(inboundDid);
+      }
       return;
     }
     dismissedBannerIdRef.current = null;
@@ -480,7 +481,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
     if (!inboundDid || inboundDid === sticky) {
       setBannerDid(null);
     }
-  }, [thread?.id, preferredFrom, lastInbound.did, lastInbound.id]);
+  }, [thread?.id, preferredFrom, lastInbound.did, lastInbound.id, selectedDid]);
 
   useEffect(() => {
     if (
@@ -503,6 +504,16 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
     if (bannerDid) set.add(bannerDid);
     return Array.from(set);
   }, [ownedDids, preferredFrom, selectedDid, bannerDid]);
+
+  const bannerDidLabel = useMemo(
+    () => (bannerDid ? formatDidDisplay(bannerDid) : null),
+    [bannerDid],
+  );
+
+  const stickyDidLabel = useMemo(
+    () => (preferredFrom ? formatDidDisplay(preferredFrom) : null),
+    [preferredFrom],
+  );
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -582,9 +593,11 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
   const handleBannerKeep = useCallback(() => {
     manualDidRef.current = true;
     dismissedBannerIdRef.current = lastInbound.id;
-    setSelectedDid(preferredFrom);
+    if (preferredFrom) {
+      setSelectedDid(preferredFrom);
+    }
     setBannerDid(null);
-  }, [preferredFrom, lastInbound.id]);
+  }, [lastInbound.id, preferredFrom]);
 
   const sendMessage = useCallback(async () => {
     if (!thread || (!input.trim() && attachments.length === 0)) return;
@@ -1176,14 +1189,16 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
               {thread.campaign_id && preferredFrom
                 ? `Campaign sticky is ${formatDidDisplay(preferredFrom)}. `
                 : ""}
-              They texted your other line {formatDidDisplay(bannerDid)}. Switch reply DID?
+              They texted your other line {bannerDidLabel}. We switched your reply to
+              {" "}
+              {bannerDidLabel}. Prefer to use {stickyDidLabel ?? "your saved number"}?
             </p>
             <div className="mt-2 flex gap-2">
               <Button size="sm" onClick={handleBannerSwitch}>
-                Switch
+                Stay on {bannerDidLabel}
               </Button>
               <Button size="sm" variant="outline" onClick={handleBannerKeep}>
-                Keep Sticky
+                Use {stickyDidLabel ?? "saved number"}
               </Button>
             </div>
           </div>
