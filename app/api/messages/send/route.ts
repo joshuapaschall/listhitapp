@@ -95,14 +95,36 @@ export async function POST(request: NextRequest) {
     if (owned) {
       let ok = true
       if (supabaseAdmin) {
-        const matchValues = [owned]
+        ok = false
         const formattedOwned = formatPhoneE164(owned)
-        if (formattedOwned) matchValues.push(formattedOwned)
-        const { data: voice } = await supabaseAdmin
-          .from("voice_numbers")
-          .select("phone_number")
-          .in("phone_number", matchValues)
-        ok = !!(voice && voice.length)
+        if (formattedOwned) {
+          const { data: inbound, error: inboundErr } = await supabaseAdmin
+            .from("inbound_numbers")
+            .select("e164")
+            .eq("enabled", true)
+            .in("e164", [formattedOwned])
+          if (!inboundErr && inbound && inbound.length) {
+            ok = true
+          }
+        }
+        if (!ok) {
+          const matchValues = Array.from(
+            new Set(
+              [owned, formattedOwned].filter(
+                (num): num is string => typeof num === "string",
+              ),
+            ),
+          )
+          if (matchValues.length) {
+            const { data: voice, error: voiceErr } = await supabaseAdmin
+              .from("voice_numbers")
+              .select("phone_number")
+              .in("phone_number", matchValues)
+            if (!voiceErr && voice && voice.length) {
+              ok = true
+            }
+          }
+        }
       }
       if (ok) fromDid = owned
     }
@@ -233,8 +255,10 @@ export async function POST(request: NextRequest) {
         )
         .select("id, preferred_from_number")
         .single()
-      if (res.error || !res.data)
-        throw res.error || new Error("Thread upsert failed")
+      if (res.error || !res.data) {
+        console.error("Thread upsert failed", res.error)
+        throw new Error("Database error")
+      }
       thread = res.data
       return res.data
     }
