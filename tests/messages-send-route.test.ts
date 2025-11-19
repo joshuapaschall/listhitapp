@@ -20,6 +20,8 @@ const smsRateLimiterMock = {
   lookupCarrier: jest.fn(async () => "verizon"),
 }
 
+const mms = await import("@/utils/mms.server")
+
 const matchFilters = (record: any, filters: Record<string, any>) => {
   return Object.entries(filters).every(([key, value]) => {
     if (value === null) {
@@ -312,6 +314,27 @@ describe("messages send route", () => {
     expect(body.media_urls).toEqual(["https://cdn/storage/v1/object/public/public-media/p"])
     expect(messages[0].media_urls).toEqual(["https://cdn/storage/v1/object/public/public-media/p"])
     expect(threads.length).toBe(1)
+  })
+
+  test("returns 422 when media cannot be processed", async () => {
+    const ensureSpy = jest
+      .spyOn(mms, "ensurePublicMediaUrls")
+      .mockResolvedValue([])
+    const req = new NextRequest("http://test", {
+      method: "POST",
+      body: JSON.stringify({
+        to: "+1222",
+        body: "hi",
+        mediaUrls: ["http://img.com/pic.jpg"],
+      }),
+    })
+    const res = await POST(req)
+    const data = await res.json()
+    expect(res.status).toBe(422)
+    expect(data.error).toContain("Attachments")
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(messages.length).toBe(0)
+    ensureSpy.mockRestore()
   })
 
   test("reuses anon thread for multiple messages", async () => {

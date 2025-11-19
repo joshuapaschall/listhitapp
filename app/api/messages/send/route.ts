@@ -40,6 +40,15 @@ export async function POST(request: NextRequest) {
   if (Array.isArray(mediaUrls) && mediaUrls.length) {
     try {
       finalMediaUrls = await ensurePublicMediaUrls(mediaUrls, "outgoing")
+      if (!finalMediaUrls || finalMediaUrls.length < mediaUrls.length) {
+        const mediaError =
+          finalMediaUrls?.length === 0
+            ? "Attachments could not be processed. Please try different files."
+            : "Some attachments could not be processed. Please try again."
+        return new Response(JSON.stringify({ error: mediaError }), {
+          status: 422,
+        })
+      }
     } catch (err: any) {
       console.error("Failed to mirror media", err)
       return new Response(JSON.stringify({ error: err.message }), { status: 400 })

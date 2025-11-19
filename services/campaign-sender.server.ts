@@ -60,6 +60,13 @@ export async function sendCampaignSMS({ buyerId, to, body, mediaUrls, dryRun, ca
   let finalMediaUrls: string[] | undefined
   if (mediaUrls?.length) {
     finalMediaUrls = await ensurePublicMediaUrls(mediaUrls)
+    if (!finalMediaUrls || finalMediaUrls.length < mediaUrls.length) {
+      const mediaError =
+        finalMediaUrls?.length === 0
+          ? "Attachments could not be processed. Please try different files."
+          : "Some attachments could not be processed. Please try again."
+      throw new Error(mediaError)
+    }
   }
 
   for (const num of to) {
