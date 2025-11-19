@@ -468,7 +468,9 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
         return;
       }
       setBannerDid(inboundDid);
-      if (!selectedDid) setSelectedDid(sticky);
+      if (!manualDidRef.current || selectedDid === sticky) {
+        setSelectedDid(inboundDid);
+      }
       return;
     }
     dismissedBannerIdRef.current = null;
@@ -508,11 +510,10 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
     [bannerDid],
   );
 
-  const currentDidLabel = useMemo(() => {
-    if (selectedDid) return formatDidDisplay(selectedDid);
-    if (preferredFrom) return formatDidDisplay(preferredFrom);
-    return null;
-  }, [selectedDid, preferredFrom]);
+  const stickyDidLabel = useMemo(
+    () => (preferredFrom ? formatDidDisplay(preferredFrom) : null),
+    [preferredFrom],
+  );
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -592,8 +593,11 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
   const handleBannerKeep = useCallback(() => {
     manualDidRef.current = true;
     dismissedBannerIdRef.current = lastInbound.id;
+    if (preferredFrom) {
+      setSelectedDid(preferredFrom);
+    }
     setBannerDid(null);
-  }, [lastInbound.id]);
+  }, [lastInbound.id, preferredFrom]);
 
   const sendMessage = useCallback(async () => {
     if (!thread || (!input.trim() && attachments.length === 0)) return;
@@ -1185,15 +1189,16 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
               {thread.campaign_id && preferredFrom
                 ? `Campaign sticky is ${formatDidDisplay(preferredFrom)}. `
                 : ""}
-              They texted your other line {bannerDidLabel}. Reply from {bannerDidLabel}
-              or stay with {currentDidLabel ?? "your current number"}?
+              They texted your other line {bannerDidLabel}. We switched your reply to
+              {" "}
+              {bannerDidLabel}. Prefer to use {stickyDidLabel ?? "your saved number"}?
             </p>
             <div className="mt-2 flex gap-2">
               <Button size="sm" onClick={handleBannerSwitch}>
-                Reply from {bannerDidLabel}
+                Stay on {bannerDidLabel}
               </Button>
               <Button size="sm" variant="outline" onClick={handleBannerKeep}>
-                Stay with current number
+                Use {stickyDidLabel ?? "saved number"}
               </Button>
             </div>
           </div>
