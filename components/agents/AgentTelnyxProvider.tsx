@@ -7,6 +7,7 @@ import React, {
   useState,
   ReactNode,
   useRef,
+  useCallback,
 } from 'react';
 import {
   TelnyxRTC,
@@ -231,12 +232,12 @@ export function AgentTelnyxProvider({
   };
 
   // Helper to cleanup all audio elements
-  const cleanupAllAudioElements = () => {
+  const cleanupAllAudioElements = useCallback(() => {
     audioElementsRef.current.forEach(audio => {
       cleanupAudioElement(audio);
     });
     audioElementsRef.current.clear();
-  };
+  }, []);
 
   // Get agent info and JWT token
   useEffect(() => {
@@ -984,14 +985,17 @@ export function AgentTelnyxProvider({
 
     initializeDevice();
 
+    // Capture current timeouts set for this effect instance
+    const timeouts = timeoutsRef.current;
+
     return () => {
       isMounted = false;
 
       // Clear all tracked timeouts
-      timeoutsRef.current.forEach(timeout => {
+      timeouts.forEach((timeout) => {
         clearTimeout(timeout);
       });
-      timeoutsRef.current.clear();
+      timeouts.clear();
 
       // Clear token refresh timer
       if (tokenRefreshTimerRef.current) {
@@ -1047,7 +1051,7 @@ export function AgentTelnyxProvider({
         }
       }
     };
-  }, [agentId]); // Re-run if agentId changes
+  }, [agentId, agent?.sip_username, cleanupAllAudioElements]); // Re-run if agentId changes
 
   // Separate useEffect for token refresh
   useEffect(() => {

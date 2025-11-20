@@ -1,24 +1,31 @@
-import { describe, beforeEach, test, expect, jest } from "@jest/globals"
+import { describe, beforeAll, afterAll, beforeEach, test, expect, jest } from "@jest/globals"
 import { NextRequest } from "next/server"
 import { POST } from "../app/api/short-links/route"
 
-let createMock = jest.fn()
+const originalFetch = global.fetch
+let fetchMock: jest.Mock
 
-jest.mock("../services/shortio-service", () => ({
-  createShortLink: (...args: any[]) => createMock(...args),
-}))
+beforeAll(() => {
+  process.env.SHORTIO_API_KEY = "test-key"
+  process.env.SHORTIO_DOMAIN = "example.com"
+})
+
+afterAll(() => {
+  global.fetch = originalFetch
+})
 
 describe("short links route", () => {
   beforeEach(() => {
-    createMock.mockReset()
+    fetchMock = jest.fn()
+    global.fetch = fetchMock as any
   })
 
   test("creates short link", async () => {
-    createMock.mockResolvedValue({
-      shortURL: "http://s.io/a",
-      path: "k1",
-      idString: "id1",
-    })
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ shortURL: "http://s.io/a", path: "k1", idString: "id1" }),
+    } as any)
+
     const req = new NextRequest("http://test", {
       method: "POST",
       body: JSON.stringify({ originalURL: "http://example.com" }),
@@ -28,7 +35,7 @@ describe("short links route", () => {
     expect(body).toBe(
       JSON.stringify({ shortURL: "http://s.io/a", path: "k1", idString: "id1" })
     )
-    expect(createMock).toHaveBeenCalledWith("http://example.com", undefined)
+    expect(fetchMock).toHaveBeenCalled()
   })
 
   test("requires url", async () => {
@@ -38,7 +45,7 @@ describe("short links route", () => {
   })
 
   test("handles shortio error", async () => {
-    createMock.mockRejectedValue(new Error("bad"))
+    fetchMock.mockRejectedValue(new Error("bad"))
     const req = new NextRequest("http://test", {
       method: "POST",
       body: JSON.stringify({ originalURL: "http://ex.com" }),

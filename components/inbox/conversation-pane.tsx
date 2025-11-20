@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { TemplateService } from "@/services/template-service";
 import {
@@ -37,7 +38,8 @@ import {
   AlertCircle,
 } from "lucide-react";
 import Image from "next/image";
-import { insertText, cn } from "@/lib/utils";
+import Link from "next/link";
+import { insertText, cn, renderTemplate } from "@/lib/utils";
 import { calculateSmsSegments } from "@/lib/sms-utils";
 import { formatPhoneE164, normalizePhone } from "@/lib/dedup-utils";
 import {
@@ -45,6 +47,7 @@ import {
   type MessageThread,
   type Message,
   type Buyer,
+  type TemplateRecord,
 } from "@/lib/supabase";
 import EditBuyerModal from "@/components/buyers/edit-buyer-modal";
 import AddBuyerModal from "@/components/buyers/add-buyer-modal";
@@ -60,6 +63,17 @@ import {
 } from "@/utils/uploadMedia";
 import VoiceRecorder from "@/components/voice/VoiceRecorder";
 import UploadModal from "./upload-modal";
+import QuickReplyModal from "./quick-reply-modal";
+
+const mergeTags = [
+  { label: "Contact's First Name", value: "{{first_name}}" },
+  { label: "Contact's Last Name", value: "{{last_name}}" },
+  { label: "Contact's Phone Number", value: "{{phone}}" },
+  { label: "Contact's Email", value: "{{email}}" },
+  { label: "Contact Form Link", value: "{{contact_form_link}}" },
+  { label: "My First Name", value: "{{my_first_name}}" },
+  { label: "My Last Name", value: "{{my_last_name}}" },
+];
 
 function parseMedia(val: any): string[] {
   if (!val) return [];
@@ -79,15 +93,7 @@ function parseMedia(val: any): string[] {
 function isPlayableAudioUrl(u: string) {
   try {
     const base = u.split("?")[0].toLowerCase()
-    return /(\.mp3|\.m4a|\.wav|\.ogg|\.opus|\.oga|\.webm|\.weba)(\?.*)?$/.test(base)
-  } catch {
-    return false
-  }
-}
-
-function isMp3Url(u: string) {
-  try {
-    return u.split("?")[0].toLowerCase().endsWith(".mp3")
+    return /(\.mp3|\.m4a|\.wav|\.ogg|\.opus|\.oga|\.webm|\.weba|\.amr)(\?.*)?$/.test(base)
   } catch {
     return false
   }
@@ -95,15 +101,27 @@ function isMp3Url(u: string) {
 
 function parseAudioUrl(val: any): string | null {
   if (!val) return null
-  const tryUrl = (u: string) => (isMp3Url(u) ? u : null)
-  if (Array.isArray(val)) return tryUrl(val[0])
+  const tryUrl = (u: string) => (isPlayableAudioUrl(u) ? u : null)
+  if (Array.isArray(val)) {
+    for (const entry of val) {
+      const candidate = typeof entry === "string" ? entry.trim() : ""
+      const playable = tryUrl(candidate)
+      if (playable) return playable
+    }
+    return null
+  }
   if (typeof val === "string") {
     const trimmed = val.trim()
     if (!trimmed) return null
     if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
       try {
         const arr = JSON.parse(trimmed)
-        if (Array.isArray(arr) && arr[0]) return tryUrl(arr[0])
+        if (Array.isArray(arr)) {
+          for (const entry of arr) {
+            const playable = tryUrl(typeof entry === "string" ? entry.trim() : "")
+            if (playable) return playable
+          }
+        }
       } catch {}
     }
     return tryUrl(trimmed)
@@ -132,8 +150,8 @@ function MediaAttachment({ url }: { url: string }) {
   const [src, setSrc] = useState(url)
   const [error, setError] = useState<string | null>(null)
   const isImage = /(\.jpg|\.jpeg|\.png|\.gif|\.bmp|\.webp)$/i.test(src)
-  const isVideo = /(\.mp4|\.webm)$/i.test(src)
-  const isMp3 = isMp3Url(src)
+  const isVideo = /(\.mp4|\.webm|\.3gp)$/i.test(src)
+  const isAudio = isPlayableAudioUrl(src)
   const needsConvert = /(\.amr|\.webm|\.weba|\.3gp|\.wav|\.ogg|\.opus|\.oga)(\?.*)?$/i.test(src)
 
   useEffect(() => {
@@ -176,7 +194,7 @@ function MediaAttachment({ url }: { url: string }) {
     content = (
       <video controls src={src} className="w-full mt-2" crossOrigin="anonymous" />
     )
-  } else if (isMp3) {
+  } else if (isAudio) {
     content = (
       <audio
         controls
@@ -187,15 +205,7 @@ function MediaAttachment({ url }: { url: string }) {
       />
     )
   } else {
-    content = src.endsWith(".mp3") ? (
-      <audio
-        controls
-        src={src}
-        preload="none"
-        style={{ maxWidth: "100%" }}
-        className="rounded-xl w-full bg-white shadow"
-      />
-    ) : (
+    content = (
       <a href={src} target="_blank" rel="noopener noreferrer">
         Download
       </a>
@@ -233,12 +243,17 @@ interface LocalMessage extends Message {
 export default function ConversationPane({ thread }: ConversationPaneProps) {
   const [messages, setMessages] = useState<LocalMessage[]>([]);
   const [input, setInput] = useState("");
-  const [templates, setTemplates] = useState<
-    { id: string; name: string; message: string }[]
-  >([]);
+  const [templates, setTemplates] = useState<TemplateRecord[]>([]);
+  const [agentDetails, setAgentDetails] = useState<{
+    firstName?: string;
+    lastName?: string;
+    displayName?: string;
+  }>({});
   const [showEmoji, setShowEmoji] = useState(false);
   const [attachments, setAttachments] = useState<File[]>([]);
-  const hasOversize = attachments.some((f) => f.size > MAX_MMS_SIZE);
+  const oversizedNonImages = attachments.filter(
+    (f) => f.size > MAX_MMS_SIZE && !f.type.startsWith("image/"),
+  );
   const [buyer, setBuyer] = useState<Buyer | null>(null);
   const [showEdit, setShowEdit] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
@@ -248,6 +263,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
   const [showRecorder, setShowRecorder] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [showUpload, setShowUpload] = useState(false);
+  const [uploadType, setUploadType] = useState<"photo" | "video" | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const [selectedDid, setSelectedDid] = useState<string | null>(
@@ -260,9 +276,42 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
   const [bannerDid, setBannerDid] = useState<string | null>(null);
   const manualDidRef = useRef(false);
   const dismissedBannerIdRef = useRef<string | null>(null);
+  const [showQuickReplyModal, setShowQuickReplyModal] = useState(false);
+
+  const loadQuickReplies = useCallback(async () => {
+    try {
+      const list = await TemplateService.listTemplates("quick_reply");
+      setTemplates(list);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to load quick replies");
+    }
+  }, []);
 
   useEffect(() => {
-    TemplateService.listTemplates().then(setTemplates);
+    void loadQuickReplies();
+  }, [loadQuickReplies]);
+
+  useEffect(() => {
+    const loadAgent = async () => {
+      try {
+        const res = await fetch("/api/agents/me");
+        if (!res.ok) return;
+        const data = await res.json().catch(() => ({}));
+        const display = typeof data.display_name === "string" ? data.display_name : "";
+        const parts = display.trim().split(/\s+/).filter(Boolean);
+        setAgentDetails({
+          displayName: display,
+          firstName:
+            data.first_name || (parts.length ? parts[0] : ""),
+          lastName:
+            data.last_name || (parts.length > 1 ? parts.slice(1).join(" ") : ""),
+        });
+      } catch (err) {
+        console.error("Failed to load agent details", err);
+      }
+    };
+    loadAgent();
   }, []);
 
   useEffect(() => {
@@ -292,12 +341,14 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
     const loadBuyer = async () => {
       const { data, error } = await supabase
         .from("buyers")
-        .select("id,fname,lname,full_name,can_receive_sms,status")
+        .select(
+          "id,fname,lname,full_name,can_receive_sms,status,email,phone,phone2,phone3,website",
+        )
         .eq("id", thread.buyer_id);
       if (!error && data && data[0]) setBuyer(data[0] as Buyer);
     };
     loadBuyer();
-  }, [thread]);
+  }, [thread]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!thread) {
@@ -314,7 +365,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
     }
     setBannerDid(null);
     manualDidRef.current = false;
-  }, [thread?.id, thread?.preferred_from_number]);
+    }, [thread?.id, thread?.preferred_from_number]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!thread || !thread.unread) return;
@@ -424,20 +475,66 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
         },
         (payload) => {
           const msg = payload.new as Message;
-          const parsed = {
-            ...msg,
+          const parsed: LocalMessage = {
+            ...(msg as Message),
             media_urls: parseMedia((msg as any).media_urls),
-          } as Message;
+          };
+
           setMessages((prev) => {
-            const idx = prev.findIndex(
-              (m) => m.provider_id && m.provider_id === msg.provider_id,
-            );
-            if (idx >= 0) {
+            // 1) If we already have this DB id, just update it in place
+            const byId = prev.findIndex((m) => m.id === msg.id);
+            if (byId >= 0) {
               const arr = [...prev];
-              arr[idx] = parsed as LocalMessage;
+              const old = arr[byId];
+              arr[byId] = {
+                ...parsed,
+                // keep any localId we were using for optimistic updates
+                localId: old.localId,
+              };
               return arr;
             }
-            return [...prev, parsed as LocalMessage];
+
+            // 2) Normal path: match by provider_id (after sendMessage sets it)
+            if (msg.provider_id) {
+              const byProvider = prev.findIndex(
+                (m) => m.provider_id === msg.provider_id,
+              );
+              if (byProvider >= 0) {
+                const arr = [...prev];
+                const old = arr[byProvider];
+                arr[byProvider] = {
+                  ...parsed,
+                  localId: old.localId,
+                };
+                return arr;
+              }
+            }
+
+            // 3) Fallback: match any outbound "sending" message with same to_number + body
+            const msgTo = normalizeDid(msg.to_number);
+            const byPending = prev.findIndex((m) => {
+              if (m.status !== "sending" || m.direction !== "outbound") return false;
+              if (m.provider_id) return false;
+              const pendingTo = normalizeDid(m.to_number);
+              return pendingTo === msgTo && (m.body || "") === (msg.body || "");
+            });
+            if (byPending >= 0) {
+              const arr = [...prev];
+              const old = arr[byPending];
+              arr[byPending] = {
+                ...parsed,
+                localId: old.localId,
+              };
+              return arr;
+            }
+
+            // 4) If somehow it's already there, don't duplicate
+            if (prev.some((m) => m.id === msg.id)) {
+              return prev;
+            }
+
+            // 5) Otherwise append (covers inbound messages, etc.)
+            return [...prev, parsed];
           });
         },
       )
@@ -457,6 +554,56 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
     }
     return { id: null as string | null, did: null as string | null };
   }, [messages]);
+
+  const mergeContext = useMemo(
+    () => {
+      const fname = buyer?.fname || thread?.buyers?.fname || "";
+      const lname = buyer?.lname || thread?.buyers?.lname || "";
+      const primaryPhone =
+        buyer?.phone ||
+        buyer?.phone2 ||
+        buyer?.phone3 ||
+        thread?.phone_number ||
+        "";
+      const email = buyer?.email || "";
+      const contactFormLink =
+        (buyer as any)?.contact_form_link ||
+        (buyer as any)?.form_link ||
+        buyer?.website ||
+        "";
+      const myFirstName =
+        agentDetails.firstName ||
+        (agentDetails.displayName
+          ? agentDetails.displayName.split(" ")[0] || ""
+          : "");
+      const myLastName =
+        agentDetails.lastName ||
+        (agentDetails.displayName
+          ? agentDetails.displayName
+              .split(" ")
+              .slice(1)
+              .join(" ") || ""
+          : "");
+
+      return {
+        buyer: {
+          fname,
+          lname,
+          phone: primaryPhone,
+          email,
+          contact_form_link: contactFormLink,
+        },
+        agent: { myFirstName, myLastName },
+      };
+    },
+    [
+      agentDetails.displayName,
+      agentDetails.firstName,
+      agentDetails.lastName,
+      buyer,
+      thread,
+    ],
+  );
 
   useEffect(() => {
     if (!thread) return;
@@ -481,7 +628,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
     if (!inboundDid || inboundDid === sticky) {
       setBannerDid(null);
     }
-  }, [thread?.id, preferredFrom, lastInbound.did, lastInbound.id, selectedDid]);
+  }, [thread?.id, preferredFrom, lastInbound.did, lastInbound.id, selectedDid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (
@@ -599,23 +746,105 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
     setBannerDid(null);
   }, [lastInbound.id, preferredFrom]);
 
+  const compressImageIfNeeded = useCallback(
+    async (file: File): Promise<File> => {
+      if (!file.type.startsWith("image/") || file.size <= MAX_MMS_SIZE) {
+        return file;
+      }
+
+      return await new Promise<File>((resolve, reject) => {
+        const img = new Image();
+        const reader = new FileReader();
+
+        reader.onload = () => {
+          img.onload = () => {
+            try {
+              const canvas = document.createElement("canvas");
+              const ctx = canvas.getContext("2d");
+              if (!ctx) {
+                reject(new Error("Canvas not supported"));
+                return;
+              }
+
+              const scale = Math.sqrt(MAX_MMS_SIZE / file.size);
+              const targetScale =
+                isFinite(scale) && scale > 0 && scale < 1 ? scale : 1;
+
+              canvas.width = img.width * targetScale;
+              canvas.height = img.height * targetScale;
+              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+              canvas.toBlob(
+                (blob) => {
+                  if (!blob) {
+                    reject(new Error("Failed to compress image"));
+                    return;
+                  }
+                  if (blob.size > MAX_MMS_SIZE) {
+                    reject(
+                      new Error(
+                        `Image is still too large after compression (${Math.round(
+                          blob.size / 1024,
+                        )}KB). Try a smaller image.`,
+                      ),
+                    );
+                    return;
+                  }
+                  const compressed = new File(
+                    [blob],
+                    file.name.replace(/\.[^.]+$/, ".jpg"),
+                    { type: "image/jpeg" },
+                  );
+                  resolve(compressed);
+                },
+                "image/jpeg",
+                0.8,
+              );
+            } catch (err) {
+              reject(err as Error);
+            }
+          };
+          img.onerror = () =>
+            reject(new Error("Failed to load image for compression"));
+          img.src = reader.result as string;
+        };
+
+        reader.onerror = () => reject(new Error("Failed to read image file"));
+        reader.readAsDataURL(file);
+      });
+    },
+    [],
+  );
+
   const sendMessage = useCallback(async () => {
-    if (!thread || (!input.trim() && attachments.length === 0)) return;
+    const trimmedInput = input.trim();
+    if (!thread || (!trimmedInput && attachments.length === 0)) return;
+    const sendableFiles: File[] = []
+    const linkOnlyFiles: File[] = []
+
     for (const file of attachments) {
       const ext = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
       if (!ALLOWED_MMS_EXTENSIONS.includes(ext)) {
         toast.error(`Unsupported file type: ${file.name}`);
         return;
       }
-      if (file.size > MAX_MMS_SIZE) {
-        toast.error(`File ${file.name} exceeds 1MB limit`);
-        return;
+
+      if (file.size > MAX_MMS_SIZE && !file.type.startsWith("image/")) {
+        linkOnlyFiles.push(file)
+        continue
       }
+
+      sendableFiles.push(file)
     }
 
-    const uploadFiles = async () => {
+    const uploadFiles = async (list: File[]) => {
       const urls: string[] = []
-      for (const file of attachments) {
+      for (const original of list) {
+        const file =
+          original.type.startsWith("image/") && original.size > MAX_MMS_SIZE
+            ? await compressImageIfNeeded(original)
+            : original
+
         let url = await uploadMediaFile(file, "outgoing")
         const lower = file.name.toLowerCase()
         const needsConvert =
@@ -643,9 +872,52 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
 
     const currentFrom = selectedDid || preferredFrom || null;
 
-    if (scheduleDate) {
+    const renderedBody = renderTemplate(
+      trimmedInput,
+      mergeContext.buyer,
+      mergeContext.agent,
+    );
+
+    const largeNames = linkOnlyFiles.map((f) => f.name)
+    if (linkOnlyFiles.length) {
+      toast.info(
+        `${linkOnlyFiles.length} file${linkOnlyFiles.length > 1 ? "s" : ""} will send as download link${
+          linkOnlyFiles.length > 1 ? "s" : ""
+        } due to the 1MB MMS limit.`,
+      )
+    }
+
+    const uploadAndBuildBody = async () => {
+      let mediaUrls: string[] = []
+      let linkUrls: string[] = []
+
       try {
-        const mediaUrls = await uploadFiles();
+        mediaUrls = await uploadFiles(sendableFiles)
+        linkUrls = linkOnlyFiles.length ? await uploadFiles(linkOnlyFiles) : []
+      } catch (err) {
+        console.error("Media upload failed", err)
+        toast.error(
+          (err as any)?.message ||
+            "Failed to upload attachments. Please try different files.",
+        )
+        return { mediaUrls: [], linkUrls: [], failed: true }
+      }
+
+      const finalBody = linkUrls.length
+        ? `${renderedBody ? `${renderedBody}\n\n` : ""}Download link${
+            linkUrls.length > 1 ? "s" : ""
+          } (over 1MB):\n${linkUrls
+            .map((url, idx) => `• ${largeNames[idx] || "Attachment"}: ${url}`)
+            .join("\n")}`
+        : renderedBody
+
+      return { mediaUrls, linkUrls, body: finalBody, failed: false }
+    }
+
+    if (scheduleDate) {
+      const { mediaUrls, body, failed } = await uploadAndBuildBody()
+      if (failed) return
+      try {
         const name =
           buyer?.full_name ||
           `${buyer?.fname || ""} ${buyer?.lname || ""}`.trim() ||
@@ -653,7 +925,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
         const campaign = await CampaignService.createCampaign({
           name: `SMS to ${name}`,
           channel: "sms",
-          message: input.trim(),
+          message: body,
           mediaUrls,
           buyerIds: [thread.buyer_id],
           groupIds: [],
@@ -678,7 +950,9 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
       return;
     }
 
-    const mediaUrls = await uploadFiles();
+    const { mediaUrls, body, failed } = await uploadAndBuildBody()
+    if (failed) return
+
     const tempId = `temp-${Date.now()}`;
     const pending: LocalMessage = {
       id: tempId,
@@ -688,7 +962,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
       direction: "outbound",
       from_number: currentFrom ? formatDidE164(currentFrom) : null,
       to_number: thread.phone_number,
-      body: input.trim(),
+      body,
       provider_id: null,
       is_bulk: false,
       filtered: false,
@@ -728,7 +1002,6 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
             : m,
         ),
       );
-      toast.error((err as Error).message || "Failed to send message");
     }
   }, [
     thread,
@@ -739,6 +1012,8 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
     attachments,
     selectedDid,
     preferredFrom,
+    mergeContext,
+    compressImageIfNeeded,
   ]);
 
   const retryMessage = async (msg: LocalMessage) => {
@@ -1045,7 +1320,12 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
         <div className="border-t pt-2 flex gap-2 flex-wrap">
           <DropdownMenu open={showEmoji} onOpenChange={setShowEmoji}>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon">
+              <Button
+                variant="outline"
+                size="icon"
+                title="Insert emoji"
+                aria-label="Insert emoji"
+              >
                 <Smile className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -1061,7 +1341,12 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
           </DropdownMenu>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon">
+              <Button
+                variant="outline"
+                size="icon"
+                title="Insert template"
+                aria-label="Insert template"
+              >
                 <Clipboard className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -1074,37 +1359,70 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
                   {t.name}
                 </DropdownMenuItem>
               ))}
+              {templates.length > 0 && <DropdownMenuSeparator />}
+              <DropdownMenuItem onSelect={() => setShowQuickReplyModal(true)}>
+                New quick reply…
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/settings/templates/quick_reply">Manage templates…</Link>
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon">
+              <Button
+                variant="outline"
+                size="icon"
+                title="Insert merge tag"
+                aria-label="Insert merge tag"
+              >
                 <Tag className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
-              <DropdownMenuItem
-                onSelect={() => insertPlaceholder("{{first_name}}")}
+              {mergeTags.map((tag) => (
+                <DropdownMenuItem
+                  key={tag.value}
+                  onSelect={() => insertPlaceholder(tag.value)}
+                >
+                  {tag.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                aria-label="Add media"
+                title="Add media"
+                variant="outline"
+                size="icon"
               >
-                First Name
+                <ImageIcon className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuItem
+                onSelect={() => {
+                  setUploadType("photo")
+                  setShowUpload(true)
+                }}
+              >
+                Photo
               </DropdownMenuItem>
               <DropdownMenuItem
-                onSelect={() => insertPlaceholder("{{last_name}}")}
+                onSelect={() => {
+                  setUploadType("video")
+                  setShowUpload(true)
+                }}
               >
-                Last Name
+                Video
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           <Button
-            aria-label="Upload files"
-            variant="outline"
-            size="icon"
-            onClick={() => setShowUpload(true)}
-          >
-            <ImageIcon className="h-4 w-4" />
-          </Button>
-          <Button
             aria-label="Record voice"
+            title="Record voice note"
             variant="outline"
             size="icon"
             onClick={() => setShowRecorder(true)}
@@ -1113,7 +1431,12 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
           </Button>
           <Popover open={schedulePicker} onOpenChange={setSchedulePicker}>
             <PopoverTrigger asChild>
-              <Button variant="outline" size="icon">
+              <Button
+                variant="outline"
+                size="icon"
+                title="Schedule message"
+                aria-label="Schedule message"
+              >
                 <Clock className="h-4 w-4" />
               </Button>
             </PopoverTrigger>
@@ -1141,12 +1464,12 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
               file.type.startsWith("image/") || /(jpg|jpeg|png|gif|bmp|webp)$/.test(lower);
             const isVideo =
               file.type.startsWith("video/") ||
-              (!file.type.startsWith("audio/") && /(mp4|webm)$/.test(lower));
+              (!file.type.startsWith("audio/") && /(mp4|webm|3gp)$/.test(lower));
             // use isPlayableAudioUrl so webm recordings preview correctly
             const isPlayableAudio = isPlayableAudioUrl(lower);
             const isAudio =
               file.type.startsWith("audio/") ||
-              /(m4a|mp3|wav|ogg|opus|oga|webm|mp4)$/.test(lower);
+              isPlayableAudio;
             const url = URL.createObjectURL(file);
             return (
               <div key={idx} className="relative inline-block">
@@ -1203,14 +1526,6 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
             </div>
           </div>
         )}
-        <div
-          className={`flex justify-between text-xs ${smsSegments > 1 ? "text-red-600" : "text-muted-foreground"}`}
-        >
-          <span>
-            {remaining} characters remaining · {smsSegments} segment
-            {smsSegments > 1 ? "s" : ""}
-          </span>
-        </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2 text-sm">
             <span className="text-xs uppercase text-muted-foreground">From</span>
@@ -1233,17 +1548,27 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
               </SelectContent>
             </Select>
           </div>
-          <div className="flex items-center gap-2">
-            {hasOversize && (
-              <span className="text-xs text-red-600 mr-2">Remove files over 1MB</span>
-            )}
-            <Button
-              size="sm"
-              onClick={sendMessage}
-              disabled={(!input.trim() && attachments.length === 0) || hasOversize}
+          <div className="flex flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-3">
+            <div
+              className={`text-xs text-right ${smsSegments > 1 ? "text-red-600" : "text-muted-foreground"}`}
             >
-              Send
-            </Button>
+              {remaining} characters remaining · {smsSegments} segment
+              {smsSegments > 1 ? "s" : ""}
+            </div>
+            <div className="flex items-center gap-2">
+              {oversizedNonImages.length > 0 && (
+                <span className="text-xs text-amber-600 mr-2">
+                  Files over 1MB will send as download links instead of MMS.
+                </span>
+              )}
+              <Button
+                size="sm"
+                onClick={sendMessage}
+                disabled={!input.trim() && attachments.length === 0}
+              >
+                Send
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -1278,10 +1603,23 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
       />
       <UploadModal
         open={showUpload}
-        onOpenChange={setShowUpload}
+        onOpenChange={(open) => {
+          setShowUpload(open)
+          if (!open) setUploadType(null)
+        }}
+        uploadType={uploadType}
         onAddFiles={(files) =>
           setAttachments((prev) => [...prev, ...files])
         }
+      />
+      <QuickReplyModal
+        open={showQuickReplyModal}
+        onOpenChange={setShowQuickReplyModal}
+        onCreated={(tpl) => {
+          setTemplates((prev) => [tpl, ...prev])
+          void loadQuickReplies()
+        }}
+        mergeTags={mergeTags}
       />
     </div>
   );

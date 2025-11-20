@@ -40,6 +40,15 @@ export async function POST(request: NextRequest) {
   if (Array.isArray(mediaUrls) && mediaUrls.length) {
     try {
       finalMediaUrls = await ensurePublicMediaUrls(mediaUrls, "outgoing")
+      if (!finalMediaUrls || finalMediaUrls.length < mediaUrls.length) {
+        const mediaError =
+          finalMediaUrls?.length === 0
+            ? "Attachments could not be processed. Please try different files."
+            : "Some attachments could not be processed. Please try again."
+        return new Response(JSON.stringify({ error: mediaError }), {
+          status: 422,
+        })
+      }
     } catch (err: any) {
       console.error("Failed to mirror media", err)
       return new Response(JSON.stringify({ error: err.message }), { status: 400 })
@@ -172,14 +181,17 @@ export async function POST(request: NextRequest) {
   }
 
   const replyFrom = formatPhoneE164(fromDid)!
+  const isMms = !!(finalMediaUrls && finalMediaUrls.length)
 
   const payload: Record<string, any> = {
     from: replyFrom,
     to: formatted,
     text: body,
     messaging_profile_id: messagingProfileId,
+    type: isMms ? "MMS" : "SMS",
+    use_profile_webhooks: true,
   }
-  if (finalMediaUrls && finalMediaUrls.length) {
+  if (isMms) {
     payload.media_urls = finalMediaUrls
   }
 

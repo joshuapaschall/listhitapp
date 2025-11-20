@@ -1,76 +1,85 @@
 import { describe, expect, test, beforeEach } from "@jest/globals"
 import { TemplateService } from "../services/template-service"
 
-let templates: any[] = []
+type TableName = "sms_templates" | "email_templates" | "quick_reply_templates"
+
+let tables: Record<TableName, any[]> = {
+  sms_templates: [],
+  email_templates: [],
+  quick_reply_templates: [],
+}
 let idCounter = 1
 
-jest.mock("../lib/supabase", () => {
-  const client = {
-      from: (table: string) => {
-        if (table !== "message_templates") throw new Error(`Unexpected table ${table}`)
-
+jest.mock("@/lib/supabase", () => {
+  const from = (table: string) => {
+    if (!(table in tables)) throw new Error(`Unexpected table ${table}`)
+    const store = tables[table as TableName]
+    return {
+      insert: (rows: any[]) => {
+        const record = { id: `t${idCounter++}`, ...rows[0] }
+        store.push(record)
         return {
-          insert: (rows: any[]) => {
-            const record = { id: `t${idCounter++}`, ...rows[0] }
-            templates.push(record)
-            return {
-              select: () => ({ single: async () => ({ data: record, error: null }) })
-            }
-          },
-          select: () => {
-            let result = [...templates]
-            const query: any = {
-              order: (_col: string, opts: any) => {
-                if (opts.ascending === false) result.reverse()
-                return query
-              },
-              eq: (col: string, val: any) => {
-                result = result.filter((t) => t[col] === val)
-                return query
-              },
-              maybeSingle: async () => ({ data: result[0] || null, error: null }),
-              single: async () => ({ data: result[0], error: null }),
-              then: async (resolve: any) => resolve({ data: result, error: null })
-            }
+          select: () => ({ single: async () => ({ data: record, error: null }) })
+        }
+      },
+      select: () => {
+        let result = [...store]
+        const query: any = {
+          order: (_col: string, opts: any) => {
+            if (opts.ascending === false) result.reverse()
             return query
           },
-          update: (updates: any) => ({
-            eq: (col: string, val: any) => ({
-              select: () => ({
-                single: async () => {
-                  const idx = templates.findIndex((t) => t[col] === val)
-                  if (idx !== -1) {
-                    templates[idx] = { ...templates[idx], ...updates }
-                    return { data: templates[idx], error: null }
-                  }
-                  return { data: null, error: null }
-                }
-              })
-            })
-          }),
-          delete: () => ({
-            eq: async (col: string, val: any) => {
-              const idx = templates.findIndex((t) => t[col] === val)
-              if (idx !== -1) templates.splice(idx, 1)
-              return { error: null }
+          eq: (col: string, val: any) => {
+            result = result.filter((t) => t[col] === val)
+            return query
+          },
+          maybeSingle: async () => ({ data: result[0] || null, error: null }),
+          single: async () => ({ data: result[0], error: null }),
+          then: async (resolve: any) => resolve({ data: result, error: null })
+        }
+        return query
+      },
+      update: (updates: any) => ({
+        eq: (col: string, val: any) => ({
+          select: () => ({
+            single: async () => {
+              const idx = store.findIndex((t) => t[col] === val)
+              if (idx !== -1) {
+                store[idx] = { ...store[idx], ...updates }
+                return { data: store[idx], error: null }
+              }
+              return { data: null, error: null }
             }
           })
+        })
+      }),
+      delete: () => ({
+        eq: async (col: string, val: any) => {
+          const idx = store.findIndex((t) => t[col] === val)
+          if (idx !== -1) store.splice(idx, 1)
+          return { error: null }
         }
-      }
+      })
     }
+  }
+  const client = { from }
   return { supabase: client, supabaseAdmin: client }
 })
 
 describe("TemplateService", () => {
   beforeEach(() => {
-    templates = []
+    tables = {
+      sms_templates: [],
+      email_templates: [],
+      quick_reply_templates: [],
+    }
     idCounter = 1
   })
 
   test("addTemplate inserts record", async () => {
     const tpl = await TemplateService.addTemplate({ name: "Hello", message: "Hi" })
     expect(tpl.id).toBeDefined()
-    expect(templates.length).toBe(1)
+    expect(tables.sms_templates.length).toBe(1)
   })
 
   test("listTemplates returns inserted records", async () => {
@@ -95,6 +104,13 @@ describe("TemplateService", () => {
   test("deleteTemplate removes record", async () => {
     const tpl = await TemplateService.addTemplate({ name: "A", message: "b" })
     await TemplateService.deleteTemplate(tpl.id)
-    expect(templates.length).toBe(0)
+    expect(tables.sms_templates.length).toBe(0)
+  })
+
+  test("uses correct table for non-SMS templates", async () => {
+    await TemplateService.addTemplate({ name: "Email", message: "Hello" }, "email")
+    await TemplateService.addTemplate({ name: "Quick", message: "Hi" }, "quick_reply")
+    expect(tables.email_templates.length).toBe(1)
+    expect(tables.quick_reply_templates.length).toBe(1)
   })
 })

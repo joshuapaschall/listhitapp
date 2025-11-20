@@ -19,7 +19,7 @@ jest.mock("../components/inbox/upload-modal", () => ({
 }))
 
 jest.mock("../services/template-service", () => ({
-  TemplateService: { listTemplates: jest.fn().mockResolvedValue([]) },
+  TemplateService: { listTemplates: jest.fn().mockResolvedValue([]), addTemplate: jest.fn() },
 }))
 
 jest.mock("../lib/supabase", () => {

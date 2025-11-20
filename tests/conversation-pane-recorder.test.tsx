@@ -20,7 +20,7 @@ jest.mock("../components/voice/VoiceRecorder", () => ({
 }))
 
 jest.mock("../services/template-service", () => ({
-  TemplateService: { listTemplates: jest.fn().mockResolvedValue([]) },
+  TemplateService: { listTemplates: jest.fn().mockResolvedValue([]), addTemplate: jest.fn() },
 }))
 
 jest.mock("../lib/supabase", () => {

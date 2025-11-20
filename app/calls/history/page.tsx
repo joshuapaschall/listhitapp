@@ -84,9 +84,12 @@ export default function CallHistoryPage() {
     }
   };
 
+  /* eslint-disable react-hooks/exhaustive-deps */
+  // We intentionally only refetch on pagination/sort changes; filters are applied via handleSearch/handleReset.
   useEffect(() => {
     fetchCalls();
   }, [pagination.page, pagination.pageSize, sortBy, sortOrder]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   const handleSearch = () => {
     setPagination(prev => ({ ...prev, page: 1 }));

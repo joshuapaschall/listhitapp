@@ -5,7 +5,7 @@ import { NowProvider } from "../hooks/use-now"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
 // Mock AddBuyerModal to instantly create a buyer
-jest.mock("../components/buyers/add-buyer-modal", () => ({
+jest.mock("@/components/buyers/add-buyer-modal", () => ({
   __esModule: true,
   default: ({ open, onOpenChange, onSuccessAction }: any) =>
     open ? (
@@ -16,7 +16,10 @@ jest.mock("../components/buyers/add-buyer-modal", () => ({
 }))
 
 jest.mock("../services/template-service", () => ({
-  TemplateService: { listTemplates: jest.fn().mockResolvedValue([]) },
+  TemplateService: {
+    listTemplates: jest.fn().mockResolvedValue([]),
+    addTemplate: jest.fn(),
+  },
 }))
 
 const updateEqMock = jest.fn().mockResolvedValue({ error: null })
