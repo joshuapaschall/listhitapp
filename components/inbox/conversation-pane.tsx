@@ -248,6 +248,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
   const [showRecorder, setShowRecorder] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [showUpload, setShowUpload] = useState(false);
+  const [uploadType, setUploadType] = useState<"photo" | "video" | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const [selectedDid, setSelectedDid] = useState<string | null>(
@@ -1180,7 +1181,12 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
         <div className="border-t pt-2 flex gap-2 flex-wrap">
           <DropdownMenu open={showEmoji} onOpenChange={setShowEmoji}>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon">
+              <Button
+                variant="outline"
+                size="icon"
+                title="Insert emoji"
+                aria-label="Insert emoji"
+              >
                 <Smile className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -1196,7 +1202,12 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
           </DropdownMenu>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon">
+              <Button
+                variant="outline"
+                size="icon"
+                title="Insert template"
+                aria-label="Insert template"
+              >
                 <Clipboard className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -1213,7 +1224,12 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
           </DropdownMenu>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon">
+              <Button
+                variant="outline"
+                size="icon"
+                title="Insert merge tag"
+                aria-label="Insert merge tag"
+              >
                 <Tag className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -1230,16 +1246,39 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button
-            aria-label="Upload files"
-            variant="outline"
-            size="icon"
-            onClick={() => setShowUpload(true)}
-          >
-            <ImageIcon className="h-4 w-4" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                aria-label="Add media"
+                title="Add media"
+                variant="outline"
+                size="icon"
+              >
+                <ImageIcon className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuItem
+                onSelect={() => {
+                  setUploadType("photo")
+                  setShowUpload(true)
+                }}
+              >
+                Photo
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => {
+                  setUploadType("video")
+                  setShowUpload(true)
+                }}
+              >
+                Video
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button
             aria-label="Record voice"
+            title="Record voice note"
             variant="outline"
             size="icon"
             onClick={() => setShowRecorder(true)}
@@ -1248,7 +1287,12 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
           </Button>
           <Popover open={schedulePicker} onOpenChange={setSchedulePicker}>
             <PopoverTrigger asChild>
-              <Button variant="outline" size="icon">
+              <Button
+                variant="outline"
+                size="icon"
+                title="Schedule message"
+                aria-label="Schedule message"
+              >
                 <Clock className="h-4 w-4" />
               </Button>
             </PopoverTrigger>
@@ -1413,7 +1457,11 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
       />
       <UploadModal
         open={showUpload}
-        onOpenChange={setShowUpload}
+        onOpenChange={(open) => {
+          setShowUpload(open)
+          if (!open) setUploadType(null)
+        }}
+        uploadType={uploadType}
         onAddFiles={(files) =>
           setAttachments((prev) => [...prev, ...files])
         }
