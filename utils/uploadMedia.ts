@@ -36,11 +36,20 @@ export async function uploadMediaFile(
   file: File,
   direction: "incoming" | "outgoing" = "outgoing",
 ): Promise<string> {
-  const ext = file.name.split(".").pop()!
-  const key = `${direction}/${Date.now()}_${crypto.randomUUID()}.${ext}`
+  const ext = file.name.split(".").pop() || "bin";
+  const key = `${direction}/${Date.now()}_${crypto.randomUUID()}.${ext}`;
+
   const { error } = await supabase.storage
     .from(MEDIA_BUCKET)
-    .upload(key, file, { upsert: true })
-  if (error) throw error
-  return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${MEDIA_BUCKET}/${key}`
+    .upload(key, file, { upsert: true });
+
+  if (error) {
+    console.error("[uploadMediaFile] Supabase upload error", error);
+    throw new Error(
+      error.message ||
+        "Media upload failed. Check your Supabase Storage policies for this bucket.",
+    );
+  }
+
+  return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${MEDIA_BUCKET}/${key}`;
 }

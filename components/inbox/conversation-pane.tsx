@@ -599,6 +599,76 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
     setBannerDid(null);
   }, [lastInbound.id, preferredFrom]);
 
+  const compressImageIfNeeded = useCallback(
+    async (file: File): Promise<File> => {
+      if (!file.type.startsWith("image/") || file.size <= MAX_MMS_SIZE) {
+        return file;
+      }
+
+      return await new Promise<File>((resolve, reject) => {
+        const img = new Image();
+        const reader = new FileReader();
+
+        reader.onload = () => {
+          img.onload = () => {
+            try {
+              const canvas = document.createElement("canvas");
+              const ctx = canvas.getContext("2d");
+              if (!ctx) {
+                reject(new Error("Canvas not supported"));
+                return;
+              }
+
+              const scale = Math.sqrt(MAX_MMS_SIZE / file.size);
+              const targetScale =
+                isFinite(scale) && scale > 0 && scale < 1 ? scale : 1;
+
+              canvas.width = img.width * targetScale;
+              canvas.height = img.height * targetScale;
+              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+              canvas.toBlob(
+                (blob) => {
+                  if (!blob) {
+                    reject(new Error("Failed to compress image"));
+                    return;
+                  }
+                  if (blob.size > MAX_MMS_SIZE) {
+                    reject(
+                      new Error(
+                        `Image is still too large after compression (${Math.round(
+                          blob.size / 1024,
+                        )}KB). Try a smaller image.`,
+                      ),
+                    );
+                    return;
+                  }
+                  const compressed = new File(
+                    [blob],
+                    file.name.replace(/\.[^.]+$/, ".jpg"),
+                    { type: "image/jpeg" },
+                  );
+                  resolve(compressed);
+                },
+                "image/jpeg",
+                0.8,
+              );
+            } catch (err) {
+              reject(err as Error);
+            }
+          };
+          img.onerror = () =>
+            reject(new Error("Failed to load image for compression"));
+          img.src = reader.result as string;
+        };
+
+        reader.onerror = () => reject(new Error("Failed to read image file"));
+        reader.readAsDataURL(file);
+      });
+    },
+    [],
+  );
+
   const sendMessage = useCallback(async () => {
     if (!thread || (!input.trim() && attachments.length === 0)) return;
     for (const file of attachments) {
@@ -607,15 +677,23 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
         toast.error(`Unsupported file type: ${file.name}`);
         return;
       }
-      if (file.size > MAX_MMS_SIZE) {
-        toast.error(`File ${file.name} exceeds 1MB limit`);
+
+      if (file.size > MAX_MMS_SIZE && !file.type.startsWith("image/")) {
+        toast.error(
+          `File ${file.name} exceeds ${Math.round(MAX_MMS_SIZE / 1024)}KB limit`,
+        );
         return;
       }
     }
 
     const uploadFiles = async () => {
       const urls: string[] = []
-      for (const file of attachments) {
+      for (const original of attachments) {
+        const file =
+          original.type.startsWith("image/") && original.size > MAX_MMS_SIZE
+            ? await compressImageIfNeeded(original)
+            : original
+
         let url = await uploadMediaFile(file, "outgoing")
         const lower = file.name.toLowerCase()
         const needsConvert =
@@ -678,7 +756,18 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
       return;
     }
 
-    const mediaUrls = await uploadFiles();
+    let mediaUrls: string[] = [];
+    try {
+      mediaUrls = await uploadFiles();
+    } catch (err) {
+      console.error("Media upload failed", err);
+      toast.error(
+        (err as any)?.message ||
+          "Failed to upload attachments. Please try different files.",
+      );
+      return;
+    }
+
     const tempId = `temp-${Date.now()}`;
     const pending: LocalMessage = {
       id: tempId,
@@ -728,7 +817,6 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
             : m,
         ),
       );
-      toast.error((err as Error).message || "Failed to send message");
     }
   }, [
     thread,
@@ -739,6 +827,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
     attachments,
     selectedDid,
     preferredFrom,
+    compressImageIfNeeded,
   ]);
 
   const retryMessage = async (msg: LocalMessage) => {
