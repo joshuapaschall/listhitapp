@@ -73,8 +73,8 @@ export default function UploadModal({
 
   const descriptionCopy =
     uploadType === "video"
-      ? "Telnyx MMS supports short MP4 or WebM clips under 1MB. Keep videos brief for reliable delivery."
-      : "Telnyx MMS supports photos (JPG, PNG, GIF, WEBP) and quick audio notes under 1MB. Larger files should be trimmed before sending."
+      ? "MMS supports short MP4 or WebM clips under 1MB. Keep videos brief for reliable delivery."
+      : "MMS supports photos (JPG, PNG, GIF, WEBP) and quick audio notes under 1MB. Larger files should be trimmed before sending."
 
   const reset = () => {
     previews.forEach((p) => URL.revokeObjectURL(p.url))
@@ -123,7 +123,7 @@ export default function UploadModal({
       setError(
         `Skipped ${rejected.length} file${rejected.length > 1 ? "s" : ""}: ${rejected.join(
           ", ",
-        )}. Only Telnyx-supported media under 1MB are allowed.`,
+        )}. Only supported media under 1MB are allowed.`,
       )
     } else {
       setError(null)
