@@ -40,6 +40,12 @@ export const supabase = {
   auth: {
     getUser: jest.fn(async () => ({ data: { user: null }, error: null })),
   },
+  channel: jest.fn(() => ({
+    on: () => ({
+      subscribe: () => ({}) as any,
+    }),
+  })),
+  removeChannel: jest.fn(),
 }
 
 export const supabaseAdmin = supabase
