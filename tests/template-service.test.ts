@@ -10,7 +10,7 @@ let tables: Record<TableName, any[]> = {
 }
 let idCounter = 1
 
-jest.mock("../lib/supabase", () => {
+jest.mock("@/lib/supabase", () => {
   const from = (table: string) => {
     if (!(table in tables)) throw new Error(`Unexpected table ${table}`)
     const store = tables[table as TableName]

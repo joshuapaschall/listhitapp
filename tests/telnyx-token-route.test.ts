@@ -1,29 +1,36 @@
 import { describe, beforeEach, test, expect, jest } from "@jest/globals"
+import { __getMockUser, __setMockUser, mockGetUser } from "@supabase/auth-helpers-nextjs"
+import { __setAgentRecord, supabaseAdminAuthGetUserMock } from "@/lib/supabase/admin"
+import {
+  __setTokenResponse,
+  createAgentTelephonyCredentialMock,
+  createWebRTCTokenMock,
+  deleteTelnyxCredentialMock,
+} from "@/lib/telnyx/credentials"
 
-const getUserMock = jest.fn()
-const createClientMock = jest.fn()
-const selectMock = jest.fn()
-const createAgentCredentialMock = jest.fn()
-const createTokenMock = jest.fn()
-const deleteCredentialMock = jest.fn()
+const cookieStoreMock = {
+  get: jest.fn(),
+  set: jest.fn(),
+  delete: jest.fn(),
+}
+// Prevent outbound network calls from Supabase client instances
+global.fetch = jest.fn(async () => new Response("{}")) as any
 
-jest.mock("@supabase/auth-helpers-nextjs", () => ({
-  createRouteHandlerClient: () => ({
+jest.mock("next/headers", () => ({
+  cookies: () => cookieStoreMock,
+}))
+
+jest.mock("@/lib/supabase/admin", () => ({
+  supabaseAdmin: {
+    from: () => ({
+      select: () => ({
+        eq: () => ({ maybeSingle: () => Promise.resolve({}) }),
+      }),
+    }),
     auth: {
-      getUser: getUserMock,
+      getUser: (...args: any[]) => supabaseAdminAuthGetUserMock(...args),
     },
-  }),
-}))
-
-jest.mock("@supabase/supabase-js", () => ({
-  createClient: (...args: any[]) => createClientMock(...args),
-}))
-
-jest.mock("@/lib/telnyx/credentials", () => ({
-  createAgentTelephonyCredential: (...args: any[]) =>
-    createAgentCredentialMock(...args),
-  createWebRTCToken: (...args: any[]) => createTokenMock(...args),
-  deleteTelnyxCredential: (...args: any[]) => deleteCredentialMock(...args),
+  },
 }))
 
 describe("telnyx token route", () => {
@@ -31,50 +38,30 @@ describe("telnyx token route", () => {
   let GET: typeof import("../app/api/telnyx/token/route").GET
 
   beforeEach(async () => {
-    jest.resetModules()
-    getUserMock.mockReset()
-    createClientMock.mockReset()
-    selectMock.mockReset()
-    createAgentCredentialMock.mockReset()
-    createTokenMock.mockReset()
-    deleteCredentialMock.mockReset()
+    mockGetUser.mockReset()
+    mockGetUser.mockImplementation(async () => ({ data: { user: __getMockUser() }, error: null }))
+    createAgentTelephonyCredentialMock.mockReset()
+    createWebRTCTokenMock.mockReset()
+    deleteTelnyxCredentialMock.mockReset()
+    cookieStoreMock.get.mockReset()
+    cookieStoreMock.set.mockReset()
+    cookieStoreMock.delete.mockReset()
+    supabaseAdminAuthGetUserMock.mockReset()
+    supabaseAdminAuthGetUserMock.mockResolvedValue({ data: { user: null }, error: null })
+    __setTokenResponse({ token: "abc", expires_at: "2024-01-01" })
+    __setMockUser({ id: "user-1" })
     process.env.VOICE_CONNECTION_ID = "voice-conn-test"
     process.env.CALL_CONTROL_APP_ID = ""
     process.env.TELNYX_VOICE_CONNECTION_ID = ""
-
-    selectMock.mockImplementation(() => ({
-      eq: () => ({
-        maybeSingle: () =>
-          Promise.resolve({
-            data: {
-              id: "agent-1",
-              auth_user_id: "user-1",
-              sip_username: "sip_1001",
-              sip_password: "pass-123",
-              telnyx_credential_id: "cred-1",
-            },
-            error: null,
-          }),
-      }),
-    }))
-
-    createClientMock.mockReturnValue({
-      from: () => ({
-        select: (columns: string) => {
-          selectMock(columns)
-          return selectMock()
-        },
-        update: () => ({
-          eq: () => ({ maybeSingle: () => Promise.resolve({}) }),
-        }),
-      }),
-      auth: {
-        getUser: jest.fn().mockResolvedValue({ data: { user: null }, error: null }),
-      },
+    __setAgentRecord({
+      id: "agent-1",
+      auth_user_id: "user-1",
+      sip_username: "sip_1001",
+      sip_password: "pass-123",
+      telnyx_credential_id: "cred-1",
     })
 
-    getUserMock.mockResolvedValue({ data: { user: { id: "user-1" } }, error: null })
-    createTokenMock.mockResolvedValue({ token: "abc", expires_at: "2024-01-01" })
+    __setTokenResponse({ token: "abc", expires_at: "2024-01-01" })
 
     const mod = await import("../app/api/telnyx/token/route")
     POST = mod.POST
@@ -89,7 +76,7 @@ describe("telnyx token route", () => {
   })
 
   test("POST returns 401 when not authenticated", async () => {
-    getUserMock.mockResolvedValueOnce({ data: { user: null }, error: null })
+    __setMockUser(null)
     const res = await POST(new Request("http://local"))
     expect(res.status).toBe(401)
   })
@@ -104,26 +91,18 @@ describe("telnyx token route", () => {
       sip_username: "sip_1001",
       sip_password: "pass-123",
     })
-    expect(createTokenMock).toHaveBeenCalledWith("cred-1")
-    expect(createAgentCredentialMock).not.toHaveBeenCalled()
+    expect(createWebRTCTokenMock).toHaveBeenCalledWith("cred-1")
+    expect(createAgentTelephonyCredentialMock).not.toHaveBeenCalled()
   })
 
   test("POST returns null sip username when not configured", async () => {
-    selectMock.mockImplementationOnce(() => ({
-      eq: () => ({
-        maybeSingle: () =>
-          Promise.resolve({
-            data: {
-              id: "agent-1",
-              auth_user_id: "user-1",
-              sip_username: null,
-              sip_password: null,
-              telnyx_credential_id: "cred-1",
-            },
-            error: null,
-          }),
-      }),
-    }))
+    __setAgentRecord({
+      id: "agent-1",
+      auth_user_id: "user-1",
+      sip_username: null,
+      sip_password: null,
+      telnyx_credential_id: "cred-1",
+    })
 
     const res = await POST(new Request("http://local", { method: "POST" }))
     const body = await res.json()
@@ -135,6 +114,6 @@ describe("telnyx token route", () => {
       sip_username: null,
       sip_password: null,
     })
-    expect(createTokenMock).not.toHaveBeenCalled()
+    expect(createWebRTCTokenMock).not.toHaveBeenCalled()
   })
 })

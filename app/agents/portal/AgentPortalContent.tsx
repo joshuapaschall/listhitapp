@@ -113,7 +113,7 @@ export default function AgentPortalContent({
       }, 15000); // 15 second timeout
       return () => clearTimeout(timeout);
     }
-  }, [activeCall?.state, isAnswering]);
+  }, [activeCall, isAnswering]);
 
   // Poll for active call leg IDs when there's an active call
   useEffect(() => {
@@ -160,7 +160,7 @@ export default function AgentPortalContent({
     // const interval = setInterval(fetchCallLegIds, 2000);
 
     // return () => clearInterval(interval);
-  }, [activeCall]);
+  }, [activeCall, attendedTransfer]);
 
   const updateStatus = async (newStatus: 'available' | 'offline') => {
     if (!agent) return;
@@ -532,8 +532,8 @@ export default function AgentPortalContent({
                   you will be automatically connected. Keep this window open.
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  <strong>Note:</strong> If you don't receive a call within 10 minutes,
-                  the connection may timeout. Simply click "Go Available" again to reconnect.
+                  <strong>Note:</strong> If you don&apos;t receive a call within 10 minutes,
+                  the connection may timeout. Simply click &quot;Go Available&quot; again to reconnect.
                 </p>
               </div>
             </CardContent>

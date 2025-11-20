@@ -476,7 +476,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
             <User className="h-5 w-5 text-blue-500" />
             Create Buyer Account
           </DialogTitle>
-          <DialogDescription>Enter the buyer's information following the natural sales process flow.</DialogDescription>
+          <DialogDescription>Enter the buyer&apos;s information following the natural sales process flow.</DialogDescription>
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -766,7 +766,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
                   <span className="text-green-400">⚙️</span>
                   <strong>Property Preferences</strong>
                 </CardTitle>
-                <CardDescription>Buyer's property criteria and investment parameters</CardDescription>
+                <CardDescription>Buyer&apos;s property criteria and investment parameters</CardDescription>
               </CardHeader>
               <CardContent className="space-y-8">
                 {/* Property Types Section */}
@@ -1038,7 +1038,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
                   <span className="text-pink-500">⭐</span>
                   <strong>Buyer Status & Communication</strong>
                 </CardTitle>
-                <CardDescription>Set the buyer's status and communication preferences</CardDescription>
+                <CardDescription>Set the buyer&apos;s status and communication preferences</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Status Section */}

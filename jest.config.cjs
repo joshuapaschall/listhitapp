@@ -24,6 +24,13 @@ module.exports = {
 
   // Fix relative ESM imports that end with .js in TS and map @/ to root
   moduleNameMapper: {
+    "^.+\\.(css|less|sass|scss)$": "<rootDir>/tests/__mocks__/styleMock.js",
+    "@supabase/auth-helpers-nextjs": "<rootDir>/tests/__mocks__/supabaseAuthHelpers.ts",
+    "@/lib/supabase/admin": "<rootDir>/tests/__mocks__/supabaseAdmin.ts",
+    "@/lib/telnyx/credentials": "<rootDir>/tests/__mocks__/telnyxCredentials.ts",
+    "@/lib/supabase": "<rootDir>/tests/__mocks__/supabase.ts",
+    "@/lib/supabase-browser\\.js$": "<rootDir>/tests/__mocks__/supabase-browser.ts",
+    "@/lib/supabase-browser": "<rootDir>/tests/__mocks__/supabase-browser.ts",
     "^@/(.*)$": "<rootDir>/$1",
     "^(\\.{1,2}/.*)\\.js$": "$1"
   },
