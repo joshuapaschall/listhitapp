@@ -16,6 +16,10 @@ export async function uploadOriginalToSupabase(
 ): Promise<string | null> {
   assertServer()
   try {
+    if (process.env.NODE_ENV === "test" && process.env.MOCK_MIRROR_MEDIA === "true") {
+      return `${getMediaBaseUrl()}mock/test.mp3`
+    }
+
     const isTelnyx = /^https:\/\/[^/]*telnyx\.com\//i.test(url)
     const headers: Record<string, string> = {}
     const apiKey = getTelnyxApiKey()
@@ -69,6 +73,10 @@ export async function mirrorMediaUrl(
 ): Promise<string | null> {
   assertServer()
   try {
+    if (process.env.NODE_ENV === "test" && process.env.MOCK_MIRROR_MEDIA === "true") {
+      return `${getMediaBaseUrl()}mock/test.mp3`
+    }
+
     const isTelnyx = /^https:\/\/[^/]*telnyx\.com\//i.test(url)
     const headers: Record<string, string> = {}
     const apiKey = getTelnyxApiKey()
@@ -89,26 +97,30 @@ export async function mirrorMediaUrl(
     const originalExt = url.split("?")[0].match(/\.[^./]+$/)?.[0]?.toLowerCase()
 
     const convertible =
-      contentType.includes("amr") ||
-      contentType.includes("3gpp") ||
-      contentType.includes("webm") ||
-      contentType.includes("ogg") ||
-      contentType.includes("opus") ||
-      contentType.includes("wav") ||
-      contentType.includes("m4a") ||
-      [".amr", ".3gp", ".webm", ".ogg", ".oga", ".opus", ".wav", ".m4a"].includes(
-        originalExt || ""
-      )
+      /amr|3gpp|webm|ogg|opus|wav|m4a/i.test(contentType) ||
+      [
+        ".amr",
+        ".3gp",
+        ".3gpp",
+        ".webm",
+        ".weba",
+        ".ogg",
+        ".oga",
+        ".opus",
+        ".wav",
+        ".m4a",
+      ].includes(originalExt || "")
 
     if (convertible) {
       try {
         return await convertToMp3(url, direction, buffer)
       } catch (err) {
         console.error("❌ convertToMp3 failed:", err)
-        return null
+        throw err instanceof Error
+          ? err
+          : new Error("Audio conversion failed for MMS attachment")
       }
     }
-
     return await uploadOriginalToSupabase(url, direction)
   } catch (err) {
     console.error("mirrorMediaUrl error:", err)

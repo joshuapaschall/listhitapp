@@ -8,12 +8,15 @@ import ffmpegPath from "ffmpeg-static" // ✅ NEW: Use ffmpeg-static instead of 
 
 import {
   MEDIA_BUCKET,
+  MAX_MMS_SIZE,
   getMediaBaseUrl,
   isPublicMediaUrl,
 } from "./uploadMedia"
 
-// ✅ Set ffmpeg path using ffmpeg-static
-ffmpeg.setFfmpegPath(ffmpegPath || "")
+// ✅ Set ffmpeg path using ffmpeg-static when available
+if (typeof (ffmpeg as any).setFfmpegPath === "function") {
+  ffmpeg.setFfmpegPath(ffmpegPath || "")
+}
 
 export async function convertToMp3(
   inputUrl: string,
@@ -57,6 +60,10 @@ export async function convertToMp3(
       .pipe()
       .on("data", (d: Buffer) => chunks.push(d))
   })
+
+  if (mp3.length > MAX_MMS_SIZE) {
+    throw new Error("Converted audio exceeds the 1MB MMS limit")
+  }
 
   const fileName =
     direction === "incoming"

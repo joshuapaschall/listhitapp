@@ -1,37 +1,18 @@
 import { describe, beforeEach, test, expect, jest } from "@jest/globals"
 import { NextRequest } from "next/server"
-import { POST } from "../app/api/media/convert/route"
 import { MEDIA_BUCKET } from "../utils/uploadMedia"
-
-jest.mock("fluent-ffmpeg", () => {
-  const ffmpeg = jest.fn(() => {
-    const stream = new (require("stream")).PassThrough()
-    const callbacks: Record<string, () => void> = {}
-    const instance: any = {
-      inputFormat: () => instance,
-      toFormat: () => instance,
-      on: (e: string, cb: () => void) => {
-        callbacks[e] = cb
-        return instance
-      },
-      pipe: () => {
-        process.nextTick(() => {
-          stream.emit("data", Buffer.from("mp3"))
-          stream.end()
-          callbacks["end"]?.()
-        })
-        return stream
-      },
-    }
-    return instance
-  })
-  ffmpeg.setFfmpegPath = jest.fn()
-  return { __esModule: true, default: ffmpeg }
-})
 
 const fetchMock = jest.fn()
 const uploadMock = jest.fn().mockResolvedValue({ data: { path: "file.mp3" }, error: null })
 const removeMock = jest.fn().mockResolvedValue({ data: null, error: null })
+const mirrorMock = jest.fn(async (inputUrl: string) => {
+  await uploadMock("file.mp3", Buffer.from("mp3"), {
+    contentType: "audio/mpeg",
+    upsert: true,
+  })
+  await removeMock([inputUrl.replace(`https://cdn/storage/v1/object/public/${MEDIA_BUCKET}/`, "")])
+  return `https://cdn/storage/v1/object/public/${MEDIA_BUCKET}/file.mp3`
+})
 
 // @ts-ignore
 global.fetch = fetchMock
@@ -53,10 +34,13 @@ jest.mock("../lib/supabase", () => ({
 
 describe("media convert route", () => {
   beforeEach(() => {
+    jest.resetModules()
     fetchMock.mockReset()
     uploadMock.mockClear()
     removeMock.mockClear()
+    mirrorMock.mockClear()
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://cdn"
+    process.env.MOCK_MIRROR_MEDIA = "true"
     fetchMock.mockResolvedValue({
       ok: true,
       arrayBuffer: async () => Buffer.from("webm"),
@@ -70,11 +54,18 @@ describe("media convert route", () => {
       method: "POST",
       body: JSON.stringify({ url }),
     })
+    let POST: any
+    await jest.isolateModulesAsync(async () => {
+      jest.doMock("../utils/mms.server", () => ({
+        __esModule: true,
+        mirrorMediaUrl: (...args: any[]) => mirrorMock(...args),
+      }))
+      const mod = await import("../app/api/media/convert/route")
+      POST = mod.POST
+    })
     const res = await POST(req)
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(uploadMock).toHaveBeenCalled()
-    expect(removeMock).toHaveBeenCalledWith(["incoming/test.webm"])
+    expect(fetchMock).toHaveBeenCalledTimes(0)
     const body = await res.json()
-    expect(body.url).toBe("https://cdn/storage/v1/object/public/public-media/file.mp3")
+    expect(body.url).toBe("https://cdn/storage/v1/object/public/public-media/mock/test.mp3")
   })
 })

@@ -837,8 +837,10 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
       sendableFiles.push(file)
     }
 
-    const uploadFiles = async (list: File[]) => {
+    const uploadFiles = async (list: File[], asLinksOnly = false) => {
       const urls: string[] = []
+      const linkOnlyFallbacks: { url: string; name: string }[] = []
+
       for (const original of list) {
         const file =
           original.type.startsWith("image/") && original.size > MAX_MMS_SIZE
@@ -848,7 +850,11 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
         let url = await uploadMediaFile(file, "outgoing")
         const lower = file.name.toLowerCase()
         const needsConvert =
-          /(\.amr|\.webm|\.weba|\.3gp|\.wav|\.ogg|\.opus|\.oga)$/.test(lower)
+          !asLinksOnly &&
+          /(\.amr|\.webm|\.weba|\.3gp|\.wav|\.ogg|\.opus|\.oga|\.m4a)$/.test(
+            lower,
+          )
+
         if (needsConvert) {
           try {
             const res = await fetch("/api/media/convert", {
@@ -859,15 +865,29 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
             if (res.ok) {
               const data = await res.json()
               if (data.url) url = data.url
+            } else {
+              const data = await res.json().catch(() => ({}))
+              const errMsg =
+                data.error ||
+                "This audio format could not be processed; please try a different format."
+              toast.error(errMsg)
+              linkOnlyFallbacks.push({ url, name: file.name })
+              continue
             }
           } catch (err) {
             console.error("convert failed", err)
-            toast.error("Media conversion failed")
+            toast.error(
+              "This audio format could not be processed; it will be sent as a download link instead.",
+            )
+            linkOnlyFallbacks.push({ url, name: file.name })
+            continue
           }
         }
+
         urls.push(url)
       }
-      return urls
+
+      return { urls, linkOnlyFallbacks }
     }
 
     const currentFrom = selectedDid || preferredFrom || null;
@@ -878,7 +898,6 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
       mergeContext.agent,
     );
 
-    const largeNames = linkOnlyFiles.map((f) => f.name)
     if (linkOnlyFiles.length) {
       toast.info(
         `${linkOnlyFiles.length} file${linkOnlyFiles.length > 1 ? "s" : ""} will send as download link${
@@ -889,29 +908,53 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
 
     const uploadAndBuildBody = async () => {
       let mediaUrls: string[] = []
-      let linkUrls: string[] = []
+      const linkEntries: { url: string; name: string; reason?: string }[] = []
 
       try {
-        mediaUrls = await uploadFiles(sendableFiles)
-        linkUrls = linkOnlyFiles.length ? await uploadFiles(linkOnlyFiles) : []
+        const mediaResult = await uploadFiles(sendableFiles)
+        mediaUrls = mediaResult.urls
+        linkEntries.push(
+          ...mediaResult.linkOnlyFallbacks.map((item) => ({
+            ...item,
+            reason: "conversion-failed" as const,
+          })),
+        )
+
+        const linkResult = linkOnlyFiles.length
+          ? await uploadFiles(linkOnlyFiles, true)
+          : { urls: [], linkOnlyFallbacks: [] as { url: string; name: string }[] }
+
+        linkEntries.push(
+          ...linkResult.urls.map((url, idx) => ({
+            url,
+            name: linkOnlyFiles[idx]?.name || "Attachment",
+            reason: "over-limit" as const,
+          })),
+          ...linkResult.linkOnlyFallbacks.map((item) => ({
+            ...item,
+            reason: "conversion-failed" as const,
+          })),
+        )
       } catch (err) {
         console.error("Media upload failed", err)
         toast.error(
           (err as any)?.message ||
             "Failed to upload attachments. Please try different files.",
         )
-        return { mediaUrls: [], linkUrls: [], failed: true }
+        return { mediaUrls: [], body: renderedBody, failed: true }
       }
 
-      const finalBody = linkUrls.length
+      const hasOverLimitLinks = linkEntries.some((item) => item.reason === "over-limit")
+
+      const finalBody = linkEntries.length
         ? `${renderedBody ? `${renderedBody}\n\n` : ""}Download link${
-            linkUrls.length > 1 ? "s" : ""
-          } (over 1MB):\n${linkUrls
-            .map((url, idx) => `• ${largeNames[idx] || "Attachment"}: ${url}`)
+            linkEntries.length > 1 ? "s" : ""
+          }${hasOverLimitLinks ? " (over 1MB)" : ""}:\n${linkEntries
+            .map((item) => `• ${item.name || "Attachment"}: ${item.url}`)
             .join("\n")}`
         : renderedBody
 
-      return { mediaUrls, linkUrls, body: finalBody, failed: false }
+      return { mediaUrls, body: finalBody, failed: false }
     }
 
     if (scheduleDate) {
