@@ -856,13 +856,20 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ url, direction: "outgoing" }),
             })
-            if (res.ok) {
-              const data = await res.json()
-              if (data.url) url = data.url
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok || !data.url) {
+              const errMsg =
+                data.error ||
+                "This audio format could not be processed; please try a different format"
+              throw new Error(errMsg)
             }
+            url = data.url
           } catch (err) {
             console.error("convert failed", err)
-            toast.error("Media conversion failed")
+            throw new Error(
+              (err as Error).message ||
+                "This audio format could not be processed; please try a different format",
+            )
           }
         }
         urls.push(url)
@@ -896,10 +903,10 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
         linkUrls = linkOnlyFiles.length ? await uploadFiles(linkOnlyFiles) : []
       } catch (err) {
         console.error("Media upload failed", err)
-        toast.error(
+        const message =
           (err as any)?.message ||
-            "Failed to upload attachments. Please try different files.",
-        )
+          "Failed to upload attachments. Please try different files."
+        toast.error(message)
         return { mediaUrls: [], linkUrls: [], failed: true }
       }
 

@@ -10,6 +10,7 @@ import {
   MEDIA_BUCKET,
   getMediaBaseUrl,
   isPublicMediaUrl,
+  MAX_MMS_SIZE,
 } from "./uploadMedia"
 
 // ✅ Set ffmpeg path using ffmpeg-static
@@ -51,12 +52,18 @@ export async function convertToMp3(
     const chunks: Buffer[] = []
 
     ffmpeg(input)
+      .audioBitrate("96k")
+      .audioChannels(1)
       .toFormat("mp3")
       .on("error", reject)
       .on("end", () => resolve(Buffer.concat(chunks)))
       .pipe()
       .on("data", (d: Buffer) => chunks.push(d))
   })
+
+  if (mp3.length > MAX_MMS_SIZE) {
+    throw new Error("Converted audio exceeds the 1MB MMS limit")
+  }
 
   const fileName =
     direction === "incoming"
