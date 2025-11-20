@@ -9,6 +9,8 @@ jest.mock("fluent-ffmpeg", () => {
     const callbacks: Record<string, () => void> = {}
     const instance: any = {
       inputFormat: () => instance,
+      audioBitrate: () => instance,
+      audioChannels: () => instance,
       toFormat: () => instance,
       on: (e: string, cb: () => void) => {
         callbacks[e] = cb
@@ -76,5 +78,20 @@ describe("media convert route", () => {
     expect(removeMock).toHaveBeenCalledWith(["incoming/test.webm"])
     const body = await res.json()
     expect(body.url).toBe("https://cdn/storage/v1/object/public/public-media/file.mp3")
+  })
+
+  test("returns error when conversion fails", async () => {
+    const spy = jest
+      .spyOn(require("../utils/audio-utils"), "convertToMp3")
+      .mockRejectedValueOnce(new Error("Converted audio exceeds the 1MB MMS limit"))
+    const req = new NextRequest("http://test", {
+      method: "POST",
+      body: JSON.stringify({ url: "https://cdn/audio.weba" }),
+    })
+    const res = await POST(req)
+    expect(res.status).toBe(500)
+    const body = await res.json()
+    expect(body.error).toBe("Converted audio exceeds the 1MB MMS limit")
+    spy.mockRestore()
   })
 })

@@ -18,6 +18,7 @@ export const ALLOWED_MMS_EXTENSIONS = [
   ".weba",
   ".mp4",
   ".3gp",
+  ".3gpp",
 ] as const
 
 export const MAX_MMS_SIZE = 1 * 1024 * 1024
