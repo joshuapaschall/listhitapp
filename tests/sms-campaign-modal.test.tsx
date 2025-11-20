@@ -27,7 +27,7 @@ jest.mock("../services/buyer-service", () => ({
 }))
 
 jest.mock("../services/template-service", () => ({
-  TemplateService: { listTemplates: jest.fn().mockResolvedValue([]) }
+  TemplateService: { listTemplates: jest.fn().mockResolvedValue([]), addTemplate: jest.fn() }
 }))
 
 jest.mock("../services/prompt-service", () => ({

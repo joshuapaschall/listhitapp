@@ -10,7 +10,7 @@ global.fetch = fetchMock
 Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { value: jest.fn(), writable: true })
 
 jest.mock("../services/template-service", () => ({
-  TemplateService: { listTemplates: jest.fn().mockResolvedValue([]) }
+  TemplateService: { listTemplates: jest.fn().mockResolvedValue([]), addTemplate: jest.fn() }
 }))
 
 jest.mock("../lib/supabase", () => {

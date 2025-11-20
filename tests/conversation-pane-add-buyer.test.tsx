@@ -16,7 +16,10 @@ jest.mock("../components/buyers/add-buyer-modal", () => ({
 }))
 
 jest.mock("../services/template-service", () => ({
-  TemplateService: { listTemplates: jest.fn().mockResolvedValue([]) },
+  TemplateService: {
+    listTemplates: jest.fn().mockResolvedValue([]),
+    addTemplate: jest.fn(),
+  },
 }))
 
 const updateEqMock = jest.fn().mockResolvedValue({ error: null })
