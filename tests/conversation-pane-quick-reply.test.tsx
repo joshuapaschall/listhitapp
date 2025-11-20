@@ -86,6 +86,6 @@ describe("ConversationPane quick replies", () => {
 
     fireEvent.click(screen.getByLabelText("Insert template"))
     const manageLink = screen.getByText("Manage templates…").closest("a")
-    expect(manageLink).toHaveAttribute("href", "/settings/templates/quick-reply")
+    expect(manageLink).toHaveAttribute("href", "/settings/templates/quick_reply")
   })
 })

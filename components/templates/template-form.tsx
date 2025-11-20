@@ -39,12 +39,11 @@ export default function TemplateForm({
   const channelLabel =
     channel === "email" ? "Email" : channel === "quick_reply" ? "Quick Reply" : "SMS"
 
-  const { chars, segments } = useMemo(() => {
-    return {
-      chars: message.length,
-      segments: calculateSmsSegments(message),
-    }
-  }, [message])
+  const chars = message.length
+  const { segments: smsSegments, remaining, encoding } = useMemo(
+    () => calculateSmsSegments(message),
+    [message],
+  )
 
   const insertPlaceholder = (value: string) => {
     setMessage((prev) => {
@@ -85,7 +84,8 @@ export default function TemplateForm({
           {showCharacterCount && (
             <div className="text-right text-xs text-muted-foreground">
               <p>{chars} characters</p>
-              <p className="text-[11px]">{segments} SMS segment{segments === 1 ? "" : "s"}</p>
+              <p className="text-[11px]">{smsSegments} SMS segment{smsSegments === 1 ? "" : "s"}</p>
+              <p className="text-[11px] capitalize">Encoding: {encoding}</p>
             </div>
           )}
         </div>
@@ -108,7 +108,7 @@ export default function TemplateForm({
                 Message
               </label>
               {showCharacterCount && (
-                <span className="text-xs text-muted-foreground">{chars}/612</span>
+                <span className="text-xs text-muted-foreground">{remaining} characters left</span>
               )}
             </div>
             {(enableEmojiPicker || mergeTags.length > 0) && (
