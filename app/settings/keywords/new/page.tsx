@@ -2,7 +2,6 @@
 
 import { useRouter } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
-import MainLayout from "@/components/layout/main-layout"
 import KeywordForm from "@/components/keywords/keyword-form"
 import { KeywordService } from "@/services/keyword-service"
 import { toast } from "sonner"
@@ -24,11 +23,9 @@ export default function NewKeywordPage() {
   }
 
   return (
-    <MainLayout>
-      <div className="p-4 max-w-xl mx-auto">
-        <h1 className="text-2xl font-bold mb-4">Add Keyword</h1>
-        <KeywordForm onSubmit={handleSubmit} />
-      </div>
-    </MainLayout>
+    <div className="p-4 max-w-xl mx-auto">
+      <h1 className="text-2xl font-bold mb-4">Add Keyword</h1>
+      <KeywordForm onSubmit={handleSubmit} />
+    </div>
   )
 }

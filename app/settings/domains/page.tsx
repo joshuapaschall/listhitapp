@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import MainLayout from "@/components/layout/main-layout"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import {
@@ -51,63 +50,61 @@ export default function DomainsPage() {
   }
 
   return (
-    <MainLayout>
-      <div className="p-4 space-y-4">
-        <h1 className="text-2xl font-bold">Short Domains</h1>
-        <form onSubmit={handleAdd} className="flex items-center space-x-2">
-          <Input
-            id="domain-hostname"
-            name="domain-hostname"
-            placeholder="example.com"
-            value={hostname}
-            onChange={(e) => setHostname(e.target.value)}
-          />
-          <Button type="submit" disabled={!hostname.trim() || adding}>
-            {adding ? "Adding..." : "Add"}
-          </Button>
-        </form>
-        <div className="border rounded-md">
-          <Table>
-            <TableHeader>
+    <div className="p-4 space-y-4">
+      <h1 className="text-2xl font-bold">Short Domains</h1>
+      <form onSubmit={handleAdd} className="flex items-center space-x-2">
+        <Input
+          id="domain-hostname"
+          name="domain-hostname"
+          placeholder="example.com"
+          value={hostname}
+          onChange={(e) => setHostname(e.target.value)}
+        />
+        <Button type="submit" disabled={!hostname.trim() || adding}>
+          {adding ? "Adding..." : "Add"}
+        </Button>
+      </form>
+      <div className="border rounded-md">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Domain</TableHead>
+              <TableHead className="w-24">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading && (
               <TableRow>
-                <TableHead>Domain</TableHead>
-                <TableHead className="w-24">Actions</TableHead>
+                <TableCell colSpan={2}>Loading...</TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading && (
-                <TableRow>
-                  <TableCell colSpan={2}>Loading...</TableCell>
+            )}
+            {!isLoading && domains.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={2}>No domains found.</TableCell>
+              </TableRow>
+            )}
+            {domains.map((d: any) => {
+              const id = d.id || d.domain_id
+              const host = d.hostname || d.domain
+              return (
+                <TableRow key={id}>
+                  <TableCell>{host}</TableCell>
+                  <TableCell>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDelete(id)}
+                      disabled={deleting === id}
+                    >
+                      {deleting === id ? "Deleting..." : "Delete"}
+                    </Button>
+                  </TableCell>
                 </TableRow>
-              )}
-              {!isLoading && domains.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={2}>No domains found.</TableCell>
-                </TableRow>
-              )}
-              {domains.map((d: any) => {
-                const id = d.id || d.domain_id
-                const host = d.hostname || d.domain
-                return (
-                  <TableRow key={id}>
-                    <TableCell>{host}</TableCell>
-                    <TableCell>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDelete(id)}
-                        disabled={deleting === id}
-                      >
-                        {deleting === id ? "Deleting..." : "Delete"}
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        </div>
+              )
+            })}
+          </TableBody>
+        </Table>
       </div>
-    </MainLayout>
+    </div>
   )
 }

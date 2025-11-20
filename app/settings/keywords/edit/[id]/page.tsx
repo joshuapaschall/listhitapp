@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
-import MainLayout from "@/components/layout/main-layout"
 import KeywordForm from "@/components/keywords/keyword-form"
 import { KeywordService } from "@/services/keyword-service"
 import { toast } from "sonner"
@@ -38,27 +37,17 @@ export default function EditKeywordPage() {
   }
 
   if (loading) {
-    return (
-      <MainLayout>
-        <div className="p-4">Loading...</div>
-      </MainLayout>
-    )
+    return <div className="p-4">Loading...</div>
   }
 
   if (!initial) {
-    return (
-      <MainLayout>
-        <div className="p-4">Keyword not found.</div>
-      </MainLayout>
-    )
+    return <div className="p-4">Keyword not found.</div>
   }
 
   return (
-    <MainLayout>
-      <div className="p-4 max-w-xl mx-auto">
-        <h1 className="text-2xl font-bold mb-4">Edit Keyword</h1>
-        <KeywordForm initial={initial} onSubmit={handleSubmit} />
-      </div>
-    </MainLayout>
+    <div className="p-4 max-w-xl mx-auto">
+      <h1 className="text-2xl font-bold mb-4">Edit Keyword</h1>
+      <KeywordForm initial={initial} onSubmit={handleSubmit} />
+    </div>
   )
 }

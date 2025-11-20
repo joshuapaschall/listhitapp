@@ -1,10 +1,20 @@
 import { supabase } from "@/lib/supabase"
-import type { MessageTemplate } from "@/lib/supabase"
+import type { TemplateRecord, TemplateType } from "@/lib/supabase"
+
+const TEMPLATE_TABLES: Record<TemplateType, string> = {
+  sms: "sms_templates",
+  email: "email_templates",
+  quick_reply: "quick_reply_templates",
+}
 
 export class TemplateService {
-  static async listTemplates() {
+  static tableFor(type: TemplateType) {
+    return TEMPLATE_TABLES[type]
+  }
+
+  static async listTemplates(type: TemplateType = "sms") {
     const { data, error } = await supabase
-      .from("message_templates")
+      .from(this.tableFor(type))
       .select("*")
       .order("created_at", { ascending: false })
 
@@ -13,12 +23,12 @@ export class TemplateService {
       throw error
     }
 
-    return (data || []) as MessageTemplate[]
+    return (data || []) as TemplateRecord[]
   }
 
-  static async getTemplate(id: string) {
+  static async getTemplate(id: string, type: TemplateType = "sms") {
     const { data, error } = await supabase
-      .from("message_templates")
+      .from(this.tableFor(type))
       .select("*")
       .eq("id", id)
       .maybeSingle()
@@ -28,12 +38,12 @@ export class TemplateService {
       throw error
     }
 
-    return data as MessageTemplate | null
+    return data as TemplateRecord | null
   }
 
-  static async addTemplate(template: Partial<MessageTemplate>) {
+  static async addTemplate(template: Partial<TemplateRecord>, type: TemplateType = "sms") {
     const { data, error } = await supabase
-      .from("message_templates")
+      .from(this.tableFor(type))
       .insert([template])
       .select()
       .single()
@@ -43,12 +53,16 @@ export class TemplateService {
       throw error
     }
 
-    return data as MessageTemplate
+    return data as TemplateRecord
   }
 
-  static async updateTemplate(id: string, updates: Partial<MessageTemplate>) {
+  static async updateTemplate(
+    id: string,
+    updates: Partial<TemplateRecord>,
+    type: TemplateType = "sms",
+  ) {
     const { data, error } = await supabase
-      .from("message_templates")
+      .from(this.tableFor(type))
       .update(updates)
       .eq("id", id)
       .select()
@@ -59,12 +73,12 @@ export class TemplateService {
       throw error
     }
 
-    return data as MessageTemplate
+    return data as TemplateRecord
   }
 
-  static async deleteTemplate(id: string) {
+  static async deleteTemplate(id: string, type: TemplateType = "sms") {
     const { error } = await supabase
-      .from("message_templates")
+      .from(this.tableFor(type))
       .delete()
       .eq("id", id)
 

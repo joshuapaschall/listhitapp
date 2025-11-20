@@ -38,3 +38,13 @@ export const supabaseAdmin: SupabaseClient | null =
         auth: { persistSession: false, autoRefreshToken: false },
       })
     : null
+
+export type TemplateType = "sms" | "email" | "quick_reply"
+
+export interface TemplateRecord {
+  id: string
+  name: string
+  message: string
+  created_at?: string
+  updated_at?: string
+}

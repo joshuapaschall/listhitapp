@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation"
 
-export default function LegacyTemplatesRedirect() {
+export default function SettingsIndexPage() {
   redirect("/settings/templates/sms")
 }
