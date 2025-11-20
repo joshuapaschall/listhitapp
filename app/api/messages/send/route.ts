@@ -181,14 +181,17 @@ export async function POST(request: NextRequest) {
   }
 
   const replyFrom = formatPhoneE164(fromDid)!
+  const isMms = !!(finalMediaUrls && finalMediaUrls.length)
 
   const payload: Record<string, any> = {
     from: replyFrom,
     to: formatted,
     text: body,
     messaging_profile_id: messagingProfileId,
+    type: isMms ? "MMS" : "SMS",
+    use_profile_webhooks: true,
   }
-  if (finalMediaUrls && finalMediaUrls.length) {
+  if (isMms) {
     payload.media_urls = finalMediaUrls
   }
 
