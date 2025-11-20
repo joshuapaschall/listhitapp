@@ -17,9 +17,21 @@ export function insertText(
 
 export function renderTemplate(
   message: string,
-  buyer: { fname?: string | null; lname?: string | null },
+  buyer: {
+    fname?: string | null;
+    lname?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    contact_form_link?: string | null;
+  } = {},
+  context: { myFirstName?: string | null; myLastName?: string | null } = {},
 ): string {
   return message
     .replace(/{{first_name}}/g, buyer.fname || "")
     .replace(/{{last_name}}/g, buyer.lname || "")
+    .replace(/{{phone}}/g, buyer.phone || "")
+    .replace(/{{email}}/g, buyer.email || "")
+    .replace(/{{contact_form_link}}/g, buyer.contact_form_link || "")
+    .replace(/{{my_first_name}}/g, context.myFirstName || "")
+    .replace(/{{my_last_name}}/g, context.myLastName || "");
 }

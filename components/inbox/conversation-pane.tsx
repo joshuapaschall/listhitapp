@@ -37,7 +37,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import Image from "next/image";
-import { insertText, cn } from "@/lib/utils";
+import { insertText, cn, renderTemplate } from "@/lib/utils";
 import { calculateSmsSegments } from "@/lib/sms-utils";
 import { formatPhoneE164, normalizePhone } from "@/lib/dedup-utils";
 import {
@@ -62,21 +62,13 @@ import VoiceRecorder from "@/components/voice/VoiceRecorder";
 import UploadModal from "./upload-modal";
 
 const mergeTags = [
-  { label: "Buyer First Name", value: "{{first_name}}" },
-  { label: "Buyer Last Name", value: "{{last_name}}" },
-  { label: "Buyer Full Name", value: "{{full_name}}" },
-  { label: "Buyer Email", value: "{{email}}" },
-  { label: "Buyer Phone", value: "{{phone}}" },
-  { label: "Property Address", value: "{{property_address}}" },
-  { label: "City", value: "{{city}}" },
-  { label: "State", value: "{{state}}" },
-  { label: "ZIP Code", value: "{{zip}}" },
-  { label: "City/State/ZIP", value: "{{city_state_zip}}" },
-  { label: "Price", value: "{{price}}" },
-  { label: "Status", value: "{{status}}" },
-  { label: "Agent Name", value: "{{agent_name}}" },
-  { label: "Appointment Time", value: "{{appointment_time}}" },
-  { label: "Company Name", value: "{{company_name}}" },
+  { label: "Contact's First Name", value: "{{first_name}}" },
+  { label: "Contact's Last Name", value: "{{last_name}}" },
+  { label: "Contact's Phone Number", value: "{{phone}}" },
+  { label: "Contact's Email", value: "{{email}}" },
+  { label: "Contact Form Link", value: "{{contact_form_link}}" },
+  { label: "My First Name", value: "{{my_first_name}}" },
+  { label: "My Last Name", value: "{{my_last_name}}" },
 ];
 
 function parseMedia(val: any): string[] {
@@ -254,6 +246,11 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
   const [templates, setTemplates] = useState<
     { id: string; name: string; message: string }[]
   >([]);
+  const [agentDetails, setAgentDetails] = useState<{
+    firstName?: string;
+    lastName?: string;
+    displayName?: string;
+  }>({});
   const [showEmoji, setShowEmoji] = useState(false);
   const [attachments, setAttachments] = useState<File[]>([]);
   const hasOversize = attachments.some((f) => f.size > MAX_MMS_SIZE);
@@ -285,6 +282,28 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
   }, []);
 
   useEffect(() => {
+    const loadAgent = async () => {
+      try {
+        const res = await fetch("/api/agents/me");
+        if (!res.ok) return;
+        const data = await res.json().catch(() => ({}));
+        const display = typeof data.display_name === "string" ? data.display_name : "";
+        const parts = display.trim().split(/\s+/).filter(Boolean);
+        setAgentDetails({
+          displayName: display,
+          firstName:
+            data.first_name || (parts.length ? parts[0] : ""),
+          lastName:
+            data.last_name || (parts.length > 1 ? parts.slice(1).join(" ") : ""),
+        });
+      } catch (err) {
+        console.error("Failed to load agent details", err);
+      }
+    };
+    loadAgent();
+  }, []);
+
+  useEffect(() => {
     const loadVoiceNumbers = async () => {
       try {
         const res = await fetch("/api/voice-numbers");
@@ -311,7 +330,9 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
     const loadBuyer = async () => {
       const { data, error } = await supabase
         .from("buyers")
-        .select("id,fname,lname,full_name,can_receive_sms,status")
+        .select(
+          "id,fname,lname,full_name,can_receive_sms,status,email,phone,phone2,phone3,website",
+        )
         .eq("id", thread.buyer_id);
       if (!error && data && data[0]) setBuyer(data[0] as Buyer);
     };
@@ -522,6 +543,56 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
     }
     return { id: null as string | null, did: null as string | null };
   }, [messages]);
+
+  const mergeContext = useMemo(
+    () => {
+      const fname = buyer?.fname || thread?.buyers?.fname || "";
+      const lname = buyer?.lname || thread?.buyers?.lname || "";
+      const primaryPhone =
+        buyer?.phone ||
+        buyer?.phone2 ||
+        buyer?.phone3 ||
+        thread?.phone_number ||
+        "";
+      const email = buyer?.email || "";
+      const contactFormLink =
+        (buyer as any)?.contact_form_link ||
+        (buyer as any)?.form_link ||
+        buyer?.website ||
+        "";
+      const myFirstName =
+        agentDetails.firstName ||
+        (agentDetails.displayName
+          ? agentDetails.displayName.split(" ")[0] || ""
+          : "");
+      const myLastName =
+        agentDetails.lastName ||
+        (agentDetails.displayName
+          ? agentDetails.displayName
+              .split(" ")
+              .slice(1)
+              .join(" ") || ""
+          : "");
+
+      return {
+        buyer: {
+          fname,
+          lname,
+          phone: primaryPhone,
+          email,
+          contact_form_link: contactFormLink,
+        },
+        agent: { myFirstName, myLastName },
+      };
+    },
+    [
+      agentDetails.displayName,
+      agentDetails.firstName,
+      agentDetails.lastName,
+      buyer,
+      thread,
+    ],
+  );
 
   useEffect(() => {
     if (!thread) return;
@@ -735,7 +806,8 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
   );
 
   const sendMessage = useCallback(async () => {
-    if (!thread || (!input.trim() && attachments.length === 0)) return;
+    const trimmedInput = input.trim();
+    if (!thread || (!trimmedInput && attachments.length === 0)) return;
     for (const file of attachments) {
       const ext = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
       if (!ALLOWED_MMS_EXTENSIONS.includes(ext)) {
@@ -786,6 +858,12 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
 
     const currentFrom = selectedDid || preferredFrom || null;
 
+    const renderedBody = renderTemplate(
+      trimmedInput,
+      mergeContext.buyer,
+      mergeContext.agent,
+    );
+
     if (scheduleDate) {
       try {
         const mediaUrls = await uploadFiles();
@@ -796,7 +874,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
         const campaign = await CampaignService.createCampaign({
           name: `SMS to ${name}`,
           channel: "sms",
-          message: input.trim(),
+          message: renderedBody,
           mediaUrls,
           buyerIds: [thread.buyer_id],
           groupIds: [],
@@ -842,7 +920,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
       direction: "outbound",
       from_number: currentFrom ? formatDidE164(currentFrom) : null,
       to_number: thread.phone_number,
-      body: input.trim(),
+      body: renderedBody,
       provider_id: null,
       is_bulk: false,
       filtered: false,
@@ -892,6 +970,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
     attachments,
     selectedDid,
     preferredFrom,
+    mergeContext,
     compressImageIfNeeded,
   ]);
 

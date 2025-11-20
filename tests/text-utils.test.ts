@@ -27,4 +27,23 @@ describe("renderTemplate", () => {
     const out = renderTemplate(msg, { fname: null, lname: null })
     expect(out).toBe("Hi ")
   })
+
+  test("replaces extended placeholders", () => {
+    const msg =
+      "Hi {{first_name}} {{last_name}}, call me at {{phone}} or email {{email}}. {{contact_form_link}} - {{my_first_name}} {{my_last_name}}"
+    const out = renderTemplate(
+      msg,
+      {
+        fname: "John",
+        lname: "Doe",
+        phone: "5551234567",
+        email: "john@example.com",
+        contact_form_link: "http://example.com/form",
+      },
+      { myFirstName: "Agent", myLastName: "Smith" },
+    )
+    expect(out).toBe(
+      "Hi John Doe, call me at 5551234567 or email john@example.com. http://example.com/form - Agent Smith",
+    )
+  })
 })
