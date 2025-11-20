@@ -505,7 +505,9 @@ export function TelnyxCallHistory() {
                     <>
                       <Voicemail className="h-12 w-12 mx-auto mb-4 opacity-50" />
                       <p>No voicemails found</p>
-                      <p className="text-sm mt-2">Click "Poll Voicemails" to check for new messages</p>
+                      <p className="text-sm mt-2">
+                        Click &quot;Poll Voicemails&quot; to check for new messages
+                      </p>
                     </>
                   )}
                 </div>

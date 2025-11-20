@@ -348,7 +348,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
       if (!error && data && data[0]) setBuyer(data[0] as Buyer);
     };
     loadBuyer();
-  }, [thread]);
+  }, [thread]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!thread) {
@@ -365,7 +365,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
     }
     setBannerDid(null);
     manualDidRef.current = false;
-  }, [thread?.id, thread?.preferred_from_number]);
+    }, [thread?.id, thread?.preferred_from_number]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!thread || !thread.unread) return;
@@ -628,7 +628,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
     if (!inboundDid || inboundDid === sticky) {
       setBannerDid(null);
     }
-  }, [thread?.id, preferredFrom, lastInbound.did, lastInbound.id, selectedDid]);
+  }, [thread?.id, preferredFrom, lastInbound.did, lastInbound.id, selectedDid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (
