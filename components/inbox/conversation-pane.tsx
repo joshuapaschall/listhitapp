@@ -249,7 +249,9 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
   }>({});
   const [showEmoji, setShowEmoji] = useState(false);
   const [attachments, setAttachments] = useState<File[]>([]);
-  const hasOversize = attachments.some((f) => f.size > MAX_MMS_SIZE);
+  const oversizedNonImages = attachments.filter(
+    (f) => f.size > MAX_MMS_SIZE && !f.type.startsWith("image/"),
+  );
   const [buyer, setBuyer] = useState<Buyer | null>(null);
   const [showEdit, setShowEdit] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
@@ -804,6 +806,9 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
   const sendMessage = useCallback(async () => {
     const trimmedInput = input.trim();
     if (!thread || (!trimmedInput && attachments.length === 0)) return;
+    const sendableFiles: File[] = []
+    const linkOnlyFiles: File[] = []
+
     for (const file of attachments) {
       const ext = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
       if (!ALLOWED_MMS_EXTENSIONS.includes(ext)) {
@@ -812,16 +817,16 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
       }
 
       if (file.size > MAX_MMS_SIZE && !file.type.startsWith("image/")) {
-        toast.error(
-          `File ${file.name} exceeds ${Math.round(MAX_MMS_SIZE / 1024)}KB limit`,
-        );
-        return;
+        linkOnlyFiles.push(file)
+        continue
       }
+
+      sendableFiles.push(file)
     }
 
-    const uploadFiles = async () => {
+    const uploadFiles = async (list: File[]) => {
       const urls: string[] = []
-      for (const original of attachments) {
+      for (const original of list) {
         const file =
           original.type.startsWith("image/") && original.size > MAX_MMS_SIZE
             ? await compressImageIfNeeded(original)
@@ -860,9 +865,46 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
       mergeContext.agent,
     );
 
-    if (scheduleDate) {
+    const largeNames = linkOnlyFiles.map((f) => f.name)
+    if (linkOnlyFiles.length) {
+      toast.info(
+        `${linkOnlyFiles.length} file${linkOnlyFiles.length > 1 ? "s" : ""} will send as download link${
+          linkOnlyFiles.length > 1 ? "s" : ""
+        } due to the 1MB MMS limit.`,
+      )
+    }
+
+    const uploadAndBuildBody = async () => {
+      let mediaUrls: string[] = []
+      let linkUrls: string[] = []
+
       try {
-        const mediaUrls = await uploadFiles();
+        mediaUrls = await uploadFiles(sendableFiles)
+        linkUrls = linkOnlyFiles.length ? await uploadFiles(linkOnlyFiles) : []
+      } catch (err) {
+        console.error("Media upload failed", err)
+        toast.error(
+          (err as any)?.message ||
+            "Failed to upload attachments. Please try different files.",
+        )
+        return { mediaUrls: [], linkUrls: [], failed: true }
+      }
+
+      const finalBody = linkUrls.length
+        ? `${renderedBody ? `${renderedBody}\n\n` : ""}Download link${
+            linkUrls.length > 1 ? "s" : ""
+          } (over 1MB):\n${linkUrls
+            .map((url, idx) => `• ${largeNames[idx] || "Attachment"}: ${url}`)
+            .join("\n")}`
+        : renderedBody
+
+      return { mediaUrls, linkUrls, body: finalBody, failed: false }
+    }
+
+    if (scheduleDate) {
+      const { mediaUrls, body, failed } = await uploadAndBuildBody()
+      if (failed) return
+      try {
         const name =
           buyer?.full_name ||
           `${buyer?.fname || ""} ${buyer?.lname || ""}`.trim() ||
@@ -870,7 +912,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
         const campaign = await CampaignService.createCampaign({
           name: `SMS to ${name}`,
           channel: "sms",
-          message: renderedBody,
+          message: body,
           mediaUrls,
           buyerIds: [thread.buyer_id],
           groupIds: [],
@@ -895,17 +937,8 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
       return;
     }
 
-    let mediaUrls: string[] = [];
-    try {
-      mediaUrls = await uploadFiles();
-    } catch (err) {
-      console.error("Media upload failed", err);
-      toast.error(
-        (err as any)?.message ||
-          "Failed to upload attachments. Please try different files.",
-      );
-      return;
-    }
+    const { mediaUrls, body, failed } = await uploadAndBuildBody()
+    if (failed) return
 
     const tempId = `temp-${Date.now()}`;
     const pending: LocalMessage = {
@@ -916,7 +949,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
       direction: "outbound",
       from_number: currentFrom ? formatDidE164(currentFrom) : null,
       to_number: thread.phone_number,
-      body: renderedBody,
+      body,
       provider_id: null,
       is_bulk: false,
       filtered: false,
@@ -1503,13 +1536,15 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
               {smsSegments > 1 ? "s" : ""}
             </div>
             <div className="flex items-center gap-2">
-              {hasOversize && (
-                <span className="text-xs text-red-600 mr-2">Remove files over 1MB</span>
+              {oversizedNonImages.length > 0 && (
+                <span className="text-xs text-amber-600 mr-2">
+                  Files over 1MB will send as download links instead of MMS.
+                </span>
               )}
               <Button
                 size="sm"
                 onClick={sendMessage}
-                disabled={(!input.trim() && attachments.length === 0) || hasOversize}
+                disabled={!input.trim() && attachments.length === 0}
               >
                 Send
               </Button>
