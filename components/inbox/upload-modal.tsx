@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useRef } from "react"
+import React, { useState, useRef, useMemo } from "react"
 import {
   Dialog,
   DialogContent,
@@ -12,13 +12,14 @@ import {
 import { Button } from "@/components/ui/button"
 import { X, UploadCloud, ImageIcon, Music2, Film } from "lucide-react"
 import Image from "next/image"
-import { ALLOWED_MMS_EXTENSIONS, MAX_MMS_SIZE } from "@/utils/uploadMedia"
+import { MAX_MMS_SIZE } from "@/utils/uploadMedia"
 import { resizeImage } from "@/utils/image"
 
 interface UploadModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onAddFiles: (files: File[]) => void
+  uploadType: "photo" | "video" | null
 }
 
 interface PreviewItem {
@@ -26,12 +27,54 @@ interface PreviewItem {
   url: string
 }
 
+const PHOTO_AUDIO_EXTENSIONS = [
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".gif",
+  ".bmp",
+  ".webp",
+  ".m4a",
+  ".mp3",
+  ".wav",
+  ".ogg",
+  ".oga",
+  ".opus",
+  ".amr",
+  ".webm",
+  ".weba",
+]
+
+const VIDEO_EXTENSIONS = [".mp4", ".webm", ".3gp"]
+
 const formatSize = (bytes: number) => `${Math.round(bytes / 1024)} KB`
 
-export default function UploadModal({ open, onOpenChange, onAddFiles }: UploadModalProps) {
+export default function UploadModal({
+  open,
+  onOpenChange,
+  onAddFiles,
+  uploadType,
+}: UploadModalProps) {
   const [previews, setPreviews] = useState<PreviewItem[]>([])
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const allowedExtensions = useMemo(() => {
+    if (uploadType === "video") return VIDEO_EXTENSIONS
+    return PHOTO_AUDIO_EXTENSIONS
+  }, [uploadType])
+
+  const acceptValue = useMemo(() => {
+    if (uploadType === "video") return "video/mp4,video/webm,video/3gpp"
+    return "image/jpeg,image/png,image/gif,image/webp,audio/*"
+  }, [uploadType])
+
+  const titleCopy = uploadType === "video" ? "Add video" : "Add photo or audio"
+
+  const descriptionCopy =
+    uploadType === "video"
+      ? "MMS supports short MP4 or WebM clips under 1MB. Keep videos brief for reliable delivery."
+      : "MMS supports photos (JPG, PNG, GIF, WEBP) and quick audio notes under 1MB. Larger files should be trimmed before sending."
 
   const reset = () => {
     previews.forEach((p) => URL.revokeObjectURL(p.url))
@@ -55,7 +98,7 @@ export default function UploadModal({ open, onOpenChange, onAddFiles }: UploadMo
       const dot = lower.lastIndexOf(".")
       const ext = dot >= 0 ? lower.slice(dot) : ""
 
-      if (!ALLOWED_MMS_EXTENSIONS.includes(ext)) {
+      if (!allowedExtensions.includes(ext)) {
         rejected.push(`${f.name} (unsupported type)`)
         continue
       }
@@ -80,7 +123,7 @@ export default function UploadModal({ open, onOpenChange, onAddFiles }: UploadMo
       setError(
         `Skipped ${rejected.length} file${rejected.length > 1 ? "s" : ""}: ${rejected.join(
           ", ",
-        )}. Only supported formats under 1MB are allowed.`,
+        )}. Only supported media under 1MB are allowed.`,
       )
     } else {
       setError(null)
@@ -117,10 +160,8 @@ export default function UploadModal({ open, onOpenChange, onAddFiles }: UploadMo
     <Dialog open={open} onOpenChange={close}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Add attachments</DialogTitle>
-          <DialogDescription>
-            Send property photos, short clips, or voice notes. Max 1MB per file.
-          </DialogDescription>
+          <DialogTitle>{titleCopy}</DialogTitle>
+          <DialogDescription>{descriptionCopy}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -141,14 +182,16 @@ export default function UploadModal({ open, onOpenChange, onAddFiles }: UploadMo
               <span className="text-muted-foreground">or click to browse</span>
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              JPG, PNG, GIF, MP4, MP3 & common audio · up to{" "}
-              {Math.round(MAX_MMS_SIZE / 1024)} KB each
+              {uploadType === "video"
+                ? "MP4 or WebM clips · under 1MB each"
+                : "JPG, PNG, GIF, WEBP, and common audio · under 1MB each"}
             </p>
             <input
               ref={fileInputRef}
               type="file"
               multiple
               className="hidden"
+              accept={acceptValue}
               onChange={handleChange}
             />
           </div>
