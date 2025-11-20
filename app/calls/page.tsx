@@ -165,9 +165,12 @@ export default function CallsPage() {
     return phone;
   };
 
+  /* eslint-disable react-hooks/exhaustive-deps */
+  // Initial load of recent calls on mount only.
   useEffect(() => {
     fetchCalls();
   }, []);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   return (
     <MainLayout>
@@ -406,7 +409,9 @@ export default function CallsPage() {
                   <div className="text-center py-12 text-muted-foreground">
                     <Voicemail className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>No voicemails found</p>
-                    <p className="text-sm mt-2">Click "Load Voicemails" to check for messages</p>
+                    <p className="text-sm mt-2">
+                      Click &quot;Load Voicemails&quot; to check for messages
+                    </p>
                     <p className="text-xs mt-4 max-w-md mx-auto">
                       Voicemails are identified by analyzing recordings from Telnyx API
                     </p>

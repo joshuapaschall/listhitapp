@@ -496,7 +496,7 @@ export default function ImportBuyersModal({ onSuccess }: ImportBuyersModalProps)
             <DialogHeader>
               <DialogTitle>Import Buyers</DialogTitle>
               <DialogDescription>
-                Upload a CSV file with your buyer data. You'll be able to map fields in the next step.
+                Upload a CSV file with your buyer data. You&apos;ll be able to map fields in the next step.
               </DialogDescription>
             </DialogHeader>
 
