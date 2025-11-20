@@ -1338,14 +1338,6 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
             </div>
           </div>
         )}
-        <div
-          className={`flex justify-between text-xs ${smsSegments > 1 ? "text-red-600" : "text-muted-foreground"}`}
-        >
-          <span>
-            {remaining} characters remaining · {smsSegments} segment
-            {smsSegments > 1 ? "s" : ""}
-          </span>
-        </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2 text-sm">
             <span className="text-xs uppercase text-muted-foreground">From</span>
@@ -1368,17 +1360,25 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
               </SelectContent>
             </Select>
           </div>
-          <div className="flex items-center gap-2">
-            {hasOversize && (
-              <span className="text-xs text-red-600 mr-2">Remove files over 1MB</span>
-            )}
-            <Button
-              size="sm"
-              onClick={sendMessage}
-              disabled={(!input.trim() && attachments.length === 0) || hasOversize}
+          <div className="flex flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-3">
+            <div
+              className={`text-xs text-right ${smsSegments > 1 ? "text-red-600" : "text-muted-foreground"}`}
             >
-              Send
-            </Button>
+              {remaining} characters remaining · {smsSegments} segment
+              {smsSegments > 1 ? "s" : ""}
+            </div>
+            <div className="flex items-center gap-2">
+              {hasOversize && (
+                <span className="text-xs text-red-600 mr-2">Remove files over 1MB</span>
+              )}
+              <Button
+                size="sm"
+                onClick={sendMessage}
+                disabled={(!input.trim() && attachments.length === 0) || hasOversize}
+              >
+                Send
+              </Button>
+            </div>
           </div>
         </div>
       </div>
