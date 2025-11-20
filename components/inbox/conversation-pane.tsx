@@ -424,20 +424,66 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
         },
         (payload) => {
           const msg = payload.new as Message;
-          const parsed = {
-            ...msg,
+          const parsed: LocalMessage = {
+            ...(msg as Message),
             media_urls: parseMedia((msg as any).media_urls),
-          } as Message;
+          };
+
           setMessages((prev) => {
-            const idx = prev.findIndex(
-              (m) => m.provider_id && m.provider_id === msg.provider_id,
-            );
-            if (idx >= 0) {
+            // 1) If we already have this DB id, just update it in place
+            const byId = prev.findIndex((m) => m.id === msg.id);
+            if (byId >= 0) {
               const arr = [...prev];
-              arr[idx] = parsed as LocalMessage;
+              const old = arr[byId];
+              arr[byId] = {
+                ...parsed,
+                // keep any localId we were using for optimistic updates
+                localId: old.localId,
+              };
               return arr;
             }
-            return [...prev, parsed as LocalMessage];
+
+            // 2) Normal path: match by provider_id (after sendMessage sets it)
+            if (msg.provider_id) {
+              const byProvider = prev.findIndex(
+                (m) => m.provider_id === msg.provider_id,
+              );
+              if (byProvider >= 0) {
+                const arr = [...prev];
+                const old = arr[byProvider];
+                arr[byProvider] = {
+                  ...parsed,
+                  localId: old.localId,
+                };
+                return arr;
+              }
+            }
+
+            // 3) Fallback: match any outbound "sending" message with same to_number + body
+            const msgTo = normalizeDid(msg.to_number);
+            const byPending = prev.findIndex((m) => {
+              if (m.status !== "sending" || m.direction !== "outbound") return false;
+              if (m.provider_id) return false;
+              const pendingTo = normalizeDid(m.to_number);
+              return pendingTo === msgTo && (m.body || "") === (msg.body || "");
+            });
+            if (byPending >= 0) {
+              const arr = [...prev];
+              const old = arr[byPending];
+              arr[byPending] = {
+                ...parsed,
+                localId: old.localId,
+              };
+              return arr;
+            }
+
+            // 4) If somehow it's already there, don't duplicate
+            if (prev.some((m) => m.id === msg.id)) {
+              return prev;
+            }
+
+            // 5) Otherwise append (covers inbound messages, etc.)
+            return [...prev, parsed];
           });
         },
       )
