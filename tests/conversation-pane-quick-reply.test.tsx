@@ -70,4 +70,22 @@ describe("ConversationPane quick replies", () => {
     const textarea = screen.getAllByRole("textbox")[0] as HTMLTextAreaElement
     expect(textarea.value).toBe("Quick message")
   })
+
+  test("manage templates link points to quick replies", async () => {
+    const thread = { id: "t1", buyer_id: "b1", phone_number: "+1222" } as any
+    const qc = new QueryClient()
+    render(
+      <QueryClientProvider client={qc}>
+        <NowProvider>
+          <ConversationPane thread={thread} />
+        </NowProvider>
+      </QueryClientProvider>
+    )
+
+    await waitFor(() => expect(listTemplatesMock).toHaveBeenCalled())
+
+    fireEvent.click(screen.getByLabelText("Insert template"))
+    const manageLink = screen.getByText("Manage templates…").closest("a")
+    expect(manageLink).toHaveAttribute("href", "/settings/templates/quick-reply")
+  })
 })

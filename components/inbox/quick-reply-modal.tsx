@@ -17,12 +17,14 @@ interface QuickReplyModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onCreated: (template: TemplateRecord) => void
+  mergeTags?: { label: string; value: string }[]
 }
 
 export default function QuickReplyModal({
   open,
   onOpenChange,
   onCreated,
+  mergeTags = [],
 }: QuickReplyModalProps) {
   const [error, setError] = useState<string | null>(null)
 
@@ -52,6 +54,9 @@ export default function QuickReplyModal({
           channel="quick_reply"
           onSubmit={handleSubmit}
           initial={{ name: "", message: "" }}
+          enableEmojiPicker
+          mergeTags={mergeTags}
+          showCharacterCount
         />
         {error && <p className="text-sm text-destructive">{error}</p>}
       </DialogContent>
