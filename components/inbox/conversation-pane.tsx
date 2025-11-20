@@ -61,6 +61,24 @@ import {
 import VoiceRecorder from "@/components/voice/VoiceRecorder";
 import UploadModal from "./upload-modal";
 
+const mergeTags = [
+  { label: "Buyer First Name", value: "{{first_name}}" },
+  { label: "Buyer Last Name", value: "{{last_name}}" },
+  { label: "Buyer Full Name", value: "{{full_name}}" },
+  { label: "Buyer Email", value: "{{email}}" },
+  { label: "Buyer Phone", value: "{{phone}}" },
+  { label: "Property Address", value: "{{property_address}}" },
+  { label: "City", value: "{{city}}" },
+  { label: "State", value: "{{state}}" },
+  { label: "ZIP Code", value: "{{zip}}" },
+  { label: "City/State/ZIP", value: "{{city_state_zip}}" },
+  { label: "Price", value: "{{price}}" },
+  { label: "Status", value: "{{status}}" },
+  { label: "Agent Name", value: "{{agent_name}}" },
+  { label: "Appointment Time", value: "{{appointment_time}}" },
+  { label: "Company Name", value: "{{company_name}}" },
+];
+
 function parseMedia(val: any): string[] {
   if (!val) return [];
   if (Array.isArray(val)) return val;
@@ -1234,16 +1252,14 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
-              <DropdownMenuItem
-                onSelect={() => insertPlaceholder("{{first_name}}")}
-              >
-                First Name
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => insertPlaceholder("{{last_name}}")}
-              >
-                Last Name
-              </DropdownMenuItem>
+              {mergeTags.map((tag) => (
+                <DropdownMenuItem
+                  key={tag.value}
+                  onSelect={() => insertPlaceholder(tag.value)}
+                >
+                  {tag.label}
+                </DropdownMenuItem>
+              ))}
             </DropdownMenuContent>
           </DropdownMenu>
           <DropdownMenu>
