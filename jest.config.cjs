@@ -31,6 +31,8 @@ module.exports = {
     "@/lib/supabase": "<rootDir>/tests/__mocks__/supabase.ts",
     "@/lib/supabase-browser\\.js$": "<rootDir>/tests/__mocks__/supabase-browser.ts",
     "@/lib/supabase-browser": "<rootDir>/tests/__mocks__/supabase-browser.ts",
+    "@/services/email-metrics-service": "<rootDir>/tests/__mocks__/email-metrics-service.ts",
+    "next/headers": "<rootDir>/tests/__mocks__/next-headers.ts",
     "^@/(.*)$": "<rootDir>/$1",
     "^(\\.{1,2}/.*)\\.js$": "$1"
   },
