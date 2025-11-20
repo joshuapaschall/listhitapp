@@ -1,9 +1,10 @@
 import { describe, expect, test, beforeEach, jest } from "@jest/globals"
+import { __setBuyerGroups } from "@/lib/supabase"
 import { addBuyersToGroups } from "../lib/group-service"
 
 let buyerGroups: any[] = []
 
-jest.mock("../lib/supabase", () => {
+jest.mock("@/lib/supabase", () => {
   const client = {
     from: (table: string) => {
       if (table === "buyer_groups") {
@@ -33,7 +34,8 @@ jest.mock("../lib/supabase", () => {
 describe("addBuyersToGroups", () => {
   beforeEach(() => {
     buyerGroups = [{ buyer_id: "1", group_id: "g1" }]
-    global.fetch = jest.fn().mockResolvedValue({ ok: true })
+    __setBuyerGroups(buyerGroups)
+    global.fetch = jest.fn(async () => new Response("{}", { status: 200 })) as any
   })
 
   test("avoids duplicates and syncs buyers", async () => {

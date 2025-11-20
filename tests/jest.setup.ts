@@ -18,3 +18,10 @@ import { TextDecoder, TextEncoder } from "util";
 (BigInt.prototype as any).toJSON = function () {
   return this.toString();
 };
+
+// Mock the browser Supabase client so tests never hit the real browser helper
+jest.mock("@/lib/supabase-browser", () => ({
+  supabaseBrowser: {
+    from: jest.fn(),
+  },
+}));

@@ -1,4 +1,4 @@
-import { describe, test, expect } from "@jest/globals"
+import { describe, test, expect, jest } from "@jest/globals"
 import { NextRequest } from "next/server"
 import { generateKeyPairSync, sign } from "crypto"
 import { Buffer } from "buffer"
