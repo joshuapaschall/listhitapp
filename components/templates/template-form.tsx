@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 
 interface TemplateFormProps {
   initial?: { name: string; message: string }
-  channel?: "sms" | "email"
+  channel?: "sms" | "email" | "quick_reply"
   onSubmit: (data: { name: string; message: string }) => Promise<void>
 }
 export default function TemplateForm({
@@ -18,6 +18,8 @@ export default function TemplateForm({
   const [name, setName] = useState(initial?.name || "")
   const [message, setMessage] = useState(initial?.message || "")
   const [loading, setLoading] = useState(false)
+  const channelLabel =
+    channel === "email" ? "Email" : channel === "quick_reply" ? "Quick Reply" : "SMS"
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -32,6 +34,7 @@ export default function TemplateForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      <p className="text-sm text-muted-foreground">Channel: {channelLabel}</p>
       <div>
         <label htmlFor="tpl-name" className="block text-sm font-medium mb-1">Name</label>
         <Input id="tpl-name" value={name} onChange={(e) => setName(e.target.value)} />
