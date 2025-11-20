@@ -8,7 +8,7 @@ import { ALLOWED_MMS_EXTENSIONS, MAX_MMS_SIZE } from "../utils/uploadMedia"
 global.URL.createObjectURL = jest.fn(() => "blob:mock")
 
 jest.mock("../services/template-service", () => ({
-  TemplateService: { listTemplates: jest.fn().mockResolvedValue([]) }
+  TemplateService: { listTemplates: jest.fn().mockResolvedValue([]), addTemplate: jest.fn() }
 }))
 
 jest.mock("../services/prompt-service", () => ({

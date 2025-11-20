@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { TemplateService } from "@/services/template-service";
 import {
@@ -37,6 +38,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 import { insertText, cn, renderTemplate } from "@/lib/utils";
 import { calculateSmsSegments } from "@/lib/sms-utils";
 import { formatPhoneE164, normalizePhone } from "@/lib/dedup-utils";
@@ -45,6 +47,7 @@ import {
   type MessageThread,
   type Message,
   type Buyer,
+  type TemplateRecord,
 } from "@/lib/supabase";
 import EditBuyerModal from "@/components/buyers/edit-buyer-modal";
 import AddBuyerModal from "@/components/buyers/add-buyer-modal";
@@ -60,6 +63,7 @@ import {
 } from "@/utils/uploadMedia";
 import VoiceRecorder from "@/components/voice/VoiceRecorder";
 import UploadModal from "./upload-modal";
+import QuickReplyModal from "./quick-reply-modal";
 
 const mergeTags = [
   { label: "Contact's First Name", value: "{{first_name}}" },
@@ -239,9 +243,7 @@ interface LocalMessage extends Message {
 export default function ConversationPane({ thread }: ConversationPaneProps) {
   const [messages, setMessages] = useState<LocalMessage[]>([]);
   const [input, setInput] = useState("");
-  const [templates, setTemplates] = useState<
-    { id: string; name: string; message: string }[]
-  >([]);
+  const [templates, setTemplates] = useState<TemplateRecord[]>([]);
   const [agentDetails, setAgentDetails] = useState<{
     firstName?: string;
     lastName?: string;
@@ -274,10 +276,21 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
   const [bannerDid, setBannerDid] = useState<string | null>(null);
   const manualDidRef = useRef(false);
   const dismissedBannerIdRef = useRef<string | null>(null);
+  const [showQuickReplyModal, setShowQuickReplyModal] = useState(false);
+
+  const loadQuickReplies = useCallback(async () => {
+    try {
+      const list = await TemplateService.listTemplates("quick_reply");
+      setTemplates(list);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to load quick replies");
+    }
+  }, []);
 
   useEffect(() => {
-    TemplateService.listTemplates().then(setTemplates);
-  }, []);
+    void loadQuickReplies();
+  }, [loadQuickReplies]);
 
   useEffect(() => {
     const loadAgent = async () => {
@@ -1346,6 +1359,13 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
                   {t.name}
                 </DropdownMenuItem>
               ))}
+              {templates.length > 0 && <DropdownMenuSeparator />}
+              <DropdownMenuItem onSelect={() => setShowQuickReplyModal(true)}>
+                New quick reply…
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/settings/templates/quick_reply">Manage templates…</Link>
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           <DropdownMenu>
@@ -1591,6 +1611,14 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
         onAddFiles={(files) =>
           setAttachments((prev) => [...prev, ...files])
         }
+      />
+      <QuickReplyModal
+        open={showQuickReplyModal}
+        onOpenChange={setShowQuickReplyModal}
+        onCreated={(tpl) => {
+          setTemplates((prev) => [tpl, ...prev])
+          void loadQuickReplies()
+        }}
       />
     </div>
   );

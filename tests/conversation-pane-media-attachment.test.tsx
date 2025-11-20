@@ -9,7 +9,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 global.fetch = jest.fn(() => Promise.resolve({ headers: { get: () => null } }))
 
 jest.mock("../services/template-service", () => ({
-  TemplateService: { listTemplates: jest.fn().mockResolvedValue([]) },
+  TemplateService: { listTemplates: jest.fn().mockResolvedValue([]), addTemplate: jest.fn() },
 }))
 
 const message: any = {
