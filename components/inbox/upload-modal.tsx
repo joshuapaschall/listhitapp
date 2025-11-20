@@ -73,8 +73,8 @@ export default function UploadModal({
 
   const descriptionCopy =
     uploadType === "video"
-      ? "MMS supports short MP4 or WebM clips under 1MB. Keep videos brief for reliable delivery."
-      : "MMS supports photos (JPG, PNG, GIF, WEBP) and quick audio notes under 1MB. Larger files should be trimmed before sending."
+      ? "MMS supports short MP4, WebM, or 3GP clips under 1MB. Bigger clips will be shared as download links."
+      : "MMS supports photos (JPG, PNG, GIF, WEBP) and quick audio notes (MP3, OGG, WEBM, AMR) under 1MB. Larger files should be trimmed before sending."
 
   const reset = () => {
     previews.forEach((p) => URL.revokeObjectURL(p.url))
@@ -92,6 +92,7 @@ export default function UploadModal({
 
     const accepted: PreviewItem[] = []
     const rejected: string[] = []
+    const oversize: string[] = []
 
     for (const f of incoming) {
       const lower = f.name.toLowerCase()
@@ -104,10 +105,7 @@ export default function UploadModal({
       }
 
       if (f.size > MAX_MMS_SIZE && !f.type.startsWith("image/")) {
-        rejected.push(
-          `${f.name} (over ${Math.round(MAX_MMS_SIZE / 1024)}KB – trim before sending)`,
-        )
-        continue
+        oversize.push(f.name)
       }
 
       const resized = await resizeImage(f, MAX_MMS_SIZE)
@@ -119,15 +117,25 @@ export default function UploadModal({
 
     setPreviews((prev) => [...prev, ...accepted])
 
+    const messages: string[] = []
+
     if (rejected.length) {
-      setError(
+      messages.push(
         `Skipped ${rejected.length} file${rejected.length > 1 ? "s" : ""}: ${rejected.join(
           ", ",
         )}. Only supported media under 1MB are allowed.`,
       )
-    } else {
-      setError(null)
     }
+
+    if (oversize.length) {
+      messages.push(
+        `${oversize.length} file${oversize.length > 1 ? "s" : ""} over 1MB will send as download link${
+          oversize.length > 1 ? "s" : ""
+        } instead of MMS.`,
+      )
+    }
+
+    setError(messages.length ? messages.join(" ") : null)
   }
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
@@ -183,7 +191,7 @@ export default function UploadModal({
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
               {uploadType === "video"
-                ? "MP4 or WebM clips · under 1MB each"
+                ? "MP4, WebM, or 3GP clips · under 1MB each"
                 : "JPG, PNG, GIF, WEBP, and common audio · under 1MB each"}
             </p>
             <input
@@ -224,7 +232,7 @@ export default function UploadModal({
                   const isVideo =
                     /(mp4|webm|3gp)$/.test(lower) || file.type.startsWith("video/")
                   const isAudio =
-                    /(m4a|mp3|wav|ogg|oga|opus|amr|webm|3gp)$/.test(lower) ||
+                    /(m4a|mp3|wav|ogg|oga|opus|amr|webm|weba)$/.test(lower) ||
                     file.type.startsWith("audio/")
 
                   return (

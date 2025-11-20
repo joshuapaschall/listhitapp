@@ -89,15 +89,7 @@ function parseMedia(val: any): string[] {
 function isPlayableAudioUrl(u: string) {
   try {
     const base = u.split("?")[0].toLowerCase()
-    return /(\.mp3|\.m4a|\.wav|\.ogg|\.opus|\.oga|\.webm|\.weba)(\?.*)?$/.test(base)
-  } catch {
-    return false
-  }
-}
-
-function isMp3Url(u: string) {
-  try {
-    return u.split("?")[0].toLowerCase().endsWith(".mp3")
+    return /(\.mp3|\.m4a|\.wav|\.ogg|\.opus|\.oga|\.webm|\.weba|\.amr)(\?.*)?$/.test(base)
   } catch {
     return false
   }
@@ -105,15 +97,27 @@ function isMp3Url(u: string) {
 
 function parseAudioUrl(val: any): string | null {
   if (!val) return null
-  const tryUrl = (u: string) => (isMp3Url(u) ? u : null)
-  if (Array.isArray(val)) return tryUrl(val[0])
+  const tryUrl = (u: string) => (isPlayableAudioUrl(u) ? u : null)
+  if (Array.isArray(val)) {
+    for (const entry of val) {
+      const candidate = typeof entry === "string" ? entry.trim() : ""
+      const playable = tryUrl(candidate)
+      if (playable) return playable
+    }
+    return null
+  }
   if (typeof val === "string") {
     const trimmed = val.trim()
     if (!trimmed) return null
     if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
       try {
         const arr = JSON.parse(trimmed)
-        if (Array.isArray(arr) && arr[0]) return tryUrl(arr[0])
+        if (Array.isArray(arr)) {
+          for (const entry of arr) {
+            const playable = tryUrl(typeof entry === "string" ? entry.trim() : "")
+            if (playable) return playable
+          }
+        }
       } catch {}
     }
     return tryUrl(trimmed)
@@ -142,8 +146,8 @@ function MediaAttachment({ url }: { url: string }) {
   const [src, setSrc] = useState(url)
   const [error, setError] = useState<string | null>(null)
   const isImage = /(\.jpg|\.jpeg|\.png|\.gif|\.bmp|\.webp)$/i.test(src)
-  const isVideo = /(\.mp4|\.webm)$/i.test(src)
-  const isMp3 = isMp3Url(src)
+  const isVideo = /(\.mp4|\.webm|\.3gp)$/i.test(src)
+  const isAudio = isPlayableAudioUrl(src)
   const needsConvert = /(\.amr|\.webm|\.weba|\.3gp|\.wav|\.ogg|\.opus|\.oga)(\?.*)?$/i.test(src)
 
   useEffect(() => {
@@ -186,7 +190,7 @@ function MediaAttachment({ url }: { url: string }) {
     content = (
       <video controls src={src} className="w-full mt-2" crossOrigin="anonymous" />
     )
-  } else if (isMp3) {
+  } else if (isAudio) {
     content = (
       <audio
         controls
@@ -197,15 +201,7 @@ function MediaAttachment({ url }: { url: string }) {
       />
     )
   } else {
-    content = src.endsWith(".mp3") ? (
-      <audio
-        controls
-        src={src}
-        preload="none"
-        style={{ maxWidth: "100%" }}
-        className="rounded-xl w-full bg-white shadow"
-      />
-    ) : (
+    content = (
       <a href={src} target="_blank" rel="noopener noreferrer">
         Download
       </a>
@@ -253,7 +249,9 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
   }>({});
   const [showEmoji, setShowEmoji] = useState(false);
   const [attachments, setAttachments] = useState<File[]>([]);
-  const hasOversize = attachments.some((f) => f.size > MAX_MMS_SIZE);
+  const oversizedNonImages = attachments.filter(
+    (f) => f.size > MAX_MMS_SIZE && !f.type.startsWith("image/"),
+  );
   const [buyer, setBuyer] = useState<Buyer | null>(null);
   const [showEdit, setShowEdit] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
@@ -808,6 +806,9 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
   const sendMessage = useCallback(async () => {
     const trimmedInput = input.trim();
     if (!thread || (!trimmedInput && attachments.length === 0)) return;
+    const sendableFiles: File[] = []
+    const linkOnlyFiles: File[] = []
+
     for (const file of attachments) {
       const ext = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
       if (!ALLOWED_MMS_EXTENSIONS.includes(ext)) {
@@ -816,16 +817,16 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
       }
 
       if (file.size > MAX_MMS_SIZE && !file.type.startsWith("image/")) {
-        toast.error(
-          `File ${file.name} exceeds ${Math.round(MAX_MMS_SIZE / 1024)}KB limit`,
-        );
-        return;
+        linkOnlyFiles.push(file)
+        continue
       }
+
+      sendableFiles.push(file)
     }
 
-    const uploadFiles = async () => {
+    const uploadFiles = async (list: File[]) => {
       const urls: string[] = []
-      for (const original of attachments) {
+      for (const original of list) {
         const file =
           original.type.startsWith("image/") && original.size > MAX_MMS_SIZE
             ? await compressImageIfNeeded(original)
@@ -864,9 +865,46 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
       mergeContext.agent,
     );
 
-    if (scheduleDate) {
+    const largeNames = linkOnlyFiles.map((f) => f.name)
+    if (linkOnlyFiles.length) {
+      toast.info(
+        `${linkOnlyFiles.length} file${linkOnlyFiles.length > 1 ? "s" : ""} will send as download link${
+          linkOnlyFiles.length > 1 ? "s" : ""
+        } due to the 1MB MMS limit.`,
+      )
+    }
+
+    const uploadAndBuildBody = async () => {
+      let mediaUrls: string[] = []
+      let linkUrls: string[] = []
+
       try {
-        const mediaUrls = await uploadFiles();
+        mediaUrls = await uploadFiles(sendableFiles)
+        linkUrls = linkOnlyFiles.length ? await uploadFiles(linkOnlyFiles) : []
+      } catch (err) {
+        console.error("Media upload failed", err)
+        toast.error(
+          (err as any)?.message ||
+            "Failed to upload attachments. Please try different files.",
+        )
+        return { mediaUrls: [], linkUrls: [], failed: true }
+      }
+
+      const finalBody = linkUrls.length
+        ? `${renderedBody ? `${renderedBody}\n\n` : ""}Download link${
+            linkUrls.length > 1 ? "s" : ""
+          } (over 1MB):\n${linkUrls
+            .map((url, idx) => `• ${largeNames[idx] || "Attachment"}: ${url}`)
+            .join("\n")}`
+        : renderedBody
+
+      return { mediaUrls, linkUrls, body: finalBody, failed: false }
+    }
+
+    if (scheduleDate) {
+      const { mediaUrls, body, failed } = await uploadAndBuildBody()
+      if (failed) return
+      try {
         const name =
           buyer?.full_name ||
           `${buyer?.fname || ""} ${buyer?.lname || ""}`.trim() ||
@@ -874,7 +912,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
         const campaign = await CampaignService.createCampaign({
           name: `SMS to ${name}`,
           channel: "sms",
-          message: renderedBody,
+          message: body,
           mediaUrls,
           buyerIds: [thread.buyer_id],
           groupIds: [],
@@ -899,17 +937,8 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
       return;
     }
 
-    let mediaUrls: string[] = [];
-    try {
-      mediaUrls = await uploadFiles();
-    } catch (err) {
-      console.error("Media upload failed", err);
-      toast.error(
-        (err as any)?.message ||
-          "Failed to upload attachments. Please try different files.",
-      );
-      return;
-    }
+    const { mediaUrls, body, failed } = await uploadAndBuildBody()
+    if (failed) return
 
     const tempId = `temp-${Date.now()}`;
     const pending: LocalMessage = {
@@ -920,7 +949,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
       direction: "outbound",
       from_number: currentFrom ? formatDidE164(currentFrom) : null,
       to_number: thread.phone_number,
-      body: renderedBody,
+      body,
       provider_id: null,
       is_bulk: false,
       filtered: false,
@@ -1415,12 +1444,12 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
               file.type.startsWith("image/") || /(jpg|jpeg|png|gif|bmp|webp)$/.test(lower);
             const isVideo =
               file.type.startsWith("video/") ||
-              (!file.type.startsWith("audio/") && /(mp4|webm)$/.test(lower));
+              (!file.type.startsWith("audio/") && /(mp4|webm|3gp)$/.test(lower));
             // use isPlayableAudioUrl so webm recordings preview correctly
             const isPlayableAudio = isPlayableAudioUrl(lower);
             const isAudio =
               file.type.startsWith("audio/") ||
-              /(m4a|mp3|wav|ogg|opus|oga|webm|mp4)$/.test(lower);
+              isPlayableAudio;
             const url = URL.createObjectURL(file);
             return (
               <div key={idx} className="relative inline-block">
@@ -1507,13 +1536,15 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
               {smsSegments > 1 ? "s" : ""}
             </div>
             <div className="flex items-center gap-2">
-              {hasOversize && (
-                <span className="text-xs text-red-600 mr-2">Remove files over 1MB</span>
+              {oversizedNonImages.length > 0 && (
+                <span className="text-xs text-amber-600 mr-2">
+                  Files over 1MB will send as download links instead of MMS.
+                </span>
               )}
               <Button
                 size="sm"
                 onClick={sendMessage}
-                disabled={(!input.trim() && attachments.length === 0) || hasOversize}
+                disabled={!input.trim() && attachments.length === 0}
               >
                 Send
               </Button>
