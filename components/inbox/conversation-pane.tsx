@@ -89,15 +89,7 @@ function parseMedia(val: any): string[] {
 function isPlayableAudioUrl(u: string) {
   try {
     const base = u.split("?")[0].toLowerCase()
-    return /(\.mp3|\.m4a|\.wav|\.ogg|\.opus|\.oga|\.webm|\.weba)(\?.*)?$/.test(base)
-  } catch {
-    return false
-  }
-}
-
-function isMp3Url(u: string) {
-  try {
-    return u.split("?")[0].toLowerCase().endsWith(".mp3")
+    return /(\.mp3|\.m4a|\.wav|\.ogg|\.opus|\.oga|\.webm|\.weba|\.amr)(\?.*)?$/.test(base)
   } catch {
     return false
   }
@@ -105,15 +97,27 @@ function isMp3Url(u: string) {
 
 function parseAudioUrl(val: any): string | null {
   if (!val) return null
-  const tryUrl = (u: string) => (isMp3Url(u) ? u : null)
-  if (Array.isArray(val)) return tryUrl(val[0])
+  const tryUrl = (u: string) => (isPlayableAudioUrl(u) ? u : null)
+  if (Array.isArray(val)) {
+    for (const entry of val) {
+      const candidate = typeof entry === "string" ? entry.trim() : ""
+      const playable = tryUrl(candidate)
+      if (playable) return playable
+    }
+    return null
+  }
   if (typeof val === "string") {
     const trimmed = val.trim()
     if (!trimmed) return null
     if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
       try {
         const arr = JSON.parse(trimmed)
-        if (Array.isArray(arr) && arr[0]) return tryUrl(arr[0])
+        if (Array.isArray(arr)) {
+          for (const entry of arr) {
+            const playable = tryUrl(typeof entry === "string" ? entry.trim() : "")
+            if (playable) return playable
+          }
+        }
       } catch {}
     }
     return tryUrl(trimmed)
@@ -142,8 +146,8 @@ function MediaAttachment({ url }: { url: string }) {
   const [src, setSrc] = useState(url)
   const [error, setError] = useState<string | null>(null)
   const isImage = /(\.jpg|\.jpeg|\.png|\.gif|\.bmp|\.webp)$/i.test(src)
-  const isVideo = /(\.mp4|\.webm)$/i.test(src)
-  const isMp3 = isMp3Url(src)
+  const isVideo = /(\.mp4|\.webm|\.3gp)$/i.test(src)
+  const isAudio = isPlayableAudioUrl(src)
   const needsConvert = /(\.amr|\.webm|\.weba|\.3gp|\.wav|\.ogg|\.opus|\.oga)(\?.*)?$/i.test(src)
 
   useEffect(() => {
@@ -186,7 +190,7 @@ function MediaAttachment({ url }: { url: string }) {
     content = (
       <video controls src={src} className="w-full mt-2" crossOrigin="anonymous" />
     )
-  } else if (isMp3) {
+  } else if (isAudio) {
     content = (
       <audio
         controls
@@ -197,15 +201,7 @@ function MediaAttachment({ url }: { url: string }) {
       />
     )
   } else {
-    content = src.endsWith(".mp3") ? (
-      <audio
-        controls
-        src={src}
-        preload="none"
-        style={{ maxWidth: "100%" }}
-        className="rounded-xl w-full bg-white shadow"
-      />
-    ) : (
+    content = (
       <a href={src} target="_blank" rel="noopener noreferrer">
         Download
       </a>
@@ -1415,12 +1411,12 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
               file.type.startsWith("image/") || /(jpg|jpeg|png|gif|bmp|webp)$/.test(lower);
             const isVideo =
               file.type.startsWith("video/") ||
-              (!file.type.startsWith("audio/") && /(mp4|webm)$/.test(lower));
+              (!file.type.startsWith("audio/") && /(mp4|webm|3gp)$/.test(lower));
             // use isPlayableAudioUrl so webm recordings preview correctly
             const isPlayableAudio = isPlayableAudioUrl(lower);
             const isAudio =
               file.type.startsWith("audio/") ||
-              /(m4a|mp3|wav|ogg|opus|oga|webm|mp4)$/.test(lower);
+              isPlayableAudio;
             const url = URL.createObjectURL(file);
             return (
               <div key={idx} className="relative inline-block">

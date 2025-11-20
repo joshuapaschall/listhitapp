@@ -73,8 +73,8 @@ export default function UploadModal({
 
   const descriptionCopy =
     uploadType === "video"
-      ? "MMS supports short MP4 or WebM clips under 1MB. Keep videos brief for reliable delivery."
-      : "MMS supports photos (JPG, PNG, GIF, WEBP) and quick audio notes under 1MB. Larger files should be trimmed before sending."
+      ? "MMS supports short MP4, WebM, or 3GP clips under 1MB. Keep videos brief for reliable delivery."
+      : "MMS supports photos (JPG, PNG, GIF, WEBP) and quick audio notes (MP3, OGG, WEBM, AMR) under 1MB. Larger files should be trimmed before sending."
 
   const reset = () => {
     previews.forEach((p) => URL.revokeObjectURL(p.url))
@@ -183,7 +183,7 @@ export default function UploadModal({
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
               {uploadType === "video"
-                ? "MP4 or WebM clips · under 1MB each"
+                ? "MP4, WebM, or 3GP clips · under 1MB each"
                 : "JPG, PNG, GIF, WEBP, and common audio · under 1MB each"}
             </p>
             <input
@@ -224,7 +224,7 @@ export default function UploadModal({
                   const isVideo =
                     /(mp4|webm|3gp)$/.test(lower) || file.type.startsWith("video/")
                   const isAudio =
-                    /(m4a|mp3|wav|ogg|oga|opus|amr|webm|3gp)$/.test(lower) ||
+                    /(m4a|mp3|wav|ogg|oga|opus|amr|webm|weba)$/.test(lower) ||
                     file.type.startsWith("audio/")
 
                   return (
