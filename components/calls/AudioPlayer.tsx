@@ -47,6 +47,8 @@ export function AudioPlayer({ recordingId, callSid, compact = false }: AudioPlay
   const id = recordingId || callSid;
   const audioUrl = id ? `/api/recordings/${id}/stream` : null;
 
+  // Set up audio + keyboard listeners once on mount; handlers are stable enough for this usage.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -110,7 +112,7 @@ export function AudioPlayer({ recordingId, callSid, compact = false }: AudioPlay
       audio.removeEventListener('error', handleError);
       window.removeEventListener('keydown', handleKeyPress);
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const togglePlayPause = () => {
     const audio = audioRef.current;

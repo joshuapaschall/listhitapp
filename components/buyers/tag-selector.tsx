@@ -146,7 +146,9 @@ export default function TagSelector({
                         className="flex items-center justify-between p-2 cursor-pointer hover:bg-muted"
                         onClick={handleCreate}
                       >
-                        <span>Create "{inputValue}"</span>
+                        <span>
+                          Create &quot;{inputValue}&quot;
+                        </span>
                         <Badge variant="outline">Enter</Badge>
                       </div>
                     ) : (
