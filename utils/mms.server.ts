@@ -90,6 +90,36 @@ export async function mirrorMediaUrl(
       res.headers.get("content-type")?.toLowerCase() || "application/octet-stream"
     const originalExt = url.split("?")[0].match(/\.[^./]+$/)?.[0]?.toLowerCase()
 
+    const videoExtensions = [
+      ".mp4",
+      ".mov",
+      ".3gp",
+      ".3gpp",
+      ".webm",
+      ".avi",
+      ".wmv",
+      ".mkv",
+      ".mpg",
+      ".mpeg",
+      ".ogv",
+    ]
+    const videoContentTypes = [
+      "video/mp4",
+      "video/quicktime",
+      "video/3gpp",
+      "video/3gp",
+      "video/webm",
+      "video/ogg",
+      "video/mpeg",
+      "video/x-msvideo",
+      "video/x-ms-wmv",
+    ]
+    const isAudioContent = contentType.startsWith("audio/")
+    const isVideo =
+      !isAudioContent &&
+      (videoContentTypes.some((ct) => contentType.startsWith(ct)) ||
+        (originalExt ? videoExtensions.includes(originalExt) : false))
+
     const convertibleExts = [
       ".amr",
       ".3gp",
@@ -106,10 +136,7 @@ export async function mirrorMediaUrl(
       "audio/amr",
       "audio/3gpp",
       "audio/3gp",
-      "video/3gpp",
-      "video/3gp",
       "audio/webm",
-      "video/webm",
       "audio/ogg",
       "application/ogg",
       "audio/opus",
@@ -120,8 +147,13 @@ export async function mirrorMediaUrl(
     ]
 
     const convertible =
-      convertibleContentTypes.some((ct) => contentType.includes(ct.replace("audio/", ""))) ||
-      (originalExt ? convertibleExts.includes(originalExt) : false)
+      !isVideo &&
+      (convertibleContentTypes.some((ct) => contentType.includes(ct.replace("audio/", ""))) ||
+        (originalExt ? convertibleExts.includes(originalExt) : false))
+
+    if (isVideo) {
+      return await uploadOriginalToSupabase(url, direction)
+    }
 
     if (convertible) {
       attemptedConvert = true
