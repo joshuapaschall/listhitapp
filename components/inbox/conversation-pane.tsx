@@ -1395,7 +1395,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
                 New quick reply…
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link href="/settings/templates/quick_reply">Manage templates…</Link>
+                <Link href="/settings/templates/quick-reply">Manage templates…</Link>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
