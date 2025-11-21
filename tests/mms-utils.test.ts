@@ -2,6 +2,13 @@ import { describe, beforeEach, test, expect, jest } from "@jest/globals"
 
 const fetchMock = jest.fn()
 const uploadMock = jest.fn().mockResolvedValue({ data: { path: "file.mp3" }, error: null })
+const convertToMp4Mock = jest.fn(async () => {
+  await uploadMock("file.mp4", Buffer.from("mp4"), {
+    contentType: "video/mp4",
+    upsert: true,
+  })
+  return "https://cdn/storage/v1/object/public/public-media/file.mp4"
+})
 
 await jest.unstable_mockModule("../utils/audio-utils", () => ({
   __esModule: true,
@@ -12,6 +19,11 @@ await jest.unstable_mockModule("../utils/audio-utils", () => ({
     })
     return "https://cdn/storage/v1/object/public/public-media/file.mp3"
   }),
+}))
+
+await jest.unstable_mockModule("../utils/video-utils", () => ({
+  __esModule: true,
+  convertToMp4: (...args: any[]) => convertToMp4Mock(...args),
 }))
 
 let mms: typeof import("../utils/mms.server")
@@ -45,6 +57,7 @@ describe("mirrorMediaUrl", () => {
   beforeEach(() => {
     fetchMock.mockReset()
     uploadMock.mockClear()
+    convertToMp4Mock.mockClear()
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://cdn"
     fetchMock.mockResolvedValue({
       ok: true,
@@ -228,7 +241,7 @@ describe("mirrorMediaUrl", () => {
     )
   })
 
-  test("uploads inbound video without conversion", async () => {
+  test("uploads inbound mp4 video without conversion", async () => {
     const videoResponse = {
       ok: true,
       arrayBuffer: async () => Buffer.from("mp4"),
@@ -241,6 +254,7 @@ describe("mirrorMediaUrl", () => {
     const out = await mms.mirrorMediaUrl(url, "incoming")
     expect(fetchMock).toHaveBeenCalled()
     expect(uploadMock).toHaveBeenCalled()
+    expect(convertToMp4Mock).not.toHaveBeenCalled()
     const args = uploadMock.mock.calls[0]
     expect(args[0]).toMatch(/\.mp4$/)
     expect(args[2].contentType).toBe("video/mp4")
@@ -249,7 +263,7 @@ describe("mirrorMediaUrl", () => {
     )
   })
 
-  test("uploads outbound video without conversion", async () => {
+  test("uploads outbound mp4 video without conversion", async () => {
     const videoResponse = {
       ok: true,
       arrayBuffer: async () => Buffer.from("mp4"),
@@ -262,11 +276,33 @@ describe("mirrorMediaUrl", () => {
     const out = await mms.mirrorMediaUrl(url, "outgoing")
     expect(fetchMock).toHaveBeenCalled()
     expect(uploadMock).toHaveBeenCalled()
+    expect(convertToMp4Mock).not.toHaveBeenCalled()
     const args = uploadMock.mock.calls[0]
     expect(args[0]).toMatch(/\.mp4$/)
     expect(args[2].contentType).toBe("video/mp4")
     expect(out).toBe(
       "https://cdn/storage/v1/object/public/public-media/outgoing/file.mp4",
+    )
+  })
+
+  test("converts mov video to mp4 before upload", async () => {
+    const videoResponse = {
+      ok: true,
+      arrayBuffer: async () => Buffer.from("mov"),
+      headers: { get: () => "video/quicktime" },
+    }
+    fetchMock.mockResolvedValueOnce(videoResponse)
+    fetchMock.mockResolvedValueOnce(videoResponse)
+    const url = "https://x.com/test.mov"
+    const out = await mms.mirrorMediaUrl(url, "outgoing")
+    expect(fetchMock).toHaveBeenCalled()
+    expect(convertToMp4Mock).toHaveBeenCalledWith(url, "outgoing", expect.any(Buffer))
+    expect(uploadMock).toHaveBeenCalled()
+    const args = uploadMock.mock.calls[0]
+    expect(args[0]).toMatch(/\.mp4$/)
+    expect(args[2].contentType).toBe("video/mp4")
+    expect(out).toBe(
+      "https://cdn/storage/v1/object/public/public-media/file.mp4",
     )
   })
 })
@@ -275,6 +311,7 @@ describe("uploadOriginalToSupabase", () => {
   beforeEach(() => {
     fetchMock.mockReset()
     uploadMock.mockClear()
+    convertToMp4Mock.mockClear()
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://cdn"
     fetchMock.mockResolvedValue({
       ok: true,
@@ -300,6 +337,7 @@ describe("ensurePublicMediaUrls", () => {
   beforeEach(() => {
     fetchMock.mockReset()
     uploadMock.mockClear()
+    convertToMp4Mock.mockClear()
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://cdn"
     fetchMock.mockResolvedValue({
       ok: true,
@@ -399,6 +437,16 @@ describe("ensurePublicMediaUrls", () => {
     expect(fetchMock).not.toHaveBeenCalled()
     expect(uploadMock).not.toHaveBeenCalled()
     expect(out[0]).toBe(url)
+  })
+
+  test("converts public mov files to mp4", async () => {
+    const url =
+      "https://cdn/storage/v1/object/public/public-media/outgoing/test.mov"
+    const out = await mms.ensurePublicMediaUrls([url], "outgoing")
+    expect(convertToMp4Mock).toHaveBeenCalledWith(url, "outgoing")
+    expect(out[0]).toBe(
+      "https://cdn/storage/v1/object/public/public-media/file.mp4",
+    )
   })
 })
 
