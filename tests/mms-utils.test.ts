@@ -2,13 +2,16 @@ import { describe, beforeEach, test, expect, jest } from "@jest/globals"
 
 const fetchMock = jest.fn()
 const uploadMock = jest.fn().mockResolvedValue({ data: { path: "file.mp3" }, error: null })
-const convertToMp4Mock = jest.fn(async () => {
-  await uploadMock("file.mp4", Buffer.from("mp4"), {
-    contentType: "video/mp4",
-    upsert: true,
-  })
-  return "https://cdn/storage/v1/object/public/public-media/file.mp4"
-})
+const convertToMp4Mock = jest.fn(
+  async (_inputUrl: string, direction: "incoming" | "outgoing" = "incoming") => {
+    const path = `${direction}/file.mp4`
+    await uploadMock(path, Buffer.from("mp4"), {
+      contentType: "video/mp4",
+      upsert: true,
+    })
+    return `https://cdn/storage/v1/object/public/public-media/${path}`
+  },
+)
 
 await jest.unstable_mockModule("../utils/audio-utils", () => ({
   __esModule: true,
@@ -254,10 +257,7 @@ describe("mirrorMediaUrl", () => {
     const out = await mms.mirrorMediaUrl(url, "incoming")
     expect(fetchMock).toHaveBeenCalled()
     expect(uploadMock).toHaveBeenCalled()
-    expect(convertToMp4Mock).not.toHaveBeenCalled()
-    const args = uploadMock.mock.calls[0]
-    expect(args[0]).toMatch(/\.mp4$/)
-    expect(args[2].contentType).toBe("video/mp4")
+    expect(convertToMp4Mock).toHaveBeenCalledWith(url, "incoming", expect.any(Buffer))
     expect(out).toBe(
       "https://cdn/storage/v1/object/public/public-media/file.mp4",
     )
@@ -276,10 +276,7 @@ describe("mirrorMediaUrl", () => {
     const out = await mms.mirrorMediaUrl(url, "outgoing")
     expect(fetchMock).toHaveBeenCalled()
     expect(uploadMock).toHaveBeenCalled()
-    expect(convertToMp4Mock).not.toHaveBeenCalled()
-    const args = uploadMock.mock.calls[0]
-    expect(args[0]).toMatch(/\.mp4$/)
-    expect(args[2].contentType).toBe("video/mp4")
+    expect(convertToMp4Mock).toHaveBeenCalledWith(url, "outgoing", expect.any(Buffer))
     expect(out).toBe(
       "https://cdn/storage/v1/object/public/public-media/outgoing/file.mp4",
     )
@@ -303,6 +300,27 @@ describe("mirrorMediaUrl", () => {
     expect(args[2].contentType).toBe("video/mp4")
     expect(out).toBe(
       "https://cdn/storage/v1/object/public/public-media/file.mp4",
+    )
+  })
+
+  test("falls back to uploading original video when conversion fails", async () => {
+    const videoResponse = {
+      ok: true,
+      arrayBuffer: async () => Buffer.from("mp4"),
+      headers: { get: () => "video/mp4" },
+    }
+    convertToMp4Mock.mockRejectedValueOnce(new Error("ffmpeg failed"))
+    uploadMock.mockResolvedValueOnce({ data: { path: "fallback.mp4" }, error: null })
+    fetchMock.mockResolvedValueOnce(videoResponse)
+    fetchMock.mockResolvedValueOnce(videoResponse)
+
+    const url = "https://x.com/test.mp4"
+    const out = await mms.mirrorMediaUrl(url, "incoming")
+
+    expect(convertToMp4Mock).toHaveBeenCalledWith(url, "incoming", expect.any(Buffer))
+    expect(uploadMock).toHaveBeenCalled()
+    expect(out).toBe(
+      "https://cdn/storage/v1/object/public/public-media/fallback.mp4",
     )
   })
 })

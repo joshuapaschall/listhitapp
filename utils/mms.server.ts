@@ -121,11 +121,6 @@ export async function mirrorMediaUrl(
       (videoContentTypes.some((ct) => contentType.startsWith(ct)) ||
         (originalExt ? videoExtensions.includes(originalExt) : false))
 
-    const needsVideoConversion =
-      isVideo &&
-      ((originalExt ? originalExt !== ".mp4" : false) ||
-        !contentType.startsWith("video/mp4"))
-
     const convertibleExts = [
       ".amr",
       ".3gp",
@@ -157,7 +152,7 @@ export async function mirrorMediaUrl(
       (convertibleContentTypes.some((ct) => contentType.includes(ct.replace("audio/", ""))) ||
         (originalExt ? convertibleExts.includes(originalExt) : false))
 
-    if (needsVideoConversion) {
+    if (isVideo) {
       attemptedConvert = true
       try {
         return await convertToMp4(url, direction, buffer)
@@ -167,6 +162,12 @@ export async function mirrorMediaUrl(
           url,
           contentType,
         })
+        try {
+          const fallbackUpload = await uploadOriginalToSupabase(url, direction)
+          if (fallbackUpload) return fallbackUpload
+        } catch (uploadErr) {
+          console.error("❌ Failed to upload original after video conversion error", uploadErr)
+        }
         if (direction === "incoming") {
           console.warn("⚠️ Falling back to original URL after failed video conversion", {
             url,
@@ -176,10 +177,6 @@ export async function mirrorMediaUrl(
         }
         throw err
       }
-    }
-
-    if (isVideo) {
-      return await uploadOriginalToSupabase(url, direction)
     }
 
     if (convertible) {
