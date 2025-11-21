@@ -897,9 +897,9 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
     const largeNames = linkOnlyFiles.map((f) => f.name)
     if (linkOnlyFiles.length) {
       toast.info(
-        `${linkOnlyFiles.length} file${linkOnlyFiles.length > 1 ? "s" : ""} will send as download link${
+        `${linkOnlyFiles.length} attachment${
           linkOnlyFiles.length > 1 ? "s" : ""
-        } due to the 1MB MMS limit.`,
+        } will send as a link because it's over 1MB.`,
       )
     }
 
@@ -920,9 +920,9 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
       }
 
       const finalBody = linkUrls.length
-        ? `${renderedBody ? `${renderedBody}\n\n` : ""}Download link${
-            linkUrls.length > 1 ? "s" : ""
-          } (over 1MB):\n${linkUrls
+        ? `${renderedBody ? `${renderedBody}\n\n` : ""}Attached ${
+            linkUrls.length > 1 ? "files" : "file"
+          }:\n${linkUrls
             .map((url, idx) => `• ${largeNames[idx] || "Attachment"}: ${url}`)
             .join("\n")}`
         : renderedBody
