@@ -17,6 +17,13 @@ export const ALLOWED_MMS_EXTENSIONS = [
   ".webm",
   ".weba",
   ".mp4",
+  ".mov",
+  ".avi",
+  ".wmv",
+  ".mkv",
+  ".mpg",
+  ".mpeg",
+  ".ogv",
   ".3gp",
   ".3gpp",
 ] as const

@@ -4,6 +4,7 @@ import { Buffer } from "buffer"
 import { randomUUID } from "crypto"
 import { assertServer } from "@/utils/assert-server"
 import { convertToMp3 } from "./audio-utils"
+import { convertToMp4 } from "./video-utils"
 import {
   MEDIA_BUCKET,
   getMediaBaseUrl,
@@ -120,6 +121,11 @@ export async function mirrorMediaUrl(
       (videoContentTypes.some((ct) => contentType.startsWith(ct)) ||
         (originalExt ? videoExtensions.includes(originalExt) : false))
 
+    const needsVideoConversion =
+      isVideo &&
+      ((originalExt ? originalExt !== ".mp4" : false) ||
+        !contentType.startsWith("video/mp4"))
+
     const convertibleExts = [
       ".amr",
       ".3gp",
@@ -150,6 +156,27 @@ export async function mirrorMediaUrl(
       !isVideo &&
       (convertibleContentTypes.some((ct) => contentType.includes(ct.replace("audio/", ""))) ||
         (originalExt ? convertibleExts.includes(originalExt) : false))
+
+    if (needsVideoConversion) {
+      attemptedConvert = true
+      try {
+        return await convertToMp4(url, direction, buffer)
+      } catch (err) {
+        console.error("❌ convertToMp4 failed", {
+          error: err,
+          url,
+          contentType,
+        })
+        if (direction === "incoming") {
+          console.warn("⚠️ Falling back to original URL after failed video conversion", {
+            url,
+            contentType,
+          })
+          return url
+        }
+        throw err
+      }
+    }
 
     if (isVideo) {
       return await uploadOriginalToSupabase(url, direction)
@@ -203,7 +230,50 @@ export async function ensurePublicMediaUrls(
       throw new Error("Blob URLs not supported")
     }
 
+    const ext = u.split("?")[0].match(/\.[^./]+$/)?.[0]?.toLowerCase()
+    const audioConvertibleExts = [
+      ".amr",
+      ".3gp",
+      ".3gpp",
+      ".webm",
+      ".weba",
+      ".ogg",
+      ".oga",
+      ".opus",
+      ".wav",
+      ".m4a",
+    ]
+    const needsMp4Normalization =
+      ext &&
+      [
+        ".mov",
+        ".avi",
+        ".wmv",
+        ".mkv",
+        ".mpg",
+        ".mpeg",
+        ".ogv",
+        ".3gp",
+        ".3gpp",
+        ".webm",
+      ].includes(ext) &&
+      !audioConvertibleExts.includes(ext)
+
     if (isPublicMediaUrl(u)) {
+      if (needsMp4Normalization) {
+        try {
+          const converted = await convertToMp4(u, direction)
+          result.push(converted)
+          continue
+        } catch (err) {
+          console.error("❌ convertToMp4 failed for public media", err)
+          if (direction === "incoming") {
+            result.push(u)
+            continue
+          }
+          throw err
+        }
+      }
       result.push(u)
       continue
     }
