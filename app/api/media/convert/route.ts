@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server"
 import { mirrorMediaUrl } from "@/utils/mms.server"
 
+export const runtime = "nodejs"
+
 export async function POST(req: NextRequest) {
   const { url, direction } = await req.json()
   if (!url || typeof url !== "string") {
