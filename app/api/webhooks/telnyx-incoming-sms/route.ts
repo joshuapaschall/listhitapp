@@ -14,6 +14,8 @@ import { verifyTelnyxRequest } from "@/lib/telnyx"
 import { upsertAnonThread } from "@/services/thread-utils"
 import { getTelnyxApiKey } from "@/lib/voice-env"
 
+export const runtime = "nodejs"
+
 assertServer()
 
 export async function GET() {

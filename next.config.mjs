@@ -26,7 +26,8 @@ const nextConfig = {
   experimental: ffmpegIncludes.length
     ? {
         outputFileTracingIncludes: {
-          "/api/**": ffmpegIncludes,
+          "app/api/media/convert/route.ts": ffmpegIncludes,
+          "app/api/webhooks/telnyx-incoming-sms/route.ts": ffmpegIncludes,
         },
       }
     : {},
