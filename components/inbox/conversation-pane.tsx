@@ -55,10 +55,12 @@ import { toast } from "sonner";
 import useHotkeys from "@/hooks/use-hotkeys";
 import { BuyerService } from "@/services/buyer-service";
 import { type ThreadWithBuyer } from "@/services/message-service";
+import { createShortMediaLink } from "@/services/media-links";
 import {
   ALLOWED_MMS_EXTENSIONS,
   MAX_MMS_SIZE,
-  uploadMediaFile,
+  getStoragePathFromUrl,
+  uploadMediaFileWithMeta,
 } from "@/utils/uploadMedia";
 import VoiceRecorder from "@/components/voice/VoiceRecorder";
 import UploadModal from "./upload-modal";
@@ -847,14 +849,14 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
     }
 
     const uploadFiles = async (list: File[]) => {
-      const urls: string[] = []
+      const uploads: { url: string; storagePath: string; contentType: string }[] = []
       for (const original of list) {
         const file =
           original.type.startsWith("image/") && original.size > MAX_MMS_SIZE
             ? await compressImageIfNeeded(original)
             : original
 
-        let url = await uploadMediaFile(file, "outgoing")
+        let upload = await uploadMediaFileWithMeta(file, "outgoing")
         const lower = file.name.toLowerCase()
         const needsConvert =
           /(\.amr|\.webm|\.weba|\.3gp|\.wav|\.ogg|\.opus|\.oga)$/.test(lower)
@@ -863,7 +865,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
             const res = await fetch("/api/media/convert", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ url, direction: "outgoing" }),
+              body: JSON.stringify({ url: upload.url, direction: "outgoing" }),
             })
             const data = await res.json().catch(() => ({}))
             if (!res.ok || !data.url) {
@@ -872,7 +874,12 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
                 "This audio format could not be processed; please try a different format"
               throw new Error(errMsg)
             }
-            url = data.url
+            const storagePath = getStoragePathFromUrl(data.url) || upload.storagePath
+            upload = {
+              url: data.url,
+              storagePath,
+              contentType: "audio/mpeg",
+            }
           } catch (err) {
             console.error("convert failed", err)
             throw new Error(
@@ -881,9 +888,9 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
             )
           }
         }
-        urls.push(url)
+        uploads.push(upload)
       }
-      return urls
+      return uploads
     }
 
     const currentFrom = selectedDid || preferredFrom || null;
@@ -904,12 +911,13 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
     }
 
     const uploadAndBuildBody = async () => {
-      let mediaUrls: string[] = []
+      let mediaUploads: { url: string; storagePath: string; contentType: string }[] = []
+      let linkUploads: { url: string; storagePath: string; contentType: string }[] = []
       let linkUrls: string[] = []
 
       try {
-        mediaUrls = await uploadFiles(sendableFiles)
-        linkUrls = linkOnlyFiles.length ? await uploadFiles(linkOnlyFiles) : []
+        mediaUploads = await uploadFiles(sendableFiles)
+        linkUploads = linkOnlyFiles.length ? await uploadFiles(linkOnlyFiles) : []
       } catch (err) {
         console.error("Media upload failed", err)
         const message =
@@ -918,6 +926,23 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
         toast.error(message)
         return { mediaUrls: [], linkUrls: [], failed: true }
       }
+
+      try {
+        linkUrls = await Promise.all(
+          linkUploads.map((upload) =>
+            createShortMediaLink(upload.storagePath, upload.contentType),
+          ),
+        )
+      } catch (err) {
+        console.error("Link shortening failed", err)
+        const message =
+          (err as any)?.message ||
+          "Failed to create short links for attachments. Please try again."
+        toast.error(message)
+        return { mediaUrls: [], linkUrls: [], failed: true }
+      }
+
+      const mediaUrls = mediaUploads.map(({ url }) => url)
 
       const finalBody = linkUrls.length
         ? `${renderedBody ? `${renderedBody}\n\n` : ""}Attached ${
