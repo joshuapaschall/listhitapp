@@ -198,12 +198,17 @@ function MediaAttachment({ url }: { url: string }) {
         width={300}
         height={300}
         loading="lazy"
-        className="rounded-md max-w-[300px]"
+        className="rounded-md max-w-[300px] h-full w-full object-cover"
       />
     )
   } else if (isVideo) {
     content = (
-      <video controls src={src} className="w-full mt-2" crossOrigin="anonymous" />
+      <video
+        controls
+        src={src}
+        className="w-full max-h-80 rounded-lg bg-black"
+        crossOrigin="anonymous"
+      />
     )
   } else if (isAudio) {
     content = (
@@ -235,6 +240,62 @@ function MediaAttachment({ url }: { url: string }) {
           <span>{error}</span>
         </div>
       )}
+    </div>
+  )
+}
+
+function AudioBubble({ src }: { src: string }) {
+  return (
+    <div className="flex items-center gap-2 rounded-xl bg-background/80 px-3 py-2 shadow-inner">
+      <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
+        <span className="flex gap-[2px]">
+          <span className="h-3 w-[2px] rounded-full bg-primary" />
+          <span className="h-4 w-[2px] rounded-full bg-primary/80" />
+          <span className="h-2 w-[2px] rounded-full bg-primary/60" />
+        </span>
+      </span>
+      <audio
+        controls
+        src={src}
+        preload="none"
+        className="w-48 max-w-full"
+      />
+    </div>
+  )
+}
+
+function MediaGrid({ urls }: { urls: string[] }) {
+  if (urls.length === 1) {
+    return (
+      <div className="rounded-xl overflow-hidden">
+        <MediaAttachment url={urls[0]} />
+      </div>
+    )
+  }
+
+  if (urls.length === 2) {
+    return (
+      <div className="grid grid-cols-2 gap-1 rounded-xl overflow-hidden">
+        {urls.map((u, i) => (
+          <MediaAttachment key={i} url={u} />
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <div className="grid grid-cols-2 gap-1 rounded-xl overflow-hidden">
+      {urls.slice(0, 3).map((u, i) => (
+        <MediaAttachment key={i} url={u} />
+      ))}
+      <div className="relative">
+        <MediaAttachment url={urls[3]} />
+        {urls.length > 4 && (
+          <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white font-medium text-sm">
+            +{urls.length - 4}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -1317,6 +1378,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
           const pillLabel = didLabel
             ? `${isOutbound ? "From" : "To"}: ${didLabel}`
             : null;
+          const hasMedia = !!audioSrc || (m.media_urls && m.media_urls.length > 0)
           return (
             <div key={m.id} className="flex flex-col">
               <div
@@ -1328,35 +1390,33 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
                 {pillLabel && (
                   <span
                     className={cn(
-                      "absolute -top-1 rounded-full border bg-background px-2 py-0.5 text-[10px] text-muted-foreground shadow-sm",
+                      "absolute -top-1 rounded-full border bg-background/80 px-2 py-0.5 text-[10px] text-muted-foreground shadow-sm backdrop-blur",
                       isOutbound ? "right-0" : "left-0",
                     )}
                   >
                     {pillLabel}
                   </span>
                 )}
-                {(m.media_urls && m.media_urls.length > 0) || audioSrc ? (
+                {hasMedia || m.body ? (
                   <div className={bubbleClass}>
-                    <div className="space-y-1">
+                    <div className="space-y-2">
                       {audioSrc && (
-                        <audio controls className="rounded-xl w-full max-w-xs bg-white shadow">
-                          <source src={audioSrc} type="audio/mpeg" />
-                          Your browser does not support the audio element.
-                        </audio>
+                        <AudioBubble src={audioSrc} />
                       )}
-                      {m.media_urls?.map((url, idx) => (
-                        <MediaAttachment key={idx} url={url} />
-                      ))}
+
+                      {m.media_urls && m.media_urls.length > 0 && (
+                        <MediaGrid urls={m.media_urls} />
+                      )}
+
+                      {m.body && (
+                        <p className="whitespace-pre-wrap leading-relaxed">
+                          {m.body}
+                        </p>
+                      )}
                     </div>
-                    {!m.body && Status}
-                  </div>
-                ) : null}
-                {m.body && (
-                  <div className={cn(bubbleClass, m.media_urls?.length ? "mt-1" : "")}>
-                    <span>{m.body}</span>
                     {Status}
                   </div>
-                )}
+                ) : null}
               </div>
               <div
                 className={cn(
