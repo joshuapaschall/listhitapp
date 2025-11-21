@@ -53,7 +53,7 @@ export async function convertToMp4(
     ffmpeg(input)
       .videoCodec("libx264")
       .audioCodec("aac")
-      .size("?x480")
+      .videoFilters("scale='min(640,iw)':-2")
       .toFormat("mp4")
       .outputOptions([
         "-movflags",
@@ -66,14 +66,18 @@ export async function convertToMp4(
         "3.0",
         "-preset",
         "faster",
+        "-crf",
+        "30",
         "-b:v",
-        "700k",
+        "650k",
         "-maxrate",
-        "800k",
+        "750k",
         "-bufsize",
-        "1200k",
+        "1000k",
         "-b:a",
         "96k",
+        "-fs",
+        `${MAX_MMS_SIZE}`,
       ])
       .on("error", reject)
       .on("end", () => resolve(Buffer.concat(chunks)))
