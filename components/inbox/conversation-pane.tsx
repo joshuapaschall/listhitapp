@@ -53,7 +53,6 @@ import EditBuyerModal from "@/components/buyers/edit-buyer-modal";
 import AddBuyerModal from "@/components/buyers/add-buyer-modal";
 import { toast } from "sonner";
 import useHotkeys from "@/hooks/use-hotkeys";
-import CampaignService from "@/services/campaign-service";
 import { BuyerService } from "@/services/buyer-service";
 import { type ThreadWithBuyer } from "@/services/message-service";
 import {
@@ -237,7 +236,7 @@ interface ConversationPaneProps {
 }
 
 interface LocalMessage extends Message {
-  status?: "sending" | "failed";
+  status?: "sending" | "failed" | "scheduled";
   localId?: string;
   error?: string;
   subject?: string | null;
@@ -928,37 +927,56 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
     if (scheduleDate) {
       const { mediaUrls, body, failed } = await uploadAndBuildBody()
       if (failed) return
+      const [hours, minutes] = (scheduleTime || "00:00").split(":")
+      const dt = new Date(scheduleDate)
+      dt.setHours(parseInt(hours || "0", 10), parseInt(minutes || "0", 10), 0, 0)
+      const sendAt = dt.toISOString()
+
       try {
-        const name =
-          buyer?.full_name ||
-          `${buyer?.fname || ""} ${buyer?.lname || ""}`.trim() ||
-          "Unnamed";
-        const campaign = await CampaignService.createCampaign({
-          name: `SMS to ${name}`,
-          channel: "sms",
-          message: body,
-          mediaUrls,
-          buyerIds: [thread.buyer_id],
-          groupIds: [],
-          sendToAllNumbers: true,
-        });
-        const dtString = `${scheduleDate
-          .toISOString()
-          .split("T")[0]}T${scheduleTime || "00:00"}:00`;
-        await CampaignService.schedule(
-          campaign.id,
-          new Date(dtString).toISOString(),
-        );
-        toast.success("Message scheduled");
-        setInput("");
-        setAttachments([]);
-        setScheduleDate(null);
-        setScheduleTime("");
+        const res = await fetch("/api/messages/schedule", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            buyerId: thread.buyer_id,
+            threadId: thread.id,
+            to: thread.phone_number,
+            from: currentFrom || undefined,
+            body,
+            mediaUrls,
+            sendAt,
+          }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(data.error || "Failed to schedule message")
+
+        const scheduledId = data.id || `scheduled-${Date.now()}`
+        const scheduledMsg: LocalMessage = {
+          id: scheduledId,
+          localId: scheduledId,
+          thread_id: thread.id,
+          buyer_id: thread.buyer_id,
+          direction: "outbound",
+          from_number: currentFrom ? formatDidE164(currentFrom) : null,
+          to_number: thread.phone_number,
+          body,
+          provider_id: data.sid || null,
+          is_bulk: false,
+          filtered: false,
+          created_at: data.created_at || new Date().toISOString(),
+          status: "scheduled",
+          media_urls: mediaUrls.length ? mediaUrls : null,
+        }
+        setMessages((prev) => [...prev, scheduledMsg])
+        toast.success("Message scheduled")
+        setInput("")
+        setAttachments([])
+        setScheduleDate(null)
+        setScheduleTime("")
       } catch (err) {
-        console.error(err);
-        toast.error("Failed to schedule message");
+        console.error(err)
+        toast.error((err as Error).message || "Failed to schedule message")
       }
-      return;
+      return
     }
 
     const { mediaUrls, body, failed } = await uploadAndBuildBody()
@@ -1019,7 +1037,6 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
     input,
     scheduleDate,
     scheduleTime,
-    buyer,
     attachments,
     selectedDid,
     preferredFrom,
@@ -1246,6 +1263,9 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
             <>
               {m.status === "sending" && (
                 <span className="ml-2 text-xs text-muted-foreground">Sending...</span>
+              )}
+              {m.status === "scheduled" && (
+                <span className="ml-2 text-xs text-muted-foreground">Scheduled</span>
               )}
               {m.status === "failed" && (
                 <button
