@@ -17,6 +17,9 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  env: {
+    FFMPEG_PATH: ffmpegPath || "",
+  },
   images: {
     unoptimized: true,
   },

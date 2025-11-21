@@ -156,9 +156,11 @@ function MediaAttachment({ url }: { url: string }) {
   useEffect(() => {
     const convert = async () => {
       const handleError = (message: string) => {
+        const friendlyMessage =
+          message || "Media conversion is unavailable right now. Please try again later."
         setSrc(url)
-        setError(message)
-        toast.error("Media conversion failed")
+        setError(friendlyMessage)
+        toast.error(friendlyMessage)
       }
       try {
         const res = await fetch("/api/media/convert", {
@@ -171,11 +173,15 @@ function MediaAttachment({ url }: { url: string }) {
           if (data.url) setSrc(data.url)
         } else {
           const data = await res.json().catch(() => ({}))
-          handleError(data.error || "Media conversion failed")
+          handleError(
+            typeof data.error === "string"
+              ? data.error
+              : "Media conversion is unavailable right now. Please try again later.",
+          )
         }
       } catch (err) {
         console.error(err)
-        handleError("Media conversion failed")
+        handleError("Media conversion is unavailable right now. Please try again later.")
       }
     }
     if (needsConvert) convert()

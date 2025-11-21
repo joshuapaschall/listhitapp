@@ -4,7 +4,7 @@ import { randomUUID } from "crypto"
 import { PassThrough } from "stream"
 import { assertServer } from "@/utils/assert-server"
 import ffmpeg from "fluent-ffmpeg"
-import ffmpegPath from "ffmpeg-static" // ✅ NEW: Use ffmpeg-static instead of public/bin/ffmpeg
+import { ensureFfmpegAvailable } from "@/utils/ffmpeg-path"
 
 import {
   MEDIA_BUCKET,
@@ -13,15 +13,14 @@ import {
   MAX_MMS_SIZE,
 } from "./uploadMedia"
 
-// ✅ Set ffmpeg path using ffmpeg-static
-ffmpeg.setFfmpegPath(ffmpegPath || "")
-
 export async function convertToMp3(
   inputUrl: string,
   direction: "incoming" | "outgoing" = "incoming",
   buffer?: Buffer,
 ): Promise<string> {
   assertServer()
+  const ffmpegBinary = ensureFfmpegAvailable()
+  console.log("Using FFmpeg binary for audio conversion", ffmpegBinary)
 
   const headers: Record<string, string> = {}
   const isTelnyx = /^https:\/\/[^/]*telnyx\.com\//i.test(inputUrl)
