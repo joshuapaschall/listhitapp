@@ -9,6 +9,12 @@ const ffmpegIncludes = ffmpegBinary
   ? [ffmpegBinary.startsWith(".") ? ffmpegBinary : `./${ffmpegBinary}`]
   : []
 
+async function rewrites() {
+  return [
+    { source: "/m/:id", destination: "/api/m/:id" },
+  ]
+}
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   eslint: {
@@ -31,6 +37,7 @@ const nextConfig = {
         },
       }
     : {},
+  rewrites,
 }
 
 export default nextConfig
