@@ -48,6 +48,7 @@ On Vercel, also ensure the following variables are defined:
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `ADMIN_TASKS_TOKEN` (generate with `openssl rand -hex 32`)
+- `NEXT_PUBLIC_MEDIA_BASE_URL` (optional override for branded short media links; falls back to `NEXT_PUBLIC_APP_URL`)
 
 Webhook processes that mirror incoming SMS and MMS to Supabase also need
 `TELNYX_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY` and `NEXT_PUBLIC_SUPABASE_URL`.
@@ -198,6 +199,16 @@ The last script creates cron jobs for scheduled campaigns and Gmail sync.
 Most environments only need the four scripts above plus the active migration `migrations/037-ensure-rls-policies.sql`, which keeps security policies aligned with the schema defined in the scripts. Only this single migration remains in the top-level `migrations/` directory, keeping the active count well below the 10-file cap. Historical migrations now live in `migrations/archive/` for operators upgrading older databases. Apply them selectively if a legacy deployment is missing a specific column or table.
 
 Legacy data cleanup helpers (`012-revive-threads.sql` and `013-normalize-thread-phones.sql`) are also preserved in the archive. Run them manually only when reviving an existing Supabase project that still contains the old thread records.
+
+### Media short links
+
+If you need to recreate Supabase from scratch, apply the short link table to preserve the `/m/:id` media redirect feature:
+
+```bash
+psql $SUPABASE_URL -f migrations/044-media-links.sql
+```
+
+This creates `public.media_links (id text primary key, storage_path text, content_type text, created_at timestamptz default now())`, which the media link API uses to resolve branded attachment URLs.
 
 Provide Google OAuth details for Gmail features:
 
