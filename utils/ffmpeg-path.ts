@@ -8,14 +8,17 @@ let configuredPath: string | null = null
 export function ensureFfmpegAvailable(): string {
   if (configuredPath) return configuredPath
 
-  const candidate = process.env.FFMPEG_PATH || ffmpegPath || ""
-  const resolved = candidate ? path.resolve(candidate) : ""
+  const candidate = process.env.FFMPEG_PATH || ffmpegPath
 
-  if (!resolved) {
+  if (!candidate) {
     const message = "FFmpeg binary path is not configured"
     console.error(message, { ffmpegPath })
     throw new Error(message)
   }
+
+  const resolved = path.isAbsolute(candidate)
+    ? candidate
+    : path.join(process.cwd(), candidate)
 
   const exists = fs.existsSync(resolved)
   console.log("FFmpeg preflight", { path: resolved, exists })
