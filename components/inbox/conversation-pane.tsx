@@ -156,6 +156,11 @@ function MediaAttachment({ url }: { url: string }) {
 
   useEffect(() => {
     const convert = async () => {
+      const handleError = (message: string) => {
+        setSrc(url)
+        setError(message)
+        toast.error("Media conversion failed")
+      }
       try {
         const res = await fetch("/api/media/convert", {
           method: "POST",
@@ -167,12 +172,11 @@ function MediaAttachment({ url }: { url: string }) {
           if (data.url) setSrc(data.url)
         } else {
           const data = await res.json().catch(() => ({}))
-          setError(data.error || "Media conversion failed")
+          handleError(data.error || "Media conversion failed")
         }
       } catch (err) {
         console.error(err)
-        setError("Media conversion failed")
-        toast.error("Media conversion failed")
+        handleError("Media conversion failed")
       }
     }
     if (needsConvert) convert()

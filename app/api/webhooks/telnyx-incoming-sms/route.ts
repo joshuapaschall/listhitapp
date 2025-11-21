@@ -73,6 +73,7 @@ export async function POST(request: NextRequest) {
   // ✅ Mirror incoming media to Supabase
   let mediaUrls: string[] = []
   if (rawMediaUrls.length) {
+    console.log("📎 Incoming media URLs", rawMediaUrls)
     const missingEnv: string[] = []
     if (!getTelnyxApiKey()) missingEnv.push("TELNYX_API_KEY")
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY)

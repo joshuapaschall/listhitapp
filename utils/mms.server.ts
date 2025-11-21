@@ -69,6 +69,7 @@ export async function mirrorMediaUrl(
 ): Promise<string | null> {
   assertServer()
   let attemptedConvert = false
+  let contentType = "application/octet-stream"
   try {
     const isTelnyx = /^https:\/\/[^/]*telnyx\.com\//i.test(url)
     const headers: Record<string, string> = {}
@@ -85,7 +86,7 @@ export async function mirrorMediaUrl(
 
     const array = await res.arrayBuffer()
     const buffer = Buffer.from(array)
-    const contentType =
+    contentType =
       res.headers.get("content-type")?.toLowerCase() || "application/octet-stream"
     const originalExt = url.split("?")[0].match(/\.[^./]+$/)?.[0]?.toLowerCase()
 
@@ -127,7 +128,18 @@ export async function mirrorMediaUrl(
       try {
         return await convertToMp3(url, direction, buffer)
       } catch (err) {
-        console.error("❌ convertToMp3 failed:", err)
+        console.error("❌ convertToMp3 failed", {
+          error: err,
+          url,
+          contentType,
+        })
+        if (direction === "incoming") {
+          console.warn("⚠️ Falling back to original URL after failed conversion", {
+            url,
+            contentType,
+          })
+          return url
+        }
         throw err
       }
     }
@@ -135,6 +147,13 @@ export async function mirrorMediaUrl(
     return await uploadOriginalToSupabase(url, direction)
   } catch (err) {
     console.error("mirrorMediaUrl error:", err)
+    if (attemptedConvert && direction === "incoming") {
+      console.warn("⚠️ Returning original URL after conversion error", {
+        url,
+        contentType,
+      })
+      return url
+    }
     if (attemptedConvert) throw err
     return null
   }
@@ -152,18 +171,20 @@ export async function ensurePublicMediaUrls(
       throw new Error("Blob URLs not supported")
     }
 
-    const ext = u.split("?")[0].match(/\.[^./]+$/)?.[0]?.toLowerCase() || ""
-    const needsConvert =
-      /(\.amr|\.3gp|\.3gpp|\.webm|\.weba|\.ogg|\.oga|\.opus|\.wav|\.m4a)$/i.test(ext)
-
-    if (isPublicMediaUrl(u) && !needsConvert) {
+    if (isPublicMediaUrl(u)) {
       result.push(u)
       continue
     }
 
-    const mirrored = await mirrorMediaUrl(u, direction)
+    let mirrored: string | null = null
+    try {
+      mirrored = await mirrorMediaUrl(u, direction)
+    } catch (err) {
+      console.error("❌ mirrorMediaUrl threw", err)
+    }
     if (!mirrored) {
       console.warn("⚠️ Failed to mirror media:", u)
+      if (direction === "incoming") result.push(u)
       continue
     }
 

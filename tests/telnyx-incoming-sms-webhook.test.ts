@@ -358,6 +358,40 @@ describe.skip("Telnyx incoming SMS webhook", () => {
     ])
   })
 
+  test("mirrors Telnyx MP4 media into Supabase", async () => {
+    process.env.TELNYX_API_KEY = "KEY"
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      arrayBuffer: async () => new TextEncoder().encode("vid").buffer,
+      headers: { get: () => "video/mp4" },
+    })
+
+    const body = {
+      data: {
+        event_type: "message.received",
+        payload: {
+          from: { phone_number: "+12223334444" },
+          text: "clip",
+          media: [{ url: "https://api.telnyx.com/v2/media/clip.mp4" }],
+        },
+      },
+    }
+
+    const req = new NextRequest("http://test", { method: "POST", body: JSON.stringify(body) })
+
+    await POST(req)
+
+    expect(fetchMock).toHaveBeenCalledWith("https://api.telnyx.com/v2/media/clip.mp4", {
+      headers: { Authorization: "Bearer KEY" },
+    })
+    const [path] = uploadMock.mock.calls[0]
+    expect(path).toMatch(/\.mp4$/)
+    expect(messages[0].media_urls?.[0]).toEqual(
+      "https://cdn/storage/v1/object/public/public-media/p",
+    )
+    expect(messages[0].media_urls?.[0]).not.toContain("telnyx.com")
+  })
+
   test("stores downloaded media in public-media bucket", async () => {
     process.env.TELNYX_API_KEY = "KEY"
     fetchMock.mockResolvedValueOnce({
@@ -448,6 +482,44 @@ describe.skip("Telnyx incoming SMS webhook", () => {
     )
 
     ensureSpy.mockRestore()
+  })
+
+  test.each([
+    "https://api.telnyx.com/v2/media/voice.amr",
+    "https://api.telnyx.com/v2/media/voice.3gpp",
+  ])("converts %s audio to mp3 via mirrorMediaUrl", async (mediaUrl) => {
+    const mirrorSpy = jest
+      .spyOn(mms, "mirrorMediaUrl")
+      .mockResolvedValue(
+        "https://cdn/storage/v1/object/public/public-media/incoming/audio.mp3",
+      )
+
+    const body = {
+      data: {
+        event_type: "message.received",
+        payload: {
+          from: { phone_number: "+12223334444" },
+          text: "voice",
+          media: [{ url: mediaUrl }],
+        },
+      },
+    }
+
+    const req = new NextRequest("http://test", {
+      method: "POST",
+      body: JSON.stringify(body),
+    })
+
+    try {
+      await POST(req)
+
+      expect(mirrorSpy).toHaveBeenCalledWith(mediaUrl, "incoming")
+      expect(messages[0].media_urls).toEqual([
+        "https://cdn/storage/v1/object/public/public-media/incoming/audio.mp3",
+      ])
+    } finally {
+      mirrorSpy.mockRestore()
+    }
   })
 
   test("logs error when media download fails but still returns 204", async () => {
