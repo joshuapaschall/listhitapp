@@ -33,7 +33,10 @@ const nextConfig = {
     ? {
         outputFileTracingIncludes: {
           "app/api/media/convert/route.ts": ffmpegIncludes,
+          "app/api/messages/send/route.ts": ffmpegIncludes,
+          "app/api/messages/schedule/route.ts": ffmpegIncludes,
           "app/api/webhooks/telnyx-incoming-sms/route.ts": ffmpegIncludes,
+          "services/campaign-sender.server.ts": ffmpegIncludes,
         },
       }
     : {},
