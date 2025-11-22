@@ -9,6 +9,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { toast } from "sonner"
+import { uploadMediaFileWithMeta } from "@/utils/uploadMedia"
 
 interface VoiceRecorderProps {
   open: boolean
@@ -20,6 +22,7 @@ export default function VoiceRecorder({ open, onOpenChange, onSave }: VoiceRecor
   const [status, setStatus] = useState<"idle" | "recording" | "preview">("idle")
   const [url, setUrl] = useState<string | null>(null)
   const [elapsed, setElapsed] = useState(0)
+  const [isSaving, setIsSaving] = useState(false)
   const recorder = useRef<MediaRecorder | null>(null)
   const chunks = useRef<Blob[]>([])
   const timer = useRef<NodeJS.Timeout | null>(null)
@@ -29,6 +32,7 @@ export default function VoiceRecorder({ open, onOpenChange, onSave }: VoiceRecor
     setStatus("idle")
     setUrl(null)
     setElapsed(0)
+    setIsSaving(false)
     recorder.current = null
     chunks.current = []
     if (timer.current) {
@@ -70,26 +74,31 @@ export default function VoiceRecorder({ open, onOpenChange, onSave }: VoiceRecor
       const secs = seconds % 60
       return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`
     },
-    []
+    [],
   )
 
   const start = async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-    const rec = new MediaRecorder(stream)
-    chunks.current = []
-    rec.ondataavailable = (e) => {
-      if (e.data.size) chunks.current.push(e.data)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const rec = new MediaRecorder(stream)
+      chunks.current = []
+      rec.ondataavailable = (e) => {
+        if (e.data.size) chunks.current.push(e.data)
+      }
+      rec.onstop = () => {
+        const blob = new Blob(chunks.current, { type: "audio/webm" })
+        setUrl(URL.createObjectURL(blob))
+        setStatus("preview")
+        if (timer.current) clearInterval(timer.current)
+      }
+      rec.start()
+      recorder.current = rec
+      setStatus("recording")
+      startTimer()
+    } catch (err) {
+      console.error("Failed to start recorder", err)
+      toast.error("Microphone access is required to record audio")
     }
-    rec.onstop = () => {
-      const blob = new Blob(chunks.current, { type: "audio/webm" })
-      setUrl(URL.createObjectURL(blob))
-      setStatus("preview")
-      if (timer.current) clearInterval(timer.current)
-    }
-    rec.start()
-    recorder.current = rec
-    setStatus("recording")
-    startTimer()
   }
 
   const stop = () => {
@@ -100,11 +109,46 @@ export default function VoiceRecorder({ open, onOpenChange, onSave }: VoiceRecor
   }
 
   const save = async () => {
-    if (!url) return
-    const blob = await fetch(url).then((r) => r.blob())
-    const file = new File([blob], `recording-${Date.now()}.webm`, { type: blob.type })
-    onSave(file)
-    onOpenChange(false)
+    if (!url || isSaving) return
+    setIsSaving(true)
+    try {
+      const blob = await fetch(url).then((r) => r.blob())
+      const webmFile = new File([blob], `recording-${Date.now()}.webm`, {
+        type: blob.type || "audio/webm",
+      })
+
+      const upload = await uploadMediaFileWithMeta(webmFile, "outgoing")
+      const res = await fetch("/api/media/convert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: upload.url, direction: "outgoing" }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.url) {
+        throw new Error(
+          data.error || "Failed to process recording. Please try again.",
+        )
+      }
+
+      const mp3Response = await fetch(data.url)
+      if (!mp3Response.ok) {
+        throw new Error("Unable to load converted audio. Please retry.")
+      }
+      const mp3Blob = await mp3Response.blob()
+      const mp3File = new File([mp3Blob], `recording-${Date.now()}.mp3`, {
+        type: "audio/mpeg",
+      })
+
+      onSave(mp3File)
+      toast.success("Recording converted to MP3")
+      onOpenChange(false)
+      reset()
+    } catch (err) {
+      console.error("Recording conversion failed", err)
+      toast.error((err as Error).message || "Failed to process recording")
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const reRecord = async () => {
@@ -153,22 +197,22 @@ export default function VoiceRecorder({ open, onOpenChange, onSave }: VoiceRecor
 
           {status === "preview" && (
             <div className="flex gap-2">
-              <Button variant="outline" className="w-full" onClick={reRecord}>
+              <Button variant="outline" className="w-full" onClick={reRecord} disabled={isSaving}>
                 Re-record
               </Button>
-              <Button className="w-full" onClick={save}>
-                Use this recording
+              <Button className="w-full" onClick={save} disabled={!url || isSaving}>
+                {isSaving ? "Processing…" : "Use this recording"}
               </Button>
             </div>
           )}
         </div>
         <DialogFooter>
-          <Button variant="secondary" onClick={() => onOpenChange(false)}>
+          <Button variant="secondary" onClick={() => onOpenChange(false)} disabled={isSaving}>
             Cancel
           </Button>
           {status === "preview" && (
-            <Button onClick={save} disabled={!url}>
-              Use this recording
+            <Button onClick={save} disabled={!url || isSaving}>
+              {isSaving ? "Processing…" : "Use this recording"}
             </Button>
           )}
         </DialogFooter>
