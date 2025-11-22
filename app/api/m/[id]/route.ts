@@ -36,6 +36,10 @@ export async function GET(
     })
   } catch (err) {
     console.error(err)
+    const message = (err as Error).message || ""
+    if (message.toLowerCase().includes("not found")) {
+      return new Response("Not found", { status: 404 })
+    }
     return new Response("Internal error", { status: 500 })
   }
 }
