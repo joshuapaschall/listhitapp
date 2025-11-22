@@ -45,7 +45,19 @@ const PHOTO_AUDIO_EXTENSIONS = [
   ".weba",
 ]
 
-const VIDEO_EXTENSIONS = [".mp4", ".webm", ".3gp"]
+const VIDEO_EXTENSIONS = [
+  ".mp4",
+  ".webm",
+  ".3gp",
+  ".3gpp",
+  ".mov",
+  ".avi",
+  ".wmv",
+  ".mkv",
+  ".mpg",
+  ".mpeg",
+  ".ogv",
+]
 
 const formatSize = (bytes: number) => `${Math.round(bytes / 1024)} KB`
 
@@ -65,7 +77,7 @@ export default function UploadModal({
   }, [uploadType])
 
   const acceptValue = useMemo(() => {
-    if (uploadType === "video") return "video/mp4,video/webm,video/3gpp"
+    if (uploadType === "video") return "video/*"
     return "image/jpeg,image/png,image/gif,image/webp,audio/*"
   }, [uploadType])
 
@@ -73,8 +85,8 @@ export default function UploadModal({
 
   const descriptionCopy =
     uploadType === "video"
-      ? "MMS supports short MP4, WebM, or 3GP clips under 1MB. Bigger clips will be shared as download links."
-      : "MMS supports photos (JPG, PNG, GIF, WEBP) and quick audio notes (MP3, OGG, WEBM, AMR) under 1MB. Larger files should be trimmed before sending."
+      ? "MMS supports short video clips under 1MB. Larger clips will be shared as download links."
+      : "MMS supports photos (JPG, PNG, GIF, WEBP) and quick audio clips (MP3/AMR) under 1MB. Larger files should be trimmed before sending."
 
   const reset = () => {
     previews.forEach((p) => URL.revokeObjectURL(p.url))
@@ -191,7 +203,7 @@ export default function UploadModal({
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
               {uploadType === "video"
-                ? "MP4, WebM, or 3GP clips · under 1MB each"
+                ? "Common video formats · under 1MB each"
                 : "JPG, PNG, GIF, WEBP, and common audio · under 1MB each"}
             </p>
             <input

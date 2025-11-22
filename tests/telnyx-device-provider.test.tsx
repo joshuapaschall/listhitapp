@@ -2,6 +2,7 @@
 import { jest } from "@jest/globals"
 import { render, fireEvent, screen, act } from "@testing-library/react"
 jest.mock("@/lib/supabase-browser", () => ({
+  __esModule: true,
   supabaseBrowser: () => ({
     auth: {
       getSession: jest.fn().mockResolvedValue({

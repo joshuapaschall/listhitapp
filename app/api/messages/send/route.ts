@@ -197,22 +197,37 @@ export async function POST(request: NextRequest) {
 
   const carrier = (await lookupCarrier(formatted)) || "unknown"
   const sendRequest = async () => {
+    if (isMms) {
+      console.info("[messages/send] Telnyx MMS payload", {
+        type: payload.type,
+        media_urls: payload.media_urls,
+      })
+    }
     const res = await fetch(url, {
       method: "POST",
       headers: telnyxHeaders(),
       body: JSON.stringify(payload),
     })
+    const text = await res.text()
     if (!res.ok) {
-      const text = await res.text()
-      console.error("Telnyx error", text)
+      if (isMms) {
+        console.error("[messages/send] Telnyx MMS error body", text)
+      }
       let msg = `Telnyx API error: ${res.status}`
       try {
         const data = JSON.parse(text)
-        if (data.errors && data.errors[0]?.detail) msg = data.errors[0].detail
+        if (Array.isArray(data.errors) && data.errors.length) {
+          const details = data.errors
+            .map((e: any) => e?.detail || e?.title || e?.code)
+            .filter(Boolean)
+          if (details.length) msg = details.join("; ")
+        } else if (data.error?.message) {
+          msg = data.error.message
+        }
       } catch {}
       throw new Error(msg)
     }
-    const json = await res.json()
+    const json = text ? JSON.parse(text) : {}
     const data = json.data as { id: string; from: any }
     const from =
       typeof data.from === "string" ? data.from : data.from?.phone_number || ""

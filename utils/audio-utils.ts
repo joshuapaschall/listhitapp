@@ -4,16 +4,14 @@ import { randomUUID } from "crypto"
 import { PassThrough } from "stream"
 import { assertServer } from "@/utils/assert-server"
 import ffmpeg from "fluent-ffmpeg"
-import ffmpegPath from "ffmpeg-static" // ✅ NEW: Use ffmpeg-static instead of public/bin/ffmpeg
+import { ensureFfmpegAvailable } from "@/utils/ffmpeg-path"
 
 import {
   MEDIA_BUCKET,
   getMediaBaseUrl,
   isPublicMediaUrl,
+  MAX_MMS_SIZE,
 } from "./uploadMedia"
-
-// ✅ Set ffmpeg path using ffmpeg-static
-ffmpeg.setFfmpegPath(ffmpegPath || "")
 
 export async function convertToMp3(
   inputUrl: string,
@@ -21,6 +19,8 @@ export async function convertToMp3(
   buffer?: Buffer,
 ): Promise<string> {
   assertServer()
+  const ffmpegBinary = ensureFfmpegAvailable()
+  console.log("Using FFmpeg binary for audio conversion", ffmpegBinary)
 
   const headers: Record<string, string> = {}
   const isTelnyx = /^https:\/\/[^/]*telnyx\.com\//i.test(inputUrl)
@@ -51,12 +51,18 @@ export async function convertToMp3(
     const chunks: Buffer[] = []
 
     ffmpeg(input)
+      .audioBitrate("96k")
+      .audioChannels(1)
       .toFormat("mp3")
       .on("error", reject)
       .on("end", () => resolve(Buffer.concat(chunks)))
       .pipe()
       .on("data", (d: Buffer) => chunks.push(d))
   })
+
+  if (mp3.length > MAX_MMS_SIZE) {
+    throw new Error("Converted audio exceeds the 1MB MMS limit")
+  }
 
   const fileName =
     direction === "incoming"
