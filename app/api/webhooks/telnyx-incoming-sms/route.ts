@@ -12,7 +12,6 @@ import { ensurePublicMediaUrls } from "@/utils/mms.server"
 import { normalizePhone, formatPhoneE164 } from "@/lib/dedup-utils"
 import { verifyTelnyxRequest } from "@/lib/telnyx"
 import { upsertAnonThread } from "@/services/thread-utils"
-import { getTelnyxApiKey } from "@/lib/voice-env"
 
 export const runtime = "nodejs"
 
@@ -53,6 +52,14 @@ export async function POST(request: NextRequest) {
     return new NextResponse("No payload", { status: 400 })
   }
 
+  const medias = Array.isArray(payload.media) ? payload.media : []
+  const legacyMediaUrls = Array.isArray(payload.media_urls) ? payload.media_urls : []
+
+  const rawMediaUrls = [
+    ...medias.map((m: any) => m?.url).filter(Boolean),
+    ...legacyMediaUrls.filter(Boolean),
+  ]
+
   const from =
     typeof payload.from === "string"
       ? payload.from
@@ -64,48 +71,23 @@ export async function POST(request: NextRequest) {
     : payload.to?.phone_number
   const preferredDid = to ? formatPhoneE164(to) || to : null
   const text = (payload.text as string | undefined)?.trim() ?? ""
-  const rawMediaUrls = [
-    ...(Array.isArray(payload.media)
-      ? payload.media.map((m: any) => m.url)
-      : []),
-    ...(Array.isArray(payload.media_urls) ? payload.media_urls : []),
-  ]
   const sid = payload.id as string | undefined
 
-  // ✅ Mirror incoming media to Supabase
   let mediaUrls: string[] = []
   if (rawMediaUrls.length) {
     console.log("📎 Incoming media URLs", rawMediaUrls)
-    const missingEnv: string[] = []
-    if (!getTelnyxApiKey()) missingEnv.push("TELNYX_API_KEY")
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY)
-      missingEnv.push("SUPABASE_SERVICE_ROLE_KEY")
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL)
-      missingEnv.push("NEXT_PUBLIC_SUPABASE_URL")
-
-    if (missingEnv.length) {
-      const message =
-        `Missing required environment variables: ${missingEnv.join(", ")}`
-      console.error(`❌ ${message} – incoming media cannot be stored`)
-      return new NextResponse(`${message}. Please configure them.`, {
-        status: 500,
-      })
-    }
-
     try {
       mediaUrls = await ensurePublicMediaUrls(rawMediaUrls, "incoming")
-      if (!mediaUrls.length && rawMediaUrls.length) {
-        console.warn(
-          "⚠️ ensurePublicMediaUrls returned empty array",
-          {
-            rawMediaUrls,
-            mediaUrls,
-          },
-        )
+      if (!mediaUrls.length) {
+        console.warn("⚠️ ensurePublicMediaUrls returned empty array", {
+          rawMediaUrls,
+          mediaUrls,
+        })
       }
       console.log("📁 Incoming media saved to Supabase:", mediaUrls)
     } catch (err) {
       console.error("❌ Failed to mirror or convert media", err)
+      mediaUrls = rawMediaUrls
     }
   }
 
@@ -174,7 +156,7 @@ export async function POST(request: NextRequest) {
               deleted_at: null,
               preferred_from_number: preferredDid,
             },
-            { onConflict: "buyer_id,phone_number" }
+            { onConflict: "buyer_id,phone_number" },
           )
           .select("id")
           .single()

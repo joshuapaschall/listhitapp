@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
       status: 400,
     })
   }
-  let finalMediaUrls: string[] | undefined
+  let finalMediaUrls: string[] = []
   if (Array.isArray(mediaUrls) && mediaUrls.length) {
     try {
       finalMediaUrls = await ensurePublicMediaUrls(mediaUrls, "outgoing")
@@ -181,12 +181,12 @@ export async function POST(request: NextRequest) {
   }
 
   const replyFrom = formatPhoneE164(fromDid)!
-  const isMms = !!(finalMediaUrls && finalMediaUrls.length)
+  const isMms = finalMediaUrls.length > 0
 
   const payload: Record<string, any> = {
     from: replyFrom,
     to: formatted,
-    text: body,
+    text: body ?? (isMms ? "" : undefined),
     messaging_profile_id: messagingProfileId,
     type: isMms ? "MMS" : "SMS",
     use_profile_webhooks: true,

@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase"
+import { getStoragePathFromUrl, MEDIA_BUCKET } from "@/utils/uploadMedia"
 import { nanoid } from "nanoid"
 
 function getBaseUrl() {
@@ -9,15 +10,28 @@ function getBaseUrl() {
   return base.replace(/\/+$/, "")
 }
 
+function normalizeStoragePath(storagePath: string) {
+  const fromUrl = getStoragePathFromUrl(storagePath)
+  if (fromUrl) return fromUrl
+
+  const withoutBucket = storagePath
+    .replace(/^\/+/, "")
+    .replace(new RegExp(`^${MEDIA_BUCKET}/`), "")
+
+  return withoutBucket.replace(/^\/+/, "")
+}
+
 export async function createShortMediaLink(
   storagePath: string,
   contentType: string,
 ) {
+  const normalizedStoragePath = normalizeStoragePath(storagePath)
+
   if (!supabaseAdmin) {
     const res = await fetch("/api/media-links", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ storagePath, contentType }),
+      body: JSON.stringify({ storagePath: normalizedStoragePath, contentType }),
     })
 
     const data = await res.json().catch(() => ({}))
@@ -33,7 +47,7 @@ export async function createShortMediaLink(
 
   const { error } = await supabaseAdmin
     .from("media_links")
-    .insert({ id, storage_path: storagePath, content_type: contentType })
+    .insert({ id, storage_path: normalizedStoragePath, content_type: contentType })
 
   if (error) throw error
 

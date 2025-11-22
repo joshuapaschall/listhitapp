@@ -3,6 +3,14 @@ import { jest } from "@jest/globals"
 import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import VoiceRecorder from "../components/voice/VoiceRecorder"
 
+jest.mock("../utils/uploadMedia", () => ({
+  uploadMediaFileWithMeta: jest.fn(async () => ({
+    url: "https://example.com/source.webm",
+    storagePath: "outgoing/source.webm",
+    contentType: "audio/webm",
+  })),
+}))
+
 class MockMediaRecorder {
   ondataavailable: ((event: { data: Blob }) => void) | null = null
   onstop: (() => void) | null = null
@@ -40,16 +48,35 @@ describe("VoiceRecorder", () => {
     // @ts-ignore
     global.URL.createObjectURL = jest.fn(() => "blob:mock-url")
     // @ts-ignore
-    global.fetch = jest.fn(async () => ({
-      blob: async () => new Blob(["audio"], { type: "audio/webm" }),
-    }))
+    const fetchMock = jest.fn(async (input: RequestInfo) => {
+      const inputStr = typeof input === "string" ? input : ""
+      if (inputStr.includes("/api/media/convert")) {
+        return {
+          ok: true,
+          json: async () => ({ url: "https://example.com/converted.mp3" }),
+        } as any
+      }
+      if (inputStr.endsWith(".mp3")) {
+        return {
+          ok: true,
+          blob: async () => new Blob(["mp3"], { type: "audio/mpeg" }),
+        } as any
+      }
+      return {
+        ok: true,
+        blob: async () => new Blob(["audio"], { type: "audio/webm" }),
+        json: async () => ({}),
+      } as any
+    })
+    // @ts-ignore
+    global.fetch = fetchMock
   })
 
   afterEach(() => {
     jest.clearAllMocks()
   })
 
-  test("saves webm recording with expected filename", async () => {
+  test("converts recording to mp3 before saving", async () => {
     const handleSave = jest.fn()
     render(<VoiceRecorder open onOpenChange={jest.fn()} onSave={handleSave} />)
 
@@ -63,7 +90,7 @@ describe("VoiceRecorder", () => {
 
     await waitFor(() => expect(handleSave).toHaveBeenCalledTimes(1))
     const file = handleSave.mock.calls[0][0] as File
-    expect(file.name).toMatch(/^recording-.*\.webm$/)
-    expect(file.type).toBe("audio/webm")
+    expect(file.name).toMatch(/^recording-.*\.mp3$/)
+    expect(file.type).toBe("audio/mpeg")
   })
 })

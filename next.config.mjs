@@ -1,8 +1,9 @@
 import path from "path"
-import ffmpegPath from "ffmpeg-static"
+import ffmpegStatic from "ffmpeg-static"
 
-const ffmpegBinary = ffmpegPath
-  ? path.relative(process.cwd(), ffmpegPath).replace(/\\/g, "/")
+const resolvedFfmpegPath = ffmpegStatic ? path.resolve(ffmpegStatic) : null
+const ffmpegBinary = resolvedFfmpegPath
+  ? path.relative(process.cwd(), resolvedFfmpegPath).replace(/\\/g, "/")
   : null
 
 const ffmpegIncludes = ffmpegBinary
@@ -24,7 +25,7 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   env: {
-    FFMPEG_PATH: ffmpegPath || "",
+    FFMPEG_PATH: resolvedFfmpegPath || "",
   },
   images: {
     unoptimized: true,
