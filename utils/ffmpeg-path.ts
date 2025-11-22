@@ -1,7 +1,6 @@
 import ffmpeg from "fluent-ffmpeg"
 import ffmpegPath from "ffmpeg-static"
 import fs from "fs"
-import path from "path"
 
 let configuredPath: string | null = null
 
@@ -16,17 +15,13 @@ export function ensureFfmpegAvailable(): string {
     throw new Error(message)
   }
 
-  const resolved = path.isAbsolute(candidate)
-    ? candidate
-    : path.join(process.cwd(), candidate)
+  const resolved = candidate
 
   const exists = fs.existsSync(resolved)
   console.log("FFmpeg preflight", { path: resolved, exists })
 
   if (!exists) {
-    const message = `FFmpeg binary not found at ${resolved}`
-    console.error(message)
-    throw new Error(message)
+    console.warn("FFmpeg binary not found at", resolved, "continuing anyway")
   }
 
   ffmpeg.setFfmpegPath(resolved)
