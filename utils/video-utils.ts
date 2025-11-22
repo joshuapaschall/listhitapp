@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase"
 import { getTelnyxApiKey } from "@/lib/voice-env"
 import { randomUUID } from "crypto"
-import { PassThrough } from "stream"
+import { PassThrough, Readable } from "stream"
 import { assertServer } from "@/utils/assert-server"
 import ffmpeg from "fluent-ffmpeg"
 import { ensureFfmpegAvailable } from "@/utils/ffmpeg-path"
@@ -25,9 +25,11 @@ export async function convertToMp4(
   const headers: Record<string, string> = {}
   const isTelnyx = /^https:\/\/[^/]*telnyx\.com\//i.test(inputUrl)
 
-  let buf: Buffer
+  let inputStream: NodeJS.ReadableStream
   if (buffer) {
-    buf = buffer
+    const stream = new PassThrough()
+    stream.end(buffer)
+    inputStream = stream
   } else {
     const apiKey = getTelnyxApiKey()
     if (isTelnyx && apiKey) {
@@ -38,61 +40,45 @@ export async function convertToMp4(
       inputUrl,
       Object.keys(headers).length ? { headers } : {},
     )
+
     if (!res.ok) {
       throw new Error(`Failed to fetch ${inputUrl}: ${res.status}`)
     }
 
-    buf = Buffer.from(await res.arrayBuffer())
+    if (!res.body) {
+      throw new Error(`No response body received from ${inputUrl}`)
+    }
+
+    inputStream = Readable.fromWeb(res.body as unknown as ReadableStream)
   }
 
   const mp4 = await new Promise<Buffer>((resolve, reject) => {
-    const input = new PassThrough()
-    input.end(buf)
     const chunks: Buffer[] = []
-
-    ffmpeg(input)
+    const command = ffmpeg(inputStream)
       .videoCodec("libx264")
       .audioCodec("aac")
-      .videoFilters("scale='min(640,iw)':-2")
-      .toFormat("mp4")
+      .format("mp4")
       .outputOptions([
         "-movflags",
         "faststart",
         "-pix_fmt",
         "yuv420p",
-        "-profile:v",
-        "baseline",
-        "-level",
-        "3.0",
-        "-preset",
-        "faster",
-        "-crf",
-        "30",
-        "-b:v",
-        "650k",
-        "-maxrate",
-        "750k",
-        "-bufsize",
-        "1000k",
-        "-b:a",
-        "96k",
-        "-fs",
-        `${MAX_MMS_SIZE}`,
       ])
-      .on("error", reject)
-      .on("end", () => resolve(Buffer.concat(chunks)))
-      .pipe()
-      .on("data", (d: Buffer) => chunks.push(d))
+
+    command.on("error", reject)
+
+    const output = command.pipe(new PassThrough())
+    output.on("data", (d: Buffer) => chunks.push(d))
+    output.on("error", reject)
+    output.on("end", () => resolve(Buffer.concat(chunks)))
   })
 
   if (mp4.length > MAX_MMS_SIZE) {
     throw new Error("Converted video exceeds the 1MB MMS limit")
   }
 
-  const fileName =
-    direction === "incoming"
-      ? `incoming/${Date.now()}_${randomUUID()}.mp4`
-      : `outgoing/${Date.now()}_${randomUUID()}.mp4`
+  const id = randomUUID()
+  const fileName = `${direction}/${id}.mp4`
 
   const { data, error } = await supabaseAdmin.storage
     .from(MEDIA_BUCKET)
