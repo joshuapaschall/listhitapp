@@ -55,7 +55,6 @@ import { toast } from "sonner";
 import useHotkeys from "@/hooks/use-hotkeys";
 import { BuyerService } from "@/services/buyer-service";
 import { type ThreadWithBuyer } from "@/services/message-service";
-import { createShortMediaLink } from "@/services/media-links";
 import {
   ALLOWED_MMS_EXTENSIONS,
   MAX_MMS_SIZE,
@@ -990,9 +989,24 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
 
       try {
         linkUrls = await Promise.all(
-          linkUploads.map((upload) =>
-            createShortMediaLink(upload.storagePath, upload.contentType),
-          ),
+          linkUploads.map(async (upload) => {
+            const res = await fetch("/api/media-links", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                storagePath: upload.storagePath,
+                contentType: upload.contentType,
+              }),
+            })
+
+            const data = await res.json().catch(() => ({}))
+
+            if (!res.ok || !data.shortUrl) {
+              throw new Error(data.error || "Failed to create media link")
+            }
+
+            return data.shortUrl as string
+          }),
         )
       } catch (err) {
         console.error("Link shortening failed", err)
