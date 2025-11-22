@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase"
 import { getTelnyxApiKey } from "@/lib/voice-env"
 import { randomUUID } from "crypto"
-import { PassThrough } from "stream"
+import { PassThrough, Readable } from "stream"
 import { assertServer } from "@/utils/assert-server"
 import ffmpeg from "fluent-ffmpeg"
 import { ensureFfmpegAvailable } from "@/utils/ffmpeg-path"
@@ -24,10 +24,11 @@ export async function convertToMp3(
 
   const headers: Record<string, string> = {}
   const isTelnyx = /^https:\/\/[^/]*telnyx\.com\//i.test(inputUrl)
-
-  let buf: Buffer
+  let inputStream: NodeJS.ReadableStream
   if (buffer) {
-    buf = buffer
+    const stream = new PassThrough()
+    stream.end(buffer)
+    inputStream = stream
   } else {
     const apiKey = getTelnyxApiKey()
     if (isTelnyx && apiKey) {
@@ -38,36 +39,36 @@ export async function convertToMp3(
       inputUrl,
       Object.keys(headers).length ? { headers } : {},
     )
+
     if (!res.ok) {
       throw new Error(`Failed to fetch ${inputUrl}: ${res.status}`)
     }
 
-    buf = Buffer.from(await res.arrayBuffer())
+    if (!res.body) {
+      throw new Error(`No response body received from ${inputUrl}`)
+    }
+
+    inputStream = Readable.fromWeb(res.body as unknown as ReadableStream)
   }
 
   const mp3 = await new Promise<Buffer>((resolve, reject) => {
-    const input = new PassThrough()
-    input.end(buf)
     const chunks: Buffer[] = []
+    const command = ffmpeg(inputStream).format("mp3")
 
-    ffmpeg(input)
-      .audioBitrate("96k")
-      .audioChannels(1)
-      .toFormat("mp3")
-      .on("error", reject)
-      .on("end", () => resolve(Buffer.concat(chunks)))
-      .pipe()
-      .on("data", (d: Buffer) => chunks.push(d))
+    command.on("error", reject)
+
+    const output = command.pipe(new PassThrough())
+    output.on("data", (d: Buffer) => chunks.push(d))
+    output.on("error", reject)
+    output.on("end", () => resolve(Buffer.concat(chunks)))
   })
 
   if (mp3.length > MAX_MMS_SIZE) {
     throw new Error("Converted audio exceeds the 1MB MMS limit")
   }
 
-  const fileName =
-    direction === "incoming"
-      ? `incoming/${Date.now()}_${randomUUID()}.mp3`
-      : `outgoing/${Date.now()}_${randomUUID()}.mp3`
+  const id = randomUUID()
+  const fileName = `${direction}/${id}.mp3`
 
   const { data, error } = await supabaseAdmin.storage
     .from(MEDIA_BUCKET)

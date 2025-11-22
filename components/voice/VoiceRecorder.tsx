@@ -156,9 +156,6 @@ export default function VoiceRecorder({ open, onOpenChange, onSave }: VoiceRecor
               <Button variant="outline" className="w-full" onClick={reRecord}>
                 Re-record
               </Button>
-              <Button className="w-full" onClick={save}>
-                Use this recording
-              </Button>
             </div>
           )}
         </div>
