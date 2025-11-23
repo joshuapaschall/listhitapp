@@ -42,10 +42,15 @@ export async function convertToMp4(
     )
 
     if (!res.ok) {
+      console.error("convertToMp4 error: failed to fetch", {
+        inputUrl,
+        status: res.status,
+      })
       throw new Error(`Failed to fetch ${inputUrl}: ${res.status}`)
     }
 
     if (!res.body) {
+      console.error("convertToMp4 error: no response body", { inputUrl })
       throw new Error(`No response body received from ${inputUrl}`)
     }
 
@@ -74,6 +79,7 @@ export async function convertToMp4(
   })
 
   if (mp4.length > MAX_MMS_SIZE) {
+    console.error("convertToMp4 error: converted video too large", { inputUrl })
     throw new Error("Converted video exceeds the 1MB MMS limit")
   }
 
@@ -88,6 +94,10 @@ export async function convertToMp4(
     })
 
   if (error || !data) {
+    console.error("convertToMp4 error: Supabase upload failed", {
+      inputUrl,
+      error,
+    })
     throw new Error("Supabase upload failed")
   }
 
