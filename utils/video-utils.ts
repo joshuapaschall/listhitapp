@@ -19,7 +19,7 @@ export async function convertToMp4(
   buffer?: Buffer,
 ): Promise<string> {
   assertServer()
-  const ffmpegBinary = ensureFfmpegAvailable()
+  const ffmpegBinary = await ensureFfmpegAvailable()
   console.log("Using FFmpeg binary for video conversion", ffmpegBinary)
 
   const headers: Record<string, string> = {}

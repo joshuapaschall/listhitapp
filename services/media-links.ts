@@ -2,11 +2,14 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { nanoid } from "nanoid"
 
 function getBaseUrl() {
-  const base = process.env.NEXT_PUBLIC_MEDIA_BASE_URL || process.env.NEXT_PUBLIC_APP_URL
-  if (!base) {
-    throw new Error("NEXT_PUBLIC_MEDIA_BASE_URL or NEXT_PUBLIC_APP_URL not set")
+  const rawBase =
+    process.env.NEXT_PUBLIC_MEDIA_BASE_URL || process.env.NEXT_PUBLIC_APP_URL
+
+  if (!rawBase) {
+    throw new Error("No base URL configured for media links")
   }
-  return base.replace(/\/+$/, "")
+
+  return rawBase.replace(/\/$/, "")
 }
 
 export async function createShortMediaLink(
@@ -37,7 +40,7 @@ export async function createShortMediaLink(
 
   if (error) throw error
 
-  return `${baseUrl}/m/${id}`
+  return `${baseUrl}/api/m/${id}`
 }
 
 export async function resolveMediaLink(id: string) {
