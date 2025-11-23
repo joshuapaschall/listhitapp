@@ -8,22 +8,23 @@ import { ensureFfmpegAvailable } from "@/utils/ffmpeg-path"
 
 import {
   MEDIA_BUCKET,
+  MAX_MMS_SIZE,
   getMediaBaseUrl,
   isPublicMediaUrl,
-  MAX_MMS_SIZE,
 } from "./uploadMedia"
 
-export async function convertToMp3(
+export async function convertToMp4(
   inputUrl: string,
   direction: "incoming" | "outgoing" = "incoming",
   buffer?: Buffer,
 ): Promise<string> {
   assertServer()
   const ffmpegBinary = ensureFfmpegAvailable()
-  console.log("Using FFmpeg binary for audio conversion", ffmpegBinary)
+  console.log("Using FFmpeg binary for video conversion", ffmpegBinary)
 
   const headers: Record<string, string> = {}
   const isTelnyx = /^https:\/\/[^/]*telnyx\.com\//i.test(inputUrl)
+
   let inputStream: NodeJS.ReadableStream
   if (buffer) {
     const stream = new PassThrough()
@@ -51,9 +52,18 @@ export async function convertToMp3(
     inputStream = Readable.fromWeb(res.body as unknown as ReadableStream)
   }
 
-  const mp3 = await new Promise<Buffer>((resolve, reject) => {
+  const mp4 = await new Promise<Buffer>((resolve, reject) => {
     const chunks: Buffer[] = []
-    const command = ffmpeg(inputStream).format("mp3")
+    const command = ffmpeg(inputStream)
+      .videoCodec("libx264")
+      .audioCodec("aac")
+      .format("mp4")
+      .outputOptions([
+        "-movflags",
+        "faststart",
+        "-pix_fmt",
+        "yuv420p",
+      ])
 
     command.on("error", reject)
 
@@ -63,17 +73,17 @@ export async function convertToMp3(
     output.on("end", () => resolve(Buffer.concat(chunks)))
   })
 
-  if (mp3.length > MAX_MMS_SIZE) {
-    throw new Error("Converted audio exceeds the 1MB MMS limit")
+  if (mp4.length > MAX_MMS_SIZE) {
+    throw new Error("Converted video exceeds the 1MB MMS limit")
   }
 
   const id = randomUUID()
-  const fileName = `${direction}/${id}.mp3`
+  const fileName = `${direction}/${id}.mp4`
 
   const { data, error } = await supabaseAdmin.storage
     .from(MEDIA_BUCKET)
-    .upload(fileName, mp3, {
-      contentType: "audio/mpeg",
+    .upload(fileName, mp4, {
+      contentType: "video/mp4",
       upsert: true,
     })
 
@@ -86,9 +96,7 @@ export async function convertToMp3(
       .publicUrl || `${getMediaBaseUrl()}${data.path}`
 
   if (isPublicMediaUrl(inputUrl)) {
-    const originalPath = inputUrl
-      .replace(getMediaBaseUrl(), "")
-      .split("?")[0]
+    const originalPath = inputUrl.replace(getMediaBaseUrl(), "").split("?")[0]
     await supabaseAdmin.storage.from(MEDIA_BUCKET).remove([originalPath])
   }
 

@@ -53,13 +53,13 @@ import EditBuyerModal from "@/components/buyers/edit-buyer-modal";
 import AddBuyerModal from "@/components/buyers/add-buyer-modal";
 import { toast } from "sonner";
 import useHotkeys from "@/hooks/use-hotkeys";
-import CampaignService from "@/services/campaign-service";
 import { BuyerService } from "@/services/buyer-service";
 import { type ThreadWithBuyer } from "@/services/message-service";
 import {
   ALLOWED_MMS_EXTENSIONS,
   MAX_MMS_SIZE,
-  uploadMediaFile,
+  getStoragePathFromUrl,
+  uploadMediaFileWithMeta,
 } from "@/utils/uploadMedia";
 import VoiceRecorder from "@/components/voice/VoiceRecorder";
 import UploadModal from "./upload-modal";
@@ -156,6 +156,13 @@ function MediaAttachment({ url }: { url: string }) {
 
   useEffect(() => {
     const convert = async () => {
+      const handleError = (message: string) => {
+        const friendlyMessage =
+          message || "Media conversion is unavailable right now. Please try again later."
+        setSrc(url)
+        setError(friendlyMessage)
+        toast.error(friendlyMessage)
+      }
       try {
         const res = await fetch("/api/media/convert", {
           method: "POST",
@@ -167,12 +174,15 @@ function MediaAttachment({ url }: { url: string }) {
           if (data.url) setSrc(data.url)
         } else {
           const data = await res.json().catch(() => ({}))
-          setError(data.error || "Media conversion failed")
+          handleError(
+            typeof data.error === "string"
+              ? data.error
+              : "Media conversion is unavailable right now. Please try again later.",
+          )
         }
       } catch (err) {
         console.error(err)
-        setError("Media conversion failed")
-        toast.error("Media conversion failed")
+        handleError("Media conversion is unavailable right now. Please try again later.")
       }
     }
     if (needsConvert) convert()
@@ -187,12 +197,17 @@ function MediaAttachment({ url }: { url: string }) {
         width={300}
         height={300}
         loading="lazy"
-        className="rounded-md max-w-[300px]"
+        className="rounded-md max-w-[300px] h-full w-full object-cover"
       />
     )
   } else if (isVideo) {
     content = (
-      <video controls src={src} className="w-full mt-2" crossOrigin="anonymous" />
+      <video
+        controls
+        src={src}
+        className="w-full max-h-80 rounded-lg bg-black"
+        crossOrigin="anonymous"
+      />
     )
   } else if (isAudio) {
     content = (
@@ -228,12 +243,68 @@ function MediaAttachment({ url }: { url: string }) {
   )
 }
 
+function AudioBubble({ src }: { src: string }) {
+  return (
+    <div className="flex items-center gap-2 rounded-xl bg-background/80 px-3 py-2 shadow-inner">
+      <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
+        <span className="flex gap-[2px]">
+          <span className="h-3 w-[2px] rounded-full bg-primary" />
+          <span className="h-4 w-[2px] rounded-full bg-primary/80" />
+          <span className="h-2 w-[2px] rounded-full bg-primary/60" />
+        </span>
+      </span>
+      <audio
+        controls
+        src={src}
+        preload="none"
+        className="w-48 max-w-full"
+      />
+    </div>
+  )
+}
+
+function MediaGrid({ urls }: { urls: string[] }) {
+  if (urls.length === 1) {
+    return (
+      <div className="rounded-xl overflow-hidden">
+        <MediaAttachment url={urls[0]} />
+      </div>
+    )
+  }
+
+  if (urls.length === 2) {
+    return (
+      <div className="grid grid-cols-2 gap-1 rounded-xl overflow-hidden">
+        {urls.map((u, i) => (
+          <MediaAttachment key={i} url={u} />
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <div className="grid grid-cols-2 gap-1 rounded-xl overflow-hidden">
+      {urls.slice(0, 3).map((u, i) => (
+        <MediaAttachment key={i} url={u} />
+      ))}
+      <div className="relative">
+        <MediaAttachment url={urls[3]} />
+        {urls.length > 4 && (
+          <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white font-medium text-sm">
+            +{urls.length - 4}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 interface ConversationPaneProps {
   thread: MessageThread | null;
 }
 
 interface LocalMessage extends Message {
-  status?: "sending" | "failed";
+  status?: "sending" | "failed" | "scheduled";
   localId?: string;
   error?: string;
   subject?: string | null;
@@ -838,14 +909,14 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
     }
 
     const uploadFiles = async (list: File[]) => {
-      const urls: string[] = []
+      const uploads: { url: string; storagePath: string; contentType: string }[] = []
       for (const original of list) {
         const file =
           original.type.startsWith("image/") && original.size > MAX_MMS_SIZE
             ? await compressImageIfNeeded(original)
             : original
 
-        let url = await uploadMediaFile(file, "outgoing")
+        let upload = await uploadMediaFileWithMeta(file, "outgoing")
         const lower = file.name.toLowerCase()
         const needsConvert =
           /(\.amr|\.webm|\.weba|\.3gp|\.wav|\.ogg|\.opus|\.oga)$/.test(lower)
@@ -854,20 +925,32 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
             const res = await fetch("/api/media/convert", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ url, direction: "outgoing" }),
+              body: JSON.stringify({ url: upload.url, direction: "outgoing" }),
             })
-            if (res.ok) {
-              const data = await res.json()
-              if (data.url) url = data.url
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok || !data.url) {
+              const errMsg =
+                data.error ||
+                "This audio format could not be processed; please try a different format"
+              throw new Error(errMsg)
+            }
+            const storagePath = getStoragePathFromUrl(data.url) || upload.storagePath
+            upload = {
+              url: data.url,
+              storagePath,
+              contentType: "audio/mpeg",
             }
           } catch (err) {
             console.error("convert failed", err)
-            toast.error("Media conversion failed")
+            throw new Error(
+              (err as Error).message ||
+                "This audio format could not be processed; please try a different format",
+            )
           }
         }
-        urls.push(url)
+        uploads.push(upload)
       }
-      return urls
+      return uploads
     }
 
     const currentFrom = selectedDid || preferredFrom || null;
@@ -881,32 +964,65 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
     const largeNames = linkOnlyFiles.map((f) => f.name)
     if (linkOnlyFiles.length) {
       toast.info(
-        `${linkOnlyFiles.length} file${linkOnlyFiles.length > 1 ? "s" : ""} will send as download link${
+        `${linkOnlyFiles.length} attachment${
           linkOnlyFiles.length > 1 ? "s" : ""
-        } due to the 1MB MMS limit.`,
+        } will send as a link because it's over 1MB.`,
       )
     }
 
     const uploadAndBuildBody = async () => {
-      let mediaUrls: string[] = []
+      let mediaUploads: { url: string; storagePath: string; contentType: string }[] = []
+      let linkUploads: { url: string; storagePath: string; contentType: string }[] = []
       let linkUrls: string[] = []
 
       try {
-        mediaUrls = await uploadFiles(sendableFiles)
-        linkUrls = linkOnlyFiles.length ? await uploadFiles(linkOnlyFiles) : []
+        mediaUploads = await uploadFiles(sendableFiles)
+        linkUploads = linkOnlyFiles.length ? await uploadFiles(linkOnlyFiles) : []
       } catch (err) {
         console.error("Media upload failed", err)
-        toast.error(
+        const message =
           (err as any)?.message ||
-            "Failed to upload attachments. Please try different files.",
-        )
+          "Failed to upload attachments. Please try different files."
+        toast.error(message)
         return { mediaUrls: [], linkUrls: [], failed: true }
       }
 
+      try {
+        linkUrls = await Promise.all(
+          linkUploads.map(async (upload) => {
+            const res = await fetch("/api/media-links", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                storagePath: upload.storagePath,
+                contentType: upload.contentType,
+              }),
+            })
+
+            const data = await res.json().catch(() => ({}))
+
+            if (!res.ok || !data.shortUrl) {
+              throw new Error(data.error || "Failed to create media link")
+            }
+
+            return data.shortUrl as string
+          }),
+        )
+      } catch (err) {
+        console.error("Link shortening failed", err)
+        const message =
+          (err as any)?.message ||
+          "Failed to create short links for attachments. Please try again."
+        toast.error(message)
+        return { mediaUrls: [], linkUrls: [], failed: true }
+      }
+
+      const mediaUrls = mediaUploads.map(({ url }) => url)
+
       const finalBody = linkUrls.length
-        ? `${renderedBody ? `${renderedBody}\n\n` : ""}Download link${
-            linkUrls.length > 1 ? "s" : ""
-          } (over 1MB):\n${linkUrls
+        ? `${renderedBody ? `${renderedBody}\n\n` : ""}Attached ${
+            linkUrls.length > 1 ? "files" : "file"
+          }:\n${linkUrls
             .map((url, idx) => `• ${largeNames[idx] || "Attachment"}: ${url}`)
             .join("\n")}`
         : renderedBody
@@ -917,37 +1033,56 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
     if (scheduleDate) {
       const { mediaUrls, body, failed } = await uploadAndBuildBody()
       if (failed) return
+      const [hours, minutes] = (scheduleTime || "00:00").split(":")
+      const dt = new Date(scheduleDate)
+      dt.setHours(parseInt(hours || "0", 10), parseInt(minutes || "0", 10), 0, 0)
+      const sendAt = dt.toISOString()
+
       try {
-        const name =
-          buyer?.full_name ||
-          `${buyer?.fname || ""} ${buyer?.lname || ""}`.trim() ||
-          "Unnamed";
-        const campaign = await CampaignService.createCampaign({
-          name: `SMS to ${name}`,
-          channel: "sms",
-          message: body,
-          mediaUrls,
-          buyerIds: [thread.buyer_id],
-          groupIds: [],
-          sendToAllNumbers: true,
-        });
-        const dtString = `${scheduleDate
-          .toISOString()
-          .split("T")[0]}T${scheduleTime || "00:00"}:00`;
-        await CampaignService.schedule(
-          campaign.id,
-          new Date(dtString).toISOString(),
-        );
-        toast.success("Message scheduled");
-        setInput("");
-        setAttachments([]);
-        setScheduleDate(null);
-        setScheduleTime("");
+        const res = await fetch("/api/messages/schedule", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            buyerId: thread.buyer_id,
+            threadId: thread.id,
+            to: thread.phone_number,
+            from: currentFrom || undefined,
+            body,
+            mediaUrls,
+            sendAt,
+          }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(data.error || "Failed to schedule message")
+
+        const scheduledId = data.id || `scheduled-${Date.now()}`
+        const scheduledMsg: LocalMessage = {
+          id: scheduledId,
+          localId: scheduledId,
+          thread_id: thread.id,
+          buyer_id: thread.buyer_id,
+          direction: "outbound",
+          from_number: currentFrom ? formatDidE164(currentFrom) : null,
+          to_number: thread.phone_number,
+          body,
+          provider_id: data.sid || null,
+          is_bulk: false,
+          filtered: false,
+          created_at: data.created_at || new Date().toISOString(),
+          status: "scheduled",
+          media_urls: mediaUrls.length ? mediaUrls : null,
+        }
+        setMessages((prev) => [...prev, scheduledMsg])
+        toast.success("Message scheduled")
+        setInput("")
+        setAttachments([])
+        setScheduleDate(null)
+        setScheduleTime("")
       } catch (err) {
-        console.error(err);
-        toast.error("Failed to schedule message");
+        console.error(err)
+        toast.error((err as Error).message || "Failed to schedule message")
       }
-      return;
+      return
     }
 
     const { mediaUrls, body, failed } = await uploadAndBuildBody()
@@ -1008,7 +1143,6 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
     input,
     scheduleDate,
     scheduleTime,
-    buyer,
     attachments,
     selectedDid,
     preferredFrom,
@@ -1236,6 +1370,9 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
               {m.status === "sending" && (
                 <span className="ml-2 text-xs text-muted-foreground">Sending...</span>
               )}
+              {m.status === "scheduled" && (
+                <span className="ml-2 text-xs text-muted-foreground">Scheduled</span>
+              )}
               {m.status === "failed" && (
                 <button
                   className="ml-2 text-xs underline"
@@ -1255,6 +1392,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
           const pillLabel = didLabel
             ? `${isOutbound ? "From" : "To"}: ${didLabel}`
             : null;
+          const hasMedia = !!audioSrc || (m.media_urls && m.media_urls.length > 0)
           return (
             <div key={m.id} className="flex flex-col">
               <div
@@ -1266,35 +1404,33 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
                 {pillLabel && (
                   <span
                     className={cn(
-                      "absolute -top-1 rounded-full border bg-background px-2 py-0.5 text-[10px] text-muted-foreground shadow-sm",
+                      "absolute -top-1 rounded-full border bg-background/80 px-2 py-0.5 text-[10px] text-muted-foreground shadow-sm backdrop-blur",
                       isOutbound ? "right-0" : "left-0",
                     )}
                   >
                     {pillLabel}
                   </span>
                 )}
-                {(m.media_urls && m.media_urls.length > 0) || audioSrc ? (
+                {hasMedia || m.body ? (
                   <div className={bubbleClass}>
-                    <div className="space-y-1">
+                    <div className="space-y-2">
                       {audioSrc && (
-                        <audio controls className="rounded-xl w-full max-w-xs bg-white shadow">
-                          <source src={audioSrc} type="audio/mpeg" />
-                          Your browser does not support the audio element.
-                        </audio>
+                        <AudioBubble src={audioSrc} />
                       )}
-                      {m.media_urls?.map((url, idx) => (
-                        <MediaAttachment key={idx} url={url} />
-                      ))}
+
+                      {m.media_urls && m.media_urls.length > 0 && (
+                        <MediaGrid urls={m.media_urls} />
+                      )}
+
+                      {m.body && (
+                        <p className="whitespace-pre-wrap leading-relaxed">
+                          {m.body}
+                        </p>
+                      )}
                     </div>
-                    {!m.body && Status}
-                  </div>
-                ) : null}
-                {m.body && (
-                  <div className={cn(bubbleClass, m.media_urls?.length ? "mt-1" : "")}>
-                    <span>{m.body}</span>
                     {Status}
                   </div>
-                )}
+                ) : null}
               </div>
               <div
                 className={cn(
@@ -1364,7 +1500,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
                 New quick reply…
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link href="/settings/templates/quick_reply">Manage templates…</Link>
+                <Link href="/settings/templates/quick-reply">Manage templates…</Link>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

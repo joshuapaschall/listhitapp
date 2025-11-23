@@ -14,6 +14,8 @@ import { verifyTelnyxRequest } from "@/lib/telnyx"
 import { upsertAnonThread } from "@/services/thread-utils"
 import { getTelnyxApiKey } from "@/lib/voice-env"
 
+export const runtime = "nodejs"
+
 assertServer()
 
 export async function GET() {
@@ -73,6 +75,7 @@ export async function POST(request: NextRequest) {
   // ✅ Mirror incoming media to Supabase
   let mediaUrls: string[] = []
   if (rawMediaUrls.length) {
+    console.log("📎 Incoming media URLs", rawMediaUrls)
     const missingEnv: string[] = []
     if (!getTelnyxApiKey()) missingEnv.push("TELNYX_API_KEY")
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY)

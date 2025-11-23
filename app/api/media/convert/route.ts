@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server"
 import { mirrorMediaUrl } from "@/utils/mms.server"
 
+export const runtime = "nodejs"
+
 export async function POST(req: NextRequest) {
   const { url, direction } = await req.json()
   if (!url || typeof url !== "string") {
@@ -12,6 +14,9 @@ export async function POST(req: NextRequest) {
     return Response.json({ url: out })
   } catch (err: any) {
     console.error("convert error", err)
-    return new Response(JSON.stringify({ error: err.message || "error" }), { status: 500 })
+    const message =
+      err?.message || "Media conversion is unavailable right now. Please retry later."
+    const status = err?.message?.toLowerCase().includes("ffmpeg") ? 503 : 500
+    return new Response(JSON.stringify({ error: message }), { status })
   }
 }
