@@ -19,7 +19,7 @@ export async function convertToMp3(
   buffer?: Buffer,
 ): Promise<string> {
   assertServer()
-  const ffmpegBinary = ensureFfmpegAvailable()
+  const ffmpegBinary = await ensureFfmpegAvailable()
   console.log("Using FFmpeg binary for audio conversion", ffmpegBinary)
 
   const headers: Record<string, string> = {}

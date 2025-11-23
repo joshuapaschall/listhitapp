@@ -4,24 +4,22 @@ import fs from "fs"
 
 let configuredPath: string | null = null
 
-export function ensureFfmpegAvailable(): string {
+export async function ensureFfmpegAvailable(): Promise<string> {
   if (configuredPath) return configuredPath
 
   const candidate = process.env.FFMPEG_PATH || ffmpegPath
-
   if (!candidate) {
-    const message = "FFmpeg binary path is not configured"
-    console.error(message, { ffmpegPath })
-    throw new Error(message)
+    throw new Error("FFmpeg binary path is not configured")
   }
 
   const resolved = candidate
 
-  const exists = fs.existsSync(resolved)
-  console.log("FFmpeg preflight", { path: resolved, exists })
-
-  if (!exists) {
-    console.warn("FFmpeg binary not found at", resolved, "continuing anyway")
+  try {
+    if (!fs.existsSync(resolved)) {
+      console.warn("FFmpeg binary not found at", resolved, "continuing anyway")
+    }
+  } catch (err) {
+    console.warn("Error checking FFmpeg path", resolved, err)
   }
 
   ffmpeg.setFfmpegPath(resolved)
