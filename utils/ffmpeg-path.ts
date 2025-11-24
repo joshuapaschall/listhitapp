@@ -4,27 +4,40 @@ import fs from "fs"
 
 let configuredPath: string | null = null
 
-export function ensureFfmpegAvailable(): string {
+export async function ensureFfmpegAvailable(): Promise<string> {
   if (configuredPath) return configuredPath
 
-  const candidate = process.env.FFMPEG_PATH || ffmpegPath
+  const envPath = process.env.FFMPEG_PATH
+  const defaultPath = ffmpegPath || ""
+  const fallbackPath = "/var/task/node_modules/ffmpeg-static/ffmpeg"
+  const candidates = [envPath, defaultPath, fallbackPath].filter(Boolean) as string[]
 
-  if (!candidate) {
-    const message = "FFmpeg binary path is not configured"
-    console.error(message, { ffmpegPath })
-    throw new Error(message)
+  if (!candidates.length) {
+    throw new Error("FFmpeg binary path is not configured")
   }
 
-  const resolved = candidate
+  let resolved: string | null = null
 
-  const exists = fs.existsSync(resolved)
-  console.log("FFmpeg preflight", { path: resolved, exists })
-
-  if (!exists) {
-    console.warn("FFmpeg binary not found at", resolved, "continuing anyway")
+  for (const candidate of candidates) {
+    try {
+      if (fs.existsSync(candidate)) {
+        resolved = candidate
+        break
+      }
+    } catch (err) {
+      console.warn("Error checking FFmpeg path", candidate, err)
+    }
   }
 
-  ffmpeg.setFfmpegPath(resolved)
-  configuredPath = resolved
-  return resolved
+  const selected = resolved ?? candidates[0]
+
+  if (resolved) {
+    console.log("Using FFmpeg binary for audio conversion", selected)
+  } else {
+    console.warn("FFmpeg binary not found at any candidate paths", candidates)
+  }
+
+  ffmpeg.setFfmpegPath(selected)
+  configuredPath = selected
+  return selected
 }

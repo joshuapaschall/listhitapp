@@ -12,7 +12,6 @@ import { ensurePublicMediaUrls } from "@/utils/mms.server"
 import { normalizePhone, formatPhoneE164 } from "@/lib/dedup-utils"
 import { verifyTelnyxRequest } from "@/lib/telnyx"
 import { upsertAnonThread } from "@/services/thread-utils"
-import { getTelnyxApiKey } from "@/lib/voice-env"
 
 export const runtime = "nodejs"
 
@@ -76,37 +75,18 @@ export async function POST(request: NextRequest) {
   let mediaUrls: string[] = []
   if (rawMediaUrls.length) {
     console.log("📎 Incoming media URLs", rawMediaUrls)
-    const missingEnv: string[] = []
-    if (!getTelnyxApiKey()) missingEnv.push("TELNYX_API_KEY")
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY)
-      missingEnv.push("SUPABASE_SERVICE_ROLE_KEY")
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL)
-      missingEnv.push("NEXT_PUBLIC_SUPABASE_URL")
-
-    if (missingEnv.length) {
-      const message =
-        `Missing required environment variables: ${missingEnv.join(", ")}`
-      console.error(`❌ ${message} – incoming media cannot be stored`)
-      return new NextResponse(`${message}. Please configure them.`, {
-        status: 500,
-      })
-    }
-
     try {
       mediaUrls = await ensurePublicMediaUrls(rawMediaUrls, "incoming")
-      if (!mediaUrls.length && rawMediaUrls.length) {
-        console.warn(
-          "⚠️ ensurePublicMediaUrls returned empty array",
-          {
-            rawMediaUrls,
-            mediaUrls,
-          },
-        )
-      }
-      console.log("📁 Incoming media saved to Supabase:", mediaUrls)
     } catch (err) {
-      console.error("❌ Failed to mirror or convert media", err)
+      console.error("Failed to mirror incoming media", err)
+      // Fallback so we still persist the message even if mirroring fails.
+      mediaUrls = rawMediaUrls
     }
+  }
+
+  if (!text && !mediaUrls.length && !rawMediaUrls.length) {
+    console.log("[telnyx-incoming] dropping empty inbound message with no media")
+    return NextResponse.json({ received: true, skipped: true }, { status: 200 })
   }
 
   if (!from) {
