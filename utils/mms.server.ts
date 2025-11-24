@@ -109,19 +109,36 @@ export async function mirrorMediaUrl(
     }
 
     if (isAudio) {
-      const converted = await convertToMp3(inputUrl, direction, buffer)
-      return converted
+      try {
+        const converted = await convertToMp3(
+          inputUrl,
+          direction,
+          buffer,
+          contentType,
+          ext,
+        )
+        return converted
+      } catch (err) {
+        console.error("❌ convertToMp3 failed, uploading original instead", err)
+        return uploadBuffer(buffer, contentType, ext || ".bin", direction)
+      }
     }
 
     if (isVideo) {
       try {
-        const converted = await convertToMp4(inputUrl, direction, buffer)
+        const converted = await convertToMp4(
+          inputUrl,
+          direction,
+          buffer,
+          contentType,
+          ext,
+        )
         return converted
       } catch (err) {
         console.error("❌ convertToMp4 failed", err)
         if (direction === "incoming") {
           try {
-            return await uploadBuffer(buffer, "video/mp4", ".mp4", direction)
+            return await uploadBuffer(buffer, contentType, ext || ".mp4", direction)
           } catch (uploadErr) {
             console.error("❌ Failed to upload original after video conversion error", uploadErr)
           }
