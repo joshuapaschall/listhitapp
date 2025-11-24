@@ -79,9 +79,14 @@ export async function POST(request: NextRequest) {
       mediaUrls = await ensurePublicMediaUrls(rawMediaUrls, "incoming")
     } catch (err) {
       console.error("Failed to mirror incoming media", err)
-      // Don't crash the webhook; we'll just save the text part.
-      mediaUrls = []
+      // Fallback so we still persist the message even if mirroring fails.
+      mediaUrls = rawMediaUrls
     }
+  }
+
+  if (!text && !mediaUrls.length && !rawMediaUrls.length) {
+    console.log("[telnyx-incoming] dropping empty inbound message with no media")
+    return NextResponse.json({ received: true, skipped: true }, { status: 200 })
   }
 
   if (!from) {
