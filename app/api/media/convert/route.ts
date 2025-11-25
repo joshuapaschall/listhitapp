@@ -1,22 +1,30 @@
-import { NextRequest } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
+import { ensureFfmpegAvailable } from "@/utils/ffmpeg-path"
 import { mirrorMediaUrl } from "@/utils/mms.server"
 
 export const runtime = "nodejs"
 
 export async function POST(req: NextRequest) {
-  const { url, direction } = await req.json()
+  const body = await req.json().catch(() => ({}))
+  const { url, direction = "incoming" } = body
+
   if (!url || typeof url !== "string") {
-    return new Response(JSON.stringify({ error: "url required" }), { status: 400 })
+    return NextResponse.json({ error: "url required" }, { status: 400 })
   }
+
+  const ffmpegBinary = await ensureFfmpegAvailable()
+
+  if (!ffmpegBinary) {
+    console.warn("[/api/media/convert] FFmpeg not available, returning original URL")
+    return NextResponse.json({ url, converted: false })
+  }
+
   try {
-    const out = await mirrorMediaUrl(url, direction || "incoming")
+    const out = await mirrorMediaUrl(url, direction)
     if (!out) throw new Error("convert failed")
-    return Response.json({ url: out })
-  } catch (err: any) {
-    console.error("convert error", err)
-    const message =
-      err?.message || "Media conversion is unavailable right now. Please retry later."
-    const status = err?.message?.toLowerCase().includes("ffmpeg") ? 503 : 500
-    return new Response(JSON.stringify({ error: message }), { status })
+    return NextResponse.json({ url: out, converted: true })
+  } catch (err) {
+    console.error("[/api/media/convert] mirrorMediaUrl failed, falling back", err)
+    return NextResponse.json({ url, converted: false })
   }
 }
