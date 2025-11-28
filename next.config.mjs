@@ -1,14 +1,3 @@
-import path from "path"
-import ffmpegPath from "ffmpeg-static"
-
-const ffmpegBinary = ffmpegPath
-  ? path.relative(process.cwd(), ffmpegPath).replace(/\\/g, "/")
-  : null
-
-const ffmpegIncludes = ffmpegBinary
-  ? [ffmpegBinary.startsWith(".") ? ffmpegBinary : `./${ffmpegBinary}`]
-  : []
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   eslint: {
@@ -17,20 +6,18 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  env: {
-    FFMPEG_PATH: ffmpegPath || "",
-  },
   images: {
     unoptimized: true,
   },
-  experimental: ffmpegIncludes.length
-    ? {
-        outputFileTracingIncludes: {
-          "app/api/media/convert/route.ts": ffmpegIncludes,
-          "app/api/webhooks/telnyx-incoming-sms/route.ts": ffmpegIncludes,
-        },
-      }
-    : {},
+  experimental: {
+    outputFileTracingIncludes: {
+      // Ensure ffmpeg binary is bundled for any route that uses it
+      "app/api/media/convert/route.ts": ["./node_modules/ffmpeg-static/ffmpeg"],
+      "app/api/webhooks/telnyx-incoming-sms/route.ts": [
+        "./node_modules/ffmpeg-static/ffmpeg",
+      ],
+    },
+  },
 }
 
 export default nextConfig
