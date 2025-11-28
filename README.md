@@ -48,7 +48,7 @@ On Vercel, also ensure the following variables are defined:
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `ADMIN_TASKS_TOKEN` (generate with `openssl rand -hex 32`)
-- `NEXT_PUBLIC_MEDIA_BASE_URL` (optional override for branded short media links; falls back to `NEXT_PUBLIC_APP_URL`)
+- `NEXT_PUBLIC_MEDIA_BASE_URL` (optional override for branded short media links; falls back to `NEXT_PUBLIC_APP_URL`, then `SITE_URL`, then `https://app.listhit.io`)
 
 Webhook processes that mirror incoming SMS and MMS to Supabase also need
 `TELNYX_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY` and `NEXT_PUBLIC_SUPABASE_URL`.
