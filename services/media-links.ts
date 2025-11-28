@@ -1,17 +1,14 @@
 import { supabaseAdmin } from "@/lib/supabase"
 import { nanoid } from "nanoid"
 
+const APP_URL =
+  process.env.NEXT_PUBLIC_MEDIA_BASE_URL ||
+  process.env.NEXT_PUBLIC_APP_URL ||
+  process.env.SITE_URL ||
+  "https://app.listhit.io"
+
 function getBaseUrl() {
-  const rawBase =
-    process.env.NEXT_PUBLIC_MEDIA_BASE_URL ||
-    process.env.NEXT_PUBLIC_APP_URL ||
-    process.env.SITE_URL
-
-  if (!rawBase) {
-    throw new Error("No base URL configured for media links")
-  }
-
-  return rawBase.replace(/\/+$/, "")
+  return APP_URL.replace(/\/+$/, "")
 }
 
 export async function createShortMediaLink(
