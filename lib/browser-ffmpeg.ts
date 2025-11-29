@@ -71,8 +71,17 @@ export async function convertVideoToMp4(file: File): Promise<File> {
   const outputName = "output.mp4";
 
   // Clear the FS for safety
-  ffmpeg.FS("unlink", outputName).catch(() => {});
-  ffmpeg.FS("unlink", inputName).catch(() => {});
+  try {
+    ffmpeg.FS("unlink", outputName);
+  } catch (error) {
+    // ignore
+  }
+
+  try {
+    ffmpeg.FS("unlink", inputName);
+  } catch (error) {
+    // ignore
+  }
 
   ffmpeg.FS("writeFile", inputName, await fetchFile(file));
 
@@ -105,8 +114,17 @@ export async function convertVideoToMp4(file: File): Promise<File> {
   const blob = new Blob([data.buffer], { type: "video/mp4" });
 
   // Clean up
-  ffmpeg.FS("unlink", outputName).catch(() => {});
-  ffmpeg.FS("unlink", inputName).catch(() => {});
+  try {
+    ffmpeg.FS("unlink", outputName);
+  } catch (error) {
+    // ignore
+  }
+
+  try {
+    ffmpeg.FS("unlink", inputName);
+  } catch (error) {
+    // ignore
+  }
 
   return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".mp4", {
     type: "video/mp4",
@@ -129,8 +147,17 @@ export async function convertAudioToMp3(file: File): Promise<File> {
   const inputName = "input";
   const outputName = "output.mp3";
 
-  ffmpeg.FS("unlink", outputName).catch(() => {});
-  ffmpeg.FS("unlink", inputName).catch(() => {});
+  try {
+    ffmpeg.FS("unlink", outputName);
+  } catch (error) {
+    // ignore
+  }
+
+  try {
+    ffmpeg.FS("unlink", inputName);
+  } catch (error) {
+    // ignore
+  }
 
   ffmpeg.FS("writeFile", inputName, await fetchFile(file));
 
@@ -151,8 +178,17 @@ export async function convertAudioToMp3(file: File): Promise<File> {
   const data = ffmpeg.FS("readFile", outputName);
   const blob = new Blob([data.buffer], { type: "audio/mpeg" });
 
-  ffmpeg.FS("unlink", outputName).catch(() => {});
-  ffmpeg.FS("unlink", inputName).catch(() => {});
+  try {
+    ffmpeg.FS("unlink", outputName);
+  } catch (error) {
+    // ignore
+  }
+
+  try {
+    ffmpeg.FS("unlink", inputName);
+  } catch (error) {
+    // ignore
+  }
 
   return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".mp3", {
     type: "audio/mpeg",
