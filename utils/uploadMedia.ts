@@ -1,4 +1,10 @@
 import { supabase } from "@/lib/supabase"
+import {
+  convertAudioToMp3,
+  convertVideoToMp4,
+  needsAudioConversion,
+  needsVideoConversion,
+} from "@/lib/browser-ffmpeg"
 
 export const ALLOWED_MMS_EXTENSIONS = [
   ".jpg",
@@ -56,12 +62,26 @@ export async function uploadMediaFileWithMeta(
   file: File,
   direction: "incoming" | "outgoing" = "outgoing",
 ): Promise<{ url: string; storagePath: string; contentType: string }> {
-  const ext = file.name.split(".").pop() || "bin"
+  let workingFile = file
+
+  if (typeof window !== "undefined") {
+    try {
+      if (needsVideoConversion(workingFile)) {
+        workingFile = await convertVideoToMp4(workingFile)
+      } else if (needsAudioConversion(workingFile)) {
+        workingFile = await convertAudioToMp3(workingFile)
+      }
+    } catch (err) {
+      console.error("browser ffmpeg conversion failed, using original file", err)
+    }
+  }
+
+  const ext = workingFile.name.split(".").pop() || "bin"
   const key = `${direction}/${Date.now()}_${crypto.randomUUID()}.${ext}`
 
   const { data, error } = await supabase.storage
     .from(MEDIA_BUCKET)
-    .upload(key, file, { upsert: true, contentType: file.type || undefined })
+    .upload(key, workingFile, { upsert: true, contentType: workingFile.type || undefined })
 
   if (error) {
     console.error("[uploadMediaFile] Supabase upload error", error)
@@ -77,6 +97,6 @@ export async function uploadMediaFileWithMeta(
   return {
     url,
     storagePath,
-    contentType: file.type || "application/octet-stream",
+    contentType: workingFile.type || "application/octet-stream",
   }
 }
