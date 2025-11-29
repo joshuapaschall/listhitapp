@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "swr": "^2.2.5",
+    "@ffmpeg/ffmpeg": "^0.12.10",
     "@hookform/resolvers": "^3.9.1",
     "@noble/ed25519": "^2.3.0",
     "@noble/hashes": "^1.8.0",
