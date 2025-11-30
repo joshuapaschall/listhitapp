@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import DOMPurify from "dompurify"
+import createDOMPurify from "dompurify"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -72,10 +72,16 @@ export default function EmailBuilder({ value, onChange }: EmailBuilderProps) {
   const [mode, setMode] = useState<"blocks" | "markdown">(value?.format || "blocks")
   const [dragging, setDragging] = useState<string | null>(null)
 
+  const sanitizer = useMemo(() => {
+    if (typeof window === "undefined") return null
+    return createDOMPurify(window)
+  }, [])
+
   const sanitizedHtml = useMemo(() => {
     const html = mode === "blocks" ? renderBlocks(blocks) : basicMarkdownToHtml(markdown)
-    return DOMPurify.sanitize(html)
-  }, [blocks, markdown, mode])
+    if (!sanitizer) return html
+    return sanitizer.sanitize(html)
+  }, [blocks, markdown, mode, sanitizer])
 
   useEffect(() => {
     if (!onChange) return
