@@ -374,7 +374,8 @@ following variables in `.env.local`:
 - `TELNYX_DEFAULT_CALLER_ID` – default caller ID (e.g., your DID) for outbound calls
 - `CALL_CONTROL_APP_ID` – Voice connection ID used for `/v2/telephony_credentials` (legacy `VOICE_CONNECTION_ID` / `TELNYX_VOICE_CONNECTION_ID` are still read as fallbacks)
 - `VOICE_SYNC_SECRET_KEY`
-- `SENDFOX_API_TOKEN` (optional, required for SendFox integration)
+- `SENDFOX_API_TOKEN` (optional fallback for SendFox integration)
+- `SENDFOX_CLIENT_ID` and `SENDFOX_CLIENT_SECRET` (required for per-user SendFox OAuth)
 - `SENDFOX_DEFAULT_LIST_ID` (optional, default list for new contacts)
 - `SENDFOX_DELETED_LIST_ID` (optional, list ID for deleted contacts)
 - If migrating from older setups, `SENDFOX_API_KEY` is still accepted as a fallback but will be removed later.

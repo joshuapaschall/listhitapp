@@ -1,11 +1,15 @@
 import { createLogger } from "@/lib/logger"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getSendfoxToken } from "@/lib/sendfox-env"
+import { getActiveSendFoxToken, getDefaultSendFoxToken } from "@/services/sendfox-auth-service"
 
 const log = createLogger("sendfox-service")
 
-const apiKey = getSendfoxToken()
 const API_BASE = "https://api.sendfox.com"
+
+interface SendFoxRequestOptions extends RequestInit {
+  token?: string
+}
 
 export interface SendFoxList {
   id: number
@@ -54,7 +58,8 @@ export function createSendFoxError(status: number, text: string) {
   return new SendFoxError(status, info.type, info.message, text)
 }
 
-async function sendfoxRequest(path: string, options: RequestInit = {}) {
+async function sendfoxRequest(path: string, options: SendFoxRequestOptions = {}) {
+  const apiKey = options.token || getSendfoxToken()
   if (!apiKey) {
     throw new SendFoxError(401, "unauthorized", "SendFox API token not configured")
   }
@@ -62,15 +67,16 @@ async function sendfoxRequest(path: string, options: RequestInit = {}) {
   const RETRY_DELAY_MS = process.env.NODE_ENV === "test" ? 0 : 1000
   let attempt = 0
   let lastErr: any
+  const { token, ...requestOptions } = options
   while (attempt < 2) {
     try {
       const res = await fetch(`${API_BASE}${path}`, {
-        ...options,
+        ...requestOptions,
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
           Authorization: `Bearer ${apiKey}`,
-          ...(options.headers || {}),
+          ...(requestOptions.headers || {}),
         },
       })
 
@@ -113,6 +119,7 @@ export async function upsertContact(
   lists: number[] = [],
   tags?: string[],
   ip_address?: string,
+  token?: string,
 ) {
   const body: any = { email }
   if (firstName) body.first_name = firstName
@@ -122,10 +129,14 @@ export async function upsertContact(
   if (ip_address) body.ip_address = ip_address
 
   try {
-    return await sendfoxRequest("/contacts", {
-      method: "POST",
-      body: JSON.stringify(body),
-    })
+    return await sendfoxRequest(
+      "/contacts",
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+        token,
+      },
+    )
   } catch (err: any) {
     if (
       err instanceof SendFoxError &&
@@ -133,7 +144,7 @@ export async function upsertContact(
       err.details?.toLowerCase().includes("exists")
     ) {
       log("warn", "Contact already exists, reusing", { email, details: err.details })
-      const existing = await findContactByEmail(email)
+      const existing = await findContactByEmail(email, token)
       if (existing) return existing
     }
     log("error", "Failed to upsert contact", { email, error: err })
@@ -144,17 +155,22 @@ export async function upsertContact(
 export async function addContactToList(
   listId: number,
   contact: { email: string; first_name?: string; last_name?: string },
+  token?: string,
 ) {
   try {
-    return await sendfoxRequest(`/contacts`, {
-      method: "POST",
-      body: JSON.stringify({
-        email: contact.email,
-        first_name: contact.first_name,
-        last_name: contact.last_name,
-        lists: [listId],
-      }),
-    })
+    return await sendfoxRequest(
+      `/contacts`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          email: contact.email,
+          first_name: contact.first_name,
+          last_name: contact.last_name,
+          lists: [listId],
+        }),
+        token,
+      },
+    )
   } catch (err: any) {
     if (
       err instanceof SendFoxError &&
@@ -162,7 +178,7 @@ export async function addContactToList(
       err.details?.toLowerCase().includes("exists")
     ) {
       log("warn", "Contact already exists", { listId, email: contact.email })
-      return findContactByEmail(contact.email)
+      return findContactByEmail(contact.email, token)
     }
     log("error", "Failed to add contact to SendFox list", {
       listId,
@@ -173,20 +189,24 @@ export async function addContactToList(
   }
 }
 
-export async function findContactByEmail(email: string) {
-  const data = await sendfoxRequest(`/contacts?email=${encodeURIComponent(email)}`)
+export async function findContactByEmail(email: string, token?: string) {
+  const data = await sendfoxRequest(`/contacts?email=${encodeURIComponent(email)}`, { token })
   if (!data) return null
   if (Array.isArray(data)) return data[0] || null
   if (Array.isArray(data.data)) return data.data[0] || null
   return data
 }
 
-export async function createList(name: string) {
+export async function createList(name: string, token?: string) {
   try {
-    const resp = await sendfoxRequest("/lists", {
-      method: "POST",
-      body: JSON.stringify({ name }),
-    })
+    const resp = await sendfoxRequest(
+      "/lists",
+      {
+        method: "POST",
+        body: JSON.stringify({ name }),
+        token,
+      },
+    )
     const list = resp?.data ? resp.data : resp
     return list
   } catch (err: any) {
@@ -195,18 +215,19 @@ export async function createList(name: string) {
   }
 }
 
-export async function deleteContact(contactId: number) {
-  return sendfoxRequest(`/contacts/${contactId}`, { method: "DELETE" })
+export async function deleteContact(contactId: number, token?: string) {
+  return sendfoxRequest(`/contacts/${contactId}`, { method: "DELETE", token })
 }
 
-export async function removeContactFromList(listId: number, contactId: number) {
+export async function removeContactFromList(listId: number, contactId: number, token?: string) {
   return sendfoxRequest(`/lists/${listId}/contacts/${contactId}`, {
     method: "DELETE",
+    token,
   })
 }
 
-export async function getOrCreateList(name: string) {
-  const listsResp = (await sendfoxRequest("/lists")) as any
+export async function getOrCreateList(name: string, token?: string) {
+  const listsResp = (await sendfoxRequest("/lists", { token })) as any
   const lists = Array.isArray(listsResp?.data)
     ? listsResp.data
     : Array.isArray(listsResp)
@@ -219,6 +240,7 @@ export async function getOrCreateList(name: string) {
     return await sendfoxRequest("/lists", {
       method: "POST",
       body: JSON.stringify({ name }),
+      token,
     })
   } catch (err: any) {
     if (
@@ -227,7 +249,7 @@ export async function getOrCreateList(name: string) {
       err.details?.toLowerCase().includes("exists")
     ) {
       log("warn", "List already exists, reusing", { name })
-      const resp = (await sendfoxRequest("/lists")) as any
+      const resp = (await sendfoxRequest("/lists", { token })) as any
       const lists = Array.isArray(resp?.data)
         ? resp.data
         : Array.isArray(resp)
@@ -241,10 +263,11 @@ export async function getOrCreateList(name: string) {
   }
 }
 
-export async function fetchLists() {
+export async function fetchLists(token?: string) {
   try {
     const resp = (await sendfoxRequest("/lists", {
       headers: { Accept: "application/json" },
+      token,
     })) as any
     const lists = Array.isArray(resp?.data) ? resp.data : Array.isArray(resp) ? resp : []
     if (lists.length === 0) return []
@@ -280,7 +303,7 @@ export async function fetchLists() {
   }
 }
 
-export async function resyncList(listId: number) {
+export async function resyncList(listId: number, token?: string) {
   const { data: group } = await supabaseAdmin
     .from("groups")
     .select("id")
@@ -300,24 +323,29 @@ export async function resyncList(listId: number) {
   let count = 0
   for (const b of buyers || []) {
     if (b.email) {
-      await addContactToList(listId, {
-        email: b.email,
-        first_name: b.fname || undefined,
-        last_name: b.lname || undefined,
-      })
+      await addContactToList(
+        listId,
+        {
+          email: b.email,
+          first_name: b.fname || undefined,
+          last_name: b.lname || undefined,
+        },
+        token,
+      )
       count += 1
     }
   }
   return { synced: count }
 }
 
-export async function fetchListContacts(listId: number) {
+export async function fetchListContacts(listId: number, token?: string) {
   const all: any[] = []
   let page = 1
   try {
     while (true) {
       const data = (await sendfoxRequest(`/lists/${listId}/contacts?page=${page}`, {
         headers: { Accept: "application/json" },
+        token,
       })) as any
       if (Array.isArray(data)) {
         all.push(...data)
@@ -337,12 +365,13 @@ export async function fetchListContacts(listId: number) {
   return all
 }
 
-export async function fetchUnsubscribed() {
+export async function fetchUnsubscribed(token?: string) {
   const all: any[] = []
   let page = 1
   while (true) {
     const data = (await sendfoxRequest(
       `/contacts/unsubscribed?page=${page}`,
+      { token },
     )) as any
     if (Array.isArray(data)) {
       all.push(...data)
@@ -358,7 +387,7 @@ export async function fetchUnsubscribed() {
   return all
 }
 
-export async function sendEmail(to: string, subject: string, html: string) {
+export async function sendEmail(to: string, subject: string, html: string, token?: string) {
   return sendfoxRequest("/content/emails", {
     method: "POST",
     body: JSON.stringify({
@@ -367,22 +396,67 @@ export async function sendEmail(to: string, subject: string, html: string) {
       html,
       do_not_send: false,
     }),
+    token,
   })
 }
 
-export async function getEmail(id: string) {
-  return sendfoxRequest(`/emails/${id}`)
+export async function getEmail(id: string, token?: string) {
+  return sendfoxRequest(`/emails/${id}`, { token })
 }
 
-export async function unsubscribe(email: string) {
+export async function unsubscribe(email: string, token?: string) {
   return sendfoxRequest("/unsubscribe", {
     method: "PATCH",
     body: JSON.stringify({ email }),
+    token,
   })
 }
 
-export async function deleteList(listId: number) {
-  return sendfoxRequest(`/lists/${listId}`, { method: "DELETE" })
+export async function deleteList(listId: number, token?: string) {
+  return sendfoxRequest(`/lists/${listId}`, { method: "DELETE", token })
+}
+
+export async function getSendFoxTokenForUser(userId?: string) {
+  if (userId) {
+    const record = await getActiveSendFoxToken(userId)
+    if (record?.access_token) return record.access_token
+  }
+  return getDefaultSendFoxToken()
+}
+
+export async function createSendFoxClient(userId?: string) {
+  const token = await getSendFoxTokenForUser(userId)
+  if (!token) {
+    throw new SendFoxError(401, "unauthorized", "SendFox API token not configured")
+  }
+  return {
+    upsertContact: (
+      email: string,
+      firstName?: string,
+      lastName?: string,
+      lists: number[] = [],
+      tags?: string[],
+      ip_address?: string,
+    ) => upsertContact(email, firstName, lastName, lists, tags, ip_address, token),
+    addContactToList: (
+      listId: number,
+      contact: { email: string; first_name?: string; last_name?: string },
+    ) => addContactToList(listId, contact, token),
+    getOrCreateList: (name: string) => getOrCreateList(name, token),
+    createList: (name: string) => createList(name, token),
+    fetchLists: () => fetchLists(token),
+    resyncList: (listId: number) => resyncList(listId, token),
+    fetchListContacts: (listId: number) => fetchListContacts(listId, token),
+    fetchUnsubscribed: () => fetchUnsubscribed(token),
+    sendEmail: (to: string, subject: string, html: string) => sendEmail(to, subject, html, token),
+    getEmail: (id: string) => getEmail(id, token),
+    unsubscribe: (email: string) => unsubscribe(email, token),
+    deleteList: (listId: number) => deleteList(listId, token),
+    deleteContact: (contactId: number) => deleteContact(contactId, token),
+    findContactByEmail: (email: string) => findContactByEmail(email, token),
+    removeContactFromList: (listId: number, contactId: number) =>
+      removeContactFromList(listId, contactId, token),
+  }
 }
 
 export default {
@@ -401,4 +475,6 @@ export default {
   deleteContact,
   findContactByEmail,
   removeContactFromList,
+  getSendFoxTokenForUser,
+  createSendFoxClient,
 }
