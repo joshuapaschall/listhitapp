@@ -100,6 +100,7 @@ export async function POST(request: NextRequest) {
       .select("buyer_id, buyers!inner(id)")
       .in("group_id", groupIds)
       .eq("buyers.sendfox_hidden", false)
+      .eq("buyers.sendfox_suppressed", false)
     if (groupErr) {
       console.error("Error fetching group buyers", groupErr)
       return new Response(JSON.stringify({ error: "Failed to fetch recipients" }), { status: 500 })
@@ -110,11 +111,16 @@ export async function POST(request: NextRequest) {
   }
 
   let finalIds = Array.from(idSet)
-  const { data: allowed, error: allowErr } = await supabase
+  let allowedQuery = supabase
     .from("buyers")
     .select("id")
     .in("id", finalIds)
     .eq("sendfox_hidden", false)
+    .eq("sendfox_suppressed", false)
+  if (campaign.channel === "email") {
+    allowedQuery = allowedQuery.eq("can_receive_email", true)
+  }
+  const { data: allowed, error: allowErr } = await allowedQuery
   if (allowErr) {
     console.error("Error filtering recipients", allowErr)
     return new Response(JSON.stringify({ error: "Failed to fetch recipients" }), { status: 500 })
@@ -133,13 +139,18 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const { data: recipients, error: recErr } = await supabase
+  let recipientsQuery = supabase
     .from("campaign_recipients")
     .select(
       "id,buyer_id,status,buyers!inner(id,fname,lname,email,phone,phone2,phone3,can_receive_sms,can_receive_email,sendfox_hidden)"
     )
     .eq("campaign_id", campaignId)
     .eq("buyers.sendfox_hidden", false)
+    .eq("buyers.sendfox_suppressed", false)
+  if (campaign.channel === "email") {
+    recipientsQuery = recipientsQuery.eq("buyers.can_receive_email", true)
+  }
+  const { data: recipients, error: recErr } = await recipientsQuery
 
   if (recErr) {
     console.error("Error fetching recipients", recErr)
