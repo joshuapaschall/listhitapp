@@ -78,6 +78,11 @@ CREATE TABLE IF NOT EXISTS buyers (
   first_time_buyer boolean,
   sendfox_contact_id integer,
   sendfox_hidden boolean NOT NULL DEFAULT false,
+  sendfox_suppressed boolean NOT NULL DEFAULT false,
+  sendfox_bounced_at timestamptz,
+  sendfox_complained_at timestamptz,
+  sendfox_double_opt_in boolean NOT NULL DEFAULT false,
+  sendfox_double_opt_in_at timestamptz,
   deleted_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
@@ -379,9 +384,31 @@ CREATE TABLE IF NOT EXISTS campaign_recipients (
   status text,
   error text,
   opened_at timestamptz,
+  clicked_at timestamptz,
   bounced_at timestamptz,
+  complained_at timestamptz,
   unsubscribed_at timestamptz
 );
+
+-- Consent logging per SendFox list
+CREATE TABLE IF NOT EXISTS buyer_list_consent (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  buyer_id uuid REFERENCES buyers(id) ON DELETE SET NULL,
+  email text NOT NULL,
+  email_norm text GENERATED ALWAYS AS (lower(trim(email))) STORED,
+  list_id integer NOT NULL,
+  double_opt_in boolean NOT NULL DEFAULT false,
+  consent_token text,
+  consented_at timestamptz,
+  confirmed_at timestamptz,
+  ip_address text,
+  user_agent text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS buyer_list_consent_token_idx ON buyer_list_consent(consent_token) WHERE consent_token IS NOT NULL;
+ALTER TABLE buyer_list_consent
+  ADD CONSTRAINT buyer_list_consent_email_list_unique UNIQUE (email_norm, list_id);
 
 -- Lookup table storing last SMS sender number for a buyer
 CREATE TABLE IF NOT EXISTS buyer_sms_senders (

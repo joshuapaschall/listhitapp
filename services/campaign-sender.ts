@@ -1,4 +1,4 @@
-import { sendEmail } from "./sendfox-service"
+import { SendFoxError, sendEmail } from "./sendfox-service"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createLogger } from "@/lib/logger"
 import { renderTemplate } from "@/lib/utils"
@@ -6,6 +6,11 @@ import { renderTemplate } from "@/lib/utils"
 const log = createLogger("campaign-sender")
 
 export const EMAIL_BATCH_SIZE = 50
+const EMAIL_QUEUE_CONCURRENCY = Number(process.env.EMAIL_QUEUE_CONCURRENCY || 2)
+const SENDFOX_SEND_DELAY_MS = Number(process.env.SENDFOX_SEND_DELAY_MS || 750)
+const SENDFOX_RATE_BACKOFF_MS = Number(process.env.SENDFOX_RATE_BACKOFF_MS || 2000)
+const SENDFOX_RATE_MAX_RETRY = Number(process.env.SENDFOX_RATE_MAX_RETRY || 3)
+const SENDFOX_QUEUE_SPACING_MS = Number(process.env.SENDFOX_QUEUE_SPACING_MS || 500)
 
 export interface EmailOptions {
   to: string | string[]
@@ -46,6 +51,11 @@ function requireAdmin() {
   return supabaseAdmin
 }
 
+function sleep(ms: number) {
+  if (!ms) return Promise.resolve()
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 export async function sendEmailCampaign({ to, subject, html, dryRun }: EmailOptions): Promise<string> {
   const recipients = Array.isArray(to) ? to : [to]
   if (dryRun) {
@@ -73,11 +83,12 @@ export async function queueEmailCampaign(
     : new Date().toISOString()
   const batches = chunk(payload.contacts || [], EMAIL_BATCH_SIZE)
   if (!batches.length) return []
-  const rows = batches.map((batch) => ({
+  const baseTime = new Date(scheduledFor).getTime()
+  const rows = batches.map((batch, idx) => ({
     campaign_id: payload.campaignId ?? null,
     payload: { ...payload, contacts: batch },
     contact_count: batch.length,
-    scheduled_for: scheduledFor,
+    scheduled_for: new Date(baseTime + idx * SENDFOX_QUEUE_SPACING_MS).toISOString(),
     created_by: opts.createdBy ?? null,
     status: "pending",
   }))
@@ -129,13 +140,14 @@ async function refreshCampaignStatus(campaignId: string) {
 export async function processEmailQueue(limit = 5) {
   const supabase = requireAdmin()
   const now = new Date().toISOString()
+  const effectiveLimit = Math.min(limit, EMAIL_QUEUE_CONCURRENCY)
   const { data: jobs, error } = await supabase
     .from("email_campaign_queue")
     .select("id,payload,campaign_id,status")
     .eq("status", "pending")
     .lte("scheduled_for", now)
     .order("scheduled_for", { ascending: true })
-    .limit(limit)
+    .limit(effectiveLimit)
 
   if (error) {
     console.error("Failed to fetch email queue", error)
@@ -143,6 +155,19 @@ export async function processEmailQueue(limit = 5) {
   }
 
   let sent = 0
+
+  async function sendWithBackoff(contact: string, subject: string, html: string, attempt = 0): Promise<string> {
+    try {
+      return await sendEmailCampaign({ to: contact, subject, html })
+    } catch (err: any) {
+      if (err instanceof SendFoxError && err.type === "rate_limited" && attempt < SENDFOX_RATE_MAX_RETRY) {
+        const delay = SENDFOX_RATE_BACKOFF_MS * Math.max(1, attempt + 1)
+        await sleep(delay)
+        return sendWithBackoff(contact, subject, html, attempt + 1)
+      }
+      throw err
+    }
+  }
 
   for (const job of jobs || []) {
     await supabase
@@ -170,7 +195,7 @@ export async function processEmailQueue(limit = 5) {
         } catch (err) {
           console.error("Short.io replacement failed", err)
         }
-        const providerId = await sendEmailCampaign({ to: contact.email, subject, html })
+        const providerId = await sendWithBackoff(contact.email, subject, html)
         lastProvider = providerId
         sent += 1
         await updateRecipientStatus(job.campaign_id, contact.recipientId, {
@@ -178,6 +203,7 @@ export async function processEmailQueue(limit = 5) {
           sent_at: new Date().toISOString(),
           provider_id: providerId,
         })
+        await sleep(SENDFOX_SEND_DELAY_MS)
       }
 
       await supabase
@@ -190,6 +216,14 @@ export async function processEmailQueue(limit = 5) {
       }
     } catch (err: any) {
       console.error("Queue dispatch failed", err)
+      if (err instanceof SendFoxError && err.type === "rate_limited") {
+        const retryAt = new Date(Date.now() + SENDFOX_RATE_BACKOFF_MS).toISOString()
+        await supabase
+          .from("email_campaign_queue")
+          .update({ status: "pending", scheduled_for: retryAt, error: err?.message || "rate limited" })
+          .eq("id", job.id)
+        continue
+      }
       await supabase
         .from("email_campaign_queue")
         .update({ status: "error", error: err?.message || String(err) })
