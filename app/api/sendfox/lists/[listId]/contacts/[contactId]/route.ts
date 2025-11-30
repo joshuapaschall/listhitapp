@@ -1,10 +1,11 @@
 import { NextRequest } from "next/server"
-import { removeContactFromList } from "@/services/sendfox-service"
+import { supabaseAdmin } from "@/lib/supabase"
+import { moveContactToDeletedList, removeContactFromList } from "@/services/sendfox-service"
 import { withSendfoxAuth } from "@/services/sendfox-auth"
 import { loadSendfoxRouteContext } from "../../../_auth"
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { listId: string; contactId: string } },
 ) {
   try {
@@ -23,6 +24,30 @@ export async function DELETE(
         status: 400,
       })
     }
+    let contactEmail: string | null = null
+    const search = req.nextUrl.searchParams
+    if (search.get("email")) {
+      contactEmail = search.get("email")
+    }
+    if (!contactEmail && supabaseAdmin) {
+      const { data: buyer } = await supabaseAdmin
+        .from("buyers")
+        .select("email")
+        .eq("sendfox_contact_id", contactId)
+        .maybeSingle()
+      contactEmail = buyer?.email || null
+    }
+
+    if (contactEmail) {
+      try {
+        await withSendfoxAuth(authContext, async () =>
+          moveContactToDeletedList({ email: contactEmail || undefined }),
+        )
+      } catch (err) {
+        console.warn("SendFox Deleted list fallback failed", err)
+      }
+    }
+
     await withSendfoxAuth(authContext, async () => removeContactFromList(listId, contactId))
     return new Response(JSON.stringify({ success: true }))
   } catch (err: any) {

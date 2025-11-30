@@ -62,6 +62,24 @@ select cron.schedule(
         url := '${DISPOTOOL_BASE_URL}/api/email-metrics/update',
         headers := jsonb_build_object('Content-Type','application/json'),
         body := '{}'::jsonb
+  )$$
+);
+
+-- Hourly SendFox reconciliation (dry-run by default)
+select cron.unschedule('reconcile-sendfox-lists')
+  where exists (select 1 from cron.job where jobname = 'reconcile-sendfox-lists');
+
+select cron.schedule(
+  'reconcile-sendfox-lists',
+  '0 * * * *',
+  $$select
+      net.http_post(
+        url := '${DISPOTOOL_BASE_URL}/api/sendfox/reconcile',
+        headers := jsonb_build_object(
+          'Content-Type','application/json',
+          'Authorization', 'Bearer ${SUPABASE_SERVICE_ROLE_KEY}'
+        ),
+        body := jsonb_build_object('dryRun', true)
       )$$
 );
 

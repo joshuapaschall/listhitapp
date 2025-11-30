@@ -1,7 +1,7 @@
 import { cookies } from "next/headers"
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
 import { getUserRole } from "@/lib/get-user-role"
-import { fetchLists, resyncList, type SendFoxList } from "@/services/sendfox-service"
+import { fetchLists, reconcileSendfoxList, type SendFoxList } from "@/services/sendfox-service"
 import {
   buildSendfoxContextFromIntegration,
   getDefaultSendfoxContext,
@@ -18,10 +18,11 @@ export const dynamic = "force-dynamic"
 export async function resyncListAction(formData: FormData) {
   "use server"
   const id = Number(formData.get("id"))
+  const mode = (formData.get("mode") as string) || "preview"
   if (id) {
-    await resyncList(id)
-    revalidatePath("/admin/sendfox-lists")
+    await reconcileSendfoxList(id, { dryRun: mode !== "apply" })
   }
+  revalidatePath("/admin/sendfox-lists")
 }
 
 export default async function AdminSendFoxListsPage() {
@@ -57,6 +58,8 @@ export default async function AdminSendFoxListsPage() {
     error = err instanceof Error ? err.message : "An unexpected error occurred"
   }
 
+  const syncError = error || lists.find((l) => l.last_sync_status === "error")?.last_sync_message
+
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-4">SendFox Lists</h1>
@@ -67,7 +70,8 @@ export default async function AdminSendFoxListsPage() {
             <TableHead>Contacts</TableHead>
             <TableHead>Created</TableHead>
             <TableHead>CRM Group</TableHead>
-            <TableHead></TableHead>
+            <TableHead>Sync Status</TableHead>
+            <TableHead className="w-[220px]"></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -78,10 +82,29 @@ export default async function AdminSendFoxListsPage() {
               <TableCell>{new Date(list.created_at).toLocaleDateString()}</TableCell>
               <TableCell>{list.group?.name || "-"}</TableCell>
               <TableCell>
-                <form action={resyncListAction}>
+                <div className="flex flex-col gap-1 text-sm">
+                  <div className="font-medium capitalize">
+                    {list.last_sync_status ? list.last_sync_status.replace("_", " ") : "n/a"}
+                    {list.pending_mismatches ? ` • ${list.pending_mismatches} pending` : ""}
+                  </div>
+                  {list.last_sync_at ? (
+                    <div className="text-muted-foreground">
+                      {new Date(list.last_sync_at).toLocaleString()}
+                    </div>
+                  ) : null}
+                  {list.last_sync_message ? (
+                    <div className="text-destructive text-xs">{list.last_sync_message}</div>
+                  ) : null}
+                </div>
+              </TableCell>
+              <TableCell>
+                <form action={resyncListAction} className="flex gap-2">
                   <input type="hidden" name="id" value={list.id} />
-                  <Button type="submit" size="sm" variant="outline">
-                    🔁 Resync
+                  <Button type="submit" size="sm" variant="outline" name="mode" value="preview">
+                    🧪 Preview Diff
+                  </Button>
+                  <Button type="submit" size="sm" variant="default" name="mode" value="apply">
+                    🔁 Apply Sync
                   </Button>
                 </form>
               </TableCell>
@@ -89,7 +112,7 @@ export default async function AdminSendFoxListsPage() {
           ))}
         </TableBody>
       </Table>
-      <ErrorToast message={error} />
+      <ErrorToast message={syncError} />
       {!authReady && !error ? (
         <p className="text-sm text-muted-foreground mt-4">SendFox is not connected.</p>
       ) : null}
