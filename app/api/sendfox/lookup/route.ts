@@ -1,30 +1,26 @@
 import { NextRequest } from "next/server"
-import { getSendfoxToken } from "@/lib/sendfox-env"
+import { loadSendfoxRouteContext } from "../_auth"
+import { findContactByEmail } from "@/services/sendfox-service"
+import { withSendfoxAuth } from "@/services/sendfox-auth"
 
 export async function GET(req: NextRequest) {
   try {
+    const { authContext, response } = await loadSendfoxRouteContext()
+    if (response) return response
+    if (!authContext) {
+      return new Response(
+        JSON.stringify({ connected: false, error: "SendFox account not connected" }),
+        { status: 200 },
+      )
+    }
+
     const email = req.nextUrl.searchParams.get("email")
     if (!email) {
       return new Response(JSON.stringify({ error: "email required" }), {
         status: 400,
       })
     }
-    const token = getSendfoxToken()
-    const resp = await fetch(
-      `https://api.sendfox.com/contacts?email=${encodeURIComponent(email)}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-      },
-    )
-    const data = await resp.json()
-    if (!resp.ok) {
-      return new Response(JSON.stringify({ error: data.error || data.message || "error" }), {
-        status: resp.status,
-      })
-    }
+    const data = await withSendfoxAuth(authContext, async () => findContactByEmail(email))
     return new Response(JSON.stringify(data), { status: 200 })
   } catch (err: any) {
     return new Response(JSON.stringify({ error: err.message || "error" }), {

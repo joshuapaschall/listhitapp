@@ -1,11 +1,16 @@
 import { NextRequest } from "next/server"
-import { getSendfoxToken } from "@/lib/sendfox-env"
+import { loadSendfoxRouteContext } from "../_auth"
+import { upsertContact } from "@/services/sendfox-service"
+import { withSendfoxAuth } from "@/services/sendfox-auth"
 
 export async function POST(req: NextRequest) {
   try {
-    const token = getSendfoxToken()
-    if (!token) {
-      return new Response(JSON.stringify({ error: "missing SENDFOX_API_TOKEN" }), { status: 401 })
+    const { authContext, response } = await loadSendfoxRouteContext()
+    if (response) return response
+    if (!authContext) {
+      return new Response(JSON.stringify({ connected: false, error: "SendFox not connected" }), {
+        status: 200,
+      })
     }
 
     const body = await req.json()
@@ -22,48 +27,18 @@ export async function POST(req: NextRequest) {
       return new Response(JSON.stringify({ error: "lists must be array of integers" }), { status: 400 })
     }
 
-    const baseUrl = "https://api.sendfox.com"
+    const contact = await withSendfoxAuth(authContext, async () =>
+      upsertContact(
+        email,
+        body?.first_name,
+        body?.last_name,
+        lists.map((n: any) => Number(n)),
+        body?.tags,
+        body?.ip_address,
+      ),
+    )
 
-    // 1) Look up existing by email
-    const lookupResp = await fetch(`${baseUrl}/contacts?email=${encodeURIComponent(email)}`, {
-      method: "GET",
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-      cache: "no-store",
-    })
-
-    let contactId: number | null = null
-    if (lookupResp.ok) {
-      const lookupData = await lookupResp.json().catch(() => null)
-      if (Array.isArray(lookupData?.data) && lookupData.data.length > 0) {
-        contactId = Number(lookupData.data[0]?.id) || null
-      }
-    }
-
-    // 2) Build payload – SendFox overwrites lists when posting same email
-    const payload: any = {
-      email,
-      first_name: body?.first_name,
-      last_name: body?.last_name,
-      lists: lists.map((n: any) => Number(n)),
-    }
-
-    // 3) POST create-or-overwrite
-    const resp = await fetch(`${baseUrl}/contacts`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    })
-
-    const data = await resp.json().catch(() => null)
-    if (!resp.ok) {
-      return new Response(JSON.stringify(data || { error: "sendfox error" }), { status: resp.status })
-    }
-
-    return new Response(JSON.stringify({ id: data?.id ?? contactId }), { status: 200 })
+    return new Response(JSON.stringify({ id: contact?.id ?? null, connected: true }), { status: 200 })
   } catch (err: any) {
     return new Response(JSON.stringify({ error: err?.message || "error" }), { status: 500 })
   }

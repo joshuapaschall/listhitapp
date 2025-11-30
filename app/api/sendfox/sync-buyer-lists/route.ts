@@ -1,8 +1,19 @@
 import { NextRequest } from "next/server"
 import { supabase } from "@/lib/supabase"
+import { withSendfoxAuth } from "@/services/sendfox-auth"
+import { loadSendfoxRouteContext } from "../_auth"
+import { upsertContact } from "@/services/sendfox-service"
 
 export async function POST(req: NextRequest) {
   try {
+    const { authContext, response } = await loadSendfoxRouteContext()
+    if (response) return response
+    if (!authContext) {
+      return new Response(JSON.stringify({ connected: false, error: "SendFox not connected" }), {
+        status: 200,
+      })
+    }
+
     const { buyerId } = await req.json()
     if (!buyerId) {
       return new Response(JSON.stringify({ error: "buyerId required" }), { status: 400 })
@@ -38,29 +49,11 @@ export async function POST(req: NextRequest) {
 
     console.log("sync-buyer-lists: computed listIds", { buyerId, listIds })
 
-    const base = process.env.DISPOTOOL_BASE_URL || ""
-    const resp = await fetch(`${base}/api/sendfox/contact`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: buyer.email, lists: listIds }),
-      cache: "no-store",
-    })
+    await withSendfoxAuth(authContext, async () =>
+      upsertContact(buyer.email, undefined, undefined, listIds),
+    )
 
-    const data = await resp.json().catch(() => ({}))
-    if (!resp.ok) {
-      console.error("sync-buyer-lists: sendfox error", {
-        buyerId,
-        listIds,
-        data,
-        status: resp.status,
-      })
-      return new Response(
-        JSON.stringify({ error: "sendfox sync failed", data }),
-        { status: 502 },
-      )
-    }
-
-    return new Response(JSON.stringify({ ok: true }), { status: 200 })
+    return new Response(JSON.stringify({ ok: true, connected: true }), { status: 200 })
   } catch (e: any) {
     return new Response(JSON.stringify({ error: e?.message || "error" }), { status: 500 })
   }

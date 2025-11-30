@@ -2,6 +2,12 @@ import { cookies } from "next/headers"
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
 import { getUserRole } from "@/lib/get-user-role"
 import { fetchLists, resyncList, type SendFoxList } from "@/services/sendfox-service"
+import {
+  buildSendfoxContextFromIntegration,
+  getDefaultSendfoxContext,
+  getSendfoxIntegration,
+  withSendfoxAuth,
+} from "@/services/sendfox-auth"
 import ErrorToast from "./error-toast"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
@@ -31,8 +37,22 @@ export default async function AdminSendFoxListsPage() {
 
   let lists: SendFoxList[] = []
   let error: string | null = null
+  let authReady = false
   try {
-    lists = await fetchLists()
+    const { data: session } = await supabase.auth.getUser()
+    const integration = session?.user
+      ? await getSendfoxIntegration(session.user.id).catch(() => null)
+      : null
+    const context = integration
+      ? buildSendfoxContextFromIntegration(integration)
+      : getDefaultSendfoxContext()
+
+    if (!context) {
+      error = "Connect SendFox to view lists"
+    } else {
+      authReady = true
+      lists = await withSendfoxAuth(context, async () => fetchLists())
+    }
   } catch (err) {
     error = err instanceof Error ? err.message : "An unexpected error occurred"
   }
@@ -70,6 +90,9 @@ export default async function AdminSendFoxListsPage() {
         </TableBody>
       </Table>
       <ErrorToast message={error} />
+      {!authReady && !error ? (
+        <p className="text-sm text-muted-foreground mt-4">SendFox is not connected.</p>
+      ) : null}
     </div>
   )
 }
