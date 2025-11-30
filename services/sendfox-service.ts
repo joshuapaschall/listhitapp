@@ -1,10 +1,14 @@
 import { createLogger } from "@/lib/logger"
 import { supabaseAdmin } from "@/lib/supabase"
-import { getSendfoxToken } from "@/lib/sendfox-env"
+import {
+  ensureSendfoxContextFresh,
+  getDefaultSendfoxContext,
+  getSendfoxAuthContext,
+  refreshSendfoxToken,
+} from "./sendfox-auth"
 
 const log = createLogger("sendfox-service")
 
-const apiKey = getSendfoxToken()
 const API_BASE = "https://api.sendfox.com"
 
 export interface SendFoxList {
@@ -54,14 +58,32 @@ export function createSendFoxError(status: number, text: string) {
   return new SendFoxError(status, info.type, info.message, text)
 }
 
-async function sendfoxRequest(path: string, options: RequestInit = {}) {
-  if (!apiKey) {
-    throw new SendFoxError(401, "unauthorized", "SendFox API token not configured")
+async function resolveAuth(allowEnvFallback: boolean) {
+  const context = getSendfoxAuthContext()
+  if (context) {
+    const fresh = await ensureSendfoxContextFresh(context)
+    return { token: fresh.accessToken, context: fresh }
   }
+  if (allowEnvFallback) {
+    const fallback = getDefaultSendfoxContext()
+    if (fallback) {
+      return { token: fallback.accessToken, context: fallback }
+    }
+  }
+  throw new SendFoxError(401, "unauthorized", "SendFox API token not configured")
+}
 
+async function sendfoxRequest(
+  path: string,
+  options: RequestInit = {},
+  opts: { allowEnvFallback?: boolean } = {},
+) {
+  const allowEnvFallback = opts.allowEnvFallback ?? true
   const RETRY_DELAY_MS = process.env.NODE_ENV === "test" ? 0 : 1000
   let attempt = 0
   let lastErr: any
+  let auth = await resolveAuth(allowEnvFallback)
+
   while (attempt < 2) {
     try {
       const res = await fetch(`${API_BASE}${path}`, {
@@ -69,12 +91,36 @@ async function sendfoxRequest(path: string, options: RequestInit = {}) {
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${auth.token}`,
           ...(options.headers || {}),
         },
       })
 
       const text = await res.text()
+      if (res.status === 401 && auth.context?.refreshToken) {
+        try {
+          const refreshed = await refreshSendfoxToken(
+            auth.context.refreshToken,
+            auth.context.integrationId,
+            auth.context.userId,
+          )
+          auth = {
+            token: refreshed.access_token,
+            context: {
+              ...(auth.context || {}),
+              accessToken: refreshed.access_token,
+              refreshToken: refreshed.refresh_token,
+              expiresAt: refreshed.expires_at ?? undefined,
+            },
+          }
+          attempt += 1
+          continue
+        } catch (refreshErr) {
+          lastErr = refreshErr
+          break
+        }
+      }
+
       if (!res.ok) {
         const err = createSendFoxError(res.status, text)
         throw err
@@ -101,6 +147,7 @@ async function sendfoxRequest(path: string, options: RequestInit = {}) {
       if (RETRY_DELAY_MS) {
         await new Promise((r) => setTimeout(r, RETRY_DELAY_MS))
       }
+      auth = await resolveAuth(allowEnvFallback)
     }
   }
   throw lastErr
