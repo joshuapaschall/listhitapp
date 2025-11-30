@@ -26,5 +26,14 @@ create table if not exists buyer_list_consent (
 );
 
 create unique index if not exists buyer_list_consent_token_idx on buyer_list_consent(consent_token) where consent_token is not null;
-alter table buyer_list_consent
-  add constraint buyer_list_consent_email_list_unique unique (email_norm, list_id);
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'buyer_list_consent_email_list_unique'
+  ) then
+    alter table buyer_list_consent
+      add constraint buyer_list_consent_email_list_unique unique (email_norm, list_id);
+  end if;
+end $$;

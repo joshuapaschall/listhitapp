@@ -407,8 +407,17 @@ CREATE TABLE IF NOT EXISTS buyer_list_consent (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS buyer_list_consent_token_idx ON buyer_list_consent(consent_token) WHERE consent_token IS NOT NULL;
-ALTER TABLE buyer_list_consent
-  ADD CONSTRAINT buyer_list_consent_email_list_unique UNIQUE (email_norm, list_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'buyer_list_consent_email_list_unique'
+  ) THEN
+    ALTER TABLE buyer_list_consent
+      ADD CONSTRAINT buyer_list_consent_email_list_unique UNIQUE (email_norm, list_id);
+  END IF;
+END $$;
 
 -- Lookup table storing last SMS sender number for a buyer
 CREATE TABLE IF NOT EXISTS buyer_sms_senders (
