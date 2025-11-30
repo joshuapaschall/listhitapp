@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { sendCampaignSMS } from "@/services/campaign-sender.server"
-import { sendEmailCampaign } from "@/services/campaign-sender"
+import {
+  EMAIL_BATCH_SIZE,
+  processEmailQueue,
+  queueEmailCampaign,
+  type EmailContactPayload,
+} from "@/services/campaign-sender"
 import { replaceUrlsWithShortLinks } from "@/services/shortio-service"
 import { renderTemplate } from "@/lib/utils"
 import { assertServer } from "@/utils/assert-server"
@@ -141,6 +146,64 @@ export async function POST(request: NextRequest) {
     return new Response(JSON.stringify({ error: "Failed to fetch recipients" }), { status: 500 })
   }
 
+  if (campaign.channel === "email") {
+    const emailContacts: EmailContactPayload[] = (recipients || [])
+      .map((row: any) => {
+        const buyer: any = (row as any).buyers || {}
+        if (!buyer.email || !buyer.can_receive_email || buyer.sendfox_hidden) {
+          return null
+        }
+        return {
+          email: buyer.email,
+          firstName: buyer.fname,
+          lastName: buyer.lname,
+          recipientId: row.id,
+          buyerId: row.buyer_id,
+        }
+      })
+      .filter(Boolean) as EmailContactPayload[]
+
+    if (!emailContacts.length) {
+      return new Response(
+        JSON.stringify({ error: "no recipients" }),
+        { status: 400 },
+      )
+    }
+
+    const batches = [] as EmailContactPayload[][]
+    for (let i = 0; i < emailContacts.length; i += EMAIL_BATCH_SIZE) {
+      batches.push(emailContacts.slice(i, i + EMAIL_BATCH_SIZE))
+    }
+
+    await supabase
+      .from("campaign_recipients")
+      .update({ status: "pending", error: null })
+      .in(
+        "id",
+        emailContacts
+          .map((c) => c.recipientId)
+          .filter((v): v is string => Boolean(v)),
+      )
+
+    for (const batch of batches) {
+      await queueEmailCampaign(
+        {
+          campaignId,
+          subject: campaign.subject || "",
+          html: campaign.message,
+          contacts: batch,
+        },
+        { scheduledFor: campaign.scheduled_at || undefined, createdBy: userId || campaign.user_id || undefined },
+      )
+    }
+
+    const dispatched = await processEmailQueue(3)
+    return new Response(
+      JSON.stringify({ ok: true, queued: emailContacts.length, dispatched }),
+      { status: 200 },
+    )
+  }
+
   async function handleRecipient(row: any) {
     const buyer: any = (row as any).buyers || {}
     if (buyer.sendfox_hidden) {
@@ -217,26 +280,6 @@ export async function POST(request: NextRequest) {
             console.error("Error inserting extra recipients", insertErr)
           }
         }
-        shortUrlKey = shortKey
-      } else {
-        if (!buyer.email || !buyer.can_receive_email) {
-          throw new Error("Buyer cannot receive email")
-        }
-        const subject = renderTemplate(campaign.subject || "", buyer)
-        let html = renderTemplate(campaign.message, buyer)
-        let shortKey: string | null = null
-        try {
-          const replaced = await replaceUrlsWithShortLinks(html)
-          html = replaced.html
-          shortKey = replaced.key
-        } catch (err) {
-          console.error("Short.io replacement failed", err)
-        }
-        providerId = await sendEmailCampaign({
-          to: buyer.email,
-          subject,
-          html,
-        })
         shortUrlKey = shortKey
       }
     } catch (err: any) {

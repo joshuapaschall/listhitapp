@@ -405,14 +405,20 @@ export async function fetchUnsubscribed() {
   return all
 }
 
-export async function sendEmail(to: string, subject: string, html: string) {
+export async function sendEmail(
+  to: string | string[],
+  subject: string,
+  html: string,
+  opts: { doNotSend?: boolean } = {},
+) {
+  const contacts = Array.isArray(to) ? to : [to]
   return sendfoxRequest("/content/emails", {
     method: "POST",
     body: JSON.stringify({
-      contacts: [to],
+      contacts,
       subject,
       html,
-      do_not_send: false,
+      do_not_send: opts.doNotSend ?? false,
     }),
   })
 }
