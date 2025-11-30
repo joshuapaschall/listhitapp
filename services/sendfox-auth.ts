@@ -1,4 +1,3 @@
-import { AsyncLocalStorage } from "async_hooks"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getSendfoxToken } from "@/lib/sendfox-env"
 
@@ -34,7 +33,23 @@ export interface SendfoxTokenPayload {
   expires_in?: number | null
 }
 
-const sendfoxAuthStore = new AsyncLocalStorage<SendfoxAuthContext>()
+class SendfoxAuthStore {
+  private current: SendfoxAuthContext | null = null
+
+  getStore() {
+    return this.current
+  }
+
+  run<T>(context: SendfoxAuthContext, fn: () => Promise<T>) {
+    const prev = this.current
+    this.current = context
+    return Promise.resolve(fn()).finally(() => {
+      this.current = prev
+    })
+  }
+}
+
+const sendfoxAuthStore = new SendfoxAuthStore()
 
 export function getSendfoxAuthContext() {
   return sendfoxAuthStore.getStore()
