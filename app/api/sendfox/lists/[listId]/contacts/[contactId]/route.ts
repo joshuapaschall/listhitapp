@@ -2,7 +2,7 @@ import { NextRequest } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { moveContactToDeletedList, removeContactFromList } from "@/services/sendfox-service"
 import { withSendfoxAuth } from "@/services/sendfox-auth"
-import { loadSendfoxRouteContext } from "../../../_auth"
+import { loadSendfoxRouteContext } from "../../../../_auth"
 
 export async function DELETE(
   req: NextRequest,
