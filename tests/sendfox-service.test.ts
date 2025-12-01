@@ -144,9 +144,9 @@ describe("sendfox-service", () => {
     fetchMock.mockResolvedValue({ ok: true, text: async () => "{}" })
     await unsubscribe("c@test.com")
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.sendfox.com/unsubscribe",
+      "https://api.sendfox.com/contacts/unsubscribe",
       expect.objectContaining({
-        method: "PATCH",
+        method: "POST",
         body: JSON.stringify({ email: "c@test.com" }),
       }),
     )

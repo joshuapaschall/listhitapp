@@ -610,8 +610,8 @@ export async function getEmail(id: string) {
 }
 
 export async function unsubscribe(email: string) {
-  return sendfoxRequest("/unsubscribe", {
-    method: "PATCH",
+  return sendfoxRequest("/contacts/unsubscribe", {
+    method: "POST",
     body: JSON.stringify({ email }),
   })
 }
