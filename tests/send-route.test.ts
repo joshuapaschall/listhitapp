@@ -5,6 +5,7 @@ import { POST } from "../app/api/campaigns/send/route"
 let campaigns: any[] = []
 let recipients: any[] = []
 let buyers: any[] = []
+let buyerGroups: any[] = []
 let smsMock = jest.fn()
 let emailMock = jest.fn()
 let shortMock = jest.fn()
@@ -25,6 +26,15 @@ jest.mock("../services/campaign-sender", () => ({
 
 jest.mock("../services/shortio-service", () => ({
   replaceUrlsWithShortLinks: (...args: any[]) => shortMock(...args),
+}))
+
+jest.mock("@/lib/supabase", () => ({
+  get supabaseAdmin() {
+    return supabase
+  },
+  get supabase() {
+    return supabase
+  },
 }))
 
 function buildSupabase() {
@@ -51,6 +61,7 @@ function buildSupabase() {
               eq: (col: string, val: any) => {
                 if (col === "campaign_id") result = result.filter((r) => r.campaign_id === val)
                 if (col === "buyers.sendfox_hidden") result = result.filter((r) => !r.buyers?.sendfox_hidden)
+                if (col === "buyers.sendfox_suppressed") result = result.filter((r) => !r.buyers?.sendfox_suppressed)
                 return query
               },
               then: async (resolve: any) => resolve({ data: result, error: null })
@@ -83,6 +94,26 @@ function buildSupabase() {
           }),
         }
       }
+      if (table === "buyer_groups") {
+        return {
+          select: () => {
+            let result = buyerGroups.map((g) => ({ ...g, buyers: buyers.find((b) => b.id === g.buyer_id) }))
+            const query: any = {
+              in: (_col: string, vals: any[]) => {
+                result = result.filter((r) => vals.includes(r.group_id))
+                return query
+              },
+              eq: (col: string, val: any) => {
+                if (col === "buyers.sendfox_hidden") result = result.filter((r) => !r.buyers?.sendfox_hidden)
+                if (col === "buyers.sendfox_suppressed") result = result.filter((r) => !r.buyers?.sendfox_suppressed)
+                return query
+              },
+              then: async (resolve: any) => resolve({ data: result, error: null })
+            }
+            return query
+          }
+        }
+      }
       if (table === "buyers") {
         return {
           select: () => ({
@@ -112,6 +143,7 @@ describe("send route templates", () => {
     campaigns = []
     recipients = []
     buyers = []
+    buyerGroups = []
     recipientUpdates = []
     smsMock.mockReset()
     emailMock.mockReset()
@@ -211,5 +243,37 @@ describe("send route templates", () => {
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.sent).toBe(1)
+  })
+
+  test("merges buyer_ids and group_ids arrays to build recipients", async () => {
+    campaigns.push({
+      id: "c7",
+      channel: "sms",
+      message: "Hi",
+      buyer_ids: ["b1"],
+      group_ids: ["g1"],
+    })
+    buyers.push(
+      { id: "b1", phone: "+1222", can_receive_sms: true, sendfox_hidden: false, sendfox_suppressed: false },
+      { id: "b2", phone: "+1333", can_receive_sms: true, sendfox_hidden: false, sendfox_suppressed: false },
+    )
+    buyerGroups.push({ buyer_id: "b2", group_id: "g1" })
+    smsMock.mockResolvedValue([{ sid: "1", from: "+1555" }])
+
+    const req = new NextRequest("http://test", {
+      method: "POST",
+      headers: { Authorization: "Bearer tok" },
+      body: JSON.stringify({ campaignId: "c7" }),
+    })
+
+    const res = await POST(req)
+    expect(res.status).toBe(200)
+
+    const campaignRecipients = recipients
+      .filter((r) => r.campaign_id === "c7")
+      .map((r) => r.buyer_id)
+      .sort()
+    expect(campaignRecipients).toEqual(["b1", "b2"])
+    expect(smsMock).toHaveBeenCalledTimes(2)
   })
 })
