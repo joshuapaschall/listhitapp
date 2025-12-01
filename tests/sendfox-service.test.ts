@@ -49,7 +49,7 @@ describe("sendfox-service", () => {
     fetchMock.mockResolvedValue({ ok: true, text: async () => "{}" })
     await upsertContact("a@test.com", "A", "T", [1], ["vip"], "1.1.1.1")
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.sendfox.com/contacts",
+      "https://sendfox.com/api/contacts",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({
@@ -76,7 +76,7 @@ describe("sendfox-service", () => {
       last_name: "B",
     })
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.sendfox.com/contacts",
+      "https://sendfox.com/api/contacts",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({
@@ -95,10 +95,10 @@ describe("sendfox-service", () => {
       .mockResolvedValueOnce({ ok: true, text: async () => "{\"id\":2}" })
     const result = await getOrCreateList("NewList")
     expect(result).toEqual({ id: 2 })
-    expect(fetchMock).toHaveBeenNthCalledWith(1, "https://api.sendfox.com/lists", expect.any(Object))
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "https://sendfox.com/api/lists", expect.any(Object))
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      "https://api.sendfox.com/lists",
+      "https://sendfox.com/api/lists",
       expect.objectContaining({ method: "POST" }),
     )
   })
@@ -126,7 +126,7 @@ describe("sendfox-service", () => {
     fetchMock.mockResolvedValue({ ok: true, text: async () => "{}" })
     await sendEmail("b@test.com", "Sub", "<p>x</p>")
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.sendfox.com/emails",
+      "https://sendfox.com/api/emails",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({
@@ -144,7 +144,7 @@ describe("sendfox-service", () => {
     fetchMock.mockResolvedValue({ ok: true, text: async () => "{}" })
     await unsubscribe("c@test.com")
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.sendfox.com/contacts/unsubscribe",
+      "https://sendfox.com/api/contacts/unsubscribe",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({ email: "c@test.com" }),
@@ -160,7 +160,7 @@ describe("sendfox-service", () => {
       html: "<p>hi</p>",
     })
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.sendfox.com/emails",
+      "https://sendfox.com/api/emails",
       expect.objectContaining({ method: "POST" }),
     )
     expect(id).toBe("e1")
@@ -201,7 +201,7 @@ describe("sendfox-service", () => {
     expect(res).toEqual({ id: 7 })
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
-      "https://api.sendfox.com/contacts?email=g%40test.com",
+      "https://sendfox.com/api/contacts?email=g%40test.com",
       expect.any(Object),
     )
   })
@@ -223,7 +223,7 @@ describe("sendfox-service", () => {
     expect(res).toEqual({ id: 9 })
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
-      "https://api.sendfox.com/contacts?email=h%40test.com",
+      "https://sendfox.com/api/contacts?email=h%40test.com",
       expect.any(Object),
     )
   })
