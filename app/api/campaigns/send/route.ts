@@ -199,7 +199,7 @@ export async function POST(request: NextRequest) {
     for (const batch of batches) {
       await queueEmailCampaign(
         {
-          campaignId,
+          campaignId: campaign.id,
           subject: campaign.subject || "",
           html: campaign.message,
           contacts: batch,
