@@ -50,6 +50,8 @@ On Vercel, also ensure the following variables are defined:
 - `ADMIN_TASKS_TOKEN` (generate with `openssl rand -hex 32`)
 - `NEXT_PUBLIC_MEDIA_BASE_URL` (optional override for branded short media links; falls back to `NEXT_PUBLIC_APP_URL`, then `SITE_URL`, then `https://app.listhit.io`)
 
+Use the same SendFox bearer token (`SENDFOX_API_TOKEN`, and legacy `SENDFOX_API_KEY` if still needed) in both the Vercel Build and Runtime settings so every deployment can authenticate SendFox calls.
+
 Webhook processes that mirror incoming SMS and MMS to Supabase also need
 `TELNYX_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY` and `NEXT_PUBLIC_SUPABASE_URL`.
 Without these variables attachments stay on Telnyx-hosted URLs which expire
@@ -611,6 +613,8 @@ Before enabling the scheduler, set the required secrets in Supabase:
 
 On Vercel, set these variables in both the **Build** and **Runtime** sections
 to prevent build failures.
+
+Re-use the exact `SENDFOX_API_TOKEN` value from Vercel when configuring Supabase secrets. That keeps the `send-scheduled-campaigns` edge function and any `pg_cron` jobs invoking SendFox-backed routes aligned with the same bearer token.
 
 Run the following command and supply your values:
 
