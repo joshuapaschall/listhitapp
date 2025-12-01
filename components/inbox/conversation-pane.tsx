@@ -58,7 +58,6 @@ import { type ThreadWithBuyer } from "@/services/message-service";
 import {
   ALLOWED_MMS_EXTENSIONS,
   MAX_MMS_SIZE,
-  getStoragePathFromUrl,
   uploadMediaFileWithMeta,
 } from "@/utils/uploadMedia";
 import VoiceRecorder from "@/components/voice/VoiceRecorder";
@@ -917,37 +916,6 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
             : original
 
         let upload = await uploadMediaFileWithMeta(file, "outgoing")
-        const lower = file.name.toLowerCase()
-        const needsConvert =
-          /(\.amr|\.webm|\.weba|\.3gp|\.wav|\.ogg|\.opus|\.oga)$/.test(lower)
-        if (needsConvert) {
-          try {
-            const res = await fetch("/api/media/convert", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ url: upload.url, direction: "outgoing" }),
-            })
-            const data = await res.json().catch(() => ({}))
-            if (!res.ok || !data.url) {
-              const errMsg =
-                data.error ||
-                "This audio format could not be processed; please try a different format"
-              throw new Error(errMsg)
-            }
-            const storagePath = getStoragePathFromUrl(data.url) || upload.storagePath
-            upload = {
-              url: data.url,
-              storagePath,
-              contentType: "audio/mpeg",
-            }
-          } catch (err) {
-            console.error("convert failed", err)
-            throw new Error(
-              (err as Error).message ||
-                "This audio format could not be processed; please try a different format",
-            )
-          }
-        }
         uploads.push(upload)
       }
       return uploads
