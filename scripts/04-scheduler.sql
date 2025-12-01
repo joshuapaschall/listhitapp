@@ -11,9 +11,27 @@ select cron.schedule(
   '*/5 * * * *',
   $$select
       net.http_post(
-        url := '${FUNCTION_URL}',
+        url := 'https://iracqoqaigaoikpfrklh.supabase.co/functions/v1/send-scheduled-campaigns',
         headers := jsonb_build_object('Content-Type','application/json'),
         body := '{}'::jsonb
+      )$$
+);
+
+-- Drive queued email batches
+select cron.unschedule('process-email-queue')
+  where exists (select 1 from cron.job where jobname = 'process-email-queue');
+
+select cron.schedule(
+  'process-email-queue',
+  '*/5 * * * *',
+  $$select
+      net.http_post(
+        url := 'https://app.listhit.io/api/email-campaigns/process',
+        headers := jsonb_build_object(
+          'Content-Type','application/json',
+          'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyYWNxb3FhaWdhb2lrcGZya2xoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1ODQ1NTIyNiwiZXhwIjoyMDc0MDMxMjI2fQ.xCHmZRGfh5VB7U2dfDv81L8nQdmbsyeTDAayoo2ZAJQ'
+        ),
+        body := jsonb_build_object('limit', 25)
       )$$
 );
 
@@ -26,7 +44,7 @@ select cron.schedule(
   '*/5 * * * *',
   $$select
       net.http_post(
-        url := '${DISPOTOOL_BASE_URL}/api/gmail/sync',
+        url := 'https://app.listhit.io/api/gmail/sync',
         headers := jsonb_build_object('Content-Type','application/json'),
         body := '{}'::jsonb
       )$$
@@ -41,9 +59,27 @@ select cron.schedule(
   '*/5 * * * *',
   $$select
       net.http_post(
-        url := '${DISPOTOOL_BASE_URL}/api/email-metrics/update',
+        url := 'https://app.listhit.io/api/email-metrics/update',
         headers := jsonb_build_object('Content-Type','application/json'),
         body := '{}'::jsonb
+  )$$
+);
+
+-- Hourly SendFox reconciliation (dry-run by default)
+select cron.unschedule('reconcile-sendfox-lists')
+  where exists (select 1 from cron.job where jobname = 'reconcile-sendfox-lists');
+
+select cron.schedule(
+  'reconcile-sendfox-lists',
+  '0 * * * *',
+  $$select
+      net.http_post(
+        url := 'https://app.listhit.io/api/sendfox/reconcile',
+        headers := jsonb_build_object(
+          'Content-Type','application/json',
+          'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyYWNxb3FhaWdhb2lrcGZya2xoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1ODQ1NTIyNiwiZXhwIjoyMDc0MDMxMjI2fQ.xCHmZRGfh5VB7U2dfDv81L8nQdmbsyeTDAayoo2ZAJQ'
+        ),
+        body := jsonb_build_object('dryRun', true)
       )$$
 );
 
@@ -56,7 +92,7 @@ select cron.schedule(
   '0 0 * * *',
   $$select
       net.http_post(
-        url := '${DISPOTOOL_BASE_URL}/api/telnyx/cleanup',
+        url := 'https://app.listhit.io/api/telnyx/cleanup',
         headers := jsonb_build_object('Content-Type','application/json'),
         body := '{}'::jsonb
       )$$

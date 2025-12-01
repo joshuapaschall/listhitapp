@@ -170,6 +170,8 @@ describe("CampaignService", () => {
       groupIds: [],
     })
     expect(campaigns.length).toBe(1)
+    expect(campaigns[0].buyer_ids).toEqual(["b1"])
+    expect(campaigns[0].group_ids).toBeNull()
     expect(recipients.length).toBe(1)
     expect(recipients[0].campaign_id).toBe(campaign.id)
   })

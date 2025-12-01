@@ -9,13 +9,22 @@ export async function ensureFfmpegAvailable(): Promise<string | null> {
   const ffmpegBinary = getFfmpegPath()
 
   if (!ffmpegBinary) {
-    console.warn("[ffmpeg] Binary not found; FFmpeg will be disabled")
+    const message =
+      "[ffmpeg] Binary not found; set FFMPEG_PATH or add ffmpeg-static to your deployment"
+
+    if (process.env.NODE_ENV === "production") {
+      console.error(message)
+      throw new Error("FFmpeg binary not found in production runtime")
+    }
+
+    console.warn(message)
     configuredPath = null
     return null
   }
 
   ffmpeg.setFfmpegPath(ffmpegBinary)
   configuredPath = ffmpegBinary
+  process.env.FFMPEG_PATH = ffmpegBinary
   console.log("[ffmpeg] Using FFmpeg binary", ffmpegBinary)
   return configuredPath
 }

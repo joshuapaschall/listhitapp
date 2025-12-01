@@ -1,8 +1,18 @@
 import { NextRequest } from "next/server"
 import { addContactToList, fetchListContacts } from "@/services/sendfox-service"
+import { withSendfoxAuth } from "@/services/sendfox-auth"
+import { loadSendfoxRouteContext } from "../../../_auth"
 
 export async function POST(req: NextRequest, { params }: { params: { listId: string } }) {
   try {
+    const { authContext, response } = await loadSendfoxRouteContext()
+    if (response) return response
+    if (!authContext) {
+      return new Response(JSON.stringify({ connected: false, error: "SendFox not connected" }), {
+        status: 200,
+      })
+    }
+
     const listId = Number(params.listId)
     if (!listId) {
       return new Response(JSON.stringify({ error: "invalid list id" }), {
@@ -16,7 +26,9 @@ export async function POST(req: NextRequest, { params }: { params: { listId: str
         status: 400,
       })
     }
-    const contact = await addContactToList(listId, { email, first_name, last_name })
+    const contact = await withSendfoxAuth(authContext, async () =>
+      addContactToList(listId, { email, first_name, last_name }),
+    )
     return new Response(JSON.stringify({ success: true, id: contact?.id }))
   } catch (err: any) {
     console.error("SendFox add contact failed", err)
@@ -28,13 +40,21 @@ export async function POST(req: NextRequest, { params }: { params: { listId: str
 
 export async function GET(_req: NextRequest, { params }: { params: { listId: string } }) {
   try {
+    const { authContext, response } = await loadSendfoxRouteContext()
+    if (response) return response
+    if (!authContext) {
+      return new Response(JSON.stringify({ connected: false, error: "SendFox not connected" }), {
+        status: 200,
+      })
+    }
+
     const listId = Number(params.listId)
     if (!listId) {
       return new Response(JSON.stringify({ error: "invalid list id" }), {
         status: 400,
       })
     }
-    const contacts = await fetchListContacts(listId)
+    const contacts = await withSendfoxAuth(authContext, async () => fetchListContacts(listId))
     return new Response(JSON.stringify(contacts || []))
   } catch (err: any) {
     console.error("SendFox contacts fetch failed", err)
