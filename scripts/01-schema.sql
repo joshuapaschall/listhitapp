@@ -360,6 +360,8 @@ CREATE TABLE IF NOT EXISTS campaigns (
   subject text,
   message text NOT NULL,
   media_url text,
+  buyer_ids uuid[],
+  group_ids uuid[],
   send_to_all_numbers boolean NOT NULL DEFAULT true,
   scheduled_at timestamptz,
   status text NOT NULL DEFAULT 'pending',
