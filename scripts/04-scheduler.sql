@@ -11,7 +11,7 @@ select cron.schedule(
   '*/5 * * * *',
   $$select
       net.http_post(
-        url := 'https://iracqoqaigaoikpfrklh.supabase.co/functions/v1/send-scheduled-campaigns',
+        url := '${FUNCTION_URL}',
         headers := jsonb_build_object('Content-Type','application/json'),
         body := '{}'::jsonb
       )$$
@@ -26,10 +26,10 @@ select cron.schedule(
   '*/5 * * * *',
   $$select
       net.http_post(
-        url := 'https://app.listhit.io/api/email-campaigns/process',
+        url := '${DISPOTOOL_BASE_URL}/api/email-campaigns/process',
         headers := jsonb_build_object(
           'Content-Type','application/json',
-          'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyYWNxb3FhaWdhb2lrcGZya2xoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1ODQ1NTIyNiwiZXhwIjoyMDc0MDMxMjI2fQ.xCHmZRGfh5VB7U2dfDv81L8nQdmbsyeTDAayoo2ZAJQ'
+          'Authorization', 'Bearer ${SUPABASE_SERVICE_ROLE_KEY}'
         ),
         body := jsonb_build_object('limit', 25)
       )$$
@@ -44,7 +44,7 @@ select cron.schedule(
   '*/5 * * * *',
   $$select
       net.http_post(
-        url := 'https://app.listhit.io/api/gmail/sync',
+        url := '${DISPOTOOL_BASE_URL}/api/gmail/sync',
         headers := jsonb_build_object('Content-Type','application/json'),
         body := '{}'::jsonb
       )$$
@@ -59,7 +59,7 @@ select cron.schedule(
   '*/5 * * * *',
   $$select
       net.http_post(
-        url := 'https://app.listhit.io/api/email-metrics/update',
+        url := '${DISPOTOOL_BASE_URL}/api/email-metrics/update',
         headers := jsonb_build_object('Content-Type','application/json'),
         body := '{}'::jsonb
   )$$
@@ -74,10 +74,10 @@ select cron.schedule(
   '0 * * * *',
   $$select
       net.http_post(
-        url := 'https://app.listhit.io/api/sendfox/reconcile',
+        url := '${DISPOTOOL_BASE_URL}/api/sendfox/reconcile',
         headers := jsonb_build_object(
           'Content-Type','application/json',
-          'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyYWNxb3FhaWdhb2lrcGZya2xoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1ODQ1NTIyNiwiZXhwIjoyMDc0MDMxMjI2fQ.xCHmZRGfh5VB7U2dfDv81L8nQdmbsyeTDAayoo2ZAJQ'
+          'Authorization', 'Bearer ${SUPABASE_SERVICE_ROLE_KEY}'
         ),
         body := jsonb_build_object('dryRun', true)
       )$$
@@ -92,7 +92,7 @@ select cron.schedule(
   '0 0 * * *',
   $$select
       net.http_post(
-        url := 'https://app.listhit.io/api/telnyx/cleanup',
+        url := '${DISPOTOOL_BASE_URL}/api/telnyx/cleanup',
         headers := jsonb_build_object('Content-Type','application/json'),
         body := '{}'::jsonb
       )$$
