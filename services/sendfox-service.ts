@@ -594,7 +594,7 @@ export async function sendEmail(
   opts: { doNotSend?: boolean } = {},
 ) {
   const contacts = Array.isArray(to) ? to : [to]
-  return sendfoxRequest("/content/emails", {
+  return sendfoxRequest("/emails", {
     method: "POST",
     body: JSON.stringify({
       contacts,
