@@ -43,7 +43,7 @@ On Vercel, also ensure the following variables are defined:
 
 - `DISPOTOOL_BASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
-- `SENDFOX_API_TOKEN`
+- `SENDFOX_API_TOKEN` (and optional `SENDFOX_API_KEY` fallback)
 - `SENDFOX_DELETED_LIST_ID`
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
@@ -607,6 +607,7 @@ Before enabling the scheduler, set the required secrets in Supabase:
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `DISPOTOOL_BASE_URL` (or `SITE_URL`) pointing to your deployed Next.js site
 - `FUNCTION_URL` pointing to your deployed `send-scheduled-campaigns` function
+- `SENDFOX_API_TOKEN` (and optional `SENDFOX_API_KEY` fallback) so SendFox calls from scheduled jobs stay authenticated
 
 On Vercel, set these variables in both the **Build** and **Runtime** sections
 to prevent build failures.
@@ -614,7 +615,7 @@ to prevent build failures.
 Run the following command and supply your values:
 
 ```bash
-supabase secrets set SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... DISPOTOOL_BASE_URL=... FUNCTION_URL=...
+supabase secrets set SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... DISPOTOOL_BASE_URL=... FUNCTION_URL=... SENDFOX_API_TOKEN=... [SENDFOX_API_KEY=...]
 ```
 
 After the secrets are configured, run `pnpm run db:schedule` to create the cron job.
