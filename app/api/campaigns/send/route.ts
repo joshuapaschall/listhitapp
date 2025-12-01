@@ -197,15 +197,30 @@ export async function POST(request: NextRequest) {
       )
 
     for (const batch of batches) {
-      await queueEmailCampaign(
-        {
-          campaignId,
-          subject: campaign.subject || "",
-          html: campaign.message,
-          contacts: batch,
-        },
-        { scheduledFor: campaign.scheduled_at || undefined, createdBy: userId || campaign.user_id || undefined },
-      )
+      try {
+        await queueEmailCampaign(
+          {
+            campaignId: campaign.id,
+            subject: campaign.subject || "",
+            html: campaign.message,
+            contacts: batch,
+          },
+          { scheduledFor: campaign.scheduled_at || undefined, createdBy: userId || campaign.user_id || undefined },
+        )
+      } catch (err: any) {
+        console.error("Queue insertion failed", err)
+        const isMissingCampaign = err?.code === "23503"
+        return new Response(
+          JSON.stringify({
+            error: "Failed to queue email campaign",
+            details: err?.message || String(err),
+            hint: isMissingCampaign
+              ? "Campaign definition record is missing; ensure campaign_id is valid before queuing."
+              : "Queue insertion failed; check campaign definition and queue payload.",
+          }),
+          { status: 500 },
+        )
+      }
     }
 
     const dispatched = await processEmailQueue(3)
