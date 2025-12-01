@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server"
 import { addContactToList, fetchListContacts } from "@/services/sendfox-service"
 import { withSendfoxAuth } from "@/services/sendfox-auth"
-import { loadSendfoxRouteContext } from "../../_auth"
+import { loadSendfoxRouteContext } from "../../../_auth"
 
 export async function POST(req: NextRequest, { params }: { params: { listId: string } }) {
   try {

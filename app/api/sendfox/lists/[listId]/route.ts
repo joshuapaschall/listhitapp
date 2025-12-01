@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server"
 import { deleteList } from "@/services/sendfox-service"
 import { withSendfoxAuth } from "@/services/sendfox-auth"
-import { loadSendfoxRouteContext } from "../_auth"
+import { loadSendfoxRouteContext } from "../../_auth"
 
 export async function DELETE(_req: NextRequest, { params }: { params: { listId: string } }) {
   try {
