@@ -24,6 +24,29 @@ export async function POST(request: NextRequest) {
     })
 
     const text = await res.text()
+    if (!res.ok) {
+      let body: any = null
+      try {
+        body = JSON.parse(text)
+      } catch (err) {
+        console.error("Failed to parse error response", err)
+      }
+      const isMissingCampaign = body?.details?.includes("foreign key") || body?.hint?.includes("missing")
+      return new Response(
+        JSON.stringify({
+          error: body?.error || "Failed to trigger campaign send",
+          status: res.status,
+          details: body?.details || (!body ? text : undefined),
+          hint:
+            body?.hint ||
+            (isMissingCampaign
+              ? "Campaign definition record is missing; ensure campaign_id is valid before queuing."
+              : "Queue insertion failed; verify campaign definition exists and payload is valid."),
+        }),
+        { status: res.status, headers: { "Content-Type": "application/json" } },
+      )
+    }
+
     return new Response(text, {
       status: res.status,
       headers: { "Content-Type": "application/json" },
