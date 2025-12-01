@@ -622,6 +622,21 @@ Run the following command and supply your values:
 supabase secrets set SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... DISPOTOOL_BASE_URL=... FUNCTION_URL=... SENDFOX_API_TOKEN=... [SENDFOX_API_KEY=...]
 ```
 
+### Validate cron secrets
+
+`pg_cron` jobs call Next.js routes for campaigns, Gmail sync, metrics, and SendFox reconciliation. Make sure the Supabase project secrets that cron can read match the values used by your deployed app:
+
+- `DISPOTOOL_BASE_URL` must be the public URL of the deployed site (for example `https://app.listhit.io`). A localhost value will cause the HTTP calls to fail inside Supabase.
+- `SUPABASE_SERVICE_ROLE_KEY` must be the same service role key you configured in Vercel or your server environment so the scheduled requests stay authorized.
+
+Check what Supabase has stored with:
+
+```bash
+supabase secrets list --project-ref <project_id>
+```
+
+If either value is missing or incorrect, re-run the `supabase secrets set ...` command above. After correcting the secrets, run `pnpm run db:schedule` to recreate the cron jobs with the updated environment.
+
 After the secrets are configured, run `pnpm run db:schedule` to create the cron job.
 The job runs every **5 minutes**, as defined in both `scripts/04-scheduler.sql` and `supabase/config.toml`.
 
