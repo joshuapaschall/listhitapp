@@ -126,7 +126,7 @@ describe("sendfox-service", () => {
     fetchMock.mockResolvedValue({ ok: true, text: async () => "{}" })
     await sendEmail("b@test.com", "Sub", "<p>x</p>")
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.sendfox.com/content/emails",
+      "https://api.sendfox.com/emails",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({
@@ -160,7 +160,7 @@ describe("sendfox-service", () => {
       html: "<p>hi</p>",
     })
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.sendfox.com/content/emails",
+      "https://api.sendfox.com/emails",
       expect.objectContaining({ method: "POST" }),
     )
     expect(id).toBe("e1")
