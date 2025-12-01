@@ -1,7 +1,8 @@
-project_id = "finaldispotool"
+project_id = "iracqoqaigaoikpfrklh"
 
 [functions.send-scheduled-campaigns]
 schedule = "*/5 * * * *"
 verify_jwt = false
 
 # Note: The `sync-gmail-threads` entry has been removed because Gmail syncing is handled by a Next.js API route via cron job.
+
