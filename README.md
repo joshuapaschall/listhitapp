@@ -599,7 +599,8 @@ The GitHub Actions workflow automatically lints and tests on every push.
 
 ## Deployment
 
-- `pnpm run db:schedule` – enables pg_cron/pg_net and (re)creates the scheduler job.
+- `pnpm run db:schedule` – enables pg_cron/pg_net and (re)creates the scheduler jobs (campaign sender and email queue dispatcher).
+  See [`docs/supabase-cron-setup.md`](docs/supabase-cron-setup.md) for the exact SQL to drop any legacy job and re-create the current ones from the Supabase SQL editor.
 
 ### Supabase Secrets
 

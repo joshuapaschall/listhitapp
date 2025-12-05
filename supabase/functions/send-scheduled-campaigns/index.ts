@@ -4,6 +4,9 @@
 // Finds pending campaigns, marks them “processing”,
 // then asks your Next.js API route to deliver them.
 //
+// Deploy with: supabase functions deploy send-scheduled-campaigns
+// (do NOT paste this file into the SQL editor).
+//
 // IMPORTANT:
 // • SUPABASE_URL  and SUPABASE_SERVICE_ROLE_KEY must be
 //   present in Supabase Secrets.
@@ -11,7 +14,7 @@
 //   deployment that hosts /api/campaigns/send
 // -----------------------------------------------
 
-import { serve }     from "https://deno.land/std@0.224.0/http/server.ts"
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 serve(async () => {
@@ -107,6 +110,36 @@ serve(async () => {
     } else {
       console.log("✅ Sent", campaign.id)
     }
+  }
+
+  /* 6️⃣  Kick email queue dispatcher if pending jobs exist */
+  const { count: pendingEmails, error: queueErr } = await supabase
+    .from("email_campaign_queue")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "pending")
+    .lte("scheduled_for", new Date().toISOString())
+
+  if (queueErr) {
+    console.error("Error checking email queue", queueErr)
+    return new Response("error", { status: 500 })
+  }
+
+  if ((pendingEmails ?? 0) > 0) {
+    console.log("📧 Dispatching", pendingEmails, "email queue jobs")
+    const resp = await fetch(`${BASE_URL}/api/email-queue/process`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${SERVICE_KEY}`,
+      },
+    })
+
+    if (!resp.ok) {
+      console.error("❌ Email queue dispatch failed", await resp.text())
+      return new Response("error", { status: 500 })
+    }
+  } else {
+    console.log("📭 No pending email queue jobs")
   }
 
   return new Response("ok", { status: 200 })
