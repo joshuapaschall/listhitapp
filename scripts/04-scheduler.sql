@@ -15,7 +15,7 @@ select cron.schedule(
         headers := jsonb_build_object('Content-Type','application/json'),
         body := '{}'::jsonb
       )$$
-);
+  );
 
 -- Drive queued email batches
 select cron.unschedule('process-email-queue')
@@ -26,14 +26,14 @@ select cron.schedule(
   '*/5 * * * *',
   $$select
       net.http_post(
-        url := '${DISPOTOOL_BASE_URL}/api/email-campaigns/process',
+        url := '${DISPOTOOL_BASE_URL}/api/email-queue/process',
         headers := jsonb_build_object(
           'Content-Type','application/json',
           'Authorization', 'Bearer ${SUPABASE_SERVICE_ROLE_KEY}'
         ),
-        body := jsonb_build_object('limit', 25)
+        body := '{}'::jsonb
       )$$
-);
+  );
 
 -- Recreate Gmail sync: every 5 min hit Next.js route
 select cron.unschedule('sync-gmail-threads')
