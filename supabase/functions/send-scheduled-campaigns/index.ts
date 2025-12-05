@@ -4,6 +4,9 @@
 // Finds pending campaigns, marks them “processing”,
 // then asks your Next.js API route to deliver them.
 //
+// Deploy with: supabase functions deploy send-scheduled-campaigns
+// (do NOT paste this file into the SQL editor).
+//
 // IMPORTANT:
 // • SUPABASE_URL  and SUPABASE_SERVICE_ROLE_KEY must be
 //   present in Supabase Secrets.

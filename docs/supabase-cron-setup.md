@@ -2,13 +2,15 @@
 
 Follow these steps to replace any legacy cron job with the current workflow that calls the `send-scheduled-campaigns` edge function and the `/api/email-queue/process` dispatcher.
 
-## 1) Deploy the edge function
+## 1) Deploy the edge function (CLI, not SQL editor)
+
+Use the Supabase CLI to deploy the code in `supabase/functions/send-scheduled-campaigns`. Pasting that TypeScript into the SQL editor will throw a `syntax error at or near " / "` because the SQL editor only accepts SQL.
 
 ```bash
 supabase functions deploy send-scheduled-campaigns
 ```
 
-This uploads `supabase/functions/send-scheduled-campaigns` to your project using the project ID in `supabase/config.toml`.
+This uploads the function to your project using the project ID in `supabase/config.toml`.
 
 ## 2) Confirm required secrets
 
