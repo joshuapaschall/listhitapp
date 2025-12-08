@@ -9,7 +9,7 @@ import {
 
 const log = createLogger("sendfox-service")
 
-const API_BASE = "https://api.sendfox.com"
+const API_BASE = "https://sendfox.com/api"
 const DELETED_LIST_ID = Number(process.env.SENDFOX_DELETED_LIST_ID)
 
 export interface SendFoxList {
@@ -89,9 +89,17 @@ async function sendfoxRequest(
   let lastErr: any
   let auth = await resolveAuth(allowEnvFallback)
 
+  const buildUrl = (endpoint: string) => {
+    if (endpoint.startsWith("http://") || endpoint.startsWith("https://")) {
+      return endpoint
+    }
+    const normalized = endpoint.startsWith("/") ? endpoint : `/${endpoint}`
+    return `${API_BASE}${normalized}`
+  }
+
   while (attempt < 2) {
     try {
-      const res = await fetch(`${API_BASE}${path}`, {
+      const res = await fetch(buildUrl(path), {
         ...options,
         headers: {
           Accept: "application/json",
