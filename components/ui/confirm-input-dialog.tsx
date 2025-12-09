@@ -47,6 +47,10 @@ export default function ConfirmInputDialog({
     onOpenChange(false)
   }
 
+  const normalizedValue = value.trim().toLowerCase()
+  const normalizedConfirmation = confirmationText.trim().toLowerCase()
+  const isMatch = normalizedValue === normalizedConfirmation
+
   return (
     <AlertDialog open={open} onOpenChange={handleOpenChange}>
       <AlertDialogContent>
@@ -76,7 +80,7 @@ export default function ConfirmInputDialog({
             <Button
               variant="destructive"
               onClick={handleConfirm}
-              disabled={value !== confirmationText}
+              disabled={!isMatch}
             >
               {actionText}
             </Button>
