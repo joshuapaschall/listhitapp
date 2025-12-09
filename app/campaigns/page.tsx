@@ -339,7 +339,16 @@ export default function CampaignsPage() {
         onConfirm={async () => {
           if (!deleteId) return
           try {
-            await CampaignService.deleteCampaign(deleteId)
+            const res = await fetch(`/api/campaigns/${deleteId}/delete`, {
+              method: "DELETE",
+              headers: {
+                Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_SERVICE_KEY ?? ""}`,
+              },
+            })
+
+            if (!res.ok) {
+              throw new Error("Failed to delete campaign")
+            }
             await queryClient.invalidateQueries({ queryKey: ["campaigns"] })
             toast.success("Campaign deleted")
             setDeleteId(null)

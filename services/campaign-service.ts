@@ -163,32 +163,6 @@ export class CampaignService {
     return data
   }
 
-  static async deleteCampaign(id: string) {
-    const { error: recipientError } = await supabase
-      .from("campaign_recipients")
-      .delete()
-      .eq("campaign_id", id)
-    if (recipientError) {
-      console.error("Error deleting campaign recipients:", recipientError)
-      throw recipientError
-    }
-
-    const { error: queueError } = await supabase
-      .from("email_campaign_queue")
-      .delete()
-      .eq("campaign_id", id)
-    if (queueError) {
-      console.error("Error deleting campaign email queue rows:", queueError)
-      throw queueError
-    }
-
-    const { error } = await supabase.from("campaigns").delete().eq("id", id)
-    if (error) {
-      console.error("Error deleting campaign:", error)
-      throw error
-    }
-  }
-
   static async listCampaigns(
     page = 1,
     filters: { channel?: string; status?: string } = {},
