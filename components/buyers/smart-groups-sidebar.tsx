@@ -296,11 +296,11 @@ export default function SmartGroupsSidebar({
       await loadGroups() // Reload from database
       toast.success("Group deleted")
       log("info", "Group deleted", { id: groupToDelete.id })
+      setGroupToDelete(null)
     } catch (err) {
       log("error", "Failed to delete group", { error: err })
       toast.error("Failed to delete group. Please try again.")
-    } finally {
-      setGroupToDelete(null)
+      throw err
     }
   }
 

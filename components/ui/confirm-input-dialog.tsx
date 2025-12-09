@@ -42,9 +42,13 @@ export default function ConfirmInputDialog({
   }
 
   const handleConfirm = async () => {
-    await onConfirm()
-    reset()
-    onOpenChange(false)
+    try {
+      await onConfirm()
+      reset()
+      onOpenChange(false)
+    } catch (error) {
+      console.error(error)
+    }
   }
 
   return (
