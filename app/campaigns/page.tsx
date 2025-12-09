@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import MainLayout from "@/components/layout/main-layout"
@@ -52,6 +52,13 @@ export default function CampaignsPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const queryClient = useQueryClient()
+
+  const deleteCampaign = useMutation({
+    mutationFn: (id: string) => CampaignService.deleteCampaign(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["campaigns"] })
+    },
+  })
 
   useEffect(() => {
     const type = searchParams.get("type")
@@ -337,7 +344,7 @@ export default function CampaignsPage() {
         actionText="Delete"
         onConfirm={async () => {
           if (deleteId) {
-            await CampaignService.deleteCampaign(deleteId)
+            await deleteCampaign.mutateAsync(deleteId)
             setDeleteId(null)
           }
         }}
