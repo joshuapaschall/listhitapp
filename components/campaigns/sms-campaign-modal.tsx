@@ -57,6 +57,7 @@ import { calculateSmsSegments } from "@/lib/sms-utils"
 import { TemplateService } from "@/services/template-service"
 import { PromptService } from "@/services/prompt-service"
 import ChatAssistantButton from "@/components/chat-assistant-button"
+import { useSession } from "@/hooks/use-session"
 
 const TIME_OPTIONS = Array.from({ length: 24 }, (_, i) => {
   const hour12 = i % 12 === 0 ? 12 : i % 12
@@ -190,6 +191,7 @@ export default function SmsCampaignModal({ open, onOpenChange, onSuccess, onAiIn
   const progressValue = (stepIndex / (STEPS.length - 1)) * 100
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const { user } = useSession()
 
   const previewBuyers = buyers.length
     ? buyers
@@ -345,6 +347,7 @@ export default function SmsCampaignModal({ open, onOpenChange, onSuccess, onAiIn
       }
       let finalMessage = message.trim() ? message : ""
       const campaign = await CampaignService.createCampaign({
+        userId: user?.id,
         name,
         channel: "sms",
         message: finalMessage,

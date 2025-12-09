@@ -55,6 +55,7 @@ import { renderTemplate } from "@/lib/utils"
 import ChatAssistantButton from "@/components/chat-assistant-button"
 import TagFilterSelector from "@/components/buyers/tag-filter-selector"
 import LocationFilterSelector from "@/components/buyers/location-filter-selector"
+import { useSession } from "@/hooks/use-session"
 
 const TIME_OPTIONS = Array.from({ length: 24 }, (_, i) => {
   const hour12 = i % 12 === 0 ? 12 : i % 12
@@ -194,6 +195,7 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
     ...buyers.map((b) => b.id),
     ...groupBuyerIds,
   ]).size
+  const { user } = useSession()
 
 
   useEffect(() => {
@@ -303,6 +305,7 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
         maxScore: maxScore ? Number(maxScore) : undefined,
       }
       const campaign = await CampaignService.createCampaign({
+        userId: user?.id,
         name,
         channel: "email",
         subject,

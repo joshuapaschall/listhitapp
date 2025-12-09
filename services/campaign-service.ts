@@ -25,6 +25,10 @@ export class CampaignService {
   static async createCampaign(data: CampaignData) {
     const { buyerIds = [], groupIds = [], filters, ...campaign } = data
 
+    if (!campaign.userId) {
+      throw new Error("CampaignService.createCampaign requires a userId")
+    }
+
     const idSet = new Set<string>(buyerIds)
     if (groupIds.length) {
       const { data: groupRows, error: groupErr } = await supabase
