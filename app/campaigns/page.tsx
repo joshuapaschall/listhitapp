@@ -338,6 +338,7 @@ export default function CampaignsPage() {
         onConfirm={async () => {
           if (deleteId) {
             await CampaignService.deleteCampaign(deleteId)
+            queryClient.invalidateQueries({ queryKey: ["campaigns"] })
             setDeleteId(null)
           }
         }}
