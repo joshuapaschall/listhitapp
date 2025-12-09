@@ -55,7 +55,33 @@ export default function CampaignsPage() {
 
   const deleteCampaign = useMutation({
     mutationFn: (id: string) => CampaignService.deleteCampaign(id),
-    onSuccess: async () => {
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ["campaigns"] })
+
+      const previousQueries = queryClient.getQueriesData<{
+        campaigns: any[]
+        totalCount: number
+      }>(["campaigns"])
+
+      previousQueries.forEach(([queryKey, data]) => {
+        if (!data) return
+
+        const filteredCampaigns = data.campaigns.filter((c) => c.id !== id)
+        queryClient.setQueryData(queryKey, {
+          ...data,
+          campaigns: filteredCampaigns,
+          totalCount: Math.max(0, data.totalCount - 1),
+        })
+      })
+
+      return { previousQueries }
+    },
+    onError: (_err, _id, context) => {
+      context?.previousQueries.forEach(([queryKey, data]) => {
+        queryClient.setQueryData(queryKey, data)
+      })
+    },
+    onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey: ["campaigns"] })
     },
   })
