@@ -32,6 +32,7 @@ import {
   MAX_MMS_SIZE,
   uploadMediaFile,
 } from "@/utils/uploadMedia"
+import { useSession } from "@/hooks/use-session"
 
 interface SendSmsModalProps {
   open: boolean
@@ -57,6 +58,7 @@ export default function SendSmsModal({ open, onOpenChange, buyer, onSuccess }: S
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { segments: smsSegments, remaining } = calculateSmsSegments(message)
   const hasOversize = attachments.some((f) => f.size > MAX_MMS_SIZE)
+  const { user } = useSession()
 
   useEffect(() => {
     if (open) {
@@ -155,6 +157,7 @@ export default function SendSmsModal({ open, onOpenChange, buyer, onSuccess }: S
       }
       const finalMessage = message.trim() ? message : ""
       const campaign = await CampaignService.createCampaign({
+        userId: user?.id,
         name: `SMS to ${displayName(buyer)}`,
         channel: "sms",
         message: finalMessage,
