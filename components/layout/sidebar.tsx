@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
+import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -228,21 +229,27 @@ export function Sidebar({ className }: SidebarProps) {
     >
       {/* Header */}
       <div className="flex h-16 items-center border-b px-4 flex-shrink-0">
-        {!collapsed ? (
-          <div className="flex items-center space-x-2">
-            <div className="h-8 w-8 rounded-md bg-indigo-600 flex items-center justify-center">
-              <Home className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <h2 className="font-bold text-lg">DispoTool</h2>
-              <p className="text-xs text-muted-foreground">Premier Realty</p>
-            </div>
+        <Link
+          href="/dashboard"
+          aria-label="Go to dashboard"
+          className={cn(
+            "group flex items-center gap-2 rounded-md px-1 py-2 transition-colors hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-w-0",
+            collapsed ? "mx-auto" : "",
+          )}
+        >
+          <div className="h-8 w-8 rounded-md bg-transparent flex items-center justify-center">
+            <Image
+              src="/branch/icon.png"
+              alt="ListHit"
+              width={22}
+              height={22}
+              className="h-5 w-5"
+            />
           </div>
-        ) : (
-          <div className="h-8 w-8 mx-auto rounded-md bg-indigo-600 flex items-center justify-center">
-            <Home className="h-5 w-5 text-white" />
-          </div>
-        )}
+          {!collapsed && (
+            <span className="font-semibold text-lg text-foreground truncate">ListHit</span>
+          )}
+        </Link>
         <Button
           variant="ghost"
           size="icon"
