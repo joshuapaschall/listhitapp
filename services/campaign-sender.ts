@@ -170,6 +170,7 @@ export async function processEmailQueue(limit = 5) {
   }
 
   for (const job of jobs || []) {
+    let currentContactEmail: string | null = null
     await supabase
       .from("email_campaign_queue")
       .update({ status: "processing" })
@@ -180,6 +181,7 @@ export async function processEmailQueue(limit = 5) {
       let lastProvider: string | null = null
 
       for (const contact of payload.contacts || []) {
+        currentContactEmail = contact.email
         const context: Record<string, any> = {
           fname: contact.firstName,
           lname: contact.lastName,
@@ -215,18 +217,37 @@ export async function processEmailQueue(limit = 5) {
         await refreshCampaignStatus(job.campaign_id)
       }
     } catch (err: any) {
-      console.error("Queue dispatch failed", err)
+      console.error("Queue dispatch failed", {
+        campaignId: job.campaign_id,
+        contactEmail: currentContactEmail,
+        error: err,
+      })
       if (err instanceof SendFoxError && err.type === "rate_limited") {
         const retryAt = new Date(Date.now() + SENDFOX_RATE_BACKOFF_MS).toISOString()
         await supabase
           .from("email_campaign_queue")
-          .update({ status: "pending", scheduled_for: retryAt, error: err?.message || "rate limited" })
+          .update({
+            status: "pending",
+            scheduled_for: retryAt,
+            error:
+              err instanceof SendFoxError
+                ? JSON.stringify({
+                    status: err.status,
+                    type: err.type,
+                    details: err.details || err.message,
+                  })
+                : err?.message || "rate limited",
+          })
           .eq("id", job.id)
         continue
       }
+      const errorDetails =
+        err instanceof SendFoxError
+          ? JSON.stringify({ status: err.status, type: err.type, details: err.details || err.message })
+          : err?.message || String(err)
       await supabase
         .from("email_campaign_queue")
-        .update({ status: "error", error: err?.message || String(err) })
+        .update({ status: "error", error: errorDetails })
         .eq("id", job.id)
 
       if (job.campaign_id) {

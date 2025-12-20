@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import SmsCampaignModal from "@/components/campaigns/sms-campaign-modal"
 import NewEmailCampaignModal from "@/components/campaigns/NewEmailCampaignModal"
+import { toast } from "sonner"
 
 export default function CampaignsPage() {
   const [channel, setChannel] = useState<string>("all")
@@ -336,9 +337,17 @@ export default function CampaignsPage() {
         confirmationText="Delete this Campaign"
         actionText="Delete"
         onConfirm={async () => {
-          if (deleteId) {
+          if (!deleteId) return
+          try {
             await CampaignService.deleteCampaign(deleteId)
+            await queryClient.invalidateQueries({ queryKey: ["campaigns"] })
+            toast.success("Campaign deleted")
             setDeleteId(null)
+          } catch (err: any) {
+            console.error("Failed to delete campaign", err)
+            toast.error("Failed to delete campaign. Check console for details.")
+            // rethrow so ConfirmInputDialog knows it failed and won't auto-close
+            throw err
           }
         }}
       />

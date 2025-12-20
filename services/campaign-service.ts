@@ -25,6 +25,10 @@ export class CampaignService {
   static async createCampaign(data: CampaignData) {
     const { buyerIds = [], groupIds = [], filters, ...campaign } = data
 
+    if (!campaign.userId) {
+      throw new Error("CampaignService.createCampaign requires a userId")
+    }
+
     const idSet = new Set<string>(buyerIds)
     if (groupIds.length) {
       const { data: groupRows, error: groupErr } = await supabase
@@ -160,6 +164,24 @@ export class CampaignService {
   }
 
   static async deleteCampaign(id: string) {
+    const { error: recipientError } = await supabase
+      .from("campaign_recipients")
+      .delete()
+      .eq("campaign_id", id)
+    if (recipientError) {
+      console.error("Error deleting campaign recipients:", recipientError)
+      throw recipientError
+    }
+
+    const { error: queueError } = await supabase
+      .from("email_campaign_queue")
+      .delete()
+      .eq("campaign_id", id)
+    if (queueError) {
+      console.error("Error deleting campaign email queue rows:", queueError)
+      throw queueError
+    }
+
     const { error } = await supabase.from("campaigns").delete().eq("id", id)
     if (error) {
       console.error("Error deleting campaign:", error)
