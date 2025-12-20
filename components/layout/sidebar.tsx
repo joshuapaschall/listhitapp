@@ -239,7 +239,7 @@ export function Sidebar({ className }: SidebarProps) {
         >
           <div className="h-8 w-8 rounded-md bg-transparent flex items-center justify-center">
             <Image
-              src="/branch/icon.png"
+              src="/brand/icon.png"
               alt="ListHit"
               width={22}
               height={22}
