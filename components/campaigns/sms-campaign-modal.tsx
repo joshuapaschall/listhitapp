@@ -347,7 +347,6 @@ export default function SmsCampaignModal({ open, onOpenChange, onSuccess, onAiIn
       }
       let finalMessage = message.trim() ? message : ""
       const campaign = await CampaignService.createCampaign({
-        userId: user?.id,
         name,
         channel: "sms",
         message: finalMessage,
