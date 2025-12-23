@@ -19,11 +19,27 @@ interface CampaignData {
   groupIds?: string[]
   sendToAllNumbers?: boolean
   filters?: CampaignFilters
+  scheduled_at?: string | null
+  weekday_only?: boolean | null
+  run_from?: string | null
+  run_until?: string | null
+  status?: string | null
 }
 
 export class CampaignService {
   static async createCampaign(data: CampaignData) {
-    const { buyerIds = [], groupIds = [], filters, userId, ...campaign } = data
+    const {
+      buyerIds = [],
+      groupIds = [],
+      filters,
+      userId,
+      scheduled_at,
+      weekday_only,
+      run_from,
+      run_until,
+      status,
+      ...campaign
+    } = data
 
     let finalUserId = userId
     if (!finalUserId) {
@@ -90,23 +106,39 @@ export class CampaignService {
         .eq("sendfox_hidden", false)
       finalIds = (allowed || []).map((r) => r.id)
     }
+    const insertPayload: Record<string, any> = {
+      user_id: finalUserId,
+      name: campaign.name,
+      channel: campaign.channel,
+      subject: campaign.subject,
+      message: campaign.message,
+      media_url: campaign.mediaUrls && campaign.mediaUrls.length
+        ? JSON.stringify(campaign.mediaUrls)
+        : null,
+      send_to_all_numbers: campaign.sendToAllNumbers ?? true,
+      buyer_ids: buyerIds.length ? buyerIds : null,
+      group_ids: groupIds.length ? groupIds : null,
+    }
+
+    if (scheduled_at !== undefined) {
+      insertPayload.scheduled_at = scheduled_at ?? null
+    }
+    if (weekday_only !== undefined) {
+      insertPayload.weekday_only = weekday_only ?? null
+    }
+    if (run_from !== undefined) {
+      insertPayload.run_from = run_from ?? null
+    }
+    if (run_until !== undefined) {
+      insertPayload.run_until = run_until ?? null
+    }
+    const finalStatus = status !== undefined ? status : scheduled_at ? "pending" : undefined
+    if (finalStatus !== undefined) {
+      insertPayload.status = finalStatus
+    }
     const { data: created, error } = await supabase
       .from("campaigns")
-      .insert([
-        {
-          user_id: finalUserId,
-          name: campaign.name,
-          channel: campaign.channel,
-          subject: campaign.subject,
-          message: campaign.message,
-          media_url: campaign.mediaUrls && campaign.mediaUrls.length
-            ? JSON.stringify(campaign.mediaUrls)
-            : null,
-          send_to_all_numbers: campaign.sendToAllNumbers ?? true,
-          buyer_ids: buyerIds.length ? buyerIds : null,
-          group_ids: groupIds.length ? groupIds : null,
-        },
-      ])
+      .insert([insertPayload])
       .select()
       .single()
 
