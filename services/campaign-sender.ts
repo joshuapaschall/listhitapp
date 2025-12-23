@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { createLogger } from "@/lib/logger"
 import { renderTemplate } from "@/lib/utils"
 import { sendSesEmail } from "@/lib/ses"
+import { appendUnsubscribeFooter, buildUnsubscribeUrl } from "@/lib/unsubscribe"
 
 const log = createLogger("campaign-sender")
 
@@ -11,6 +12,9 @@ const SENDFOX_SEND_DELAY_MS = Number(process.env.SENDFOX_SEND_DELAY_MS || 750)
 const SENDFOX_RATE_BACKOFF_MS = Number(process.env.SENDFOX_RATE_BACKOFF_MS || 2000)
 const SENDFOX_RATE_MAX_RETRY = Number(process.env.SENDFOX_RATE_MAX_RETRY || 3)
 const SENDFOX_QUEUE_SPACING_MS = Number(process.env.SENDFOX_QUEUE_SPACING_MS || 500)
+const SITE_URL =
+  process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_BASE_URL || process.env.DISPOTOOL_BASE_URL
+const EMAIL_PHYSICAL_ADDRESS = process.env.EMAIL_PHYSICAL_ADDRESS || "ListHit CRM · 123 Main St · Anytown, USA"
 
 export interface EmailOptions {
   to: string | string[]
@@ -221,6 +225,21 @@ export async function processEmailQueue(limit = 5) {
         } catch (err) {
           console.error("Short.io replacement failed", err)
         }
+        if (!SITE_URL) {
+          throw new Error("SITE_URL is not configured")
+        }
+        if (!contact.buyerId) {
+          throw new Error("buyerId is required for unsubscribe link")
+        }
+        const unsubscribeUrl = buildUnsubscribeUrl({
+          buyerId: contact.buyerId,
+          email: contact.email,
+          baseUrl: SITE_URL,
+        })
+        html = appendUnsubscribeFooter(html, {
+          unsubscribeUrl,
+          physicalAddress: EMAIL_PHYSICAL_ADDRESS,
+        })
         const tags = {
           recipient_id: contact.recipientId,
           buyer_id: contact.buyerId,
