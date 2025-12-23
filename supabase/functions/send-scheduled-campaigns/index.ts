@@ -40,11 +40,37 @@ serve(async () => {
   })
 
   /* 5️⃣  Fetch pending campaigns */
+  const { count: scheduledPendingCount, error: scheduledCountErr } = await supabase
+    .from("campaigns")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "pending")
+    .not("scheduled_at", "is", null)
+
+  if (scheduledCountErr) {
+    console.error("Error counting scheduled campaigns", scheduledCountErr)
+  } else {
+    console.log("📅 Pending scheduled campaigns", scheduledPendingCount ?? 0)
+  }
+
+  const { count: dueCount, error: dueCountErr } = await supabase
+    .from("campaigns")
+    .select("id", { count: "exact", head: true })
+    .lte("scheduled_at", new Date().toISOString())
+    .eq("status", "pending")
+    .not("scheduled_at", "is", null)
+
+  if (dueCountErr) {
+    console.error("Error counting due campaigns", dueCountErr)
+  } else {
+    console.log("⏰ Due campaigns", dueCount ?? 0)
+  }
+
   const { data: campaigns, error } = await supabase
     .from("campaigns")
     .select("id, weekday_only, run_from, run_until")
     .lte("scheduled_at", new Date().toISOString())
     .eq("status", "pending")
+    .not("scheduled_at", "is", null)
 
   if (error) {
     console.error("Error fetching campaigns", error)

@@ -551,12 +551,12 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
                   {!html.trim() && <p className="text-xs text-red-600">Message is required</p>}
                 </div>
                 <div className="flex items-center gap-2">
-                  <Switch checked={!sendNow} onCheckedChange={(v) => setSendNow(!v)} id="sendAtToggle" />
+                  <Switch checked={sendNow} onCheckedChange={setSendNow} id="sendAtToggle" />
                   <label htmlFor="sendAtToggle" className="text-sm">
                     {sendNow ? "Send Now" : "Send At"}
                   </label>
                 </div>
-                {!sendNow && (
+                {sendNow === false && (
                   <Input
                     id="campaign-schedule"
                     name="campaign-schedule"

@@ -28,6 +28,11 @@ function createSesClient() {
 
 const sesClient = createSesClient()
 
+function extractMailbox(address: string) {
+  const match = address.match(/<([^>]+)>/)
+  return match ? match[1].trim() : address.trim()
+}
+
 export async function sendSesEmail(params: SendSesEmailParams) {
   const fromEmail = params.fromEmail || process.env.AWS_SES_FROM_EMAIL
   const configurationSet = params.configurationSetName || process.env.AWS_SES_CONFIGURATION_SET
@@ -35,6 +40,9 @@ export async function sendSesEmail(params: SendSesEmailParams) {
   if (!fromEmail) {
     throw new Error("AWS SES from email is not configured")
   }
+
+  const disableCustomHeaders = process.env.AWS_SES_DISABLE_CUSTOM_HEADERS === "1"
+  const mailbox = extractMailbox(fromEmail)
 
   const headers: { Name: string; Value: string }[] = []
 
@@ -53,12 +61,14 @@ export async function sendSesEmail(params: SendSesEmailParams) {
     "content-disposition",
   ])
 
-  if (params.unsubscribeUrl) {
-    const mailto = `mailto:${fromEmail}?subject=Unsubscribe`
+  if (params.unsubscribeUrl && !disableCustomHeaders) {
+    const mailto = `mailto:${mailbox}?subject=Unsubscribe`
     headers.push({ Name: "List-Unsubscribe", Value: `<${params.unsubscribeUrl}>, <${mailto}>` })
     headers.push({ Name: "List-Unsubscribe-Post", Value: "List-Unsubscribe=One-Click" })
   }
-  const filteredHeaders = headers.filter(({ Name }) => !reservedHeaders.has(Name.toLowerCase()))
+  const filteredHeaders = disableCustomHeaders
+    ? []
+    : headers.filter(({ Name }) => !reservedHeaders.has(Name.toLowerCase()))
 
   const emailTags: MessageTag[] = Object.entries(params.tags || {})
     .filter(([, value]) => Boolean(value))
@@ -68,7 +78,7 @@ export async function sendSesEmail(params: SendSesEmailParams) {
     }))
 
   const commandInput = {
-    FromEmailAddress: fromEmail,
+    FromEmailAddress: mailbox,
     Destination: {
       ToAddresses: [params.to],
     },
