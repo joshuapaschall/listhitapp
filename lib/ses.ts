@@ -30,14 +30,12 @@ const sesClient = createSesClient()
 
 export async function sendSesEmail(params: SendSesEmailParams) {
   const fromEmail = params.fromEmail || process.env.AWS_SES_FROM_EMAIL
-  const fromName = params.fromName || process.env.AWS_SES_FROM_NAME
   const configurationSet = params.configurationSetName || process.env.AWS_SES_CONFIGURATION_SET
 
   if (!fromEmail) {
     throw new Error("AWS SES from email is not configured")
   }
 
-  const displayFrom = fromName ? `${fromName} <${fromEmail}>` : fromEmail
   const headers: { Name: string; Value: string }[] = []
 
   const reservedHeaders = new Set([
@@ -70,7 +68,7 @@ export async function sendSesEmail(params: SendSesEmailParams) {
     }))
 
   const commandInput = {
-    FromEmailAddress: displayFrom,
+    FromEmailAddress: fromEmail,
     Destination: {
       ToAddresses: [params.to],
     },
