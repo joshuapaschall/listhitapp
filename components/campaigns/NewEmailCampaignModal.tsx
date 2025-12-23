@@ -1,7 +1,7 @@
 "use client"
 
 // Uses react-quill for rich text editing
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import dynamic from "next/dynamic"
 import type ReactQuillType from "react-quill"
 const ReactQuill = dynamic(() => import("react-quill"), { ssr: false })
@@ -34,6 +34,12 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu"
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
 
 import { Command, CommandInput, CommandList, CommandGroup, CommandItem } from "@/components/ui/command"
 import GroupTreeSelector from "@/components/buyers/group-tree-selector"
@@ -48,6 +54,7 @@ import {
   MessageSquare,
   X,
   Check,
+  Calendar as CalendarIcon,
 } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { useBuyerSuggestions } from "@/components/buyers/use-buyer-suggestions"
@@ -64,6 +71,17 @@ const TIME_OPTIONS = Array.from({ length: 24 }, (_, i) => {
   const value = `${i.toString().padStart(2, "0")}:00`
   return { value, label: `${hour12}:00 ${ampm}` }
 })
+
+const HOUR_OPTIONS = Array.from({ length: 12 }, (_, i) => `${i + 1}`)
+const MINUTE_OPTIONS = ["00", "15", "30", "45"]
+
+const to24Hour = (hour: string, period: "AM" | "PM") => {
+  const parsed = Number(hour)
+  if (period === "AM") {
+    return parsed === 12 ? 0 : parsed
+  }
+  return parsed === 12 ? 12 : parsed + 12
+}
 
 const STEPS = ["recipients", "message"] as const
 
@@ -177,6 +195,10 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
   const [html, setHtml] = useState("")
   const [sendNow, setSendNow] = useState(true)
   const [scheduleAt, setScheduleAt] = useState("")
+  const [scheduleDate, setScheduleDate] = useState<Date | null>(null)
+  const [scheduleHour, setScheduleHour] = useState("12")
+  const [scheduleMinute, setScheduleMinute] = useState("00")
+  const [schedulePeriod, setSchedulePeriod] = useState<"AM" | "PM">("PM")
   const [weekdayOnly, setWeekdayOnly] = useState(false)
   const [runFrom, setRunFrom] = useState("")
   const [runUntil, setRunUntil] = useState("")
@@ -199,6 +221,60 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
   const { user, loading: sessionLoading } = useSession()
   const [authToastShown, setAuthToastShown] = useState(false)
   const router = useRouter()
+  const timeZone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, [])
+
+  const syncScheduleAt = useCallback(({
+    date = scheduleDate,
+    hour = scheduleHour,
+    minute = scheduleMinute,
+    period = schedulePeriod,
+  }: {
+    date?: Date | null
+    hour?: string
+    minute?: string
+    period?: "AM" | "PM"
+  }) => {
+    if (!date) {
+      setScheduleAt("")
+      return
+    }
+    const scheduled = new Date(date)
+    scheduled.setHours(to24Hour(hour, period))
+    scheduled.setMinutes(Number(minute))
+    scheduled.setSeconds(0)
+    scheduled.setMilliseconds(0)
+    const year = scheduled.getFullYear()
+    const month = `${scheduled.getMonth() + 1}`.padStart(2, "0")
+    const day = `${scheduled.getDate()}`.padStart(2, "0")
+    const hours = `${scheduled.getHours()}`.padStart(2, "0")
+    setScheduleAt(`${year}-${month}-${day}T${hours}:${minute}`)
+  }, [scheduleDate, scheduleHour, scheduleMinute, schedulePeriod])
+
+  const setScheduleStateFromDate = useCallback((date: Date) => {
+    const hours24 = date.getHours()
+    const minutes = `${date.getMinutes()}`.padStart(2, "0")
+    const period = hours24 >= 12 ? "PM" : "AM"
+    const hours12 = hours24 % 12 === 0 ? 12 : hours24 % 12
+    setScheduleDate(date)
+    setScheduleHour(`${hours12}`)
+    setScheduleMinute(MINUTE_OPTIONS.includes(minutes) ? minutes : "00")
+    setSchedulePeriod(period)
+    syncScheduleAt({
+      date,
+      hour: `${hours12}`,
+      minute: MINUTE_OPTIONS.includes(minutes) ? minutes : "00",
+      period,
+    })
+  }, [syncScheduleAt])
+
+  const setNextDefaultSchedule = useCallback(() => {
+    const now = new Date()
+    const next = new Date(now)
+    next.setSeconds(0, 0)
+    const remainder = now.getMinutes() % 15 === 0 ? 15 : 15 - (now.getMinutes() % 15)
+    next.setMinutes(now.getMinutes() + remainder)
+    setScheduleStateFromDate(next)
+  }, [setScheduleStateFromDate])
 
 
   useEffect(() => {
@@ -251,6 +327,12 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
   }, [JSON.stringify(groups)])
   /* eslint-enable react-hooks/exhaustive-deps */
 
+  useEffect(() => {
+    if (!sendNow && !scheduleAt) {
+      setNextDefaultSchedule()
+    }
+  }, [sendNow, scheduleAt, setNextDefaultSchedule])
+
   const timeInvalid = runFrom && runUntil && runFrom >= runUntil
 
   const insertPlaceholder = (text: string) => {
@@ -296,6 +378,10 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
     setHtml("")
     setSendNow(true)
     setScheduleAt("")
+    setScheduleDate(null)
+    setScheduleHour("12")
+    setScheduleMinute("00")
+    setSchedulePeriod("PM")
     setWeekdayOnly(false)
     setRunFrom("")
     setRunUntil("")
@@ -323,6 +409,23 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
     }
     if (!name.trim() || !subject.trim() || !html.trim()) return
     if (!sendNow && timeInvalid) return
+    let scheduledAtIso: string | null = null
+    let normalizedRunFrom: string | null | undefined = undefined
+    let normalizedRunUntil: string | null | undefined = undefined
+    if (!sendNow) {
+      if (!scheduleAt) {
+        toast.error("Please choose a send time")
+        return
+      }
+      const parsedSchedule = new Date(scheduleAt)
+      if (Number.isNaN(parsedSchedule.getTime())) {
+        toast.error("Please choose a valid send time")
+        return
+      }
+      scheduledAtIso = parsedSchedule.toISOString()
+      normalizedRunFrom = runFrom ? (runFrom.length === 5 ? `${runFrom}:00` : runFrom) : null
+      normalizedRunUntil = runUntil ? (runUntil.length === 5 ? `${runUntil}:00` : runUntil) : null
+    }
     setLoading(true)
     try {
       const buyerIds = buyers.map((b) => b.id)
@@ -340,19 +443,13 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
         buyerIds,
         groupIds: groups,
         filters,
+        scheduled_at: scheduledAtIso ?? undefined,
+        weekday_only: scheduledAtIso ? (weekdayOnly ? true : null) : undefined,
+        run_from: scheduledAtIso ? normalizedRunFrom : undefined,
+        run_until: scheduledAtIso ? normalizedRunUntil : undefined,
       })
       if (sendNow) {
         await CampaignService.sendNow(campaign.id)
-      } else if (scheduleAt) {
-        await CampaignService.schedule(
-          campaign.id,
-          new Date(scheduleAt).toISOString(),
-          {
-            weekdayOnly,
-            runFrom: runFrom ? (runFrom.length === 5 ? `${runFrom}:00` : runFrom) : null,
-            runUntil: runUntil ? (runUntil.length === 5 ? `${runUntil}:00` : runUntil) : null,
-          },
-        )
       }
       toast.success("Campaign created")
       if (onSuccess) onSuccess()
@@ -551,19 +648,114 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
                   {!html.trim() && <p className="text-xs text-red-600">Message is required</p>}
                 </div>
                 <div className="flex items-center gap-2">
-                  <Switch checked={sendNow} onCheckedChange={setSendNow} id="sendAtToggle" />
+                  <Switch
+                    checked={sendNow}
+                    onCheckedChange={(checked) => {
+                      setSendNow(checked)
+                      if (!checked && !scheduleAt) {
+                        setNextDefaultSchedule()
+                      }
+                    }}
+                    id="sendAtToggle"
+                  />
                   <label htmlFor="sendAtToggle" className="text-sm">
                     {sendNow ? "Send Now" : "Send At"}
                   </label>
+                  <span className="text-xs text-muted-foreground">Timezone: {timeZone}</span>
                 </div>
                 {sendNow === false && (
-                  <Input
-                    id="campaign-schedule"
-                    name="campaign-schedule"
-                    type="datetime-local"
-                    value={scheduleAt}
-                    onChange={(e) => setScheduleAt(e.target.value)}
-                  />
+                  <div className="space-y-2 rounded-lg border p-3">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">Date</label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" className="w-full justify-start">
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {scheduleDate
+                                ? scheduleDate.toLocaleDateString(undefined, {
+                                    month: "short",
+                                    day: "numeric",
+                                    year: "numeric",
+                                  })
+                                : "Pick a date"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={scheduleDate ?? undefined}
+                              onSelect={(date) => {
+                                if (date) {
+                                  setScheduleStateFromDate(date)
+                                } else {
+                                  setScheduleDate(null)
+                                  setScheduleAt("")
+                                }
+                              }}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium">Time</label>
+                        <div className="grid grid-cols-3 gap-2">
+                          <Select
+                            value={scheduleHour}
+                            onValueChange={(val) => {
+                              setScheduleHour(val)
+                              syncScheduleAt({ hour: val })
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Hour" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {HOUR_OPTIONS.map((h) => (
+                                <SelectItem key={h} value={h}>{h}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Select
+                            value={scheduleMinute}
+                            onValueChange={(val) => {
+                              setScheduleMinute(val)
+                              syncScheduleAt({ minute: val })
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Minute" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {MINUTE_OPTIONS.map((m) => (
+                                <SelectItem key={m} value={m}>{m}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Select
+                            value={schedulePeriod}
+                            onValueChange={(val) => {
+                              const nextPeriod = val as "AM" | "PM"
+                              setSchedulePeriod(nextPeriod)
+                              syncScheduleAt({ period: nextPeriod })
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="AM/PM" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="AM">AM</SelectItem>
+                              <SelectItem value="PM">PM</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Times are in your local timezone: {timeZone}
+                    </p>
+                  </div>
                 )}
                 <div className="flex items-center gap-2">
                   <Checkbox id="weekdayOnly" checked={weekdayOnly} onCheckedChange={(v) => setWeekdayOnly(!!v)} />
@@ -633,6 +825,7 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
                   !name.trim() ||
                   !subject.trim() ||
                   !html.trim() ||
+                  (!sendNow && !scheduleAt) ||
                   (!sendNow && timeInvalid) ||
                   sessionLoading ||
                   !user
