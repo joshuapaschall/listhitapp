@@ -40,15 +40,28 @@ export async function sendSesEmail(params: SendSesEmailParams) {
   const displayFrom = fromName ? `${fromName} <${fromEmail}>` : fromEmail
   const headers: { Name: string; Value: string }[] = []
 
-  if (fromName) {
-    headers.push({ Name: "From", Value: displayFrom })
-  }
+  const reservedHeaders = new Set([
+    "from",
+    "to",
+    "subject",
+    "cc",
+    "bcc",
+    "reply-to",
+    "return-path",
+    "message-id",
+    "date",
+    "content-type",
+    "mime-version",
+    "content-disposition",
+  ])
 
   if (params.unsubscribeUrl) {
     const mailto = `mailto:${fromEmail}?subject=Unsubscribe`
     headers.push({ Name: "List-Unsubscribe", Value: `<${params.unsubscribeUrl}>, <${mailto}>` })
     headers.push({ Name: "List-Unsubscribe-Post", Value: "List-Unsubscribe=One-Click" })
   }
+  const filteredHeaders = headers.filter(({ Name }) => !reservedHeaders.has(Name.toLowerCase()))
+
   const emailTags: MessageTag[] = Object.entries(params.tags || {})
     .filter(([, value]) => Boolean(value))
     .map(([Name, Value]) => ({
@@ -56,8 +69,8 @@ export async function sendSesEmail(params: SendSesEmailParams) {
       Value: String(Value),
     }))
 
-  const command = new SendEmailCommand({
-    FromEmailAddress: fromEmail,
+  const commandInput = {
+    FromEmailAddress: displayFrom,
     Destination: {
       ToAddresses: [params.to],
     },
@@ -68,12 +81,22 @@ export async function sendSesEmail(params: SendSesEmailParams) {
           Html: { Data: params.html },
           ...(params.text ? { Text: { Data: params.text } } : {}),
         },
-        ...(headers.length ? { Headers: headers } : {}),
+        ...(filteredHeaders.length ? { Headers: filteredHeaders } : {}),
       },
     },
     ...(configurationSet ? { ConfigurationSetName: configurationSet } : {}),
     ...(emailTags.length ? { EmailTags: emailTags } : {}),
+  }
+
+  console.debug("Sending SES email", {
+    from: commandInput.FromEmailAddress,
+    to: commandInput.Destination.ToAddresses,
+    subject: commandInput.Content.Simple.Subject.Data,
+    configurationSet: commandInput.ConfigurationSetName,
+    headers: filteredHeaders.map(({ Name }) => Name),
   })
+
+  const command = new SendEmailCommand(commandInput)
 
   return sesClient.send(command)
 }
