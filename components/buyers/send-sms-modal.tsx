@@ -157,7 +157,6 @@ export default function SendSmsModal({ open, onOpenChange, buyer, onSuccess }: S
       }
       const finalMessage = message.trim() ? message : ""
       const campaign = await CampaignService.createCampaign({
-        userId: user?.id,
         name: `SMS to ${displayName(buyer)}`,
         channel: "sms",
         message: finalMessage,

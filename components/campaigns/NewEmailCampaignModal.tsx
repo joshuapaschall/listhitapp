@@ -305,7 +305,6 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
         maxScore: maxScore ? Number(maxScore) : undefined,
       }
       const campaign = await CampaignService.createCampaign({
-        userId: user?.id,
         name,
         channel: "email",
         subject,
