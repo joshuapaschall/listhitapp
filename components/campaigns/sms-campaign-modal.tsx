@@ -58,6 +58,7 @@ import { TemplateService } from "@/services/template-service"
 import { PromptService } from "@/services/prompt-service"
 import ChatAssistantButton from "@/components/chat-assistant-button"
 import { useSession } from "@/hooks/use-session"
+import { useRouter } from "next/navigation"
 
 const TIME_OPTIONS = Array.from({ length: 24 }, (_, i) => {
   const hour12 = i % 12 === 0 ? 12 : i % 12
@@ -191,7 +192,9 @@ export default function SmsCampaignModal({ open, onOpenChange, onSuccess, onAiIn
   const progressValue = (stepIndex / (STEPS.length - 1)) * 100
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const { user } = useSession()
+  const { user, loading: sessionLoading } = useSession()
+  const [authToastShown, setAuthToastShown] = useState(false)
+  const router = useRouter()
 
   const previewBuyers = buyers.length
     ? buyers
@@ -268,6 +271,22 @@ export default function SmsCampaignModal({ open, onOpenChange, onSuccess, onAiIn
     })
   }
 
+  useEffect(() => {
+    if (!open) {
+      setAuthToastShown(false)
+      return
+    }
+    if (!sessionLoading && !user && !authToastShown) {
+      toast.error("Please sign in again", {
+        action: {
+          label: "Go to login",
+          onClick: () => router.push("/login"),
+        },
+      })
+      setAuthToastShown(true)
+    }
+  }, [open, sessionLoading, user, authToastShown, router])
+
   const insertEmoji = (emoji: string) => {
     insertPlaceholder(emoji)
     setShowEmoji(false)
@@ -324,6 +343,15 @@ export default function SmsCampaignModal({ open, onOpenChange, onSuccess, onAiIn
   }
 
   const handleSubmit = async () => {
+    if (!user) {
+      toast.error("Please sign in again", {
+        action: {
+          label: "Go to login",
+          onClick: () => router.push("/login"),
+        },
+      })
+      return
+    }
     if (!name.trim() || (!message.trim() && attachments.length === 0)) return
     if (!sendNow && timeInvalid) return
     for (const file of attachments) {
@@ -347,7 +375,6 @@ export default function SmsCampaignModal({ open, onOpenChange, onSuccess, onAiIn
       }
       let finalMessage = message.trim() ? message : ""
       const campaign = await CampaignService.createCampaign({
-        userId: user?.id,
         name,
         channel: "sms",
         message: finalMessage,
@@ -685,11 +712,22 @@ export default function SmsCampaignModal({ open, onOpenChange, onSuccess, onAiIn
                 loading ||
                 !name.trim() ||
                 (!message.trim() && attachments.length === 0) ||
-                (!sendNow && timeInvalid)
+                (!sendNow && timeInvalid) ||
+                sessionLoading ||
+                !user
               }
             >
-              {loading ? "Saving..." : sendNow ? "Send Now" : "Schedule"}
+              {sessionLoading
+                ? "Checking session..."
+                : loading
+                  ? "Saving..."
+                  : sendNow
+                    ? "Send Now"
+                    : "Schedule"}
             </Button>
+          )}
+          {sessionLoading && (
+            <span className="text-xs text-muted-foreground">Verifying your session…</span>
           )}
         </DialogFooter>
       </DialogContent>

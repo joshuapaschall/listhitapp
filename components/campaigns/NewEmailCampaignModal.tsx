@@ -56,6 +56,7 @@ import ChatAssistantButton from "@/components/chat-assistant-button"
 import TagFilterSelector from "@/components/buyers/tag-filter-selector"
 import LocationFilterSelector from "@/components/buyers/location-filter-selector"
 import { useSession } from "@/hooks/use-session"
+import { useRouter } from "next/navigation"
 
 const TIME_OPTIONS = Array.from({ length: 24 }, (_, i) => {
   const hour12 = i % 12 === 0 ? 12 : i % 12
@@ -195,7 +196,9 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
     ...buyers.map((b) => b.id),
     ...groupBuyerIds,
   ]).size
-  const { user } = useSession()
+  const { user, loading: sessionLoading } = useSession()
+  const [authToastShown, setAuthToastShown] = useState(false)
+  const router = useRouter()
 
 
   useEffect(() => {
@@ -259,6 +262,22 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
     quill.setSelection(index + text.length, 0)
   }
 
+  useEffect(() => {
+    if (!open) {
+      setAuthToastShown(false)
+      return
+    }
+    if (!sessionLoading && !user && !authToastShown) {
+      toast.error("Please sign in again", {
+        action: {
+          label: "Go to login",
+          onClick: () => router.push("/login"),
+        },
+      })
+      setAuthToastShown(true)
+    }
+  }, [open, sessionLoading, user, authToastShown, router])
+
   const handleAiInsert = (text: string) => {
     setHtml(text)
     if (onAiInsert) onAiInsert(text)
@@ -293,6 +312,15 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
   }
 
   const handleSubmit = async () => {
+    if (!user) {
+      toast.error("Please sign in again", {
+        action: {
+          label: "Go to login",
+          onClick: () => router.push("/login"),
+        },
+      })
+      return
+    }
     if (!name.trim() || !subject.trim() || !html.trim()) return
     if (!sendNow && timeInvalid) return
     setLoading(true)
@@ -305,7 +333,6 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
         maxScore: maxScore ? Number(maxScore) : undefined,
       }
       const campaign = await CampaignService.createCampaign({
-        userId: user?.id,
         name,
         channel: "email",
         subject,
@@ -606,11 +633,22 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
                   !name.trim() ||
                   !subject.trim() ||
                   !html.trim() ||
-                  (!sendNow && timeInvalid)
+                  (!sendNow && timeInvalid) ||
+                  sessionLoading ||
+                  !user
                 }
               >
-                {loading ? "Saving..." : sendNow ? "Send Now" : "Schedule"}
+                {sessionLoading
+                  ? "Checking session..."
+                  : loading
+                    ? "Saving..."
+                    : sendNow
+                      ? "Send Now"
+                      : "Schedule"}
               </Button>
+            )}
+            {sessionLoading && (
+              <span className="text-xs text-muted-foreground">Verifying your session…</span>
             )}
           </DialogFooter>
         </div>

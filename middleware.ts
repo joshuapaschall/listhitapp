@@ -4,7 +4,30 @@ import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs"
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
   const supabase = createMiddlewareClient({ req, res })
-  await supabase.auth.getSession()
+  const { data } = await supabase.auth.getSession()
+  const session = data.session
+
+  const { pathname } = req.nextUrl
+
+  const allowedPaths = [
+    "/login",
+    "/agents/login",
+    "/unsubscribe",
+    "/api/unsubscribe",
+  ]
+
+  const isAllowedPath =
+    allowedPaths.includes(pathname) ||
+    pathname.startsWith("/api/webhooks/") ||
+    pathname.startsWith("/_next/") ||
+    pathname === "/favicon.ico" ||
+    pathname === "/robots.txt" ||
+    pathname === "/sitemap.xml"
+
+  if (!session && !isAllowedPath) {
+    return NextResponse.redirect(new URL("/login", req.url))
+  }
+
   return res
 }
 

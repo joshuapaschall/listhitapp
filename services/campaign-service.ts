@@ -23,10 +23,20 @@ interface CampaignData {
 
 export class CampaignService {
   static async createCampaign(data: CampaignData) {
-    const { buyerIds = [], groupIds = [], filters, ...campaign } = data
+    const { buyerIds = [], groupIds = [], filters, userId, ...campaign } = data
 
-    if (!campaign.userId) {
-      throw new Error("CampaignService.createCampaign requires a userId")
+    let finalUserId = userId
+    if (!finalUserId) {
+      const { data: userResponse, error: userError } = await supabase.auth.getUser()
+      if (userError) {
+        console.error("Error fetching authenticated user:", userError)
+        throw userError
+      }
+      finalUserId = userResponse?.user?.id
+    }
+
+    if (!finalUserId) {
+      throw new Error("Not signed in")
     }
 
     const idSet = new Set<string>(buyerIds)
@@ -84,7 +94,7 @@ export class CampaignService {
       .from("campaigns")
       .insert([
         {
-          user_id: campaign.userId,
+          user_id: finalUserId,
           name: campaign.name,
           channel: campaign.channel,
           subject: campaign.subject,
