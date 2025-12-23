@@ -332,7 +332,16 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
       handleClose()
     } catch (err) {
       console.error("Failed to create campaign", err)
-      toast.error("Failed to create campaign")
+      let errorMessage = "Failed to create campaign"
+      if (err instanceof Error && err.message) {
+        errorMessage = err.message
+      } else if (err && typeof err === "object" && "message" in err) {
+        const supabaseError = err as { message: string; details?: string; hint?: string }
+        errorMessage = [supabaseError.message, supabaseError.details, supabaseError.hint]
+          .filter(Boolean)
+          .join(" ")
+      }
+      toast.error(errorMessage)
     } finally {
       setLoading(false)
     }
