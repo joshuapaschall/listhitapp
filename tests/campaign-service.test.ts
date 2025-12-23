@@ -10,7 +10,7 @@ const fetchMock = jest.fn()
 // @ts-ignore
 global.fetch = fetchMock
 
-jest.mock("../lib/supabase", () => {
+jest.mock("@/lib/supabase", () => {
   const client = {
       from: (table: string) => {
         switch (table) {
@@ -147,7 +147,7 @@ jest.mock("../lib/supabase", () => {
         }
       },
     }
-  return { supabase: client, supabaseAdmin: client }
+  return { __esModule: true, supabase: client, supabaseAdmin: client }
 })
 
 beforeEach(() => {
@@ -203,6 +203,28 @@ describe("CampaignService", () => {
     expect(recipients.length).toBe(1)
     expect(recipients[0].campaign_id).toBe(campaign.id)
     expect(recipients[0].buyer_id).toBe("b1")
+  })
+
+  test("createCampaign stores schedule data and defaults status to pending", async () => {
+    const scheduledAt = "2024-01-01T12:00:00.000Z"
+    const campaign = await CampaignService.createCampaign({
+      userId: "u1",
+      name: "Scheduled",
+      channel: "email",
+      message: "msg",
+      buyerIds: [],
+      groupIds: [],
+      scheduled_at: scheduledAt,
+      weekday_only: true,
+      run_from: "09:00:00",
+      run_until: "17:00:00",
+    })
+    expect(campaigns[0].scheduled_at).toBe(scheduledAt)
+    expect(campaigns[0].weekday_only).toBe(true)
+    expect(campaigns[0].run_from).toBe("09:00:00")
+    expect(campaigns[0].run_until).toBe("17:00:00")
+    expect(campaigns[0].status).toBe("pending")
+    expect(campaign.status).toBe("pending")
   })
 
   test("sendNow posts to API route", async () => {
