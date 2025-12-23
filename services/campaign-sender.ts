@@ -1,7 +1,7 @@
-import { SendFoxError, sendEmail } from "./sendfox-service"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createLogger } from "@/lib/logger"
 import { renderTemplate } from "@/lib/utils"
+import { sendSesEmail } from "@/lib/ses"
 
 const log = createLogger("campaign-sender")
 
@@ -17,6 +17,7 @@ export interface EmailOptions {
   subject: string
   html: string
   dryRun?: boolean
+  tags?: Record<string, string | null | undefined>
 }
 
 export interface EmailContactPayload {
@@ -56,7 +57,15 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-export async function sendEmailCampaign({ to, subject, html, dryRun }: EmailOptions): Promise<string> {
+function isSesRateLimitError(err: any) {
+  if (!err) return false
+  const code = (err.name || err.Code || err.code || "").toString().toLowerCase()
+  if (code.includes("throttl") || code.includes("rate")) return true
+  const status = err.$metadata?.httpStatusCode
+  return status === 429
+}
+
+export async function sendEmailCampaign({ to, subject, html, dryRun, tags }: EmailOptions): Promise<string> {
   const recipients = Array.isArray(to) ? to : [to]
   if (dryRun) {
     recipients.forEach((r) => log("email", "[DRY RUN]", { to: r, subject }))
@@ -64,9 +73,18 @@ export async function sendEmailCampaign({ to, subject, html, dryRun }: EmailOpti
   }
 
   try {
-    const data = (await sendEmail(recipients, subject, html)) as { id?: string }
-    log("email", "Sent", { to: recipients.length, id: data?.id })
-    return data?.id || ""
+    let lastMessageId = ""
+    for (const recipient of recipients) {
+      const response = await sendSesEmail({
+        to: recipient,
+        subject,
+        html,
+        tags,
+      })
+      lastMessageId = response.MessageId || ""
+    }
+    log("email", "Sent", { to: recipients.length, id: lastMessageId })
+    return lastMessageId
   } catch (err) {
     console.error("Failed to send email", err)
     throw err
@@ -156,14 +174,20 @@ export async function processEmailQueue(limit = 5) {
 
   let sent = 0
 
-  async function sendWithBackoff(contact: string, subject: string, html: string, attempt = 0): Promise<string> {
+  async function sendWithBackoff(
+    contact: string,
+    subject: string,
+    html: string,
+    tags?: Record<string, string | null | undefined>,
+    attempt = 0,
+  ): Promise<string> {
     try {
-      return await sendEmailCampaign({ to: contact, subject, html })
+      return await sendEmailCampaign({ to: contact, subject, html, tags })
     } catch (err: any) {
-      if (err instanceof SendFoxError && err.type === "rate_limited" && attempt < SENDFOX_RATE_MAX_RETRY) {
+      if (isSesRateLimitError(err) && attempt < SENDFOX_RATE_MAX_RETRY) {
         const delay = SENDFOX_RATE_BACKOFF_MS * Math.max(1, attempt + 1)
         await sleep(delay)
-        return sendWithBackoff(contact, subject, html, attempt + 1)
+        return sendWithBackoff(contact, subject, html, tags, attempt + 1)
       }
       throw err
     }
@@ -197,7 +221,11 @@ export async function processEmailQueue(limit = 5) {
         } catch (err) {
           console.error("Short.io replacement failed", err)
         }
-        const providerId = await sendWithBackoff(contact.email, subject, html)
+        const tags = {
+          recipient_id: contact.recipientId,
+          buyer_id: contact.buyerId,
+        }
+        const providerId = await sendWithBackoff(contact.email, subject, html, tags)
         lastProvider = providerId
         sent += 1
         await updateRecipientStatus(job.campaign_id, contact.recipientId, {
@@ -222,29 +250,19 @@ export async function processEmailQueue(limit = 5) {
         contactEmail: currentContactEmail,
         error: err,
       })
-      if (err instanceof SendFoxError && err.type === "rate_limited") {
+      if (isSesRateLimitError(err)) {
         const retryAt = new Date(Date.now() + SENDFOX_RATE_BACKOFF_MS).toISOString()
         await supabase
           .from("email_campaign_queue")
           .update({
             status: "pending",
             scheduled_for: retryAt,
-            error:
-              err instanceof SendFoxError
-                ? JSON.stringify({
-                    status: err.status,
-                    type: err.type,
-                    details: err.details || err.message,
-                  })
-                : err?.message || "rate limited",
+            error: err?.message || "rate limited",
           })
           .eq("id", job.id)
         continue
       }
-      const errorDetails =
-        err instanceof SendFoxError
-          ? JSON.stringify({ status: err.status, type: err.type, details: err.details || err.message })
-          : err?.message || String(err)
+      const errorDetails = err?.message || String(err)
       await supabase
         .from("email_campaign_queue")
         .update({ status: "error", error: errorDetails })
