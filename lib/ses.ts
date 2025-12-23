@@ -9,6 +9,7 @@ export interface SendSesEmailParams {
   fromName?: string
   configurationSetName?: string
   tags?: Record<string, string | null | undefined>
+  unsubscribeUrl?: string
 }
 
 function createSesClient() {
@@ -36,7 +37,18 @@ export async function sendSesEmail(params: SendSesEmailParams) {
     throw new Error("AWS SES from email is not configured")
   }
 
-  const fromAddress = fromName ? `${fromName} <${fromEmail}>` : fromEmail
+  const displayFrom = fromName ? `${fromName} <${fromEmail}>` : fromEmail
+  const headers: { Name: string; Value: string }[] = []
+
+  if (fromName) {
+    headers.push({ Name: "From", Value: displayFrom })
+  }
+
+  if (params.unsubscribeUrl) {
+    const mailto = `mailto:${fromEmail}?subject=Unsubscribe`
+    headers.push({ Name: "List-Unsubscribe", Value: `<${params.unsubscribeUrl}>, <${mailto}>` })
+    headers.push({ Name: "List-Unsubscribe-Post", Value: "List-Unsubscribe=One-Click" })
+  }
   const emailTags: MessageTag[] = Object.entries(params.tags || {})
     .filter(([, value]) => Boolean(value))
     .map(([Name, Value]) => ({
@@ -45,7 +57,7 @@ export async function sendSesEmail(params: SendSesEmailParams) {
     }))
 
   const command = new SendEmailCommand({
-    FromEmailAddress: fromAddress,
+    FromEmailAddress: fromEmail,
     Destination: {
       ToAddresses: [params.to],
     },
@@ -56,6 +68,7 @@ export async function sendSesEmail(params: SendSesEmailParams) {
           Html: { Data: params.html },
           ...(params.text ? { Text: { Data: params.text } } : {}),
         },
+        ...(headers.length ? { Headers: headers } : {}),
       },
     },
     ...(configurationSet ? { ConfigurationSetName: configurationSet } : {}),

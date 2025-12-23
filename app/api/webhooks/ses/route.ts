@@ -10,6 +10,26 @@ export const runtime = "nodejs"
 
 const log = createLogger("ses-webhook")
 const supabase = supabaseAdmin
+const expectedTopicArn = process.env.AWS_SNS_TOPIC_ARN
+
+function validateTopicArn(arn: string | undefined | null) {
+  if (!arn) return { valid: true }
+  const arnParts = arn.split(":")
+  if (arnParts.length < 6 || arnParts[0] !== "arn" || arnParts[2] !== "sns") {
+    return { valid: false, reason: "invalid-format" as const }
+  }
+  const resource = arnParts.slice(5).join(":")
+  if (resource.includes(":")) {
+    return { valid: false, reason: "subscription-arn" as const }
+  }
+  const topicPattern = /^arn:aws[a-zA-Z-]*:sns:[a-z0-9-]+:\d{12}:[A-Za-z0-9_-]{1,256}$/
+  if (!topicPattern.test(arn)) {
+    return { valid: false, reason: "invalid-format" as const }
+  }
+  return { valid: true }
+}
+
+const topicArnValidation = validateTopicArn(expectedTopicArn)
 
 type SnsMessage = {
   Type?: string
@@ -202,9 +222,16 @@ async function suppressBuyer(eventType: string, buyerId: string | null, timestam
 }
 
 export async function POST(req: NextRequest) {
-  const expectedTopic = process.env.AWS_SNS_TOPIC_ARN
+  if (!topicArnValidation.valid) {
+    log("error", "AWS_SNS_TOPIC_ARN must be a topic ARN, not a subscription ARN", {
+      topicArn: expectedTopicArn,
+      reason: topicArnValidation.reason,
+    })
+    return NextResponse.json({ error: "Server configuration error" }, { status: 500 })
+  }
+
   const providedTopic = req.headers.get("x-amz-sns-topic-arn")
-  if (expectedTopic && providedTopic !== expectedTopic) {
+  if (expectedTopicArn && providedTopic !== expectedTopicArn) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
@@ -246,6 +273,18 @@ export async function POST(req: NextRequest) {
   if (evt === "bounce" || evt === "complaint") {
     const buyerId = await findBuyerId(buyerIdTag, { recipientId, providerId: messageId })
     await suppressBuyer(evt, buyerId, timestamp)
+  }
+
+  return NextResponse.json({ ok: true })
+}
+
+export function GET() {
+  if (!topicArnValidation.valid) {
+    log("error", "AWS_SNS_TOPIC_ARN must be a topic ARN, not a subscription ARN", {
+      topicArn: expectedTopicArn,
+      reason: topicArnValidation.reason,
+    })
+    return NextResponse.json({ error: "Server configuration error" }, { status: 500 })
   }
 
   return NextResponse.json({ ok: true })
