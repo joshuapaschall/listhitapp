@@ -23,6 +23,7 @@ interface CampaignData {
   weekday_only?: boolean | null
   run_from?: string | null
   run_until?: string | null
+  timezone?: string | null
   status?: string | null
 }
 
@@ -37,6 +38,7 @@ export class CampaignService {
       weekday_only,
       run_from,
       run_until,
+      timezone,
       status,
       ...campaign
     } = data
@@ -120,6 +122,14 @@ export class CampaignService {
       group_ids: groupIds.length ? groupIds : null,
     }
 
+    const resolvedTimezone =
+      timezone ??
+      (typeof Intl !== "undefined"
+        ? Intl.DateTimeFormat().resolvedOptions().timeZone
+        : null) ??
+      "America/New_York"
+    insertPayload.timezone = resolvedTimezone
+
     if (scheduled_at !== undefined) {
       insertPayload.scheduled_at = scheduled_at ?? null
     }
@@ -183,6 +193,7 @@ export class CampaignService {
       weekdayOnly?: boolean
       runFrom?: string | null
       runUntil?: string | null
+      timezone?: string | null
     } = {},
   ) {
     const { data, error } = await supabase
@@ -192,6 +203,12 @@ export class CampaignService {
         weekday_only: opts.weekdayOnly ?? null,
         run_from: opts.runFrom ?? null,
         run_until: opts.runUntil ?? null,
+        timezone:
+          opts.timezone ??
+          (typeof Intl !== "undefined"
+            ? Intl.DateTimeFormat().resolvedOptions().timeZone
+            : null) ??
+          "America/New_York",
       })
       .eq("id", campaignId)
       .select()
