@@ -140,13 +140,29 @@ async function confirmSubscription(subscribeUrl?: string) {
   }
 }
 
-async function storeEmailEvent(messageId: string | undefined, eventType: string, payload: any) {
+async function storeEmailEvent(input: {
+  messageId?: string
+  eventType: string
+  payload: any
+  campaignId?: string
+  recipientId?: string
+  buyerId?: string
+}) {
   if (!supabase) return
-  await supabase.from("email_events").insert({
-    provider_message_id: messageId || null,
-    event_type: eventType || null,
-    payload,
-  })
+  await supabase
+    .from("email_events")
+    .upsert(
+      {
+        provider_message_id: input.messageId || null,
+        message_id: input.messageId || null,
+        event_type: input.eventType || null,
+        campaign_id: input.campaignId || null,
+        recipient_id: input.recipientId || null,
+        buyer_id: input.buyerId || null,
+        payload: input.payload,
+      },
+      { onConflict: "provider_message_id,event_type" },
+    )
 }
 
 async function updateRecipient(
@@ -172,6 +188,10 @@ async function updateRecipient(
   }
   if (eventType === "renderingfailure") updates.rendering_failed_at = ctx.timestamp
   if (eventType === "deliverydelay") updates.delivery_delayed_at = ctx.timestamp
+  if (eventType === "unsubscribe" || eventType === "unsub") {
+    updates.unsubscribed_at = ctx.timestamp
+    updates.status = "unsubscribed"
+  }
   if (Object.keys(updates).length === 0) return
 
   let query = supabase.from("campaign_recipients").update(updates)
@@ -266,8 +286,16 @@ export async function POST(req: NextRequest) {
   const tags = payload.mail?.tags
   const recipientId = extractTagValue(tags, "recipient_id")
   const buyerIdTag = extractTagValue(tags, "buyer_id")
+  const campaignId = extractTagValue(tags, "campaign_id")
 
-  await storeEmailEvent(messageId, evt, payload)
+  await storeEmailEvent({
+    messageId,
+    eventType: evt,
+    payload,
+    campaignId,
+    recipientId,
+    buyerId: buyerIdTag,
+  })
   await updateRecipient(evt, { timestamp, recipientId: recipientId || undefined, providerId: messageId })
 
   if (evt === "bounce" || evt === "complaint") {

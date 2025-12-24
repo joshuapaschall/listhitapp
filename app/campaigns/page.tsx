@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { Fragment, useState, useEffect } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import SmsCampaignModal from "@/components/campaigns/sms-campaign-modal"
 import NewEmailCampaignModal from "@/components/campaigns/NewEmailCampaignModal"
+import CampaignDetailsPanel from "@/components/campaigns/CampaignDetailsPanel"
 import { toast } from "sonner"
 
 export default function CampaignsPage() {
@@ -158,8 +159,8 @@ export default function CampaignsPage() {
                 </TableRow>
               )}
               {campaigns.map((c: any) => (
-                <>
-                  <TableRow key={c.id}>
+                <Fragment key={c.id}>
+                  <TableRow>
                     <TableCell className="capitalize">{c.channel}</TableCell>
                     <TableCell>{c.name}</TableCell>
                     <TableCell>
@@ -217,54 +218,11 @@ export default function CampaignsPage() {
                   {open === c.id && (
                     <TableRow key={`${c.id}-recipients`}>
                       <TableCell colSpan={8} className="p-0">
-                        <div className="p-2 bg-muted rounded-b-md">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>Buyer</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Sent</TableHead>
-                                <TableHead>Opened</TableHead>
-                                <TableHead>Bounced</TableHead>
-                                <TableHead>Unsub</TableHead>
-                                <TableHead>Error</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {c.campaign_recipients.map((r: any) => (
-                                <TableRow key={r.id}>
-                                  <TableCell className="font-mono text-xs">
-                                    {r.buyers?.full_name ||
-                                      `${r.buyers?.fname || ""} ${r.buyers?.lname || ""}`.trim() ||
-                                      r.buyer_id}
-                                  </TableCell>
-                                  <TableCell>{r.status || "pending"}</TableCell>
-                                  <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">
-                                    {r.sent_at
-                                      ? new Date(r.sent_at).toLocaleString()
-                                      : "-"}
-                                  </TableCell>
-                                  <TableCell className="whitespace-nowrap font-mono text-xs">
-                                    {r.opened_at ? new Date(r.opened_at).toLocaleString() : "-"}
-                                  </TableCell>
-                                  <TableCell className="whitespace-nowrap font-mono text-xs">
-                                    {r.bounced_at ? new Date(r.bounced_at).toLocaleString() : "-"}
-                                  </TableCell>
-                                  <TableCell className="whitespace-nowrap font-mono text-xs">
-                                    {r.unsubscribed_at ? new Date(r.unsubscribed_at).toLocaleString() : "-"}
-                                  </TableCell>
-                                  <TableCell className="text-xs text-red-700">
-                                    {r.error || "-"}
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
+                        <CampaignDetailsPanel campaign={c} />
                       </TableCell>
                     </TableRow>
                   )}
-                </>
+                </Fragment>
               ))}
             </TableBody>
           </Table>

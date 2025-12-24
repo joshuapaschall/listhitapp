@@ -244,6 +244,7 @@ export async function processEmailQueue(limit = 5) {
           physicalAddress: EMAIL_PHYSICAL_ADDRESS,
         })
         const tags = {
+          campaign_id: payload.campaignId,
           recipient_id: contact.recipientId,
           buyer_id: contact.buyerId,
         }
