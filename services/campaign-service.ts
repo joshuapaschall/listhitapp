@@ -259,7 +259,7 @@ export class CampaignService {
     let query = supabase
       .from("campaigns")
       .select(
-        "*, campaign_recipients(id,status,error,sent_at,provider_id,from_number,buyer_id,opened_at,bounced_at,unsubscribed_at,buyers(fname,lname,full_name))",
+        "*, campaign_recipients(id,status,error,sent_at,delivered_at,opened_at,clicked_at,bounced_at,complained_at,unsubscribed_at,provider_id,from_number,buyer_id,buyers(fname,lname,full_name))",
         { count: "exact" },
       )
       .order("created_at", { ascending: false })
