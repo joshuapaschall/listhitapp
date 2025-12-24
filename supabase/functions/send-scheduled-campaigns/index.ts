@@ -67,7 +67,7 @@ serve(async () => {
 
   const { data: campaigns, error } = await supabase
     .from("campaigns")
-    .select("id, weekday_only, run_from, run_until")
+    .select("id, weekday_only, run_from, run_until, scheduled_at, timezone")
     .lte("scheduled_at", new Date().toISOString())
     .eq("status", "pending")
     .not("scheduled_at", "is", null)
@@ -79,23 +79,39 @@ serve(async () => {
 
   console.log("🚀 Found", (campaigns ?? []).length, "pending campaigns")
 
+  const resolveTimezone = (tz: string | null | undefined) =>
+    tz && tz.trim() ? tz : "America/New_York"
+  const getNowInTimezone = (tz: string) => {
+    try {
+      return new Date(new Date().toLocaleString("en-US", { timeZone: tz }))
+    } catch (_err) {
+      return new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }))
+    }
+  }
+
   /* 5️⃣  Process each campaign */
   for (const campaign of campaigns ?? []) {
-    console.log("→ Processing", campaign.id)
+    const timezone = resolveTimezone((campaign as any).timezone)
+    const zonedNow = getNowInTimezone(timezone)
 
-    const estNow = new Date(
-      new Date().toLocaleString("en-US", { timeZone: "America/New_York" }),
-    )
+    console.log("→ Processing", {
+      BASE_URL,
+      campaignId: campaign.id,
+      scheduledAt: (campaign as any).scheduled_at,
+      nowIso: new Date().toISOString(),
+      timezone,
+    })
+
     if (
       campaign.weekday_only &&
-      (estNow.getDay() === 0 || estNow.getDay() === 6)
+      (zonedNow.getDay() === 0 || zonedNow.getDay() === 6)
     ) {
       continue
     }
     if (campaign.run_from && campaign.run_until) {
       const [fh, fm] = campaign.run_from.split(":").map(Number)
       const [th, tm] = campaign.run_until.split(":").map(Number)
-      const nowMin = estNow.getHours() * 60 + estNow.getMinutes()
+      const nowMin = zonedNow.getHours() * 60 + zonedNow.getMinutes()
       const fromMin = fh * 60 + fm
       const toMin = th * 60 + tm
       if (nowMin < fromMin || nowMin > toMin) {
@@ -117,6 +133,7 @@ serve(async () => {
     /* call the Next.js route with auth header */
     const resp = await fetch(`${BASE_URL}/api/campaigns/send`, {
       method: "POST",
+      redirect: "manual",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${SERVICE_KEY}`,   // ← key added here
@@ -124,8 +141,19 @@ serve(async () => {
       body: JSON.stringify({ campaignId: campaign.id }),
     })
 
-    if (!resp.ok) {
-      console.error("❌ Send failed", campaign.id, await resp.text())
+    const isRedirect = resp.status >= 300 && resp.status < 400
+
+    if (isRedirect || !resp.ok) {
+      const errorPayload = await resp.text()
+      if (isRedirect) {
+        console.error("❌ Send failed (redirect)", {
+          campaignId: campaign.id,
+          status: resp.status,
+          location: resp.headers.get("location"),
+        })
+      } else {
+        console.error("❌ Send failed", campaign.id, errorPayload)
+      }
       await supabase
         .from("campaigns")
         .update({ status: "pending" })

@@ -447,6 +447,7 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
         weekday_only: scheduledAtIso ? (weekdayOnly ? true : null) : undefined,
         run_from: scheduledAtIso ? normalizedRunFrom : undefined,
         run_until: scheduledAtIso ? normalizedRunUntil : undefined,
+        timezone: timeZone,
       })
       if (sendNow) {
         await CampaignService.sendNow(campaign.id)
