@@ -368,6 +368,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
   weekday_only boolean,
   run_from time,
   run_until time,
+  timezone text,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 

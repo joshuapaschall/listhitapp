@@ -12,6 +12,16 @@ import { assertServer } from "@/utils/assert-server"
 
 assertServer()
 
+const resolveTimezone = (tz?: string | null) =>
+  tz && tz.trim() ? tz : "America/New_York"
+const getNowInTimezone = (tz: string) => {
+  try {
+    return new Date(new Date().toLocaleString("en-US", { timeZone: tz }))
+  } catch {
+    return new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }))
+  }
+}
+
 export async function POST(request: NextRequest) {
   const authHeader = request.headers.get("authorization")
   const expectedToken = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -41,12 +51,9 @@ export async function POST(request: NextRequest) {
     return new Response(JSON.stringify({ error: "Campaign not found" }), { status: 404 })
   }
 
-  const estNow = new Date(
-    new Date().toLocaleString("en-US", { timeZone: "America/New_York" }),
-  )
-  if (
-    campaign.weekday_only && (estNow.getDay() === 0 || estNow.getDay() === 6)
-  ) {
+  const timezone = resolveTimezone(campaign.timezone)
+  const zonedNow = getNowInTimezone(timezone)
+  if (campaign.weekday_only && (zonedNow.getDay() === 0 || zonedNow.getDay() === 6)) {
     return new Response(
       JSON.stringify({ error: "Outside allowed send window" }),
       { status: 400 },
@@ -55,7 +62,7 @@ export async function POST(request: NextRequest) {
   if (campaign.run_from && campaign.run_until) {
     const [fh, fm] = campaign.run_from.split(":").map(Number)
     const [th, tm] = campaign.run_until.split(":").map(Number)
-    const nowMin = estNow.getHours() * 60 + estNow.getMinutes()
+    const nowMin = zonedNow.getHours() * 60 + zonedNow.getMinutes()
     const fromMin = fh * 60 + fm
     const toMin = th * 60 + tm
     if (nowMin < fromMin || nowMin > toMin) {

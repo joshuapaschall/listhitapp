@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
   ALLOWED_MMS_EXTENSIONS,
   uploadMediaFile,
@@ -195,6 +195,7 @@ export default function SmsCampaignModal({ open, onOpenChange, onSuccess, onAiIn
   const { user, loading: sessionLoading } = useSession()
   const [authToastShown, setAuthToastShown] = useState(false)
   const router = useRouter()
+  const timeZone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, [])
 
   const previewBuyers = buyers.length
     ? buyers
@@ -382,6 +383,7 @@ export default function SmsCampaignModal({ open, onOpenChange, onSuccess, onAiIn
         buyerIds,
         groupIds: groups,
         sendToAllNumbers: allPhones,
+        timezone: timeZone,
       })
       if (sendNow) {
         await CampaignService.sendNow(campaign.id)
@@ -393,6 +395,7 @@ export default function SmsCampaignModal({ open, onOpenChange, onSuccess, onAiIn
             weekdayOnly,
             runFrom: runFrom ? (runFrom.length === 5 ? `${runFrom}:00` : runFrom) : null,
             runUntil: runUntil ? (runUntil.length === 5 ? `${runUntil}:00` : runUntil) : null,
+            timezone: timeZone,
           },
         )
       }
@@ -648,6 +651,11 @@ export default function SmsCampaignModal({ open, onOpenChange, onSuccess, onAiIn
                 value={scheduleAt}
                 onChange={(e) => setScheduleAt(e.target.value)}
               />
+            )}
+            {!sendNow && (
+              <p className="text-xs text-muted-foreground">
+                Times are in your local timezone: {timeZone}
+              </p>
             )}
             <div className="flex items-center gap-2">
               <Checkbox id="weekdayOnly" checked={weekdayOnly} onCheckedChange={(v) => setWeekdayOnly(!!v)} />
