@@ -35,6 +35,24 @@ select cron.schedule(
       )$$
 );
 
+-- Requeue stuck email jobs
+select cron.unschedule('requeue-stuck-email-jobs')
+  where exists (select 1 from cron.job where jobname = 'requeue-stuck-email-jobs');
+
+select cron.schedule(
+  'requeue-stuck-email-jobs',
+  '*/5 * * * *', -- use '*/1 * * * *' while testing
+  $$select
+      net.http_post(
+        url := '${DISPOTOOL_BASE_URL}/api/email-campaigns/requeue-stuck',
+        headers := jsonb_build_object(
+          'Content-Type','application/json',
+          'Authorization', 'Bearer ${SUPABASE_SERVICE_ROLE_KEY}'
+        ),
+        body := jsonb_build_object('leaseSeconds', 300)
+      )$$
+);
+
 -- Recreate Gmail sync: every 5 min hit Next.js route
 select cron.unschedule('sync-gmail-threads')
   where exists (select 1 from cron.job where jobname = 'sync-gmail-threads');
