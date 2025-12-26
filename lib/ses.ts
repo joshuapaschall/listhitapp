@@ -61,9 +61,22 @@ export async function sendSesEmail(params: SendSesEmailParams) {
     "content-disposition",
   ])
 
+  let headerUnsubscribeUrl = params.unsubscribeUrl
+  if (params.unsubscribeUrl) {
+    try {
+      const parsed = new URL(params.unsubscribeUrl)
+      parsed.pathname = "/api/unsubscribe"
+      headerUnsubscribeUrl = parsed.toString()
+    } catch (error) {
+      console.error("Failed to normalize unsubscribe URL for headers", error)
+      headerUnsubscribeUrl = params.unsubscribeUrl
+    }
+  }
+
   if (params.unsubscribeUrl && !disableCustomHeaders) {
     const mailto = `mailto:${mailbox}?subject=Unsubscribe`
-    headers.push({ Name: "List-Unsubscribe", Value: `<${params.unsubscribeUrl}>, <${mailto}>` })
+    const listUnsubscribeUrl = headerUnsubscribeUrl || params.unsubscribeUrl
+    headers.push({ Name: "List-Unsubscribe", Value: `<${listUnsubscribeUrl}>, <${mailto}>` })
     headers.push({ Name: "List-Unsubscribe-Post", Value: "List-Unsubscribe=One-Click" })
   }
   const filteredHeaders = disableCustomHeaders

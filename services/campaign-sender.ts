@@ -238,6 +238,8 @@ export async function processEmailQueue(limit = 5) {
           buyerId: contact.buyerId,
           email: contact.email,
           baseUrl: SITE_URL,
+          campaignId: payload.campaignId,
+          recipientId: contact.recipientId,
         })
         html = appendUnsubscribeFooter(html, {
           unsubscribeUrl,

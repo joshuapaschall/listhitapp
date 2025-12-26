@@ -9,6 +9,8 @@ export default function UnsubscribePage({
 }) {
   const email = typeof searchParams?.e === "string" ? searchParams.e : ""
   const buyerId = typeof searchParams?.id === "string" ? searchParams.id : ""
+  const campaignId = typeof searchParams?.campaignId === "string" ? searchParams.campaignId : ""
+  const recipientId = typeof searchParams?.recipientId === "string" ? searchParams.recipientId : ""
   const timestamp = typeof searchParams?.t === "string" ? searchParams.t : ""
   const signature = typeof searchParams?.s === "string" ? searchParams.s : ""
   const done = searchParams?.done === "1"
@@ -46,6 +48,8 @@ export default function UnsubscribePage({
             ) : null}
             <input type="hidden" name="id" value={buyerId} />
             <input type="hidden" name="e" value={email} />
+            <input type="hidden" name="campaignId" value={campaignId} />
+            <input type="hidden" name="recipientId" value={recipientId} />
             <input type="hidden" name="t" value={timestamp} />
             <input type="hidden" name="s" value={signature} />
             <p className="text-sm text-gray-700">
