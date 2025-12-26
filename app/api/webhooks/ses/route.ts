@@ -106,11 +106,24 @@ function buildStringToSign(message: SnsMessage): string {
     .join("")
 }
 
+function isValidSigningCertUrl(certUrl: string): boolean {
+  try {
+    const url = new URL(certUrl)
+    if (url.protocol !== "https:") return false
+    const hostPattern = /^sns\.[a-z0-9-]+\.amazonaws\.com$/i
+    if (!hostPattern.test(url.hostname)) return false
+    return true
+  } catch (error) {
+    log("warn", "Invalid SigningCertURL", { error })
+    return false
+  }
+}
+
 async function verifySnsSignature(message: SnsMessage): Promise<boolean> {
   try {
     if (!message.Signature || !message.SigningCertURL) return false
     const certUrl = message.SigningCertURL
-    if (!certUrl.startsWith("https://")) return false
+    if (!isValidSigningCertUrl(certUrl)) return false
 
     const res = await fetch(certUrl)
     if (!res.ok) return false
@@ -126,7 +139,7 @@ async function verifySnsSignature(message: SnsMessage): Promise<boolean> {
     return valid
   } catch (error) {
     log("warn", "SNS signature validation error", { error })
-    return true
+    return false
   }
 }
 
