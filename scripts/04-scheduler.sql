@@ -23,7 +23,7 @@ select cron.unschedule('process-email-queue')
 
 select cron.schedule(
   'process-email-queue',
-  '*/5 * * * *',
+  '*/1 * * * *',
   $$select
       net.http_post(
         url := '${DISPOTOOL_BASE_URL}/api/email-campaigns/process',
@@ -41,7 +41,7 @@ select cron.unschedule('requeue-stuck-email-jobs')
 
 select cron.schedule(
   'requeue-stuck-email-jobs',
-  '*/5 * * * *', -- use '*/1 * * * *' while testing
+  '*/1 * * * *',
   $$select
       net.http_post(
         url := '${DISPOTOOL_BASE_URL}/api/email-campaigns/requeue-stuck',
@@ -49,7 +49,7 @@ select cron.schedule(
           'Content-Type','application/json',
           'Authorization', 'Bearer ${SUPABASE_SERVICE_ROLE_KEY}'
         ),
-        body := jsonb_build_object('leaseSeconds', 300)
+        body := jsonb_build_object('stuckSeconds', 300, 'limit', 100)
       )$$
 );
 
@@ -65,39 +65,6 @@ select cron.schedule(
         url := '${DISPOTOOL_BASE_URL}/api/gmail/sync',
         headers := jsonb_build_object('Content-Type','application/json'),
         body := '{}'::jsonb
-      )$$
-);
-
--- Poll SendFox and Gmail for email metrics
-select cron.unschedule('update-email-metrics')
-  where exists (select 1 from cron.job where jobname = 'update-email-metrics');
-
-select cron.schedule(
-  'update-email-metrics',
-  '*/5 * * * *',
-  $$select
-      net.http_post(
-        url := '${DISPOTOOL_BASE_URL}/api/email-metrics/update',
-        headers := jsonb_build_object('Content-Type','application/json'),
-        body := '{}'::jsonb
-  )$$
-);
-
--- Hourly SendFox reconciliation (dry-run by default)
-select cron.unschedule('reconcile-sendfox-lists')
-  where exists (select 1 from cron.job where jobname = 'reconcile-sendfox-lists');
-
-select cron.schedule(
-  'reconcile-sendfox-lists',
-  '0 * * * *',
-  $$select
-      net.http_post(
-        url := '${DISPOTOOL_BASE_URL}/api/sendfox/reconcile',
-        headers := jsonb_build_object(
-          'Content-Type','application/json',
-          'Authorization', 'Bearer ${SUPABASE_SERVICE_ROLE_KEY}'
-        ),
-        body := jsonb_build_object('dryRun', true)
       )$$
 );
 
