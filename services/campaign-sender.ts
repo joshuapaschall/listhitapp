@@ -7,14 +7,14 @@ import { appendUnsubscribeFooter, buildUnsubscribeUrl } from "@/lib/unsubscribe"
 const log = createLogger("campaign-sender")
 
 const EMAIL_QUEUE_CONCURRENCY = Number(process.env.EMAIL_QUEUE_CONCURRENCY || 2)
-const EMAIL_QUEUE_SEND_DELAY_MS = Number(
-  process.env.EMAIL_QUEUE_SEND_DELAY_MS || process.env.SENDFOX_SEND_DELAY_MS || 750,
+const EMAIL_SEND_DELAY_MS = Number(
+  process.env.EMAIL_SEND_DELAY_MS ?? process.env.SENDFOX_SEND_DELAY_MS ?? 750,
 )
-const EMAIL_QUEUE_RATE_BACKOFF_MS = Number(
-  process.env.EMAIL_QUEUE_RATE_BACKOFF_MS || process.env.SENDFOX_RATE_BACKOFF_MS || 2000,
+const EMAIL_RETRY_BACKOFF_MS = Number(
+  process.env.EMAIL_RETRY_BACKOFF_MS ?? process.env.SENDFOX_RATE_BACKOFF_MS ?? 2000,
 )
-const EMAIL_QUEUE_RATE_MAX_RETRY = Number(
-  process.env.EMAIL_QUEUE_RATE_MAX_RETRY || process.env.SENDFOX_RATE_MAX_RETRY || 3,
+const EMAIL_RATE_MAX_RETRY = Number(
+  process.env.EMAIL_RATE_MAX_RETRY ?? process.env.SENDFOX_RATE_MAX_RETRY ?? 3,
 )
 const EMAIL_QUEUE_SPACING_MS = Number(
   process.env.EMAIL_QUEUE_SPACING_MS || process.env.SENDFOX_QUEUE_SPACING_MS || 500,
@@ -247,8 +247,8 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
     try {
       return await sendEmailCampaign({ to: contact, subject, html, tags, unsubscribeUrl })
     } catch (err: any) {
-      if (isSesRateLimitError(err) && attempt < EMAIL_QUEUE_RATE_MAX_RETRY) {
-        const delay = EMAIL_QUEUE_RATE_BACKOFF_MS * Math.max(1, attempt + 1)
+      if (isSesRateLimitError(err) && attempt < EMAIL_RATE_MAX_RETRY) {
+        const delay = EMAIL_RETRY_BACKOFF_MS * Math.max(1, attempt + 1)
         await sleep(delay)
         return sendWithBackoff(contact, subject, html, tags, unsubscribeUrl, attempt + 1)
       }
@@ -332,7 +332,7 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
       if (job.campaign_id) {
         await refreshCampaignStatus(job.campaign_id)
       }
-      await sleep(EMAIL_QUEUE_SEND_DELAY_MS)
+      await sleep(EMAIL_SEND_DELAY_MS)
     } catch (err: any) {
       console.error("Queue dispatch failed", {
         campaignId: job.campaign_id,

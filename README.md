@@ -48,6 +48,7 @@ On Vercel, also ensure the following variables are defined:
 - `ADMIN_TASKS_TOKEN` (generate with `openssl rand -hex 32`)
 - `NEXT_PUBLIC_MEDIA_BASE_URL` (optional override for branded short media links; falls back to `NEXT_PUBLIC_APP_URL`, then `SITE_URL`, then `https://app.listhit.io`)
 - `AWS_SES_REGION`, `AWS_SES_ACCESS_KEY_ID`, `AWS_SES_SECRET_ACCESS_KEY`, and `AWS_SES_FROM_EMAIL` for transactional email
+- `EMAIL_SEND_DELAY_MS`, `EMAIL_RETRY_BACKOFF_MS`, and `EMAIL_RATE_MAX_RETRY` to pace SES sends and retries without hitting provider limits
 - `EMAIL_QUEUE_WORKER_ID`, `EMAIL_QUEUE_LEASE_SECONDS`, `EMAIL_QUEUE_MAX_ATTEMPTS`, `EMAIL_QUEUE_BASE_BACKOFF_MS`, and `EMAIL_QUEUE_JITTER_MS` to tune email processing leases and retries
 
 Webhook processes that mirror incoming SMS and MMS to Supabase also need
@@ -514,6 +515,8 @@ New buyers can now be assigned to groups during creation via the **Assign to Gro
 ## Email Queue Resilience
 
 Email campaigns enqueue one row per recipient in `email_campaign_queue` with per-contact payloads. Each row now tracks `recipient_id`, `buyer_id`, `to_email`, `attempts`, `max_attempts`, `locked_at`, `lock_expires_at`, `locked_by`, `last_error`, and `sent_at` so workers can lease jobs safely. Supabase RPC helpers `claim_email_queue_jobs` and `requeue_stuck_email_jobs` manage leasing and requeuing stuck work, and the queue enforces idempotency with a unique `(campaign_id, recipient_id)` constraint.
+
+Control pacing and retries with the email-specific environment variables: `EMAIL_SEND_DELAY_MS` sets the gap between individual sends, `EMAIL_RETRY_BACKOFF_MS` controls the cooldown when SES returns rate limit errors, and `EMAIL_RATE_MAX_RETRY` caps rate-limit retries before marking a job as failed. Leave these at their defaults if you are not tuning SES throughput.
 
 ## Location Suggestions
 
