@@ -3,6 +3,18 @@
 import { useEffect, useMemo, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
+import {
+  AlertTriangle,
+  Bell,
+  CheckCircle2,
+  ExternalLink,
+  Inbox,
+  MailCheck,
+  MousePointerClick,
+  RefreshCw,
+  ThumbsDown,
+  XCircle,
+} from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
@@ -44,6 +56,11 @@ type AnalyticsResponse = {
     uniqueClicks: number
     totalClicks: number
     bounces: number
+    bounceBreakdown?: {
+      permanent: number
+      transient: number
+      other: number
+    }
     complaints: number
     unsubs: number
     errors: number
@@ -91,6 +108,8 @@ function useCampaignAnalytics(campaignId: string) {
       return res.json()
     },
     refetchOnWindowFocus: false,
+    refetchInterval: 8000,
+    refetchIntervalInBackground: true,
   })
 }
 
@@ -98,9 +117,11 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
   const queryClient = useQueryClient()
   const { data, isLoading, isFetching } = useCampaignAnalytics(campaign.id)
   const [activeTab, setActiveTab] = useState("overview")
+  const [isLive, setIsLive] = useState(false)
 
   useEffect(() => {
     const supabase = supabaseBrowser()
+    let liveTimeout: ReturnType<typeof setTimeout> | null = null
     const channel = supabase
       .channel(`campaign-analytics-${campaign.id}`)
       .on(
@@ -130,11 +151,15 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
       if (refreshTimeout) clearTimeout(refreshTimeout)
       refreshTimeout = setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: ["campaign-analytics", campaign.id] })
+        setIsLive(true)
+        if (liveTimeout) clearTimeout(liveTimeout)
+        liveTimeout = setTimeout(() => setIsLive(false), 2000)
       }, 500)
     }
 
     return () => {
       if (refreshTimeout) clearTimeout(refreshTimeout)
+      if (liveTimeout) clearTimeout(liveTimeout)
       supabase.removeChannel(channel)
     }
   }, [campaign.id, queryClient])
@@ -168,6 +193,63 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
     return colors[type] || "bg-muted text-muted-foreground"
   }
 
+  const statCards = [
+    {
+      label: "Sent",
+      value: summary?.sent,
+      icon: <Inbox className="h-4 w-4 text-muted-foreground" />,
+      tone: "bg-white",
+    },
+    {
+      label: "Delivered",
+      value: summary?.delivered,
+      icon: <MailCheck className="h-4 w-4 text-emerald-600" />,
+      tone: "bg-emerald-50 border border-emerald-100",
+      sublabel: `${formatPercent(summary?.rates?.deliveryRate || 0)} delivery`,
+    },
+    {
+      label: "Opens",
+      value: summary?.uniqueOpens,
+      icon: <CheckCircle2 className="h-4 w-4 text-blue-600" />,
+      tone: "bg-blue-50 border border-blue-100",
+      sublabel: `${formatNumber(summary?.totalOpens || 0)} total opens`,
+    },
+    {
+      label: "Clicks",
+      value: summary?.uniqueClicks,
+      icon: <MousePointerClick className="h-4 w-4 text-indigo-600" />,
+      tone: "bg-indigo-50 border border-indigo-100",
+      sublabel: `${formatNumber(summary?.totalClicks || 0)} total clicks`,
+    },
+    {
+      label: "Unsubscribes",
+      value: summary?.unsubs,
+      icon: <ThumbsDown className="h-4 w-4 text-amber-600" />,
+      tone: "bg-amber-50 border border-amber-100",
+    },
+    {
+      label: "Bounces",
+      value: summary?.bounces,
+      icon: <XCircle className="h-4 w-4 text-rose-600" />,
+      tone: "bg-rose-50 border border-rose-100",
+      sublabel:
+        summary?.bounceBreakdown &&
+        `Permanent ${formatNumber(summary.bounceBreakdown.permanent)} · Transient ${formatNumber(summary.bounceBreakdown.transient)}${summary.bounceBreakdown.other ? ` · Other ${formatNumber(summary.bounceBreakdown.other)}` : ""}`,
+    },
+    {
+      label: "Complaints",
+      value: summary?.complaints,
+      icon: <Bell className="h-4 w-4 text-orange-600" />,
+      tone: "bg-orange-50 border border-orange-100",
+    },
+    {
+      label: "Errors",
+      value: summary?.errors,
+      icon: <AlertTriangle className="h-4 w-4 text-red-600" />,
+      tone: "bg-red-50 border border-red-100",
+    },
+  ]
+
   return (
     <div className="bg-muted/60 p-4 rounded-b-md border-t">
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -178,33 +260,32 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
             <TabsTrigger value="links">Links</TabsTrigger>
             <TabsTrigger value="activity">Activity</TabsTrigger>
           </TabsList>
-          {isFetching && <span className="text-xs text-muted-foreground">Updating…</span>}
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            {isFetching && (
+              <span className="flex items-center gap-1">
+                <RefreshCw className="h-3 w-3 animate-spin" />
+                Syncing…
+              </span>
+            )}
+            <span className={`flex items-center gap-1 ${isLive ? "text-emerald-600" : ""}`}>
+              <span className={`h-2.5 w-2.5 rounded-full ${isLive ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground/40"}`} />
+              Live updates
+            </span>
+          </div>
         </div>
         <TabsContent value="overview" className="mt-4 space-y-4">
           <div className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
-            {[
-              { label: "Sent", value: summary?.sent },
-              { label: "Delivered", value: summary?.delivered },
-              {
-                label: "Opens",
-                value: summary?.uniqueOpens,
-                hint: `${formatNumber(summary?.totalOpens || 0)} total`,
-              },
-              {
-                label: "Clicks",
-                value: summary?.uniqueClicks,
-                hint: `${formatNumber(summary?.totalClicks || 0)} total`,
-              },
-              { label: "Bounces", value: summary?.bounces },
-              { label: "Unsubs", value: summary?.unsubs },
-              { label: "Complaints", value: summary?.complaints },
-              { label: "Errors", value: summary?.errors },
-            ].map((kpi) => (
-              <Card key={kpi.label}>
-                <CardHeader className="pb-2">
-                  <CardDescription>{kpi.label}</CardDescription>
-                  <CardTitle className="text-3xl">{isLoading ? "…" : formatNumber(kpi.value || 0)}</CardTitle>
-                  {kpi.hint && <p className="text-xs text-muted-foreground">{kpi.hint}</p>}
+            {statCards.map((kpi) => (
+              <Card key={kpi.label} className={`${kpi.tone || ""} shadow-sm`}>
+                <CardHeader className="pb-2 flex flex-row items-center justify-between gap-3">
+                  <div>
+                    <CardDescription className="flex items-center gap-2">
+                      {kpi.icon}
+                      {kpi.label}
+                    </CardDescription>
+                    <CardTitle className="text-3xl mt-2">{isLoading ? "…" : formatNumber(kpi.value || 0)}</CardTitle>
+                    {kpi.sublabel && <p className="text-xs text-muted-foreground">{kpi.sublabel}</p>}
+                  </div>
                 </CardHeader>
               </Card>
             ))}
@@ -236,34 +317,101 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
             </CardContent>
           </Card>
 
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Card className="lg:col-span-2">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg">Performance over time</CardTitle>
+                <CardDescription>Hourly buckets via campaign_event_timeline()</CardDescription>
+              </CardHeader>
+              <CardContent className="h-80">
+                {isLoading ? (
+                  <div className="text-sm text-muted-foreground">Loading chart…</div>
+                ) : timelineData.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">No activity yet.</div>
+                ) : (
+                  <ChartContainer
+                    config={{
+                      opens: { label: "Opens", color: "hsl(var(--chart-2))" },
+                      clicks: { label: "Clicks", color: "hsl(var(--chart-1))" },
+                    }}
+                    className="h-full"
+                  >
+                    <LineChart data={timelineData}>
+                      <XAxis dataKey="bucket" />
+                      <YAxis allowDecimals={false} />
+                      <ChartTooltip content={<ChartTooltipContent />} />
+                      <Line type="monotone" dataKey="opens" stroke="var(--color-opens)" strokeWidth={2} dot={false} />
+                      <Line type="monotone" dataKey="clicks" stroke="var(--color-clicks)" strokeWidth={2} dot={false} />
+                      <ChartLegend content={<ChartLegendContent />} />
+                    </LineChart>
+                  </ChartContainer>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg">Top links</CardTitle>
+                <CardDescription>campaign_top_links()</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {data?.topLinks?.length ? (
+                  data.topLinks.slice(0, 5).map((link) => (
+                    <div key={link.url} className="flex items-start justify-between gap-3 rounded-md border p-3">
+                      <div className="space-y-1">
+                        <Link href={link.url} className="text-sm text-blue-600 hover:underline break-all" target="_blank">
+                          {link.url}
+                        </Link>
+                        <p className="text-xs text-muted-foreground">
+                          {formatNumber(link.uniqueClickers)} unique · {formatNumber(link.totalClicks)} total
+                        </p>
+                      </div>
+                      <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-sm text-muted-foreground">
+                    {isLoading ? "Loading links…" : "No link activity yet."}
+                  </div>
+                )}
+                <div className="text-xs text-muted-foreground">
+                  Full breakdown available in the Links tab.
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-lg">Opens & clicks over time</CardTitle>
-              <CardDescription>Hourly buckets</CardDescription>
+              <CardTitle className="text-lg">Recent activity</CardTitle>
+              <CardDescription>Live feed from campaign_recent_events()</CardDescription>
             </CardHeader>
-            <CardContent className="h-72">
-              {isLoading ? (
-                <div className="text-sm text-muted-foreground">Loading chart…</div>
-              ) : timelineData.length === 0 ? (
-                <div className="text-sm text-muted-foreground">No activity yet.</div>
+            <CardContent className="space-y-3">
+              {data?.recentEvents?.length ? (
+                data.recentEvents.slice(0, 8).map((evt, idx) => (
+                  <div key={`${evt.at}-${idx}`} className="flex items-start gap-3 rounded-md border p-3 bg-white">
+                    <Badge className={statusBadge(evt.type)}>{evt.type}</Badge>
+                    <div className="space-y-1">
+                      <div className="text-sm font-medium">{evt.recipientEmail || "Unknown recipient"}</div>
+                      <div className="text-xs text-muted-foreground">{formatDate(evt.at)}</div>
+                      {evt.url && (
+                        <div className="text-xs">
+                          <Link href={evt.url} className="text-blue-600 hover:underline" target="_blank">
+                            {evt.url}
+                          </Link>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))
               ) : (
-                <ChartContainer
-                  config={{
-                    opens: { label: "Opens", color: "hsl(var(--chart-2))" },
-                    clicks: { label: "Clicks", color: "hsl(var(--chart-1))" },
-                  }}
-                  className="h-full"
-                >
-                  <LineChart data={timelineData}>
-                    <XAxis dataKey="bucket" />
-                    <YAxis allowDecimals={false} />
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <Line type="monotone" dataKey="opens" stroke="var(--color-opens)" strokeWidth={2} dot={false} />
-                    <Line type="monotone" dataKey="clicks" stroke="var(--color-clicks)" strokeWidth={2} dot={false} />
-                    <ChartLegend content={<ChartLegendContent />} />
-                  </LineChart>
-                </ChartContainer>
+                <div className="text-sm text-muted-foreground">
+                  {isLoading ? "Loading activity…" : "No events yet."}
+                </div>
               )}
+              <div className="text-xs text-muted-foreground">
+                See the Activity tab for the full log.
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

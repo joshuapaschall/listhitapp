@@ -14,34 +14,64 @@ function normalizeEmail(email: string) {
   return email.trim().toLowerCase()
 }
 
-function buildSignature(buyerId: string, email: string, timestamp: number) {
+function buildSignature({
+  buyerId,
+  email,
+  campaignId,
+  recipientId,
+  timestamp,
+}: {
+  buyerId: string
+  email: string
+  campaignId?: string
+  recipientId?: string
+  timestamp: number
+}) {
   const hmac = crypto.createHmac("sha256", getSecret())
-  hmac.update(`${buyerId}:${normalizeEmail(email)}:${timestamp}`)
+  const parts = [buyerId, normalizeEmail(email)]
+  if (campaignId) parts.push(campaignId)
+  if (recipientId) parts.push(recipientId)
+  parts.push(String(timestamp))
+  hmac.update(parts.join(":"))
   return hmac.digest("hex")
 }
 
 export function signUnsubscribePayload({
   buyerId,
   email,
+  campaignId,
+  recipientId,
   timestamp = Date.now(),
 }: {
   buyerId: string
   email: string
+  campaignId?: string
+  recipientId?: string
   timestamp?: number
 }) {
   const normalizedTimestamp = typeof timestamp === "number" ? timestamp : Date.now()
-  const signature = buildSignature(buyerId, email, normalizedTimestamp)
+  const signature = buildSignature({
+    buyerId,
+    email,
+    campaignId,
+    recipientId,
+    timestamp: normalizedTimestamp,
+  })
   return { timestamp: normalizedTimestamp.toString(), signature }
 }
 
 export function verifyUnsubscribeSignature({
   buyerId,
   email,
+  campaignId,
+  recipientId,
   timestamp,
   signature,
 }: {
   buyerId: string
   email: string
+  campaignId?: string
+  recipientId?: string
   timestamp: string | number
   signature: string
 }) {
@@ -49,11 +79,22 @@ export function verifyUnsubscribeSignature({
     const ts = Number(timestamp)
     if (!ts || Number.isNaN(ts)) return false
     if (Date.now() - ts > UNSUBSCRIBE_MAX_AGE_MS) return false
-    const expected = buildSignature(buyerId, email, ts)
-    const expectedBuffer = Buffer.from(expected, "hex")
+    const expectedSignatures = [
+      buildSignature({ buyerId, email, campaignId, recipientId, timestamp: ts }),
+    ]
+    const legacySignature = buildSignature({ buyerId, email, timestamp: ts })
+    if (!expectedSignatures.includes(legacySignature)) {
+      expectedSignatures.push(legacySignature)
+    }
     const providedBuffer = Buffer.from(signature, "hex")
-    if (expectedBuffer.length !== providedBuffer.length) return false
-    return crypto.timingSafeEqual(expectedBuffer, providedBuffer)
+    for (const expected of expectedSignatures) {
+      const expectedBuffer = Buffer.from(expected, "hex")
+      if (expectedBuffer.length !== providedBuffer.length) continue
+      if (crypto.timingSafeEqual(expectedBuffer, providedBuffer)) {
+        return true
+      }
+    }
+    return false
   } catch (error) {
     console.error("Unsubscribe signature verification failed", error)
     return false
@@ -64,17 +105,28 @@ export function buildUnsubscribeUrl({
   buyerId,
   email,
   baseUrl,
+  campaignId,
+  recipientId,
 }: {
   buyerId: string
   email: string
   baseUrl?: string
+  campaignId?: string
+  recipientId?: string
 }) {
   const origin = baseUrl || process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL
   if (!origin) throw new Error("SITE_URL is not configured")
-  const { signature, timestamp } = signUnsubscribePayload({ buyerId, email })
-  const url = new URL("/unsubscribe", origin)
+  const { signature, timestamp } = signUnsubscribePayload({
+    buyerId,
+    email,
+    campaignId,
+    recipientId,
+  })
+  const url = new URL("/api/unsubscribe", origin)
   url.searchParams.set("id", buyerId)
   url.searchParams.set("e", email)
+  if (campaignId) url.searchParams.set("campaignId", campaignId)
+  if (recipientId) url.searchParams.set("recipientId", recipientId)
   url.searchParams.set("t", timestamp)
   url.searchParams.set("s", signature)
   return url.toString()
