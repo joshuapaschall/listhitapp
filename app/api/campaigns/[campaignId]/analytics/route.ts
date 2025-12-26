@@ -42,29 +42,44 @@ export async function GET(_req: NextRequest, { params }: { params: { campaignId:
   const topLinksQuery = supabaseAdmin.rpc("campaign_top_links", { p_campaign_id: campaignId })
   const timelineQuery = supabaseAdmin.rpc("campaign_event_timeline", { p_campaign_id: campaignId })
   const recentQuery = supabaseAdmin.rpc("campaign_recent_events", { p_campaign_id: campaignId })
+  const bounceBreakdownQuery = supabaseAdmin
+    .from("email_events")
+    .select("payload")
+    .eq("campaign_id", campaignId)
+    .eq("event_type", "bounce")
 
-  const [summaryRes, recipientSummaryRes, linksRes, timelineRes, recentRes] = await Promise.all([
+  const [summaryRes, recipientSummaryRes, linksRes, timelineRes, recentRes, bounceBreakdownRes] = await Promise.all([
     summaryQuery,
     recipientSummaryQuery,
     topLinksQuery,
     timelineQuery,
     recentQuery,
+    bounceBreakdownQuery,
   ])
 
-  if (summaryRes.error || recipientSummaryRes.error || linksRes.error || timelineRes.error || recentRes.error) {
+  if (
+    summaryRes.error ||
+    recipientSummaryRes.error ||
+    linksRes.error ||
+    timelineRes.error ||
+    recentRes.error ||
+    bounceBreakdownRes.error
+  ) {
     console.error("Analytics query failed", {
       summary: summaryRes.error,
       recipients: recipientSummaryRes.error,
       links: linksRes.error,
       timeline: timelineRes.error,
       recent: recentRes.error,
+      bounce: bounceBreakdownRes.error,
     })
     return NextResponse.json({ error: "Failed to load analytics" }, { status: 500 })
   }
 
   const summaryRows = summaryRes.data || []
   const recipientSummary = (recipientSummaryRes.data || [])[0] || {}
-  const summary = buildSummary(summaryRows, recipientSummary)
+  const bounceBreakdown = buildBounceBreakdown(bounceBreakdownRes.data || [])
+  const summary = buildSummary(summaryRows, recipientSummary, bounceBreakdown)
 
   const topLinks = (linksRes.data || []).map((row: any) => ({
     url: row.url,
@@ -102,7 +117,7 @@ export async function GET(_req: NextRequest, { params }: { params: { campaignId:
   })
 }
 
-function buildSummary(rows: any[], recipientSummary: any) {
+function buildSummary(rows: any[], recipientSummary: any, bounceBreakdown: BounceBreakdown) {
   const totals: Record<string, { total: number; unique: number }> = {}
   rows.forEach((r) => {
     const key = (r.event_type || "").toLowerCase()
@@ -155,6 +170,7 @@ function buildSummary(rows: any[], recipientSummary: any) {
     uniqueClicks,
     totalClicks,
     bounces,
+    bounceBreakdown,
     complaints,
     unsubs,
     errors,
@@ -168,4 +184,35 @@ function buildSummary(rows: any[], recipientSummary: any) {
       clickToOpen: cto,
     },
   }
+}
+
+type BounceBreakdown = {
+  permanent: number
+  transient: number
+  other: number
+}
+
+function buildBounceBreakdown(rows: any[]): BounceBreakdown {
+  return rows.reduce(
+    (acc: BounceBreakdown, row: any) => {
+      const payload = row?.payload || {}
+      const bounce = payload?.bounce || payload?.Bounce || payload?.notification?.bounce || {}
+      const typeRaw =
+        bounce?.bounceType ||
+        bounce?.BounceType ||
+        bounce?.type ||
+        bounce?.notificationType ||
+        ""
+      const type = (typeRaw || "").toString().toLowerCase()
+      if (type.includes("permanent")) {
+        acc.permanent += 1
+      } else if (type.includes("transient") || type.includes("temporary")) {
+        acc.transient += 1
+      } else if (type) {
+        acc.other += 1
+      }
+      return acc
+    },
+    { permanent: 0, transient: 0, other: 0 },
+  )
 }
