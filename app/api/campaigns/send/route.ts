@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { sendCampaignSMS } from "@/services/campaign-sender.server"
 import {
-  EMAIL_BATCH_SIZE,
   processEmailQueue,
   queueEmailCampaign,
   type EmailContactPayload,
@@ -188,11 +187,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const batches = [] as EmailContactPayload[][]
-    for (let i = 0; i < emailContacts.length; i += EMAIL_BATCH_SIZE) {
-      batches.push(emailContacts.slice(i, i + EMAIL_BATCH_SIZE))
-    }
-
     await supabase
       .from("campaign_recipients")
       .update({ status: "pending", error: null })
@@ -203,31 +197,29 @@ export async function POST(request: NextRequest) {
           .filter((v): v is string => Boolean(v)),
       )
 
-    for (const batch of batches) {
-      try {
-        await queueEmailCampaign(
-          {
-            campaignId: campaign.id,
-            subject: campaign.subject || "",
-            html: campaign.message,
-            contacts: batch,
-          },
-          { scheduledFor: campaign.scheduled_at || undefined, createdBy: userId || campaign.user_id || undefined },
-        )
-      } catch (err: any) {
-        console.error("Queue insertion failed", err)
-        const isMissingCampaign = err?.code === "23503"
-        return new Response(
-          JSON.stringify({
-            error: "Failed to queue email campaign",
-            details: err?.message || String(err),
-            hint: isMissingCampaign
-              ? "Campaign definition record is missing; ensure campaign_id is valid before queuing."
-              : "Queue insertion failed; check campaign definition and queue payload.",
-          }),
-          { status: 500 },
-        )
-      }
+    try {
+      await queueEmailCampaign(
+        {
+          campaignId: campaign.id,
+          subject: campaign.subject || "",
+          html: campaign.message,
+          contacts: emailContacts,
+        },
+        { scheduledFor: campaign.scheduled_at || undefined, createdBy: userId || campaign.user_id || undefined },
+      )
+    } catch (err: any) {
+      console.error("Queue insertion failed", err)
+      const isMissingCampaign = err?.code === "23503"
+      return new Response(
+        JSON.stringify({
+          error: "Failed to queue email campaign",
+          details: err?.message || String(err),
+          hint: isMissingCampaign
+            ? "Campaign definition record is missing; ensure campaign_id is valid before queuing."
+            : "Queue insertion failed; check campaign definition and queue payload.",
+        }),
+        { status: 500 },
+      )
     }
 
     const dispatched = await processEmailQueue(3)
