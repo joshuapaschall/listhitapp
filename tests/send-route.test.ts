@@ -152,6 +152,7 @@ describe("send route templates", () => {
     supabase = buildSupabase()
     process.env.SUPABASE_SERVICE_ROLE_KEY = "tok"
     process.env.NEXT_PUBLIC_SUPABASE_URL = "http://local"
+    process.env.EMAIL_DISABLE_SHORTLINKS = "1"
   })
 
   test("renders template for SMS", async () => {
@@ -182,9 +183,27 @@ describe("send route templates", () => {
       body: JSON.stringify({ campaignId: "c2" }),
     })
     await POST(req)
-    expect(shortMock).toHaveBeenCalled()
+    expect(shortMock).not.toHaveBeenCalled()
     expect(emailMock).toHaveBeenCalledWith(
       expect.objectContaining({ subject: "Hey Jane" })
+    )
+  })
+
+  test("enables short links for email when configured", async () => {
+    process.env.EMAIL_DISABLE_SHORTLINKS = "0"
+    campaigns.push({ id: "c5", channel: "email", subject: "Hey {{first_name}}", message: "<a href=\"https://example.com\">link</a>", buyer_ids: ["b5"] })
+    buyers.push({ id: "b5", fname: "Alex", lname: "Jones", email: "alex@test.com", can_receive_email: true, sendfox_hidden: false })
+    emailMock.mockResolvedValue("id5")
+    shortMock.mockResolvedValue({ html: "updated", key: "path" })
+    const req = new NextRequest("http://test", {
+      method: "POST",
+      headers: { "Authorization": "Bearer tok" },
+      body: JSON.stringify({ campaignId: "c5" }),
+    })
+    await POST(req)
+    expect(shortMock).toHaveBeenCalledWith("<a href=\"https://example.com\">link</a>", { anchorHrefOnly: true })
+    expect(emailMock).toHaveBeenCalledWith(
+      expect.objectContaining({ html: "updated" })
     )
   })
 

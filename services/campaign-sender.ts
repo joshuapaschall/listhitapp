@@ -16,6 +16,8 @@ const SITE_URL =
   process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_BASE_URL || process.env.DISPOTOOL_BASE_URL
 const EMAIL_PHYSICAL_ADDRESS = process.env.EMAIL_PHYSICAL_ADDRESS || "ListHit CRM · 123 Main St · Anytown, USA"
 
+const emailShortlinksDisabled = () => (process.env.EMAIL_DISABLE_SHORTLINKS ?? "1") !== "0"
+
 export interface EmailOptions {
   to: string | string[]
   subject: string
@@ -221,12 +223,14 @@ export async function processEmailQueue(limit = 5) {
         }
         const subject = renderTemplate(payload.subject, context)
         let html = renderTemplate(payload.html, context)
-        try {
-          const { replaceUrlsWithShortLinks } = await import("./shortio-service")
-          const replaced = await replaceUrlsWithShortLinks(html)
-          html = replaced.html
-        } catch (err) {
-          console.error("Short.io replacement failed", err)
+        if (!emailShortlinksDisabled()) {
+          try {
+            const { replaceUrlsWithShortLinks } = await import("./shortio-service")
+            const replaced = await replaceUrlsWithShortLinks(html, { anchorHrefOnly: true })
+            html = replaced.html
+          } catch (err) {
+            console.error("Short.io replacement failed", err)
+          }
         }
         if (!SITE_URL) {
           throw new Error("SITE_URL is not configured")
