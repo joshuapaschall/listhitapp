@@ -46,16 +46,34 @@ create policy "message_threads select active" on public.message_threads
   for select to authenticated using (deleted_at is null);
 
 drop policy if exists "message_threads all authenticated" on public.message_threads;
-create policy "message_threads all authenticated" on public.message_threads
-  for all to authenticated using (true) with check (true);
+drop policy if exists "message_threads insert authenticated" on public.message_threads;
+create policy "message_threads insert authenticated" on public.message_threads
+  for insert to authenticated with check (true);
+
+drop policy if exists "message_threads update authenticated" on public.message_threads;
+create policy "message_threads update authenticated" on public.message_threads
+  for update to authenticated using (true) with check (true);
+
+drop policy if exists "message_threads delete authenticated" on public.message_threads;
+create policy "message_threads delete authenticated" on public.message_threads
+  for delete to authenticated using (true);
 
 drop policy if exists "messages select active" on public.messages;
 create policy "messages select active" on public.messages
   for select to authenticated using (deleted_at is null);
 
 drop policy if exists "messages all authenticated" on public.messages;
-create policy "messages all authenticated" on public.messages
-  for all to authenticated using (true) with check (true);
+drop policy if exists "messages insert authenticated" on public.messages;
+create policy "messages insert authenticated" on public.messages
+  for insert to authenticated with check (true);
+
+drop policy if exists "messages update authenticated" on public.messages;
+create policy "messages update authenticated" on public.messages
+  for update to authenticated using (true) with check (true);
+
+drop policy if exists "messages delete authenticated" on public.messages;
+create policy "messages delete authenticated" on public.messages
+  for delete to authenticated using (true);
 
 -- Voice numbers: readable to authenticated users
 drop policy if exists "voice_numbers read" on public.voice_numbers;
