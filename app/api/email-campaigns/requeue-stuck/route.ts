@@ -4,7 +4,8 @@ import { assertServer } from "@/utils/assert-server"
 
 assertServer()
 
-const DEFAULT_LEASE_SECONDS = 300
+const DEFAULT_STUCK_SECONDS = 300
+const DEFAULT_LIMIT = 50
 
 export async function POST(request: NextRequest) {
   const auth = request.headers.get("authorization")
@@ -24,13 +25,16 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => ({}))
-  const leaseSeconds =
-    typeof body?.leaseSeconds === "number" && body.leaseSeconds > 0
-      ? body.leaseSeconds
-      : DEFAULT_LEASE_SECONDS
+  const stuckSeconds =
+    typeof body?.stuckSeconds === "number" && body.stuckSeconds > 0
+      ? body.stuckSeconds
+      : DEFAULT_STUCK_SECONDS
+  const limit =
+    typeof body?.limit === "number" && body.limit > 0 ? body.limit : DEFAULT_LIMIT
 
   const { data, error } = await supabaseAdmin.rpc("requeue_stuck_email_jobs", {
-    p_stuck_seconds: leaseSeconds,
+    p_limit: limit,
+    p_stuck_seconds: stuckSeconds,
   })
 
   if (error) {
@@ -38,5 +42,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ requeued: data?.length || 0, jobs: data || [] })
+  return NextResponse.json({ requeued: data ?? 0 })
 }

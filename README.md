@@ -43,14 +43,12 @@ On Vercel, also ensure the following variables are defined:
 
 - `DISPOTOOL_BASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
-- `SENDFOX_API_TOKEN` (and optional `SENDFOX_API_KEY` fallback)
-- `SENDFOX_DELETED_LIST_ID`
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `ADMIN_TASKS_TOKEN` (generate with `openssl rand -hex 32`)
 - `NEXT_PUBLIC_MEDIA_BASE_URL` (optional override for branded short media links; falls back to `NEXT_PUBLIC_APP_URL`, then `SITE_URL`, then `https://app.listhit.io`)
-
-Use the same SendFox bearer token (`SENDFOX_API_TOKEN`, and legacy `SENDFOX_API_KEY` if still needed) in both the Vercel Build and Runtime settings so every deployment can authenticate SendFox calls.
+- `AWS_SES_REGION`, `AWS_SES_ACCESS_KEY_ID`, `AWS_SES_SECRET_ACCESS_KEY`, and `AWS_SES_FROM_EMAIL` for transactional email
+- `EMAIL_QUEUE_WORKER_ID`, `EMAIL_QUEUE_LEASE_SECONDS`, `EMAIL_QUEUE_MAX_ATTEMPTS`, `EMAIL_QUEUE_BASE_BACKOFF_MS`, and `EMAIL_QUEUE_JITTER_MS` to tune email processing leases and retries
 
 Webhook processes that mirror incoming SMS and MMS to Supabase also need
 `TELNYX_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY` and `NEXT_PUBLIC_SUPABASE_URL`.
@@ -366,8 +364,8 @@ The messages table now stores an array of media URLs for MMS. If your database p
 A new `profiles` table mirrors entries in `auth.users`. Run `migrations/archive/020-create-profiles.sql` if your database doesn't include it.
 A new `notes` column stores metadata on each call. If upgrading, run `migrations/archive/024-add-call-notes.sql` to add it.
 
-The campaign system uses Telnyx for SMS and SendFox for email. Define the
-following variables in `.env.local`:
+The campaign system uses Telnyx for SMS and AWS SES for email delivery with a
+leased email queue. Define the following variables in `.env.local`:
 
 - `TELNYX_API_KEY`
 - `TELNYX_PUBLIC_KEY`
@@ -376,10 +374,13 @@ following variables in `.env.local`:
 - `TELNYX_DEFAULT_CALLER_ID` – default caller ID (e.g., your DID) for outbound calls
 - `CALL_CONTROL_APP_ID` – Voice connection ID used for `/v2/telephony_credentials` (legacy `VOICE_CONNECTION_ID` / `TELNYX_VOICE_CONNECTION_ID` are still read as fallbacks)
 - `VOICE_SYNC_SECRET_KEY`
-- `SENDFOX_API_TOKEN` (optional, required for SendFox integration)
-- `SENDFOX_DEFAULT_LIST_ID` (optional, default list for new contacts)
-- `SENDFOX_DELETED_LIST_ID` (optional, list ID for deleted contacts)
-- If migrating from older setups, `SENDFOX_API_KEY` is still accepted as a fallback but will be removed later.
+- `AWS_SES_REGION`, `AWS_SES_ACCESS_KEY_ID`, `AWS_SES_SECRET_ACCESS_KEY`, `AWS_SES_FROM_EMAIL`, and `AWS_SES_FROM_NAME` for SES-signed sends
+- `AWS_SES_CONFIGURATION_SET` if you use configuration sets for feedback loops
+- `AWS_SNS_TOPIC_ARN` for bounce/complaint notifications
+- `EMAIL_QUEUE_WORKER_ID` (optional, defaults to a random worker name)
+- `EMAIL_QUEUE_LEASE_SECONDS` (how long a worker owns a job)
+- `EMAIL_QUEUE_MAX_ATTEMPTS` (max retry attempts before a job is marked dead)
+- `EMAIL_QUEUE_BASE_BACKOFF_MS` and `EMAIL_QUEUE_JITTER_MS` (exponential backoff + jitter for retries)
 - `SHORTIO_API_KEY`
 - `SHORTIO_DOMAIN`
 
@@ -564,14 +565,9 @@ dark mode palette.
 
 New buyers can now be assigned to groups during creation via the **Assign to Groups** section in the Add Buyer modal. Newly created groups are automatically selected and group counts refresh after the buyer is added.
 
-## SendFox Fields
+## Email Queue Resilience
 
-Migrations `022-add-sendfox-list-id.sql` and `025-add-sendfox-contact-id.sql` add columns that keep SendFox in sync:
-
-- `groups.sendfox_list_id` stores the ID of the SendFox list linked to a group and updates when the group is synced or renamed.
-- `buyers.sendfox_contact_id` tracks each buyer's SendFox contact ID, set on subscribe and cleared on unsubscribe.
-
-Run these migrations in order to keep your database schema current.
+Email campaigns enqueue one row per recipient in `email_campaign_queue` with per-contact payloads. Each row now tracks `recipient_id`, `buyer_id`, `to_email`, `attempts`, `max_attempts`, `locked_at`, `lock_expires_at`, `locked_by`, `last_error`, and `sent_at` so workers can lease jobs safely. Supabase RPC helpers `claim_email_queue_jobs` and `requeue_stuck_email_jobs` manage leasing and requeuing stuck work, and the queue enforces idempotency with a unique `(campaign_id, recipient_id)` constraint.
 
 ## Location Suggestions
 
@@ -608,23 +604,18 @@ Before enabling the scheduler, set the required secrets in Supabase:
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `DISPOTOOL_BASE_URL` (or `SITE_URL`) pointing to your deployed Next.js site
-- `FUNCTION_URL` pointing to your deployed `send-scheduled-campaigns` function
-- `SENDFOX_API_TOKEN` (and optional `SENDFOX_API_KEY` fallback) so SendFox calls from scheduled jobs stay authenticated
+- `FUNCTION_URL` pointing to your deployed `send-scheduled-campaigns` function (if you use the edge function trigger)
+- `AWS_SES_REGION`, `AWS_SES_ACCESS_KEY_ID`, `AWS_SES_SECRET_ACCESS_KEY`, and `AWS_SES_FROM_EMAIL` so cron-triggered email processing can sign SES requests
+- Optional queue tuning values like `EMAIL_QUEUE_WORKER_ID`, `EMAIL_QUEUE_LEASE_SECONDS`, and `EMAIL_QUEUE_MAX_ATTEMPTS` if you need to override defaults in scheduled jobs
 
 On Vercel, set these variables in both the **Build** and **Runtime** sections
 to prevent build failures.
 
-Re-use the exact `SENDFOX_API_TOKEN` value from Vercel when configuring Supabase secrets. That keeps the `send-scheduled-campaigns` edge function and any `pg_cron` jobs invoking SendFox-backed routes aligned with the same bearer token.
-
-Run the following command and supply your values:
-
-```bash
-supabase secrets set SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... DISPOTOOL_BASE_URL=... FUNCTION_URL=... SENDFOX_API_TOKEN=... [SENDFOX_API_KEY=...]
-```
+`pnpm run db:schedule` uses `envsubst` to inject these secrets into the SQL before applying it. Run the command from a terminal where the variables above are already exported so the cron jobs point at the correct URLs and credentials.
 
 ### Validate cron secrets
 
-`pg_cron` jobs call Next.js routes for campaigns, Gmail sync, metrics, and SendFox reconciliation. Make sure the Supabase project secrets that cron can read match the values used by your deployed app:
+`pg_cron` jobs call Next.js routes for campaigns and Gmail sync. Make sure the Supabase project secrets that cron can read match the values used by your deployed app:
 
 - `DISPOTOOL_BASE_URL` must be the public URL of the deployed site (for example `https://app.listhit.io`). A localhost value will cause the HTTP calls to fail inside Supabase.
 - `SUPABASE_SERVICE_ROLE_KEY` must be the same service role key you configured in Vercel or your server environment so the scheduled requests stay authorized.
@@ -637,8 +628,8 @@ supabase secrets list --project-ref <project_id>
 
 If either value is missing or incorrect, re-run the `supabase secrets set ...` command above. After correcting the secrets, run `pnpm run db:schedule` to recreate the cron jobs with the updated environment.
 
-After the secrets are configured, run `pnpm run db:schedule` to create the cron job.
-The job runs every **5 minutes**, as defined in both `scripts/04-scheduler.sql` and `supabase/config.toml`.
+After the secrets are configured, run `pnpm run db:schedule` to create the cron jobs.
+The email processing and stuck-job requeue cron tasks now run every **minute** as defined in `scripts/04-scheduler.sql`.
 
 To deploy the edge function that sends scheduled campaigns, run:
 
