@@ -1,0 +1,74 @@
+-- Supabase pg_cron jobs for DispoTool / ListHit
+create extension if not exists pg_net   with schema extensions;
+create extension if not exists pg_cron  with schema pg_catalog;
+
+-- Recreate cron job: every 5 min call Edge Function
+delete from cron.job where jobname = 'send-campaigns-every-5';
+select cron.schedule(
+  'send-campaigns-every-5',
+  '*/5 * * * *',
+  $$select
+      net.http_post(
+        url := '${FUNCTION_URL}',
+        headers := jsonb_build_object('Content-Type','application/json'),
+        body := '{}'::jsonb
+      )$$
+);
+
+-- Drive queued email batches
+delete from cron.job where jobname = 'process-email-queue';
+select cron.schedule(
+  'process-email-queue',
+  '*/1 * * * *',
+  $$select
+      net.http_post(
+        url := '${SITE_URL}/api/email-campaigns/process',
+        headers := jsonb_build_object(
+          'Content-Type','application/json',
+          'Authorization', 'Bearer ${SUPABASE_SERVICE_ROLE_KEY}'
+        ),
+        body := jsonb_build_object('limit', 25)
+      )$$
+);
+
+-- Requeue stuck email jobs
+delete from cron.job where jobname = 'requeue-stuck-email-jobs';
+select cron.schedule(
+  'requeue-stuck-email-jobs',
+  '*/1 * * * *',
+  $$select
+      net.http_post(
+        url := '${SITE_URL}/api/email-campaigns/requeue-stuck',
+        headers := jsonb_build_object(
+          'Content-Type','application/json',
+          'Authorization', 'Bearer ${SUPABASE_SERVICE_ROLE_KEY}'
+        ),
+        body := jsonb_build_object('stuckSeconds', 300, 'limit', 100)
+      )$$
+);
+
+-- Recreate Gmail sync: every 5 min hit Next.js route
+delete from cron.job where jobname = 'sync-gmail-threads';
+select cron.schedule(
+  'sync-gmail-threads',
+  '*/5 * * * *',
+  $$select
+      net.http_post(
+        url := '${SITE_URL}/api/gmail/sync',
+        headers := jsonb_build_object('Content-Type','application/json'),
+        body := '{}'::jsonb
+      )$$
+);
+
+-- Daily cleanup of expired Telnyx credentials
+delete from cron.job where jobname = 'cleanup-telnyx-creds';
+select cron.schedule(
+  'cleanup-telnyx-creds',
+  '0 0 * * *',
+  $$select
+      net.http_post(
+        url := '${SITE_URL}/api/telnyx/cleanup',
+        headers := jsonb_build_object('Content-Type','application/json'),
+        body := '{}'::jsonb
+      )$$
+);

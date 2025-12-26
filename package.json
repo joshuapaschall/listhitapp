@@ -13,7 +13,7 @@
     "lint": "next lint",
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --runInBand",
     "cy": "cypress run",
-    "db:schedule": "envsubst < scripts/04-scheduler.sql | supabase db execute -",
+    "db:schedule": "envsubst < scripts/db/05_scheduler.sql | supabase db execute -",
     "seed:admin": "node scripts/seed-admin.mjs",
     "test:watch": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --watch"
   },
