@@ -47,7 +47,6 @@ import type { Buyer, Group, Tag } from "@/lib/supabase"
 import { getGroups } from "@/lib/group-service"
 import { CampaignService } from "@/services/campaign-service"
 import { BuyerService } from "@/services/buyer-service"
-import { sendEmailCampaign } from "@/services/campaign-sender"
 import { toast } from "sonner"
 import {
   Users,
@@ -210,6 +209,8 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
     count: 0,
     sample: [],
   })
+  const [testRecipient, setTestRecipient] = useState("")
+  const [sendingTest, setSendingTest] = useState(false)
   const debounceRef = useRef<any>(null)
   const quillRef = useRef<ReactQuillType | null>(null)
   const stepIndex = STEPS.indexOf(step)
@@ -387,6 +388,8 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
     setRunUntil("")
     setPreview({ count: 0, sample: [] })
     setPreviewLoading(false)
+    setTestRecipient("")
+    setSendingTest(false)
     if (debounceRef.current) clearTimeout(debounceRef.current)
   }
 
@@ -473,18 +476,32 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
   }
 
   const handleSendTest = async () => {
-    if (!subject.trim() || !html.trim()) return
+    const to = (testRecipient || buyers[0]?.email || "").trim()
+    if (!subject.trim() || !html.trim()) {
+      toast.error("Subject and message are required")
+      return
+    }
+    if (!to) {
+      toast.error("Please enter a test recipient email")
+      return
+    }
+    setSendingTest(true)
     try {
-      await sendEmailCampaign({
-        to: buyers[0]?.email || "test@example.com",
-        subject,
-        html,
-        dryRun: true,
+      const res = await fetch("/api/campaigns/test-send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to, subject, html }),
       })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error || "Failed to send test email")
+      }
       toast.success("Test email sent")
     } catch (err) {
       console.error("Failed to send test email", err)
-      toast.error("Failed to send test email")
+      toast.error(err instanceof Error ? err.message : "Failed to send test email")
+    } finally {
+      setSendingTest(false)
     }
   }
 
@@ -648,6 +665,19 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
                   </div>
                   {!html.trim() && <p className="text-xs text-red-600">Message is required</p>}
                 </div>
+                <div className="space-y-1">
+                  <label htmlFor="test-recipient" className="block text-sm font-medium">Test recipient email</label>
+                  <Input
+                    id="test-recipient"
+                    name="test-recipient"
+                    value={testRecipient}
+                    onChange={(e) => setTestRecipient(e.target.value)}
+                    placeholder="you@example.com"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Leave blank to use the first selected buyer (if available).
+                  </p>
+                </div>
                 <div className="flex items-center gap-2">
                   <Switch
                     checked={sendNow}
@@ -794,8 +824,14 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
                   <p className="text-xs text-red-600">Run From must be before Run Until</p>
                 )}
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={handleSendTest}
-                    >Send Test</Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSendTest}
+                    disabled={sendingTest}
+                  >
+                    {sendingTest ? "Sending..." : "Send Test"}
+                  </Button>
                   <Button variant="outline" size="sm" onClick={handlePreview}
                     >Preview</Button>
                 </div>
