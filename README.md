@@ -57,6 +57,19 @@ after 24 hours.
 If incoming files don't show a Supabase link, verify these values were
 available when the webhook executed.
 
+## Database bootstrap
+
+Provision a fresh Supabase instance by running the consolidated SQL files in `scripts/db` in numeric order:
+
+1. `scripts/db/00_extensions.sql`
+2. `scripts/db/01_schema.sql`
+3. `scripts/db/02_functions_triggers.sql`
+4. `scripts/db/03_rls_policies.sql`
+5. `scripts/db/04_seed.sql` (optional demo data)
+6. `scripts/db/05_scheduler.sql` (optional pg_cron jobs)
+
+The Supabase Dashboard SQL editor is sufficient—paste or upload each file in order and run it. If you prefer the CLI, pipe each file through `psql $SUPABASE_URL -f <file>` after exporting your database connection string. The `db/legacy` folder retains the historical migrations and prior bootstrap scripts but is not applied to new environments.
+
 ## Voice Routing & Tenancy
 
 Voice routing is tenant-aware so each inbound DID can point to a specific customer organization.
@@ -184,32 +197,6 @@ After seeding, remove or disable ADMIN_SEED_TOKEN or delete the route for securi
 ## Upsert user (internal)
 GET https://<your-domain>/api/internal/upsert-user?token=<ADMIN_SEED_TOKEN>&email=<email>&password=<TempPass!234>&name=<Name>&role=admin
 
-Initialize your database by running the SQL files in order. Execute them via the Supabase SQL editor or `psql`:
-
-```bash
-psql $SUPABASE_URL -f scripts/01-schema.sql
-psql $SUPABASE_URL -f scripts/02-enable-security.sql
-psql $SUPABASE_URL -f scripts/03-seed-data.sql
-psql $SUPABASE_URL -f scripts/04-scheduler.sql
-psql $SUPABASE_URL -f migrations/037-ensure-rls-policies.sql
-```
-
-The last script creates cron jobs for scheduled campaigns and Gmail sync.
-
-Most environments only need the four scripts above plus the active migration `migrations/037-ensure-rls-policies.sql`, which keeps security policies aligned with the schema defined in the scripts. Only this single migration remains in the top-level `migrations/` directory, keeping the active count well below the 10-file cap. Historical migrations now live in `migrations/archive/` for operators upgrading older databases. Apply them selectively if a legacy deployment is missing a specific column or table.
-
-Legacy data cleanup helpers (`012-revive-threads.sql` and `013-normalize-thread-phones.sql`) are also preserved in the archive. Run them manually only when reviving an existing Supabase project that still contains the old thread records.
-
-### Media short links
-
-If you need to recreate Supabase from scratch, apply the short link table to preserve the `/m/:id` media redirect feature:
-
-```bash
-psql $SUPABASE_URL -f migrations/044-media-links.sql
-```
-
-This creates `public.media_links (id text primary key, storage_path text, content_type text, created_at timestamptz default now())`, which the media link API uses to resolve branded attachment URLs.
-
 Provide Google OAuth details for Gmail features:
 
 - `GOOGLE_CLIENT_ID`
@@ -219,7 +206,7 @@ Provide Google OAuth details for Gmail features:
 - `NEXT_PUBLIC_GOOGLE_REDIRECT_URI`
 - `OPENAI_API_KEY` (optional)
 
-Setting `OPENAI_API_KEY` enables the optional ChatGPT features. The prompt library lives at `/prompts` where you can store reusable prompts. Selecting a prompt while composing an SMS or email sends it to ChatGPT and inserts the generated text. If your database pre-dates this feature, run `migrations/archive/014-create-ai-prompts.sql` to create the `ai_prompts` table.
+Setting `OPENAI_API_KEY` enables the optional ChatGPT features. The prompt library lives at `/prompts` where you can store reusable prompts. Selecting a prompt while composing an SMS or email sends it to ChatGPT and inserts the generated text. If your database pre-dates this feature, run `db/legacy/migrations/archive/014-create-ai-prompts.sql` to create the `ai_prompts` table.
 
 With the key set, an **AI Assistant** button appears in message composers and in the SMS and Email campaign modals. It opens a chat modal that lets you converse with ChatGPT and copy or insert the final response into your message. Requests use the **gpt-4o** model and the API caps each conversation at **20 messages** and **8k characters** total.
 
@@ -291,7 +278,7 @@ This endpoint reads the `agent_session` cookie, confirms the path ID matches the
 
 ### Demo call-center agent
 
-Running `scripts/03-seed-data.sql` now provisions a placeholder agent so the voice UI works immediately after seeding:
+Running `scripts/db/04_seed.sql` now provisions a placeholder agent so the voice UI works immediately after seeding:
 
 - **Email:** `agent1@company.com`
 - **Password:** `test123`
@@ -321,48 +308,7 @@ See the Telnyx docs for [Call Control Apps](https://developers.telnyx.com/docs/a
 
 ## Database Setup
 
-Run the SQL scripts in the `scripts` directory to create and seed your Supabase database. Execute them in order using the Supabase SQL editor or `psql`:
-
-```bash
-psql $SUPABASE_URL -f scripts/01-schema.sql
-psql $SUPABASE_URL -f scripts/02-enable-security.sql
-psql $SUPABASE_URL -f scripts/03-seed-data.sql
-psql $SUPABASE_URL -f scripts/04-scheduler.sql
-```
-
-Running these scripts sets up all DispoTool tables and creates the scheduler jobs for campaigns and Gmail sync.
-
-After the base schema is in place, run the incremental migrations in the `migrations/` directory so Supabase stays in sync with this repo. The newest call-center migration keeps the voice APIs from failing with missing relation errors:
-
-```bash
-psql $SUPABASE_URL -f migrations/037-ensure-rls-policies.sql
-```
-
-Legacy incremental files moved to `migrations/archive/` for reference. Only apply them when backfilling older Supabase projects that have not yet adopted the consolidated setup scripts. The archive keeps the historical context without forcing fresh deployments to replay a long migration chain.
-
-
-`scripts/02-enable-security.sql` enables row-level security with open policies so
-you can run the project locally without a signed-in Supabase user. All tables
-allow reads and writes during development.
-
-**Note:** The `showings` table expects Supabase's built-in `auth.users` table.
-The `created_by` column now references `auth.users(id)`. If you drop any of the
-tables or previously set them up before this change, rerun the SQL scripts above
-to recreate them with the correct foreign key.
-
-### Upgrade Notes
-
-All tables, including properties, showings, offers, campaigns and message
-templates, are created automatically when running `scripts/01-schema.sql`.
-Message thread flag columns are now included by default in `scripts/01-schema.sql`,
-so no extra migration is required.
-
-The ChatGPT prompt library uses a new `ai_prompts` table. If you're upgrading from an earlier version, run `migrations/archive/014-create-ai-prompts.sql` to add this table before enabling the features.
-
-The messages table now stores an array of media URLs for MMS. If your database predates this change, run `migrations/archive/015-add-message-media.sql` to create the `media_urls` column.
-
-A new `profiles` table mirrors entries in `auth.users`. Run `migrations/archive/020-create-profiles.sql` if your database doesn't include it.
-A new `notes` column stores metadata on each call. If upgrading, run `migrations/archive/024-add-call-notes.sql` to add it.
+Use the consolidated scripts in `scripts/db` (see the **Database bootstrap** section above) to install the schema, functions, RLS policies, optional seed data, and scheduler jobs. All historical migrations have been archived to `db/legacy` for reference when backfilling very old environments; they are not required for new deployments.
 
 The campaign system uses Telnyx for SMS and AWS SES for email delivery with a
 leased email queue. Define the following variables in `.env.local`:
@@ -457,7 +403,7 @@ The table stores the following fields:
 - `created_at` – timestamp of the last sync
 
 If your database was created before these fields existed, run
-`migrations/archive/018-add-voice-number-sync-fields.sql` to add them.
+`db/legacy/migrations/archive/018-add-voice-number-sync-fields.sql` to add them.
 
 ## Marketing Campaigns
 
@@ -617,7 +563,7 @@ to prevent build failures.
 
 `pg_cron` jobs call Next.js routes for campaigns and Gmail sync. Make sure the Supabase project secrets that cron can read match the values used by your deployed app:
 
-- `DISPOTOOL_BASE_URL` must be the public URL of the deployed site (for example `https://app.listhit.io`). A localhost value will cause the HTTP calls to fail inside Supabase.
+- `SITE_URL` (or `DISPOTOOL_BASE_URL` for backward compatibility) must be the public URL of the deployed site (for example `https://app.listhit.io`). A localhost value will cause the HTTP calls to fail inside Supabase.
 - `SUPABASE_SERVICE_ROLE_KEY` must be the same service role key you configured in Vercel or your server environment so the scheduled requests stay authorized.
 
 Check what Supabase has stored with:
@@ -629,7 +575,7 @@ supabase secrets list --project-ref <project_id>
 If either value is missing or incorrect, re-run the `supabase secrets set ...` command above. After correcting the secrets, run `pnpm run db:schedule` to recreate the cron jobs with the updated environment.
 
 After the secrets are configured, run `pnpm run db:schedule` to create the cron jobs.
-The email processing and stuck-job requeue cron tasks now run every **minute** as defined in `scripts/04-scheduler.sql`.
+The email processing and stuck-job requeue cron tasks now run every **minute** as defined in `scripts/db/05_scheduler.sql`.
 
 To deploy the edge function that sends scheduled campaigns, run:
 
@@ -641,9 +587,9 @@ This uploads `supabase/functions/send-scheduled-campaigns` using the project ID 
 
 ### Gmail Sync
 
-`scripts/04-scheduler.sql` also creates a second cron job that POSTs to
+`scripts/db/05_scheduler.sql` also creates a second cron job that POSTs to
 `/api/gmail/sync` every **5 minutes**. This keeps the `gmail_threads` table
-synced without manual intervention. The job uses `DISPOTOOL_BASE_URL` to build
+synced without manual intervention. The job uses `SITE_URL` (falling back to `DISPOTOOL_BASE_URL` if provided) to build
 the URL, so be sure to set that secret before running `pnpm run db:schedule`.
 
 #### Troubleshooting
