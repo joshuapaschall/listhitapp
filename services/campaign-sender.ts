@@ -6,7 +6,6 @@ import { appendUnsubscribeFooter, buildUnsubscribeUrl } from "@/lib/unsubscribe"
 
 const log = createLogger("campaign-sender")
 
-export const EMAIL_BATCH_SIZE = 50
 const EMAIL_QUEUE_CONCURRENCY = Number(process.env.EMAIL_QUEUE_CONCURRENCY || 2)
 const SENDFOX_SEND_DELAY_MS = Number(process.env.SENDFOX_SEND_DELAY_MS || 750)
 const SENDFOX_RATE_BACKOFF_MS = Number(process.env.SENDFOX_RATE_BACKOFF_MS || 2000)
@@ -38,18 +37,11 @@ export interface EmailContactPayload {
 export interface EmailQueuePayload {
   subject: string
   html: string
-  contacts: EmailContactPayload[]
+  contact?: EmailContactPayload
+  contacts?: EmailContactPayload[]
   campaignId?: string
   templateId?: string
   listIds?: number[]
-}
-
-function chunk<T>(arr: T[], size: number) {
-  const result: T[][] = []
-  for (let i = 0; i < arr.length; i += size) {
-    result.push(arr.slice(i, i + size))
-  }
-  return result
 }
 
 function requireAdmin() {
@@ -107,13 +99,21 @@ export async function queueEmailCampaign(
   const scheduledFor = opts.scheduledFor
     ? new Date(opts.scheduledFor).toISOString()
     : new Date().toISOString()
-  const batches = chunk(payload.contacts || [], EMAIL_BATCH_SIZE)
-  if (!batches.length) return []
+  const contacts = payload.contacts || []
+  if (!contacts.length) return []
   const baseTime = new Date(scheduledFor).getTime()
-  const rows = batches.map((batch, idx) => ({
+  const rows = contacts.map((contact, idx) => ({
     campaign_id: payload.campaignId ?? null,
-    payload: { ...payload, contacts: batch },
-    contact_count: batch.length,
+    recipient_id: contact.recipientId ?? null,
+    buyer_id: contact.buyerId ?? null,
+    to_email: contact.email,
+    payload: {
+      campaignId: payload.campaignId,
+      subject: payload.subject,
+      html: payload.html,
+      contact,
+    },
+    contact_count: 1,
     scheduled_for: new Date(baseTime + idx * SENDFOX_QUEUE_SPACING_MS).toISOString(),
     created_by: opts.createdBy ?? null,
     status: "pending",
@@ -121,7 +121,10 @@ export async function queueEmailCampaign(
 
   const { data, error } = await supabase
     .from("email_campaign_queue")
-    .insert(rows)
+    .upsert(rows, {
+      onConflict: "campaign_id,recipient_id",
+      ignoreDuplicates: true,
+    })
     .select()
 
   if (error) {
@@ -213,7 +216,9 @@ export async function processEmailQueue(limit = 5) {
       const payload = (job as any).payload as EmailQueuePayload
       let lastProvider: string | null = null
 
-      for (const contact of payload.contacts || []) {
+      const contacts = payload.contacts?.length ? payload.contacts : payload.contact ? [payload.contact] : []
+
+      for (const contact of contacts) {
         currentContactEmail = contact.email
         const context: Record<string, any> = {
           fname: contact.firstName,
