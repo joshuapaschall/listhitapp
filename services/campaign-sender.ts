@@ -11,6 +11,8 @@ const SENDFOX_SEND_DELAY_MS = Number(process.env.SENDFOX_SEND_DELAY_MS || 750)
 const SENDFOX_RATE_BACKOFF_MS = Number(process.env.SENDFOX_RATE_BACKOFF_MS || 2000)
 const SENDFOX_RATE_MAX_RETRY = Number(process.env.SENDFOX_RATE_MAX_RETRY || 3)
 const SENDFOX_QUEUE_SPACING_MS = Number(process.env.SENDFOX_QUEUE_SPACING_MS || 500)
+const EMAIL_QUEUE_WORKER_ID = process.env.EMAIL_QUEUE_WORKER_ID || `campaign-sender-${process.pid}`
+const EMAIL_QUEUE_LEASE_SECONDS = Number(process.env.EMAIL_QUEUE_LEASE_SECONDS || 60)
 const SITE_URL =
   process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_BASE_URL || process.env.DISPOTOOL_BASE_URL
 const EMAIL_PHYSICAL_ADDRESS = process.env.EMAIL_PHYSICAL_ADDRESS || "ListHit CRM · 123 Main St · Anytown, USA"
@@ -62,6 +64,27 @@ function isSesRateLimitError(err: any) {
   if (code.includes("throttl") || code.includes("rate")) return true
   const status = err.$metadata?.httpStatusCode
   return status === 429
+}
+
+function isRetryableError(err: any) {
+  if (!err) return false
+  if (isSesRateLimitError(err)) return true
+  const status = err.$metadata?.httpStatusCode || err.status || err.statusCode
+  if (status && Number(status) >= 500) return true
+  if (status === 429) return true
+  const code = (err.code || err.type || "").toString().toLowerCase()
+  const retryableCodes = ["etimedout", "econnreset", "econnrefused", "enotfound", "eai_again"]
+  if (retryableCodes.some((c) => code.includes(c))) return true
+  const message = (err.message || "").toString().toLowerCase()
+  if (message.includes("network error") || message.includes("timeout")) return true
+  return false
+}
+
+function computeRetryDelayMs(attempt: number) {
+  const cappedAttempt = Math.max(1, attempt)
+  const base = Math.min(10 * 60 * 1000, Math.pow(2, cappedAttempt) * 1000)
+  const jitter = Math.random() * 0.25 * base
+  return base + jitter
 }
 
 export async function sendEmailCampaign({ to, subject, html, dryRun, tags, unsubscribeUrl }: EmailOptions): Promise<string> {
@@ -162,24 +185,31 @@ async function refreshCampaignStatus(campaignId: string) {
     .in("status", ["pending", "processing"])
 
   if (!pending || pending === 0) {
-    await supabase.from("campaigns").update({ status: "sent" }).eq("id", campaignId)
+    const { count: errored } = await supabase
+      .from("email_campaign_queue")
+      .select("id", { count: "exact", head: true })
+      .eq("campaign_id", campaignId)
+      .in("status", ["dead", "error"])
+    const status = errored && errored > 0 ? "completed_with_errors" : "sent"
+    await supabase.from("campaigns").update({ status }).eq("id", campaignId)
+  } else {
+    await supabase.from("campaigns").update({ status: "processing" }).eq("id", campaignId)
   }
 }
 
-export async function processEmailQueue(limit = 5) {
+export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number; workerId?: string } = {}) {
   const supabase = requireAdmin()
-  const now = new Date().toISOString()
   const effectiveLimit = Math.min(limit, EMAIL_QUEUE_CONCURRENCY)
-  const { data: jobs, error } = await supabase
-    .from("email_campaign_queue")
-    .select("id,payload,campaign_id,status")
-    .eq("status", "pending")
-    .lte("scheduled_for", now)
-    .order("scheduled_for", { ascending: true })
-    .limit(effectiveLimit)
+  const leaseSeconds = opts.leaseSeconds ?? EMAIL_QUEUE_LEASE_SECONDS
+  const workerId = opts.workerId ?? EMAIL_QUEUE_WORKER_ID
+  const { data: jobs, error } = await supabase.rpc("claim_email_queue_jobs", {
+    p_limit: effectiveLimit,
+    p_worker: workerId,
+    p_lease_seconds: leaseSeconds,
+  })
 
   if (error) {
-    console.error("Failed to fetch email queue", error)
+    console.error("Failed to claim email queue jobs", error)
     throw error
   }
 
@@ -207,103 +237,119 @@ export async function processEmailQueue(limit = 5) {
 
   for (const job of jobs || []) {
     let currentContactEmail: string | null = null
-    await supabase
-      .from("email_campaign_queue")
-      .update({ status: "processing" })
-      .eq("id", job.id)
-
     try {
       const payload = (job as any).payload as EmailQueuePayload
-      let lastProvider: string | null = null
-
-      const contacts = payload.contacts?.length ? payload.contacts : payload.contact ? [payload.contact] : []
-
-      for (const contact of contacts) {
-        currentContactEmail = contact.email
-        const context: Record<string, any> = {
-          fname: contact.firstName,
-          lname: contact.lastName,
-          first_name: contact.firstName,
-          last_name: contact.lastName,
-        }
-        const subject = renderTemplate(payload.subject, context)
-        let html = renderTemplate(payload.html, context)
-        if (!emailShortlinksDisabled()) {
-          try {
-            const { replaceUrlsWithShortLinks } = await import("./shortio-service")
-            const replaced = await replaceUrlsWithShortLinks(html, { anchorHrefOnly: true })
-            html = replaced.html
-          } catch (err) {
-            console.error("Short.io replacement failed", err)
-          }
-        }
-        if (!SITE_URL) {
-          throw new Error("SITE_URL is not configured")
-        }
-        if (!contact.buyerId) {
-          throw new Error("buyerId is required for unsubscribe link")
-        }
-        const unsubscribeUrl = buildUnsubscribeUrl({
-          buyerId: contact.buyerId,
-          email: contact.email,
-          baseUrl: SITE_URL,
-          campaignId: payload.campaignId,
-          recipientId: contact.recipientId,
-        })
-        html = appendUnsubscribeFooter(html, {
-          unsubscribeUrl,
-          physicalAddress: EMAIL_PHYSICAL_ADDRESS,
-        })
-        const tags = {
-          campaign_id: payload.campaignId,
-          recipient_id: contact.recipientId,
-          buyer_id: contact.buyerId,
-        }
-        const providerId = await sendWithBackoff(contact.email, subject, html, tags, unsubscribeUrl)
-        lastProvider = providerId
-        sent += 1
-        await updateRecipientStatus(job.campaign_id, contact.recipientId, {
-          status: "sent",
-          sent_at: new Date().toISOString(),
-          provider_id: providerId,
-        })
-        await sleep(SENDFOX_SEND_DELAY_MS)
+      const contact = payload.contact
+      if (!contact) {
+        throw new Error("Missing contact payload for email job")
       }
-
+      currentContactEmail = contact.email
+      const context: Record<string, any> = {
+        fname: contact.firstName,
+        lname: contact.lastName,
+        first_name: contact.firstName,
+        last_name: contact.lastName,
+      }
+      const subject = renderTemplate(payload.subject, context)
+      let html = renderTemplate(payload.html, context)
+      if (!emailShortlinksDisabled()) {
+        try {
+          const { replaceUrlsWithShortLinks } = await import("./shortio-service")
+          const replaced = await replaceUrlsWithShortLinks(html, { anchorHrefOnly: true })
+          html = replaced.html
+        } catch (err) {
+          console.error("Short.io replacement failed", err)
+        }
+      }
+      if (!SITE_URL) {
+        throw new Error("SITE_URL is not configured")
+      }
+      if (!contact.buyerId) {
+        throw new Error("buyerId is required for unsubscribe link")
+      }
+      const unsubscribeUrl = buildUnsubscribeUrl({
+        buyerId: contact.buyerId,
+        email: contact.email,
+        baseUrl: SITE_URL,
+        campaignId: payload.campaignId,
+        recipientId: contact.recipientId,
+      })
+      html = appendUnsubscribeFooter(html, {
+        unsubscribeUrl,
+        physicalAddress: EMAIL_PHYSICAL_ADDRESS,
+      })
+      const tags = {
+        campaign_id: payload.campaignId,
+        recipient_id: contact.recipientId,
+        buyer_id: contact.buyerId,
+      }
+      const providerId = await sendWithBackoff(contact.email, subject, html, tags, unsubscribeUrl)
+      const sentAt = new Date().toISOString()
+      sent += 1
       await supabase
         .from("email_campaign_queue")
-        .update({ status: "sent", provider_id: lastProvider, error: null })
-        .eq("id", job.id)
-
+        .update({
+          status: "sent",
+          sent_at: sentAt,
+          provider_id: providerId,
+          locked_at: null,
+          lock_expires_at: null,
+          locked_by: null,
+          last_error: null,
+          last_error_at: null,
+        })
+        .eq("id", (job as any).id)
+      await updateRecipientStatus(job.campaign_id, contact.recipientId, {
+        status: "sent",
+        sent_at: sentAt,
+        provider_id: providerId,
+      })
       if (job.campaign_id) {
         await refreshCampaignStatus(job.campaign_id)
       }
+      await sleep(SENDFOX_SEND_DELAY_MS)
     } catch (err: any) {
       console.error("Queue dispatch failed", {
         campaignId: job.campaign_id,
         contactEmail: currentContactEmail,
         error: err,
       })
-      if (isSesRateLimitError(err)) {
-        const retryAt = new Date(Date.now() + SENDFOX_RATE_BACKOFF_MS).toISOString()
-        await supabase
-          .from("email_campaign_queue")
-          .update({
-            status: "pending",
-            scheduled_for: retryAt,
-            error: err?.message || "rate limited",
-          })
-          .eq("id", job.id)
-        continue
-      }
       const errorDetails = err?.message || String(err)
-      await supabase
-        .from("email_campaign_queue")
-        .update({ status: "error", error: errorDetails })
-        .eq("id", job.id)
-
+      const nowIso = new Date().toISOString()
+      const attempts = ((job as any).attempts ?? 0) + 1
+      const maxAttempts = (job as any).max_attempts || 8
+      const retryable = isRetryableError(err)
+      const updates: Record<string, any> = {
+        attempts,
+        locked_at: null,
+        lock_expires_at: null,
+        locked_by: null,
+        last_error: errorDetails,
+        last_error_at: nowIso,
+      }
+      if (retryable) {
+        const delayMs = computeRetryDelayMs(attempts)
+        const retryAt = new Date(Date.now() + delayMs).toISOString()
+        const reachedMax = attempts >= maxAttempts
+        updates.status = reachedMax ? "dead" : "pending"
+        updates.scheduled_for = reachedMax ? nowIso : retryAt
+      } else {
+        updates.status = "error"
+      }
+      await supabase.from("email_campaign_queue").update(updates).eq("id", (job as any).id)
+      if (!retryable) {
+        await updateRecipientStatus(job.campaign_id, (job as any).recipient_id, {
+          status: "error",
+          error: errorDetails,
+        })
+      } else if (updates.status === "dead") {
+        await updateRecipientStatus(job.campaign_id, (job as any).recipient_id, {
+          status: "error",
+          error: errorDetails,
+        })
+      }
       if (job.campaign_id) {
-        await supabase.from("campaigns").update({ status: "error" }).eq("id", job.campaign_id)
+        await refreshCampaignStatus(job.campaign_id)
       }
     }
   }
