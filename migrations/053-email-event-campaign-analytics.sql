@@ -3,23 +3,26 @@ alter table email_events
   add column if not exists campaign_id uuid references campaigns(id),
   add column if not exists recipient_id uuid references campaign_recipients(id),
   add column if not exists buyer_id uuid references buyers(id),
-  add column if not exists message_id text;
+  add column if not exists message_id text,
+  add column if not exists sns_message_id text;
 
 create index if not exists email_events_campaign_idx on email_events(campaign_id);
 create index if not exists email_events_campaign_event_idx on email_events(campaign_id, event_type);
 create index if not exists email_events_campaign_created_idx on email_events(campaign_id, created_at);
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_indexes
-    where schemaname = 'public'
-      and indexname = 'email_events_provider_event_uniq_idx'
-  ) then
-    create unique index email_events_provider_event_uniq_idx
-      on email_events(provider_message_id, event_type);
-  end if;
-end $$;
+drop index if exists email_events_provider_event_uniq_idx;
+
+create unique index if not exists email_events_sns_message_id_uniq_idx
+  on email_events(sns_message_id);
+
+create index if not exists email_events_campaign_event_created_idx
+  on email_events(campaign_id, event_type, created_at desc);
+
+create index if not exists email_events_recipient_event_created_idx
+  on email_events(recipient_id, event_type, created_at desc);
+
+create index if not exists email_events_provider_message_created_idx
+  on email_events(provider_message_id, created_at desc);
 
 create or replace view campaign_event_metrics as
   select

@@ -142,26 +142,30 @@ async function confirmSubscription(subscribeUrl?: string) {
 
 async function storeEmailEvent(input: {
   messageId?: string
+  snsMessageId?: string
   eventType: string
   payload: any
   campaignId?: string
   recipientId?: string
   buyerId?: string
+  createdAt?: string
 }) {
   if (!supabase) return
   await supabase
     .from("email_events")
-    .upsert(
+    .insert(
       {
         provider_message_id: input.messageId || null,
+        sns_message_id: input.snsMessageId || null,
         message_id: input.messageId || null,
         event_type: input.eventType || null,
         campaign_id: input.campaignId || null,
         recipient_id: input.recipientId || null,
         buyer_id: input.buyerId || null,
         payload: input.payload,
+        created_at: input.createdAt || new Date().toISOString(),
       },
-      { onConflict: "provider_message_id,event_type" },
+      { onConflict: "sns_message_id", ignoreDuplicates: true },
     )
 }
 
@@ -290,11 +294,13 @@ export async function POST(req: NextRequest) {
 
   await storeEmailEvent({
     messageId,
+    snsMessageId: snsMessage.MessageId,
     eventType: evt,
     payload,
     campaignId,
     recipientId,
     buyerId: buyerIdTag,
+    createdAt: timestamp,
   })
   await updateRecipient(evt, { timestamp, recipientId: recipientId || undefined, providerId: messageId })
 
