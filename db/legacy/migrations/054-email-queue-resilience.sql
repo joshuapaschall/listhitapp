@@ -48,7 +48,7 @@ begin
   set
     status = 'processing',
     locked_at = now(),
-    lock_expires_at = now() + (coalesce(p_lease_seconds, 0) || ' seconds')::interval,
+    lock_expires_at = now() + make_interval(secs => coalesce(p_lease_seconds, 0)),
     locked_by = p_worker,
     last_error = null
   from candidates c
@@ -57,26 +57,47 @@ begin
 end;
 $$;
 
-create or replace function public.requeue_stuck_email_jobs(p_stuck_seconds int)
-returns setof public.email_campaign_queue
-language sql
+create or replace function public.requeue_stuck_email_jobs(
+  p_limit int,
+  p_stuck_seconds int
+)
+returns int
+language plpgsql
 security definer
 set search_path = public, pg_temp
 as $$
-  update public.email_campaign_queue q
-  set
-    status = 'pending',
-    locked_at = null,
-    lock_expires_at = null,
-    locked_by = null,
-    attempts = q.attempts + 1,
-    last_error = 'stuck lease expired',
-    last_error_at = now()
-  where q.status = 'processing'
-    and q.lock_expires_at is not null
-    and q.lock_expires_at < now() - (coalesce(p_stuck_seconds, 0) || ' seconds')::interval
-  returning q.*;
+declare
+  updated_count int;
+begin
+  with candidates as (
+    select id
+    from public.email_campaign_queue
+    where status = 'processing'
+      and lock_expires_at is not null
+      and lock_expires_at < now() - make_interval(secs => coalesce(p_stuck_seconds, 0))
+    order by lock_expires_at asc
+    limit greatest(coalesce(p_limit, 0), 0)
+    for update skip locked
+  ), updated as (
+    update public.email_campaign_queue q
+    set
+      status = 'pending',
+      locked_at = null,
+      lock_expires_at = null,
+      locked_by = null,
+      scheduled_for = now(),
+      attempts = q.attempts + 1,
+      last_error = 'stuck lease expired',
+      last_error_at = now()
+    from candidates c
+    where q.id = c.id
+    returning 1
+  )
+  select count(*)::int into updated_count from updated;
+
+  return coalesce(updated_count, 0);
+end;
 $$;
 
 grant execute on function public.claim_email_queue_jobs(int, text, int) to service_role;
-grant execute on function public.requeue_stuck_email_jobs(int) to service_role;
+grant execute on function public.requeue_stuck_email_jobs(int, int) to service_role;

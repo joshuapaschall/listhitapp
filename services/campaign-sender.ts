@@ -7,12 +7,25 @@ import { appendUnsubscribeFooter, buildUnsubscribeUrl } from "@/lib/unsubscribe"
 const log = createLogger("campaign-sender")
 
 const EMAIL_QUEUE_CONCURRENCY = Number(process.env.EMAIL_QUEUE_CONCURRENCY || 2)
-const SENDFOX_SEND_DELAY_MS = Number(process.env.SENDFOX_SEND_DELAY_MS || 750)
-const SENDFOX_RATE_BACKOFF_MS = Number(process.env.SENDFOX_RATE_BACKOFF_MS || 2000)
-const SENDFOX_RATE_MAX_RETRY = Number(process.env.SENDFOX_RATE_MAX_RETRY || 3)
-const SENDFOX_QUEUE_SPACING_MS = Number(process.env.SENDFOX_QUEUE_SPACING_MS || 500)
-const EMAIL_QUEUE_WORKER_ID = process.env.EMAIL_QUEUE_WORKER_ID || `campaign-sender-${process.pid}`
-const EMAIL_QUEUE_LEASE_SECONDS = Number(process.env.EMAIL_QUEUE_LEASE_SECONDS || 60)
+const EMAIL_SEND_DELAY_MS = Number(
+  process.env.EMAIL_SEND_DELAY_MS ?? process.env.SENDFOX_SEND_DELAY_MS ?? 750,
+)
+const EMAIL_RETRY_BACKOFF_MS = Number(
+  process.env.EMAIL_RETRY_BACKOFF_MS ?? process.env.SENDFOX_RATE_BACKOFF_MS ?? 2000,
+)
+const EMAIL_RATE_MAX_RETRY = Number(
+  process.env.EMAIL_RATE_MAX_RETRY ?? process.env.SENDFOX_RATE_MAX_RETRY ?? 3,
+)
+const EMAIL_QUEUE_SPACING_MS = Number(
+  process.env.EMAIL_QUEUE_SPACING_MS || process.env.SENDFOX_QUEUE_SPACING_MS || 500,
+)
+const EMAIL_QUEUE_WORKER_ID =
+  process.env.EMAIL_QUEUE_WORKER_ID ||
+  `campaign-sender-${process.pid}-${Math.random().toString(36).slice(2, 8)}`
+const EMAIL_QUEUE_LEASE_SECONDS = Number(process.env.EMAIL_QUEUE_LEASE_SECONDS || 300)
+const EMAIL_QUEUE_MAX_ATTEMPTS = Number(process.env.EMAIL_QUEUE_MAX_ATTEMPTS || 8)
+const EMAIL_QUEUE_BASE_BACKOFF_MS = Number(process.env.EMAIL_QUEUE_BASE_BACKOFF_MS || 2000)
+const EMAIL_QUEUE_JITTER_MS = Number(process.env.EMAIL_QUEUE_JITTER_MS || 500)
 const SITE_URL =
   process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_BASE_URL || process.env.DISPOTOOL_BASE_URL
 const EMAIL_PHYSICAL_ADDRESS = process.env.EMAIL_PHYSICAL_ADDRESS || "ListHit CRM · 123 Main St · Anytown, USA"
@@ -82,8 +95,8 @@ function isRetryableError(err: any) {
 
 function computeRetryDelayMs(attempt: number) {
   const cappedAttempt = Math.max(1, attempt)
-  const base = Math.min(10 * 60 * 1000, Math.pow(2, cappedAttempt) * 1000)
-  const jitter = Math.random() * 0.25 * base
+  const base = EMAIL_QUEUE_BASE_BACKOFF_MS * Math.pow(2, cappedAttempt - 1)
+  const jitter = Math.random() * EMAIL_QUEUE_JITTER_MS
   return base + jitter
 }
 
@@ -119,27 +132,31 @@ export async function queueEmailCampaign(
   opts: { scheduledFor?: string | Date; createdBy?: string } = {},
 ) {
   const supabase = requireAdmin()
-  const scheduledFor = opts.scheduledFor
-    ? new Date(opts.scheduledFor).toISOString()
-    : new Date().toISOString()
+  const scheduledFor = opts.scheduledFor ? new Date(opts.scheduledFor) : new Date()
   const contacts = payload.contacts || []
   if (!contacts.length) return []
-  const baseTime = new Date(scheduledFor).getTime()
+  const baseTime = scheduledFor.getTime()
   const rows = contacts.map((contact, idx) => ({
     campaign_id: payload.campaignId ?? null,
     recipient_id: contact.recipientId ?? null,
     buyer_id: contact.buyerId ?? null,
     to_email: contact.email,
     payload: {
-      campaignId: payload.campaignId,
       subject: payload.subject,
       html: payload.html,
-      contact,
+      campaignId: payload.campaignId,
+      contact: {
+        email: contact.email,
+        firstName: contact.firstName,
+        lastName: contact.lastName,
+        recipientId: contact.recipientId,
+        buyerId: contact.buyerId,
+      },
     },
-    contact_count: 1,
-    scheduled_for: new Date(baseTime + idx * SENDFOX_QUEUE_SPACING_MS).toISOString(),
+    scheduled_for: new Date(baseTime + idx * EMAIL_QUEUE_SPACING_MS).toISOString(),
     created_by: opts.createdBy ?? null,
     status: "pending",
+    max_attempts: EMAIL_QUEUE_MAX_ATTEMPTS,
   }))
 
   const { data, error } = await supabase
@@ -199,7 +216,7 @@ async function refreshCampaignStatus(campaignId: string) {
 
 export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number; workerId?: string } = {}) {
   const supabase = requireAdmin()
-  const effectiveLimit = Math.min(limit, EMAIL_QUEUE_CONCURRENCY)
+  const effectiveLimit = Math.max(1, limit || EMAIL_QUEUE_CONCURRENCY)
   const leaseSeconds = opts.leaseSeconds ?? EMAIL_QUEUE_LEASE_SECONDS
   const workerId = opts.workerId ?? EMAIL_QUEUE_WORKER_ID
   const { data: jobs, error } = await supabase.rpc("claim_email_queue_jobs", {
@@ -211,6 +228,10 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
   if (error) {
     console.error("Failed to claim email queue jobs", error)
     throw error
+  }
+
+  if (!jobs || jobs.length === 0) {
+    return { processed: 0, sent: 0 }
   }
 
   let sent = 0
@@ -226,8 +247,8 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
     try {
       return await sendEmailCampaign({ to: contact, subject, html, tags, unsubscribeUrl })
     } catch (err: any) {
-      if (isSesRateLimitError(err) && attempt < SENDFOX_RATE_MAX_RETRY) {
-        const delay = SENDFOX_RATE_BACKOFF_MS * Math.max(1, attempt + 1)
+      if (isSesRateLimitError(err) && attempt < EMAIL_RATE_MAX_RETRY) {
+        const delay = EMAIL_RETRY_BACKOFF_MS * Math.max(1, attempt + 1)
         await sleep(delay)
         return sendWithBackoff(contact, subject, html, tags, unsubscribeUrl, attempt + 1)
       }
@@ -235,10 +256,13 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
     }
   }
 
-  for (const job of jobs || []) {
+  for (const rawJob of jobs) {
+    const job = rawJob as any
     let currentContactEmail: string | null = null
+    const attemptNumber = Number(job.attempts ?? 0) + 1
+    const maxAttempts = Number(job.max_attempts ?? EMAIL_QUEUE_MAX_ATTEMPTS)
     try {
-      const payload = (job as any).payload as EmailQueuePayload
+      const payload = job.payload as EmailQueuePayload
       const contact = payload.contact
       if (!contact) {
         throw new Error("Missing contact payload for email job")
@@ -292,13 +316,14 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
           status: "sent",
           sent_at: sentAt,
           provider_id: providerId,
+          attempts: attemptNumber,
           locked_at: null,
           lock_expires_at: null,
           locked_by: null,
           last_error: null,
           last_error_at: null,
         })
-        .eq("id", (job as any).id)
+        .eq("id", job.id)
       await updateRecipientStatus(job.campaign_id, contact.recipientId, {
         status: "sent",
         sent_at: sentAt,
@@ -307,7 +332,7 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
       if (job.campaign_id) {
         await refreshCampaignStatus(job.campaign_id)
       }
-      await sleep(SENDFOX_SEND_DELAY_MS)
+      await sleep(EMAIL_SEND_DELAY_MS)
     } catch (err: any) {
       console.error("Queue dispatch failed", {
         campaignId: job.campaign_id,
@@ -316,34 +341,25 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
       })
       const errorDetails = err?.message || String(err)
       const nowIso = new Date().toISOString()
-      const attempts = ((job as any).attempts ?? 0) + 1
-      const maxAttempts = (job as any).max_attempts || 8
       const retryable = isRetryableError(err)
       const updates: Record<string, any> = {
-        attempts,
+        attempts: attemptNumber,
         locked_at: null,
         lock_expires_at: null,
         locked_by: null,
         last_error: errorDetails,
         last_error_at: nowIso,
       }
-      if (retryable) {
-        const delayMs = computeRetryDelayMs(attempts)
-        const retryAt = new Date(Date.now() + delayMs).toISOString()
-        const reachedMax = attempts >= maxAttempts
-        updates.status = reachedMax ? "dead" : "pending"
-        updates.scheduled_for = reachedMax ? nowIso : retryAt
+      if (retryable && attemptNumber < maxAttempts) {
+        const retryAt = new Date(Date.now() + computeRetryDelayMs(attemptNumber)).toISOString()
+        updates.status = "pending"
+        updates.scheduled_for = retryAt
       } else {
-        updates.status = "error"
+        updates.status = retryable ? "dead" : "error"
       }
-      await supabase.from("email_campaign_queue").update(updates).eq("id", (job as any).id)
-      if (!retryable) {
-        await updateRecipientStatus(job.campaign_id, (job as any).recipient_id, {
-          status: "error",
-          error: errorDetails,
-        })
-      } else if (updates.status === "dead") {
-        await updateRecipientStatus(job.campaign_id, (job as any).recipient_id, {
+      await supabase.from("email_campaign_queue").update(updates).eq("id", job.id)
+      if (updates.status !== "pending") {
+        await updateRecipientStatus(job.campaign_id, job.recipient_id, {
           status: "error",
           error: errorDetails,
         })
@@ -354,5 +370,5 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
     }
   }
 
-  return { processed: jobs?.length || 0, sent }
+  return { processed: jobs.length, sent }
 }

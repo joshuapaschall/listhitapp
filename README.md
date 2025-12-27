@@ -43,14 +43,13 @@ On Vercel, also ensure the following variables are defined:
 
 - `DISPOTOOL_BASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
-- `SENDFOX_API_TOKEN` (and optional `SENDFOX_API_KEY` fallback)
-- `SENDFOX_DELETED_LIST_ID`
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `ADMIN_TASKS_TOKEN` (generate with `openssl rand -hex 32`)
 - `NEXT_PUBLIC_MEDIA_BASE_URL` (optional override for branded short media links; falls back to `NEXT_PUBLIC_APP_URL`, then `SITE_URL`, then `https://app.listhit.io`)
-
-Use the same SendFox bearer token (`SENDFOX_API_TOKEN`, and legacy `SENDFOX_API_KEY` if still needed) in both the Vercel Build and Runtime settings so every deployment can authenticate SendFox calls.
+- `AWS_SES_REGION`, `AWS_SES_ACCESS_KEY_ID`, `AWS_SES_SECRET_ACCESS_KEY`, and `AWS_SES_FROM_EMAIL` for transactional email
+- `EMAIL_SEND_DELAY_MS`, `EMAIL_RETRY_BACKOFF_MS`, and `EMAIL_RATE_MAX_RETRY` to pace SES sends and retries without hitting provider limits
+- `EMAIL_QUEUE_WORKER_ID`, `EMAIL_QUEUE_LEASE_SECONDS`, `EMAIL_QUEUE_MAX_ATTEMPTS`, `EMAIL_QUEUE_BASE_BACKOFF_MS`, and `EMAIL_QUEUE_JITTER_MS` to tune email processing leases and retries
 
 Webhook processes that mirror incoming SMS and MMS to Supabase also need
 `TELNYX_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY` and `NEXT_PUBLIC_SUPABASE_URL`.
@@ -58,6 +57,19 @@ Without these variables attachments stay on Telnyx-hosted URLs which expire
 after 24 hours.
 If incoming files don't show a Supabase link, verify these values were
 available when the webhook executed.
+
+## Database bootstrap
+
+Provision a fresh Supabase instance by running the consolidated SQL files in `scripts/db` in numeric order:
+
+1. `scripts/db/00_extensions.sql`
+2. `scripts/db/01_schema.sql`
+3. `scripts/db/02_functions_triggers.sql`
+4. `scripts/db/03_rls_policies.sql`
+5. `scripts/db/04_seed.sql` (optional demo data)
+6. `scripts/db/05_scheduler.sql` (optional pg_cron jobs)
+
+The Supabase Dashboard SQL editor is sufficient—paste or upload each file in order and run it. If you prefer the CLI, pipe each file through `psql $SUPABASE_URL -f <file>` after exporting your database connection string. The `db/legacy` folder retains the historical migrations and prior bootstrap scripts but is not applied to new environments.
 
 ## Voice Routing & Tenancy
 
@@ -186,32 +198,6 @@ After seeding, remove or disable ADMIN_SEED_TOKEN or delete the route for securi
 ## Upsert user (internal)
 GET https://<your-domain>/api/internal/upsert-user?token=<ADMIN_SEED_TOKEN>&email=<email>&password=<TempPass!234>&name=<Name>&role=admin
 
-Initialize your database by running the SQL files in order. Execute them via the Supabase SQL editor or `psql`:
-
-```bash
-psql $SUPABASE_URL -f scripts/01-schema.sql
-psql $SUPABASE_URL -f scripts/02-enable-security.sql
-psql $SUPABASE_URL -f scripts/03-seed-data.sql
-psql $SUPABASE_URL -f scripts/04-scheduler.sql
-psql $SUPABASE_URL -f migrations/037-ensure-rls-policies.sql
-```
-
-The last script creates cron jobs for scheduled campaigns and Gmail sync.
-
-Most environments only need the four scripts above plus the active migration `migrations/037-ensure-rls-policies.sql`, which keeps security policies aligned with the schema defined in the scripts. Only this single migration remains in the top-level `migrations/` directory, keeping the active count well below the 10-file cap. Historical migrations now live in `migrations/archive/` for operators upgrading older databases. Apply them selectively if a legacy deployment is missing a specific column or table.
-
-Legacy data cleanup helpers (`012-revive-threads.sql` and `013-normalize-thread-phones.sql`) are also preserved in the archive. Run them manually only when reviving an existing Supabase project that still contains the old thread records.
-
-### Media short links
-
-If you need to recreate Supabase from scratch, apply the short link table to preserve the `/m/:id` media redirect feature:
-
-```bash
-psql $SUPABASE_URL -f migrations/044-media-links.sql
-```
-
-This creates `public.media_links (id text primary key, storage_path text, content_type text, created_at timestamptz default now())`, which the media link API uses to resolve branded attachment URLs.
-
 Provide Google OAuth details for Gmail features:
 
 - `GOOGLE_CLIENT_ID`
@@ -221,7 +207,7 @@ Provide Google OAuth details for Gmail features:
 - `NEXT_PUBLIC_GOOGLE_REDIRECT_URI`
 - `OPENAI_API_KEY` (optional)
 
-Setting `OPENAI_API_KEY` enables the optional ChatGPT features. The prompt library lives at `/prompts` where you can store reusable prompts. Selecting a prompt while composing an SMS or email sends it to ChatGPT and inserts the generated text. If your database pre-dates this feature, run `migrations/archive/014-create-ai-prompts.sql` to create the `ai_prompts` table.
+Setting `OPENAI_API_KEY` enables the optional ChatGPT features. The prompt library lives at `/prompts` where you can store reusable prompts. Selecting a prompt while composing an SMS or email sends it to ChatGPT and inserts the generated text. If your database pre-dates this feature, run `db/legacy/migrations/archive/014-create-ai-prompts.sql` to create the `ai_prompts` table.
 
 With the key set, an **AI Assistant** button appears in message composers and in the SMS and Email campaign modals. It opens a chat modal that lets you converse with ChatGPT and copy or insert the final response into your message. Requests use the **gpt-4o** model and the API caps each conversation at **20 messages** and **8k characters** total.
 
@@ -293,7 +279,7 @@ This endpoint reads the `agent_session` cookie, confirms the path ID matches the
 
 ### Demo call-center agent
 
-Running `scripts/03-seed-data.sql` now provisions a placeholder agent so the voice UI works immediately after seeding:
+Running `scripts/db/04_seed.sql` now provisions a placeholder agent so the voice UI works immediately after seeding:
 
 - **Email:** `agent1@company.com`
 - **Password:** `test123`
@@ -323,51 +309,10 @@ See the Telnyx docs for [Call Control Apps](https://developers.telnyx.com/docs/a
 
 ## Database Setup
 
-Run the SQL scripts in the `scripts` directory to create and seed your Supabase database. Execute them in order using the Supabase SQL editor or `psql`:
+Use the consolidated scripts in `scripts/db` (see the **Database bootstrap** section above) to install the schema, functions, RLS policies, optional seed data, and scheduler jobs. All historical migrations have been archived to `db/legacy` for reference when backfilling very old environments; they are not required for new deployments.
 
-```bash
-psql $SUPABASE_URL -f scripts/01-schema.sql
-psql $SUPABASE_URL -f scripts/02-enable-security.sql
-psql $SUPABASE_URL -f scripts/03-seed-data.sql
-psql $SUPABASE_URL -f scripts/04-scheduler.sql
-```
-
-Running these scripts sets up all DispoTool tables and creates the scheduler jobs for campaigns and Gmail sync.
-
-After the base schema is in place, run the incremental migrations in the `migrations/` directory so Supabase stays in sync with this repo. The newest call-center migration keeps the voice APIs from failing with missing relation errors:
-
-```bash
-psql $SUPABASE_URL -f migrations/037-ensure-rls-policies.sql
-```
-
-Legacy incremental files moved to `migrations/archive/` for reference. Only apply them when backfilling older Supabase projects that have not yet adopted the consolidated setup scripts. The archive keeps the historical context without forcing fresh deployments to replay a long migration chain.
-
-
-`scripts/02-enable-security.sql` enables row-level security with open policies so
-you can run the project locally without a signed-in Supabase user. All tables
-allow reads and writes during development.
-
-**Note:** The `showings` table expects Supabase's built-in `auth.users` table.
-The `created_by` column now references `auth.users(id)`. If you drop any of the
-tables or previously set them up before this change, rerun the SQL scripts above
-to recreate them with the correct foreign key.
-
-### Upgrade Notes
-
-All tables, including properties, showings, offers, campaigns and message
-templates, are created automatically when running `scripts/01-schema.sql`.
-Message thread flag columns are now included by default in `scripts/01-schema.sql`,
-so no extra migration is required.
-
-The ChatGPT prompt library uses a new `ai_prompts` table. If you're upgrading from an earlier version, run `migrations/archive/014-create-ai-prompts.sql` to add this table before enabling the features.
-
-The messages table now stores an array of media URLs for MMS. If your database predates this change, run `migrations/archive/015-add-message-media.sql` to create the `media_urls` column.
-
-A new `profiles` table mirrors entries in `auth.users`. Run `migrations/archive/020-create-profiles.sql` if your database doesn't include it.
-A new `notes` column stores metadata on each call. If upgrading, run `migrations/archive/024-add-call-notes.sql` to add it.
-
-The campaign system uses Telnyx for SMS and SendFox for email. Define the
-following variables in `.env.local`:
+The campaign system uses Telnyx for SMS and AWS SES for email delivery with a
+leased email queue. Define the following variables in `.env.local`:
 
 - `TELNYX_API_KEY`
 - `TELNYX_PUBLIC_KEY`
@@ -376,10 +321,13 @@ following variables in `.env.local`:
 - `TELNYX_DEFAULT_CALLER_ID` – default caller ID (e.g., your DID) for outbound calls
 - `CALL_CONTROL_APP_ID` – Voice connection ID used for `/v2/telephony_credentials` (legacy `VOICE_CONNECTION_ID` / `TELNYX_VOICE_CONNECTION_ID` are still read as fallbacks)
 - `VOICE_SYNC_SECRET_KEY`
-- `SENDFOX_API_TOKEN` (optional, required for SendFox integration)
-- `SENDFOX_DEFAULT_LIST_ID` (optional, default list for new contacts)
-- `SENDFOX_DELETED_LIST_ID` (optional, list ID for deleted contacts)
-- If migrating from older setups, `SENDFOX_API_KEY` is still accepted as a fallback but will be removed later.
+- `AWS_SES_REGION`, `AWS_SES_ACCESS_KEY_ID`, `AWS_SES_SECRET_ACCESS_KEY`, `AWS_SES_FROM_EMAIL`, and `AWS_SES_FROM_NAME` for SES-signed sends
+- `AWS_SES_CONFIGURATION_SET` if you use configuration sets for feedback loops
+- `AWS_SNS_TOPIC_ARN` for bounce/complaint notifications
+- `EMAIL_QUEUE_WORKER_ID` (optional, defaults to a random worker name)
+- `EMAIL_QUEUE_LEASE_SECONDS` (how long a worker owns a job)
+- `EMAIL_QUEUE_MAX_ATTEMPTS` (max retry attempts before a job is marked dead)
+- `EMAIL_QUEUE_BASE_BACKOFF_MS` and `EMAIL_QUEUE_JITTER_MS` (exponential backoff + jitter for retries)
 - `SHORTIO_API_KEY`
 - `SHORTIO_DOMAIN`
 
@@ -456,7 +404,7 @@ The table stores the following fields:
 - `created_at` – timestamp of the last sync
 
 If your database was created before these fields existed, run
-`migrations/archive/018-add-voice-number-sync-fields.sql` to add them.
+`db/legacy/migrations/archive/018-add-voice-number-sync-fields.sql` to add them.
 
 ## Marketing Campaigns
 
@@ -564,14 +512,11 @@ dark mode palette.
 
 New buyers can now be assigned to groups during creation via the **Assign to Groups** section in the Add Buyer modal. Newly created groups are automatically selected and group counts refresh after the buyer is added.
 
-## SendFox Fields
+## Email Queue Resilience
 
-Migrations `022-add-sendfox-list-id.sql` and `025-add-sendfox-contact-id.sql` add columns that keep SendFox in sync:
+Email campaigns enqueue one row per recipient in `email_campaign_queue` with per-contact payloads. Each row now tracks `recipient_id`, `buyer_id`, `to_email`, `attempts`, `max_attempts`, `locked_at`, `lock_expires_at`, `locked_by`, `last_error`, and `sent_at` so workers can lease jobs safely. Supabase RPC helpers `claim_email_queue_jobs` and `requeue_stuck_email_jobs` manage leasing and requeuing stuck work, and the queue enforces idempotency with a unique `(campaign_id, recipient_id)` constraint.
 
-- `groups.sendfox_list_id` stores the ID of the SendFox list linked to a group and updates when the group is synced or renamed.
-- `buyers.sendfox_contact_id` tracks each buyer's SendFox contact ID, set on subscribe and cleared on unsubscribe.
-
-Run these migrations in order to keep your database schema current.
+Control pacing and retries with the email-specific environment variables: `EMAIL_SEND_DELAY_MS` sets the gap between individual sends, `EMAIL_RETRY_BACKOFF_MS` controls the cooldown when SES returns rate limit errors, and `EMAIL_RATE_MAX_RETRY` caps rate-limit retries before marking a job as failed. Leave these at their defaults if you are not tuning SES throughput.
 
 ## Location Suggestions
 
@@ -608,25 +553,20 @@ Before enabling the scheduler, set the required secrets in Supabase:
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `DISPOTOOL_BASE_URL` (or `SITE_URL`) pointing to your deployed Next.js site
-- `FUNCTION_URL` pointing to your deployed `send-scheduled-campaigns` function
-- `SENDFOX_API_TOKEN` (and optional `SENDFOX_API_KEY` fallback) so SendFox calls from scheduled jobs stay authenticated
+- `FUNCTION_URL` pointing to your deployed `send-scheduled-campaigns` function (if you use the edge function trigger)
+- `AWS_SES_REGION`, `AWS_SES_ACCESS_KEY_ID`, `AWS_SES_SECRET_ACCESS_KEY`, and `AWS_SES_FROM_EMAIL` so cron-triggered email processing can sign SES requests
+- Optional queue tuning values like `EMAIL_QUEUE_WORKER_ID`, `EMAIL_QUEUE_LEASE_SECONDS`, and `EMAIL_QUEUE_MAX_ATTEMPTS` if you need to override defaults in scheduled jobs
 
 On Vercel, set these variables in both the **Build** and **Runtime** sections
 to prevent build failures.
 
-Re-use the exact `SENDFOX_API_TOKEN` value from Vercel when configuring Supabase secrets. That keeps the `send-scheduled-campaigns` edge function and any `pg_cron` jobs invoking SendFox-backed routes aligned with the same bearer token.
-
-Run the following command and supply your values:
-
-```bash
-supabase secrets set SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... DISPOTOOL_BASE_URL=... FUNCTION_URL=... SENDFOX_API_TOKEN=... [SENDFOX_API_KEY=...]
-```
+`pnpm run db:schedule` uses `envsubst` to inject these secrets into the SQL before applying it. Run the command from a terminal where the variables above are already exported so the cron jobs point at the correct URLs and credentials.
 
 ### Validate cron secrets
 
-`pg_cron` jobs call Next.js routes for campaigns, Gmail sync, metrics, and SendFox reconciliation. Make sure the Supabase project secrets that cron can read match the values used by your deployed app:
+`pg_cron` jobs call Next.js routes for campaigns and Gmail sync. Make sure the Supabase project secrets that cron can read match the values used by your deployed app:
 
-- `DISPOTOOL_BASE_URL` must be the public URL of the deployed site (for example `https://app.listhit.io`). A localhost value will cause the HTTP calls to fail inside Supabase.
+- `SITE_URL` (or `DISPOTOOL_BASE_URL` for backward compatibility) must be the public URL of the deployed site (for example `https://app.listhit.io`). A localhost value will cause the HTTP calls to fail inside Supabase.
 - `SUPABASE_SERVICE_ROLE_KEY` must be the same service role key you configured in Vercel or your server environment so the scheduled requests stay authorized.
 
 Check what Supabase has stored with:
@@ -637,8 +577,8 @@ supabase secrets list --project-ref <project_id>
 
 If either value is missing or incorrect, re-run the `supabase secrets set ...` command above. After correcting the secrets, run `pnpm run db:schedule` to recreate the cron jobs with the updated environment.
 
-After the secrets are configured, run `pnpm run db:schedule` to create the cron job.
-The job runs every **5 minutes**, as defined in both `scripts/04-scheduler.sql` and `supabase/config.toml`.
+After the secrets are configured, run `pnpm run db:schedule` to create the cron jobs.
+The email processing and stuck-job requeue cron tasks now run every **minute** as defined in `scripts/db/05_scheduler.sql`.
 
 To deploy the edge function that sends scheduled campaigns, run:
 
@@ -650,9 +590,9 @@ This uploads `supabase/functions/send-scheduled-campaigns` using the project ID 
 
 ### Gmail Sync
 
-`scripts/04-scheduler.sql` also creates a second cron job that POSTs to
+`scripts/db/05_scheduler.sql` also creates a second cron job that POSTs to
 `/api/gmail/sync` every **5 minutes**. This keeps the `gmail_threads` table
-synced without manual intervention. The job uses `DISPOTOOL_BASE_URL` to build
+synced without manual intervention. The job uses `SITE_URL` (falling back to `DISPOTOOL_BASE_URL` if provided) to build
 the URL, so be sure to set that secret before running `pnpm run db:schedule`.
 
 #### Troubleshooting
