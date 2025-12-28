@@ -202,7 +202,6 @@ Provide Google OAuth details for Gmail features:
 
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
-- `GMAIL_REFRESH_TOKEN`
 - `GMAIL_FROM`
 - `NEXT_PUBLIC_GOOGLE_REDIRECT_URI`
 - `OPENAI_API_KEY` (optional)
@@ -590,6 +589,18 @@ supabase functions deploy send-scheduled-campaigns
 
 This uploads `supabase/functions/send-scheduled-campaigns` using the project ID from `supabase/config.toml`.
 
+### Cron scheduling (Supabase SQL editor)
+
+If you run `scripts/db/05_scheduler.sql` directly in the Supabase SQL editor, replace placeholders like `${SITE_URL}`, `${CRON_SECRET}`, `${SUPABASE_SERVICE_ROLE_KEY}`, and `${FUNCTION_URL}` with the correct values before executing.
+
+After applying the script, the **Jobs** tab in Supabase should list:
+
+- `send-scheduled-campaigns`
+- `process-email-queue`
+- `requeue-stuck-email-jobs`
+- `sync-gmail-threads`
+- `cleanup-telnyx-creds` (optional Telnyx cleanup)
+
 ### Gmail Sync
 
 `scripts/db/05_scheduler.sql` also creates a second cron job that POSTs to
@@ -607,11 +618,11 @@ without hardcoded `user_id` values.
 If threads aren't syncing:
 
 - Double-check that all Gmail environment variables from `.env.example` are set
-  (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`,
-  `GMAIL_FROM` and `NEXT_PUBLIC_GOOGLE_REDIRECT_URI`). Missing values will cause
-  the Gmail API client to fail.
-- A revoked or expired refresh token also stops sync. Generate a new token in
-  the Google Cloud console and update `GMAIL_REFRESH_TOKEN`.
+  (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GMAIL_FROM` and
+  `NEXT_PUBLIC_GOOGLE_REDIRECT_URI`). Missing values will cause the Gmail API
+  client to fail.
+- A revoked or expired Gmail OAuth grant stored in `gmail_tokens` will stop sync.
+  Reconnect the inbox so a valid refresh token is stored in the table.
 
 Verify the scheduler is active by running:
 
