@@ -10,7 +10,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
   const token = auth.split(" ")[1]
-  if (token !== process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  const allowedTokens = [process.env.CRON_SECRET, process.env.SUPABASE_SERVICE_ROLE_KEY].filter(
+    Boolean,
+  )
+  if (!allowedTokens.includes(token)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

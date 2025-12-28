@@ -552,6 +552,7 @@ Before enabling the scheduler, set the required secrets in Supabase:
 
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
+- `CRON_SECRET` generated with `openssl rand -hex 32` (use this for cron callbacks instead of the service role key)
 - `DISPOTOOL_BASE_URL` (or `SITE_URL`) pointing to your deployed Next.js site
 - `FUNCTION_URL` pointing to your deployed `send-scheduled-campaigns` function (if you use the edge function trigger)
 - `AWS_SES_REGION`, `AWS_SES_ACCESS_KEY_ID`, `AWS_SES_SECRET_ACCESS_KEY`, and `AWS_SES_FROM_EMAIL` so cron-triggered email processing can sign SES requests
@@ -564,10 +565,11 @@ to prevent build failures.
 
 ### Validate cron secrets
 
-`pg_cron` jobs call Next.js routes for campaigns and Gmail sync. Make sure the Supabase project secrets that cron can read match the values used by your deployed app:
+`pg_cron` jobs call Next.js routes for campaigns and Gmail sync. Use `CRON_SECRET` in the `Authorization: Bearer ...` header for these calls; the service role key remains a fallback but should not be embedded in cron commands. Make sure the Supabase project secrets that cron can read match the values used by your deployed app:
 
+- `CRON_SECRET` should be present in Supabase so scheduled HTTP jobs can authenticate without exposing the service role key. Generate one locally with `openssl rand -hex 32`, set it in Vercel, then run `supabase secrets set CRON_SECRET=...`.
 - `SITE_URL` (or `DISPOTOOL_BASE_URL` for backward compatibility) must be the public URL of the deployed site (for example `https://app.listhit.io`). A localhost value will cause the HTTP calls to fail inside Supabase.
-- `SUPABASE_SERVICE_ROLE_KEY` must be the same service role key you configured in Vercel or your server environment so the scheduled requests stay authorized.
+- `SUPABASE_SERVICE_ROLE_KEY` remains a supported fallback for cron auth, but avoid embedding it in job commands now that `CRON_SECRET` is available.
 
 Check what Supabase has stored with:
 
