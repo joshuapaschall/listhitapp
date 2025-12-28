@@ -3,8 +3,9 @@ create extension if not exists pg_net   with schema extensions;
 create extension if not exists pg_cron  with schema pg_catalog;
 
 select cron.unschedule('send-campaigns-every-5') where exists (select 1 from cron.job where jobname='send-campaigns-every-5');
+select cron.unschedule('send-scheduled-campaigns') where exists (select 1 from cron.job where jobname='send-scheduled-campaigns');
 select cron.schedule(
-  'send-campaigns-every-5',
+  'send-scheduled-campaigns',
   '*/5 * * * *',
   $$select
       net.http_post(
@@ -18,13 +19,13 @@ select cron.schedule(
 select cron.unschedule('process-email-queue') where exists (select 1 from cron.job where jobname='process-email-queue');
 select cron.schedule(
   'process-email-queue',
-  '*/1 * * * *',
+  '*/1 * * * *', -- switch to '*/5 * * * *' in production
   $$select
       net.http_post(
         url := '${SITE_URL}/api/email-campaigns/process',
         headers := jsonb_build_object(
           'Content-Type','application/json',
-          'Authorization', 'Bearer ${SUPABASE_SERVICE_ROLE_KEY}'
+          'Authorization', 'Bearer ' || coalesce(nullif('${CRON_SECRET}',''), '${SUPABASE_SERVICE_ROLE_KEY}')
         ),
         body := jsonb_build_object('limit', 25)
       )$$
@@ -34,13 +35,13 @@ select cron.schedule(
 select cron.unschedule('requeue-stuck-email-jobs') where exists (select 1 from cron.job where jobname='requeue-stuck-email-jobs');
 select cron.schedule(
   'requeue-stuck-email-jobs',
-  '*/1 * * * *',
+  '*/1 * * * *', -- switch to '*/5 * * * *' in production
   $$select
       net.http_post(
         url := '${SITE_URL}/api/email-campaigns/requeue-stuck',
         headers := jsonb_build_object(
           'Content-Type','application/json',
-          'Authorization', 'Bearer ${SUPABASE_SERVICE_ROLE_KEY}'
+          'Authorization', 'Bearer ' || coalesce(nullif('${CRON_SECRET}',''), '${SUPABASE_SERVICE_ROLE_KEY}')
         ),
         body := jsonb_build_object('stuckSeconds', 300, 'limit', 100)
       )$$
@@ -56,9 +57,9 @@ select cron.schedule(
         url := '${SITE_URL}/api/gmail/sync-cron',
         headers := jsonb_build_object(
           'Content-Type','application/json',
-          'Authorization', 'Bearer ${SUPABASE_SERVICE_ROLE_KEY}'
+          'Authorization', 'Bearer ' || coalesce(nullif('${CRON_SECRET}',''), '${SUPABASE_SERVICE_ROLE_KEY}')
         ),
-        body := '{}'::jsonb
+        body := jsonb_build_object('batchSize', 5, 'maxResults', 100, 'folder', 'inbox')
       )$$
 );
 
@@ -70,7 +71,10 @@ select cron.schedule(
   $$select
       net.http_post(
         url := '${SITE_URL}/api/telnyx/cleanup',
-        headers := jsonb_build_object('Content-Type','application/json'),
+        headers := jsonb_build_object(
+          'Content-Type','application/json',
+          'Authorization', 'Bearer ' || coalesce(nullif('${CRON_SECRET}',''), '${SUPABASE_SERVICE_ROLE_KEY}')
+        ),
         body := '{}'::jsonb
       )$$
 );
