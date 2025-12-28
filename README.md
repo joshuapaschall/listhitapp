@@ -591,9 +591,14 @@ This uploads `supabase/functions/send-scheduled-campaigns` using the project ID 
 ### Gmail Sync
 
 `scripts/db/05_scheduler.sql` also creates a second cron job that POSTs to
-`/api/gmail/sync` every **5 minutes**. This keeps the `gmail_threads` table
-synced without manual intervention. The job uses `SITE_URL` (falling back to `DISPOTOOL_BASE_URL` if provided) to build
-the URL, so be sure to set that secret before running `pnpm run db:schedule`.
+`/api/gmail/sync-cron` every **5 minutes**. This keeps the `gmail_threads` table
+synced without manual intervention using a batch-aware, multi-tenant sync that
+tracks `last_synced_at` per Gmail token to avoid overlapping runs. The job uses
+`SITE_URL` (falling back to `DISPOTOOL_BASE_URL` if provided) to build
+the URL, so be sure to set that secret before running `pnpm run db:schedule`. The
+request includes a Bearer token (either `CRON_SECRET` or `SUPABASE_SERVICE_ROLE_KEY`)
+to authorize the cron-safe endpoint and automatically cycles through enabled users
+without hardcoded `user_id` values.
 
 #### Troubleshooting
 

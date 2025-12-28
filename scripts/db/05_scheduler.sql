@@ -53,8 +53,11 @@ select cron.schedule(
   '*/5 * * * *',
   $$select
       net.http_post(
-        url := '${SITE_URL}/api/gmail/sync',
-        headers := jsonb_build_object('Content-Type','application/json'),
+        url := '${SITE_URL}/api/gmail/sync-cron',
+        headers := jsonb_build_object(
+          'Content-Type','application/json',
+          'Authorization', 'Bearer ${SUPABASE_SERVICE_ROLE_KEY}'
+        ),
         body := '{}'::jsonb
       )$$
 );
