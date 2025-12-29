@@ -214,9 +214,11 @@ You can save your last user message as a reusable prompt directly from the modal
 
 After setting these variables, Gmail threads sync automatically. Visiting
 `/gmail` or any endpoint that hits `/api/gmail/threads` triggers a sync.
-The cron job started with `pnpm run db:schedule` POSTs to `/api/gmail/sync`
-every 5 minutes. Running `pnpm ts-node scripts/gmail-sync.ts` manually is
-optional if you want to seed threads right away.
+If you enable the optional scheduler job in `scripts/db/05_scheduler.sql`,
+`pnpm run db:schedule` will POST to `/api/gmail/sync-cron` every 5 minutes
+using `CRON_SECRET` without needing a hardcoded `user_id`. Running
+`pnpm ts-node scripts/gmail-sync.ts` manually is optional if you want to seed
+threads right away.
 
 When using Telnyx for voice calls during development, expose your local Next.js
 server with a tunneling tool like **ngrok** so Telnyx can reach your public URL.
@@ -561,6 +563,7 @@ On Vercel, set these variables in both the **Build** and **Runtime** sections
 to prevent build failures.
 
 `pnpm run db:schedule` uses `envsubst` to inject these secrets into the SQL before applying it. Run the command from a terminal where the variables above are already exported so the cron jobs point at the correct URLs and credentials.
+`CRON_SECRET` is the preferred credential for scheduled HTTP callbacks so pg_cron jobs do not need the Supabase service role key embedded in SQL.
 
 ### Cron Security
 
@@ -585,6 +588,7 @@ If either value is missing or incorrect, re-run the `supabase secrets set ...` c
 
 After the secrets are configured, run `pnpm run db:schedule` to create the cron jobs.
 The email processing and stuck-job requeue cron tasks now run every **minute** as defined in `scripts/db/05_scheduler.sql`.
+For production, change the cron expressions in that file to `*/5 * * * *` so campaign tasks run every five minutes instead of every minute during local testing.
 
 To deploy the edge function that sends scheduled campaigns, run:
 
@@ -600,23 +604,23 @@ If you run `scripts/db/05_scheduler.sql` directly in the Supabase SQL editor, re
 
 After applying the script, the **Jobs** tab in Supabase should list:
 
-- `send-scheduled-campaigns`
-- `process-email-queue`
-- `requeue-stuck-email-jobs`
-- `sync-gmail-threads`
-- `cleanup-telnyx-creds` (optional Telnyx cleanup)
+- `send-scheduled-campaigns` (edge function trigger, runs every 5 minutes)
+- `process-email-queue` (Next.js route, runs every minute locally; switch to every 5 minutes in production)
+- `requeue-stuck-email-jobs` (Next.js route, runs every minute locally; switch to every 5 minutes in production)
+- `sync-gmail-threads` (optional; keep commented unless Gmail sync is enabled)
+- `cleanup-telnyx-creds` (optional Telnyx cleanup; commented by default)
 
 ### Gmail Sync
 
 `scripts/db/05_scheduler.sql` also creates a second cron job that POSTs to
-`/api/gmail/sync-cron` every **5 minutes**. This keeps the `gmail_threads` table
-synced without manual intervention using a batch-aware, multi-tenant sync that
-tracks `last_synced_at` per Gmail token to avoid overlapping runs. The job uses
-`SITE_URL` (falling back to `DISPOTOOL_BASE_URL` if provided) to build
-the URL, so be sure to set that secret before running `pnpm run db:schedule`. The
-request includes a Bearer token (`CRON_SECRET`)
-to authorize the cron-safe endpoint and automatically cycles through enabled users
-without hardcoded `user_id` values.
+`/api/gmail/sync-cron` every **5 minutes**. The cron-safe route accepts
+`Authorization: Bearer <CRON_SECRET>` (or the service role key for backward
+compatibility) and does **not** require hardcoded `user_id` values. When called
+without a `userId` payload it selects accounts from `gmail_tokens` that have
+`last_synced_at` older than five minutes (or null), limits the batch size with
+`limitUsers` (default 10), and updates `gmail_tokens.last_synced_at` after each
+sync. The job uses `SITE_URL` (falling back to `DISPOTOOL_BASE_URL` if provided)
+to build the URL, so set that secret before running `pnpm run db:schedule`.
 
 #### Troubleshooting
 

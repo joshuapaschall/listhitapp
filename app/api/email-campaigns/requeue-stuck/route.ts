@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireCronAuth } from "@/lib/cron-auth"
+import { assertCronAuth } from "@/lib/cron-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { assertServer } from "@/utils/assert-server"
 
@@ -9,8 +9,12 @@ const DEFAULT_STUCK_SECONDS = 300
 const DEFAULT_LIMIT = 50
 
 export async function POST(request: NextRequest) {
-  const authResponse = requireCronAuth(request)
-  if (authResponse) return authResponse
+  try {
+    assertCronAuth(request)
+  } catch (err) {
+    if (err instanceof Response) return err
+    throw err
+  }
 
   if (!supabaseAdmin) {
     return NextResponse.json(

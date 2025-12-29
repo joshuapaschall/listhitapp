@@ -1,5 +1,9 @@
 -- Supabase pg_cron jobs for DispoTool / ListHit
--- If running in the Supabase SQL editor, replace ${...} placeholders manually before executing.
+-- ============================================================================
+-- If you run this in the Supabase SQL editor, the ${...} placeholders will NOT
+-- be expanded. Replace ${SITE_URL}, ${CRON_SECRET}, and ${FUNCTION_URL}
+-- manually before executing.
+-- ============================================================================
 create extension if not exists pg_net   with schema extensions;
 create extension if not exists pg_cron  with schema pg_catalog;
 
@@ -51,34 +55,34 @@ select cron.schedule(
       )$$
 );
 
--- Recreate Gmail sync: every 5 min hit Next.js route
-select cron.unschedule('sync-gmail-threads') where exists (select 1 from cron.job where jobname='sync-gmail-threads');
-select cron.schedule(
-  'sync-gmail-threads',
-  '*/5 * * * *',
-  $$select
-      net.http_post(
-        url := '${SITE_URL}/api/gmail/sync-cron',
-        headers := jsonb_build_object(
-          'Content-Type','application/json',
-          'Authorization', 'Bearer ${CRON_SECRET}'
-        ),
-        body := jsonb_build_object('batchSize', 5, 'maxResults', 100, 'folder', 'inbox')
-      )$$
-);
+-- Optional: Gmail sync (remove leading `--` to enable)
+-- select cron.unschedule('sync-gmail-threads') where exists (select 1 from cron.job where jobname='sync-gmail-threads');
+-- select cron.schedule(
+--   'sync-gmail-threads',
+--   '*/5 * * * *',
+--   $$select
+--       net.http_post(
+--         url := '${SITE_URL}/api/gmail/sync-cron',
+--         headers := jsonb_build_object(
+--           'Content-Type','application/json',
+--           'Authorization', 'Bearer ${CRON_SECRET}'
+--         ),
+--         body := jsonb_build_object('limitUsers', 10, 'maxResults', 100, 'folder', 'inbox')
+--       )$$
+-- );
 
--- Daily cleanup of expired Telnyx credentials
-select cron.unschedule('cleanup-telnyx-creds') where exists (select 1 from cron.job where jobname='cleanup-telnyx-creds');
-select cron.schedule(
-  'cleanup-telnyx-creds',
-  '0 0 * * *',
-  $$select
-      net.http_post(
-        url := '${SITE_URL}/api/telnyx/cleanup',
-        headers := jsonb_build_object(
-          'Content-Type','application/json',
-          'Authorization', 'Bearer ${CRON_SECRET}'
-        ),
-        body := '{}'::jsonb
-      )$$
-);
+-- Optional: Daily cleanup of expired Telnyx credentials
+-- select cron.unschedule('cleanup-telnyx-creds') where exists (select 1 from cron.job where jobname='cleanup-telnyx-creds');
+-- select cron.schedule(
+--   'cleanup-telnyx-creds',
+--   '0 0 * * *',
+--   $$select
+--       net.http_post(
+--         url := '${SITE_URL}/api/telnyx/cleanup',
+--         headers := jsonb_build_object(
+--           'Content-Type','application/json',
+--           'Authorization', 'Bearer ${CRON_SECRET}'
+--         ),
+--         body := '{}'::jsonb
+--       )$$
+-- );
