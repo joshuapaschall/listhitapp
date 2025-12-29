@@ -193,8 +193,14 @@ create table if not exists public.gmail_tokens (
   refresh_token text not null,
   expires_at bigint,
   email text,
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  sync_enabled boolean not null default true,
+  last_synced_at timestamptz,
+  last_sync_error text,
+  last_sync_error_at timestamptz
 );
+
+create index if not exists gmail_tokens_last_synced_at_idx on public.gmail_tokens (last_synced_at);
 
 -- Templates
 create table if not exists public.sms_templates (

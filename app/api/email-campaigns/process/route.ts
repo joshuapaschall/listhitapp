@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from "next/server"
 import { processEmailQueue } from "@/services/campaign-sender"
-import { requireCronAuth } from "@/lib/cron-auth"
+import { assertCronAuth } from "@/lib/cron-auth"
 import { assertServer } from "@/utils/assert-server"
 
 assertServer()
 
 export async function POST(request: NextRequest) {
-  const authResponse = requireCronAuth(request)
-  if (authResponse) return authResponse
+  try {
+    assertCronAuth(request)
+  } catch (err) {
+    if (err instanceof Response) return err
+    throw err
+  }
 
   const body = await request.json().catch(() => ({}))
   const limit = typeof body?.limit === "number" ? body.limit : 10
