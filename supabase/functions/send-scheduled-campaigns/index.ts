@@ -11,16 +11,30 @@
 //   deployment that hosts /api/campaigns/send
 // -----------------------------------------------
 
-import { serve }     from "https://deno.land/std@0.224.0/http/server.ts"
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
-serve(async () => {
+serve(async (req: Request) => {
   /* 1️⃣  Load secrets AFTER the function starts */
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")
-  const SERVICE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
+  const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
+  const CRON_SECRET = Deno.env.get("CRON_SECRET")
   const BASE_URL =
-    Deno.env.get("DISPOTOOL_BASE_URL") ??
-    Deno.env.get("SITE_URL")           ?? ""
+    Deno.env.get("DISPOTOOL_BASE_URL") ?? Deno.env.get("SITE_URL") ?? ""
+
+  const authHeader = req.headers.get("authorization") || ""
+  const token = authHeader.toLowerCase().startsWith("bearer ")
+    ? authHeader.slice(7).trim()
+    : null
+
+  if (!CRON_SECRET) {
+    console.error("Missing CRON_SECRET")
+    return new Response("Env vars missing", { status: 500 })
+  }
+
+  if (!token || token !== CRON_SECRET) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 })
+  }
 
   /* 2️⃣  Guard-rail: bail if secrets missing */
   if (!SUPABASE_URL || !SERVICE_KEY) {
@@ -136,7 +150,7 @@ serve(async () => {
       redirect: "manual",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${SERVICE_KEY}`,   // ← key added here
+        Authorization: `Bearer ${CRON_SECRET}`,
       },
       body: JSON.stringify({ campaignId: campaign.id }),
     })

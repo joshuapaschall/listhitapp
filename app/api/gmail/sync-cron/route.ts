@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import { syncGmailThreads } from "@/scripts/gmail-sync"
-
-function getBearerToken(req: NextRequest) {
-  const header = req.headers.get("authorization") || ""
-  if (!header.toLowerCase().startsWith("bearer ")) return null
-  return header.slice(7)
-}
+import { requireCronAuth } from "@/lib/cron-auth"
 
 function getSupabaseAdminClient() {
   const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = process.env
@@ -21,11 +16,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing Supabase env" }, { status: 500 })
   }
 
-  const token = getBearerToken(req)
-  const allowedTokens = [CRON_SECRET, SUPABASE_SERVICE_ROLE_KEY].filter(Boolean)
-  if (!token || !allowedTokens.includes(token)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const authResponse = requireCronAuth(req)
+  if (authResponse) return authResponse
 
   const { batchSize = 5, maxResults = 100, folder = "inbox", userId } =
     (await req.json().catch(() => ({}))) || {}
