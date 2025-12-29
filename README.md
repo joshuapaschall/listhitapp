@@ -551,7 +551,7 @@ Before enabling the scheduler, set the required secrets in Supabase:
 
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
-- `CRON_SECRET` generated with `openssl rand -hex 32` (use this for cron callbacks instead of the service role key)
+- `CRON_SECRET` generated with `openssl rand -hex 32` (used by cron callbacks and the edge function; keep this out of SQL commands)
 - `DISPOTOOL_BASE_URL` (or `SITE_URL`) pointing to your deployed Next.js site
 - `FUNCTION_URL` pointing to your deployed `send-scheduled-campaigns` function (if you use the edge function trigger)
 - `AWS_SES_REGION`, `AWS_SES_ACCESS_KEY_ID`, `AWS_SES_SECRET_ACCESS_KEY`, and `AWS_SES_FROM_EMAIL` so cron-triggered email processing can sign SES requests
@@ -562,13 +562,18 @@ to prevent build failures.
 
 `pnpm run db:schedule` uses `envsubst` to inject these secrets into the SQL before applying it. Run the command from a terminal where the variables above are already exported so the cron jobs point at the correct URLs and credentials.
 
+### Cron Security
+
+- `pg_cron` jobs and the `send-scheduled-campaigns` edge function must send `Authorization: Bearer <CRON_SECRET>` when calling protected endpoints.
+- Do **not** embed `SUPABASE_SERVICE_ROLE_KEY` inside `cron.job.command`; keep it in Supabase secrets for admin access only.
+- To rotate `CRON_SECRET`, generate a new value, update Vercel environment variables, update Supabase secrets (including the edge function), redeploy the edge function, then re-run `pnpm run db:schedule` so `pg_cron` picks up the new header.
+
 ### Validate cron secrets
 
-`pg_cron` jobs call Next.js routes for campaigns and Gmail sync. Use `CRON_SECRET` in the `Authorization: Bearer ...` header for these calls; the service role key remains a fallback but should not be embedded in cron commands. Make sure the Supabase project secrets that cron can read match the values used by your deployed app:
+`pg_cron` jobs call Next.js routes for campaigns and Gmail sync. Use `CRON_SECRET` in the `Authorization: Bearer ...` header for these calls. Make sure the Supabase project secrets that cron can read match the values used by your deployed app:
 
 - `CRON_SECRET` should be present in Supabase so scheduled HTTP jobs can authenticate without exposing the service role key. Generate one locally with `openssl rand -hex 32`, set it in Vercel, then run `supabase secrets set CRON_SECRET=...`.
 - `SITE_URL` (or `DISPOTOOL_BASE_URL` for backward compatibility) must be the public URL of the deployed site (for example `https://app.listhit.io`). A localhost value will cause the HTTP calls to fail inside Supabase.
-- `SUPABASE_SERVICE_ROLE_KEY` remains a supported fallback for cron auth, but avoid embedding it in job commands now that `CRON_SECRET` is available.
 
 Check what Supabase has stored with:
 
@@ -591,7 +596,7 @@ This uploads `supabase/functions/send-scheduled-campaigns` using the project ID 
 
 ### Cron scheduling (Supabase SQL editor)
 
-If you run `scripts/db/05_scheduler.sql` directly in the Supabase SQL editor, replace placeholders like `${SITE_URL}`, `${CRON_SECRET}`, `${SUPABASE_SERVICE_ROLE_KEY}`, and `${FUNCTION_URL}` with the correct values before executing.
+If you run `scripts/db/05_scheduler.sql` directly in the Supabase SQL editor, replace placeholders like `${SITE_URL}`, `${CRON_SECRET}`, and `${FUNCTION_URL}` with the correct values before executing.
 
 After applying the script, the **Jobs** tab in Supabase should list:
 
@@ -609,7 +614,7 @@ synced without manual intervention using a batch-aware, multi-tenant sync that
 tracks `last_synced_at` per Gmail token to avoid overlapping runs. The job uses
 `SITE_URL` (falling back to `DISPOTOOL_BASE_URL` if provided) to build
 the URL, so be sure to set that secret before running `pnpm run db:schedule`. The
-request includes a Bearer token (either `CRON_SECRET` or `SUPABASE_SERVICE_ROLE_KEY`)
+request includes a Bearer token (`CRON_SECRET`)
 to authorize the cron-safe endpoint and automatically cycles through enabled users
 without hardcoded `user_id` values.
 

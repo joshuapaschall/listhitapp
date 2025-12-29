@@ -1,4 +1,5 @@
 -- Supabase pg_cron jobs for DispoTool / ListHit
+-- If running in the Supabase SQL editor, replace ${...} placeholders manually before executing.
 create extension if not exists pg_net   with schema extensions;
 create extension if not exists pg_cron  with schema pg_catalog;
 
@@ -10,7 +11,10 @@ select cron.schedule(
   $$select
       net.http_post(
         url := '${FUNCTION_URL}',
-        headers := jsonb_build_object('Content-Type','application/json'),
+        headers := jsonb_build_object(
+          'Content-Type','application/json',
+          'Authorization', 'Bearer ${CRON_SECRET}'
+        ),
         body := '{}'::jsonb
       )$$
 );
@@ -25,7 +29,7 @@ select cron.schedule(
         url := '${SITE_URL}/api/email-campaigns/process',
         headers := jsonb_build_object(
           'Content-Type','application/json',
-          'Authorization', 'Bearer ' || coalesce(nullif('${CRON_SECRET}',''), '${SUPABASE_SERVICE_ROLE_KEY}')
+          'Authorization', 'Bearer ${CRON_SECRET}'
         ),
         body := jsonb_build_object('limit', 25)
       )$$
@@ -41,7 +45,7 @@ select cron.schedule(
         url := '${SITE_URL}/api/email-campaigns/requeue-stuck',
         headers := jsonb_build_object(
           'Content-Type','application/json',
-          'Authorization', 'Bearer ' || coalesce(nullif('${CRON_SECRET}',''), '${SUPABASE_SERVICE_ROLE_KEY}')
+          'Authorization', 'Bearer ${CRON_SECRET}'
         ),
         body := jsonb_build_object('stuckSeconds', 300, 'limit', 100)
       )$$
@@ -57,7 +61,7 @@ select cron.schedule(
         url := '${SITE_URL}/api/gmail/sync-cron',
         headers := jsonb_build_object(
           'Content-Type','application/json',
-          'Authorization', 'Bearer ' || coalesce(nullif('${CRON_SECRET}',''), '${SUPABASE_SERVICE_ROLE_KEY}')
+          'Authorization', 'Bearer ${CRON_SECRET}'
         ),
         body := jsonb_build_object('batchSize', 5, 'maxResults', 100, 'folder', 'inbox')
       )$$
@@ -73,7 +77,7 @@ select cron.schedule(
         url := '${SITE_URL}/api/telnyx/cleanup',
         headers := jsonb_build_object(
           'Content-Type','application/json',
-          'Authorization', 'Bearer ' || coalesce(nullif('${CRON_SECRET}',''), '${SUPABASE_SERVICE_ROLE_KEY}')
+          'Authorization', 'Bearer ${CRON_SECRET}'
         ),
         body := '{}'::jsonb
       )$$
