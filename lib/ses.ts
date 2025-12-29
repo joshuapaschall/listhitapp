@@ -33,6 +33,49 @@ function extractMailbox(address: string) {
   return match ? match[1].trim() : address.trim()
 }
 
+function sanitizeHeaderValue(value?: string | null) {
+  return value?.replace(/[\r\n]/g, "")
+}
+
+function extractDisplayName(address: string) {
+  const match = address.match(/^\s*([^<]+)<[^>]+>\s*$/)
+  if (!match) {
+    return undefined
+  }
+  const name = match[1].trim()
+  const unquoted = name.replace(/^"(.*)"$/, "$1")
+  return unquoted || undefined
+}
+
+function formatDisplayName(name: string) {
+  const trimmed = name.trim()
+  const needsQuoting = /[<>()\[\]:;@,.\\"']/.test(trimmed)
+  if (!needsQuoting) {
+    return trimmed
+  }
+  const escaped = trimmed.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
+  return `"${escaped}"`
+}
+
+export function formatFromEmailAddress(params: { fromEmail?: string; fromName?: string }) {
+  const sanitizedEmail = sanitizeHeaderValue(params.fromEmail ?? process.env.AWS_SES_FROM_EMAIL)
+  if (!sanitizedEmail) {
+    throw new Error("AWS SES from email is not configured")
+  }
+
+  const mailbox = extractMailbox(sanitizedEmail)
+  const providedName = sanitizeHeaderValue(params.fromName ?? process.env.AWS_SES_FROM_NAME)
+  const fallbackName = providedName ?? extractDisplayName(sanitizedEmail)
+  const displayName = fallbackName?.trim()
+
+  if (!displayName) {
+    return { fromEmailAddress: mailbox, mailbox }
+  }
+
+  const formattedName = formatDisplayName(displayName)
+  return { fromEmailAddress: `${formattedName} <${mailbox}>`, mailbox }
+}
+
 export async function sendSesEmail(params: SendSesEmailParams) {
   const fromEmail = params.fromEmail || process.env.AWS_SES_FROM_EMAIL
   const configurationSet = params.configurationSetName || process.env.AWS_SES_CONFIGURATION_SET
@@ -41,8 +84,12 @@ export async function sendSesEmail(params: SendSesEmailParams) {
     throw new Error("AWS SES from email is not configured")
   }
 
+  const { fromEmailAddress, mailbox } = formatFromEmailAddress({
+    fromEmail,
+    fromName: params.fromName,
+  })
+
   const disableCustomHeaders = process.env.AWS_SES_DISABLE_CUSTOM_HEADERS === "1"
-  const mailbox = extractMailbox(fromEmail)
 
   const headers: { Name: string; Value: string }[] = []
 
@@ -91,7 +138,7 @@ export async function sendSesEmail(params: SendSesEmailParams) {
     }))
 
   const commandInput = {
-    FromEmailAddress: mailbox,
+    FromEmailAddress: fromEmailAddress,
     Destination: {
       ToAddresses: [params.to],
     },
