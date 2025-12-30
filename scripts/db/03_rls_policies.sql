@@ -139,6 +139,14 @@ drop policy if exists "Profiles are viewable by owner" on public.profiles;
 create policy "Profiles are viewable by owner" on public.profiles
   for select to authenticated using (auth.uid() = id);
 
+drop policy if exists "Profiles can be inserted by auth service" on public.profiles;
+create policy "Profiles can be inserted by auth service" on public.profiles
+  for insert to supabase_auth_admin with check (true);
+
+drop policy if exists "Profiles can be inserted by service role" on public.profiles;
+create policy "Profiles can be inserted by service role" on public.profiles
+  for insert to service_role with check (true);
+
 drop policy if exists "Profiles can be inserted by owner" on public.profiles;
 create policy "Profiles can be inserted by owner" on public.profiles
   for insert to authenticated with check (auth.uid() = id);
