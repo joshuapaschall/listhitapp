@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { type FormEvent, useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import type { Session } from "@supabase/supabase-js"
@@ -143,6 +144,15 @@ export default function LoginPage() {
               </Button>
             </form>
           </CardContent>
+          <CardFooter className="flex justify-center text-sm text-muted-foreground">
+            Don’t have an account?{" "}
+            <Link
+              href="/signup"
+              className="ml-1 font-medium text-primary underline underline-offset-4"
+            >
+              Create one
+            </Link>
+          </CardFooter>
         </Card>
       </div>
     </div>
