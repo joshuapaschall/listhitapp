@@ -15,6 +15,8 @@ export async function middleware(req: NextRequest) {
 
   const allowedPaths = [
     "/login",
+    "/signup",
+    "/auth/callback",
     "/agents/login",
     "/unsubscribe",
     "/api/unsubscribe",
