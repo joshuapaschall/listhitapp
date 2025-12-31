@@ -30,6 +30,9 @@ export default function SignupPage() {
   const [userExists, setUserExists] = useState(false)
   const [successMessage, setSuccessMessage] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [resendMessage, setResendMessage] = useState<string | null>(null)
+  const [resendError, setResendError] = useState<string | null>(null)
+  const [isResending, setIsResending] = useState(false)
 
   const validate = () => {
     if (!isValidEmail(email)) {
@@ -52,6 +55,8 @@ export default function SignupPage() {
     setError(null)
     setUserExists(false)
     setSuccessMessage("")
+    setResendMessage(null)
+    setResendError(null)
 
     const validationError = validate()
     if (validationError) {
@@ -87,6 +92,29 @@ export default function SignupPage() {
 
     setSuccessMessage("Check your email to confirm your account.")
     setIsSubmitting(false)
+  }
+
+  const handleResendConfirmation = async () => {
+    setResendMessage(null)
+    setResendError(null)
+    setError(null)
+    setIsResending(true)
+
+    const { error: resendError } = await supabase.auth.resend({
+      type: "signup",
+      email,
+      options: { emailRedirectTo: "https://app.listhit.io/auth/callback" },
+    })
+
+    if (resendError) {
+      setResendMessage(resendError.message)
+      setResendError(resendError.message)
+      setIsResending(false)
+      return
+    }
+
+    setResendMessage("Confirmation email resent. Please check your inbox.")
+    setIsResending(false)
   }
 
   return (
@@ -184,7 +212,32 @@ export default function SignupPage() {
                 </div>
               ) : null}
               {successMessage ? (
-                <p className="text-sm text-green-600">{successMessage}</p>
+                <div className="space-y-2">
+                  <p className="text-sm text-green-600">{successMessage}</p>
+                  <Button
+                    variant="link"
+                    type="button"
+                    className="h-auto p-0 text-sm"
+                    onClick={handleResendConfirmation}
+                    disabled={!email || isResending}
+                  >
+                    {isResending ? (
+                      <span className="inline-flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Resending...
+                      </span>
+                    ) : (
+                      "Didn't get the email? Resend confirmation"
+                    )}
+                  </Button>
+                  {resendMessage ? (
+                    <p
+                      className={`text-sm ${resendError ? "text-destructive" : "text-muted-foreground"}`}
+                    >
+                      {resendMessage}
+                    </p>
+                  ) : null}
+                </div>
               ) : null}
               <Button type="submit" className="w-full" disabled={isSubmitting}>
                 {isSubmitting ? (
