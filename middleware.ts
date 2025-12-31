@@ -2,7 +2,21 @@ import { NextRequest, NextResponse } from "next/server"
 import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs"
 
 export async function middleware(req: NextRequest) {
-  if (req.nextUrl.pathname.startsWith("/api/")) {
+  const { pathname } = req.nextUrl
+
+  const allowedPrefixes = [
+    "/signup",
+    "/login",
+    "/auth/callback",
+    "/api/",
+    "/unsubscribe",
+  ]
+
+  const isAllowedPath = allowedPrefixes.some((prefix) =>
+    pathname.startsWith(prefix)
+  )
+
+  if (isAllowedPath) {
     return NextResponse.next()
   }
 
@@ -10,25 +24,6 @@ export async function middleware(req: NextRequest) {
   const supabase = createMiddlewareClient({ req, res })
   const { data } = await supabase.auth.getSession()
   const session = data.session
-
-  const { pathname } = req.nextUrl
-
-  const allowedPaths = [
-    "/login",
-    "/signup",
-    "/auth/callback",
-    "/agents/login",
-    "/unsubscribe",
-    "/api/unsubscribe",
-  ]
-
-  const isAllowedPath =
-    allowedPaths.includes(pathname) ||
-    pathname.startsWith("/api/webhooks/") ||
-    pathname.startsWith("/_next/") ||
-    pathname === "/favicon.ico" ||
-    pathname === "/robots.txt" ||
-    pathname === "/sitemap.xml"
 
   if (!session && !isAllowedPath) {
     return NextResponse.redirect(new URL("/login", req.url))
