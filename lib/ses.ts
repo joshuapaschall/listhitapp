@@ -1,4 +1,9 @@
-import { MessageTag, SESv2Client, SendEmailCommand } from "@aws-sdk/client-sesv2"
+import {
+  MessageTag,
+  SESv2Client,
+  SendEmailCommand,
+  type SendEmailCommandOutput,
+} from "@aws-sdk/client-sesv2"
 
 export interface SendSesEmailParams {
   to: string
@@ -76,12 +81,19 @@ export function formatFromEmailAddress(params: { fromEmail?: string; fromName?: 
   return { fromEmailAddress: `${formattedName} <${mailbox}>`, mailbox }
 }
 
-export async function sendSesEmail(params: SendSesEmailParams) {
+export async function sendSesEmail(params: SendSesEmailParams): Promise<
+  SendEmailCommandOutput & { configurationSetName?: string }
+> {
   const fromEmail = params.fromEmail || process.env.AWS_SES_FROM_EMAIL
   const configurationSet = params.configurationSetName || process.env.AWS_SES_CONFIGURATION_SET
+  const isProduction = process.env.NODE_ENV === "production"
 
   if (!fromEmail) {
     throw new Error("AWS SES from email is not configured")
+  }
+
+  if (isProduction && !configurationSet) {
+    throw new Error("AWS_SES_CONFIGURATION_SET is required when sending emails in production")
   }
 
   const { fromEmailAddress, mailbox } = formatFromEmailAddress({
@@ -160,11 +172,21 @@ export async function sendSesEmail(params: SendSesEmailParams) {
     from: commandInput.FromEmailAddress,
     to: commandInput.Destination.ToAddresses,
     subject: commandInput.Content.Simple.Subject.Data,
-    configurationSet: commandInput.ConfigurationSetName,
+    configurationSet: configurationSet || null,
     headers: filteredHeaders.map(({ Name }) => Name),
   })
 
   const command = new SendEmailCommand(commandInput)
+  const response = await sesClient.send(command)
 
-  return sesClient.send(command)
+  console.debug("SES email sent", {
+    messageId: response.MessageId,
+    configurationSet: configurationSet || null,
+    requestId: response.$metadata?.requestId,
+  })
+
+  return {
+    ...response,
+    configurationSetName: configurationSet || undefined,
+  }
 }
