@@ -706,7 +706,7 @@ create table if not exists public.email_campaign_queue (
   sent_at timestamptz
 );
 
-create unique index if not exists email_campaign_queue_campaign_recipient_uniq_idx on public.email_campaign_queue (campaign_id, recipient_id) where recipient_id is not null;
+create unique index if not exists email_campaign_queue_campaign_recipient_uniq_idx on public.email_campaign_queue (campaign_id, recipient_id);
 create index if not exists email_campaign_queue_scheduled_idx on public.email_campaign_queue (status, scheduled_for);
 create index if not exists email_campaign_queue_status_lock_expires_idx on public.email_campaign_queue (status, lock_expires_at);
 
