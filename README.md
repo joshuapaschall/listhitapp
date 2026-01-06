@@ -571,6 +571,14 @@ to prevent build failures.
 - Do **not** embed `SUPABASE_SERVICE_ROLE_KEY` inside `cron.job.command`; keep it in Supabase secrets for admin access only.
 - To rotate `CRON_SECRET`, generate a new value, update Vercel environment variables, update Supabase secrets (including the edge function), redeploy the edge function, then re-run `pnpm run db:schedule` so `pg_cron` picks up the new header.
 
+### After Supabase redeploy
+
+When Supabase is redeployed, refresh every copy of the credentials to avoid token drift:
+
+- Vercel environment variables: `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_SUPABASE_URL`
+- Supabase Edge Function secrets for `send-scheduled-campaigns`: `CRON_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+- `pg_cron` jobs if `CRON_SECRET` changed (rerun `pnpm run db:schedule` so headers update)
+
 ### Validate cron secrets
 
 `pg_cron` jobs call Next.js routes for campaigns and Gmail sync. Use `CRON_SECRET` in the `Authorization: Bearer ...` header for these calls. Make sure the Supabase project secrets that cron can read match the values used by your deployed app:

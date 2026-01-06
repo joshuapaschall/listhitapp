@@ -17,7 +17,8 @@ select cron.schedule(
         url := '${FUNCTION_URL}',
         headers := jsonb_build_object(
           'Content-Type','application/json',
-          'Authorization', 'Bearer ${CRON_SECRET}'
+          'Authorization', 'Bearer ${CRON_SECRET}',
+          'x-cron-secret', '${CRON_SECRET}'
         ),
         body := '{}'::jsonb
       )$$

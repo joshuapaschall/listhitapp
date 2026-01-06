@@ -22,17 +22,32 @@ serve(async (req: Request) => {
   const BASE_URL =
     Deno.env.get("DISPOTOOL_BASE_URL") ?? Deno.env.get("SITE_URL") ?? ""
 
-  const authHeader = req.headers.get("authorization") || ""
-  const token = authHeader.toLowerCase().startsWith("bearer ")
-    ? authHeader.slice(7).trim()
+  const requestHeaders = {
+    authorization: req.headers.get("authorization") || "",
+    "x-cron-secret": req.headers.get("x-cron-secret") || "",
+  }
+  const bearerToken = requestHeaders.authorization.toLowerCase().startsWith("bearer ")
+    ? requestHeaders.authorization.slice(7).trim()
     : null
+  const headerToken = requestHeaders["x-cron-secret"].trim() || null
+  const token = bearerToken ?? headerToken
+  const tokenSource = bearerToken ? "authorization" : headerToken ? "x-cron-secret" : "none"
 
   if (!CRON_SECRET) {
-    console.error("Missing CRON_SECRET")
-    return new Response("Env vars missing", { status: 500 })
+    console.warn("CRON_SECRET missing from env; allowing service role fallback")
   }
 
-  if (!token || token !== CRON_SECRET) {
+  const allowedTokens = [CRON_SECRET, SERVICE_KEY].filter(Boolean)
+  if (!token) {
+    console.error("Unauthorized: missing Authorization or x-cron-secret header")
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 })
+  }
+  if (!allowedTokens.includes(token)) {
+    console.error("Unauthorized: token mismatch", {
+      hasCronSecret: Boolean(CRON_SECRET),
+      hasServiceRole: Boolean(SERVICE_KEY),
+      providedHeader: tokenSource,
+    })
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 })
   }
 
@@ -145,12 +160,14 @@ serve(async (req: Request) => {
     }
 
     /* call the Next.js route with auth header */
+    const outboundToken = CRON_SECRET || SERVICE_KEY || ""
     const resp = await fetch(`${BASE_URL}/api/campaigns/send`, {
       method: "POST",
       redirect: "manual",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${CRON_SECRET}`,
+        Authorization: `Bearer ${outboundToken}`,
+        "x-cron-secret": outboundToken,
       },
       body: JSON.stringify({ campaignId: campaign.id }),
     })
