@@ -12,16 +12,21 @@ export async function POST(request: NextRequest) {
     process.env.SITE_URL ||
     request.nextUrl.origin
 
-  try {
-    const auth =
-      request.headers.get("authorization") ??
-      `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`
+  const cronSecret = process.env.CRON_SECRET
+  if (!cronSecret) {
+    return new Response(
+      JSON.stringify({ error: "CRON_SECRET env var is required to trigger campaigns" }),
+      { status: 500 },
+    )
+  }
 
+  try {
     const res = await fetch(`${baseUrl}/api/campaigns/send`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: auth,
+        Authorization: `Bearer ${cronSecret}`,
+        "x-cron-secret": cronSecret,
       },
       body: JSON.stringify({ campaignId }),
       cache: "no-store",
