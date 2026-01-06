@@ -8,6 +8,7 @@ import {
 import { replaceUrlsWithShortLinks } from "@/services/shortio-service"
 import { renderTemplate } from "@/lib/utils"
 import { assertServer } from "@/utils/assert-server"
+import { getCronRequestToken } from "@/lib/cron-auth"
 
 assertServer()
 
@@ -22,14 +23,27 @@ const getNowInTimezone = (tz: string) => {
 }
 
 export async function POST(request: NextRequest) {
-  const authHeader = request.headers.get("authorization")
-  const expectedToken = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const cronSecret = process.env.CRON_SECRET
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return NextResponse.json({ error: "Missing auth header" }, { status: 401 })
+  if (!cronSecret && !serviceRoleKey) {
+    return NextResponse.json(
+      { error: "CRON_SECRET or SUPABASE_SERVICE_ROLE_KEY env vars are required" },
+      { status: 500 },
+    )
+  }
+  if (!serviceRoleKey) {
+    return NextResponse.json(
+      { error: "SUPABASE_SERVICE_ROLE_KEY env var is required" },
+      { status: 500 },
+    )
   }
 
-  const token = authHeader.split(" ")[1]
+  const token = getCronRequestToken(request)
+  if (!token) {
+    return NextResponse.json({ error: "Missing auth token" }, { status: 401 })
+  }
+
   const { supabaseAdmin } = await import("@/lib/supabase")
   const supabase = supabaseAdmin
 
@@ -72,8 +86,10 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  const allowedTokens = [cronSecret, serviceRoleKey].filter(Boolean)
+
   let userId: string | null = null
-  if (token !== expectedToken) {
+  if (!allowedTokens.includes(token)) {
     const {
       data: { user },
       error: userError,

@@ -33,22 +33,28 @@ serve(async (req: Request) => {
   const token = bearerToken ?? headerToken
   const tokenSource = bearerToken ? "authorization" : headerToken ? "x-cron-secret" : "none"
 
-  if (!CRON_SECRET) {
-    console.warn("CRON_SECRET missing from env; allowing service role fallback")
-  }
-
   const allowedTokens = [CRON_SECRET, SERVICE_KEY].filter(Boolean)
   if (!token) {
-    console.error("Unauthorized: missing Authorization or x-cron-secret header")
+    console.error("Unauthorized: missing token", { headerUsed: tokenSource })
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 })
   }
+  if (!allowedTokens.length) {
+    console.error("Unauthorized: no configured tokens for validation")
+    return new Response(JSON.stringify({ error: "Server misconfigured" }), { status: 500 })
+  }
   if (!allowedTokens.includes(token)) {
-    console.error("Unauthorized: token mismatch", {
+    console.error("Unauthorized: mismatched token", {
+      headerUsed: tokenSource,
       hasCronSecret: Boolean(CRON_SECRET),
       hasServiceRole: Boolean(SERVICE_KEY),
-      providedHeader: tokenSource,
     })
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 })
+  }
+  if (!CRON_SECRET) {
+    console.error("CRON_SECRET missing: cannot authenticate outbound request")
+    return new Response(JSON.stringify({ error: "CRON_SECRET env var is required" }), {
+      status: 500,
+    })
   }
 
   /* 2️⃣  Guard-rail: bail if secrets missing */
@@ -160,7 +166,7 @@ serve(async (req: Request) => {
     }
 
     /* call the Next.js route with auth header */
-    const outboundToken = CRON_SECRET || SERVICE_KEY || ""
+    const outboundToken = CRON_SECRET
     const resp = await fetch(`${BASE_URL}/api/campaigns/send`, {
       method: "POST",
       redirect: "manual",
