@@ -1,32 +1,30 @@
-import { type NextRequest } from "next/server"
-
-export function getBearerToken(req: Request | NextRequest): string | null {
+export function getBearerToken(req: Request): string | null {
   const header = req.headers.get("authorization") || ""
   if (!header.toLowerCase().startsWith("bearer ")) return null
   const token = header.slice(7).trim()
   return token || null
 }
 
-export function assertCronAuth(req: Request | NextRequest): void {
-  const token = getBearerToken(req)
+export function getCronToken(req: Request): string | null {
+  const bearerToken = getBearerToken(req)
+  if (bearerToken) return bearerToken
+  const headerToken = (req.headers.get("x-cron-secret") || "").trim()
+  return headerToken || null
+}
+
+export function requireCronAuth(req: Request): Response | null {
+  const token = getCronToken(req)
   const allowedTokens = [process.env.CRON_SECRET, process.env.SUPABASE_SERVICE_ROLE_KEY].filter(
     Boolean,
-  ) as string[]
+  )
 
   if (!token || !allowedTokens.includes(token)) {
-    throw new Response(JSON.stringify({ error: "Unauthorized" }), {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { "Content-Type": "application/json" },
     })
   }
-}
 
-export function requireCronAuth(req: Request | NextRequest): Response | null {
-  try {
-    assertCronAuth(req)
-    return null
-  } catch (err) {
-    if (err instanceof Response) return err
-    throw err
-  }
+  // TODO: Remove SUPABASE_SERVICE_ROLE_KEY fallback once all cron jobs are rescheduled to CRON_SECRET.
+  return null
 }
