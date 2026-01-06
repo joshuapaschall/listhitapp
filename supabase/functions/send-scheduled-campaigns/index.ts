@@ -30,7 +30,7 @@ serve(async (req: Request) => {
     ? requestHeaders.authorization.slice(7).trim()
     : null
   const headerToken = requestHeaders["x-cron-secret"].trim() || null
-  const token = bearerToken ?? headerToken
+  const token = headerToken ?? bearerToken
   const tokenSource = bearerToken ? "authorization" : headerToken ? "x-cron-secret" : "none"
 
   const allowedTokens = [CRON_SECRET, SERVICE_KEY].filter(Boolean)
