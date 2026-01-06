@@ -5,7 +5,7 @@ export function getBearerToken(req: Request): string | null {
   return token || null
 }
 
-export function getCronToken(req: Request): string | null {
+export function getCronRequestToken(req: Request): string | null {
   const bearerToken = getBearerToken(req)
   if (bearerToken) return bearerToken
   const headerToken = (req.headers.get("x-cron-secret") || "").trim()
@@ -13,7 +13,7 @@ export function getCronToken(req: Request): string | null {
 }
 
 export function requireCronAuth(req: Request): Response | null {
-  const token = getCronToken(req)
+  const token = getCronRequestToken(req)
   const allowedTokens = [process.env.CRON_SECRET, process.env.SUPABASE_SERVICE_ROLE_KEY].filter(
     Boolean,
   )
