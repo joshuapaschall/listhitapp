@@ -1,6 +1,6 @@
 -- Extend email_events with campaign context and analytics helpers
 alter table email_events
-  add column if not exists campaign_id uuid references campaigns(id),
+  add column if not exists campaign_id uuid references campaigns(id) on delete set null,
   add column if not exists recipient_id uuid references campaign_recipients(id),
   add column if not exists buyer_id uuid references buyers(id),
   add column if not exists message_id text,
