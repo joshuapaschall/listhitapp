@@ -806,25 +806,32 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          <span className="text-xs text-muted-foreground">Quick picks:</span>
-                          {[
-                            { label: "+5 min", minutes: 5 },
-                            { label: "+10 min", minutes: 10 },
-                            { label: "+15 min", minutes: 15 },
-                            { label: "+30 min", minutes: 30 },
-                            { label: "+1 hour", minutes: 60 },
-                          ].map((item) => (
-                            <Button
-                              key={item.label}
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => applyQuickPick(item.minutes)}
-                            >
-                              {item.label}
-                            </Button>
-                          ))}
+                        <div className="mt-3 rounded-md border bg-muted/30 px-3 py-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                              Quick picks
+                            </span>
+                            <div className="flex flex-wrap gap-2">
+                              {[
+                                { label: "+5 min", minutes: 5 },
+                                { label: "+10 min", minutes: 10 },
+                                { label: "+15 min", minutes: 15 },
+                                { label: "+30 min", minutes: 30 },
+                                { label: "+1 hour", minutes: 60 },
+                              ].map((item) => (
+                                <Button
+                                  key={item.label}
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 px-3 text-xs"
+                                  onClick={() => applyQuickPick(item.minutes)}
+                                >
+                                  {item.label}
+                                </Button>
+                              ))}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
