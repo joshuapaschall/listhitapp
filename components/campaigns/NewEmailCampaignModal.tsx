@@ -72,7 +72,7 @@ const TIME_OPTIONS = Array.from({ length: 24 }, (_, i) => {
 })
 
 const HOUR_OPTIONS = Array.from({ length: 12 }, (_, i) => `${i + 1}`)
-const MINUTE_OPTIONS = ["00", "15", "30", "45"]
+const MINUTE_OPTIONS = Array.from({ length: 12 }, (_, i) => `${i * 5}`.padStart(2, "0"))
 
 const to24Hour = (hour: string, period: "AM" | "PM") => {
   const parsed = Number(hour)
@@ -80,6 +80,17 @@ const to24Hour = (hour: string, period: "AM" | "PM") => {
     return parsed === 12 ? 0 : parsed
   }
   return parsed === 12 ? 12 : parsed + 12
+}
+
+const roundToNearestFive = (date: Date) => {
+  const rounded = new Date(date)
+  rounded.setSeconds(0, 0)
+  const minutes = rounded.getMinutes()
+  const remainder = minutes % 5
+  if (remainder === 0) return rounded
+  const delta = remainder >= 3 ? 5 - remainder : -remainder
+  rounded.setMinutes(minutes + delta)
+  return rounded
 }
 
 const STEPS = ["recipients", "message"] as const
@@ -213,6 +224,7 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
   const [sendingTest, setSendingTest] = useState(false)
   const debounceRef = useRef<any>(null)
   const quillRef = useRef<ReactQuillType | null>(null)
+  const payloadLogRef = useRef(false)
   const stepIndex = STEPS.indexOf(step)
   const progressValue = (stepIndex / (STEPS.length - 1)) * 100
   const selectedCount = new Set([
@@ -252,16 +264,17 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
   }, [scheduleDate, scheduleHour, scheduleMinute, schedulePeriod])
 
   const setScheduleStateFromDate = useCallback((date: Date) => {
-    const hours24 = date.getHours()
-    const minutes = `${date.getMinutes()}`.padStart(2, "0")
+    const rounded = roundToNearestFive(date)
+    const hours24 = rounded.getHours()
+    const minutes = `${rounded.getMinutes()}`.padStart(2, "0")
     const period = hours24 >= 12 ? "PM" : "AM"
     const hours12 = hours24 % 12 === 0 ? 12 : hours24 % 12
-    setScheduleDate(date)
+    setScheduleDate(rounded)
     setScheduleHour(`${hours12}`)
     setScheduleMinute(MINUTE_OPTIONS.includes(minutes) ? minutes : "00")
     setSchedulePeriod(period)
     syncScheduleAt({
-      date,
+      date: rounded,
       hour: `${hours12}`,
       minute: MINUTE_OPTIONS.includes(minutes) ? minutes : "00",
       period,
@@ -272,9 +285,16 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
     const now = new Date()
     const next = new Date(now)
     next.setSeconds(0, 0)
-    const remainder = now.getMinutes() % 15 === 0 ? 15 : 15 - (now.getMinutes() % 15)
+    const remainder = now.getMinutes() % 5 === 0 ? 5 : 5 - (now.getMinutes() % 5)
     next.setMinutes(now.getMinutes() + remainder)
     setScheduleStateFromDate(next)
+  }, [setScheduleStateFromDate])
+
+  const applyQuickPick = useCallback((minutesToAdd: number) => {
+    const now = new Date()
+    const target = new Date(now.getTime() + minutesToAdd * 60 * 1000)
+    const rounded = roundToNearestFive(target)
+    setScheduleStateFromDate(rounded)
   }, [setScheduleStateFromDate])
 
 
@@ -438,7 +458,7 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
         minScore: minScore ? Number(minScore) : undefined,
         maxScore: maxScore ? Number(maxScore) : undefined,
       }
-      const campaign = await CampaignService.createCampaign({
+      const payload = {
         name,
         channel: "email",
         subject,
@@ -451,7 +471,12 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
         run_from: scheduledAtIso ? normalizedRunFrom : undefined,
         run_until: scheduledAtIso ? normalizedRunUntil : undefined,
         timezone: timeZone,
-      })
+      }
+      if (!payloadLogRef.current && process.env.NODE_ENV !== "production") {
+        console.log("Campaign payload", payload)
+        payloadLogRef.current = true
+      }
+      const campaign = await CampaignService.createCampaign(payload)
       if (sendNow) {
         await CampaignService.sendNow(campaign.id)
       }
@@ -780,6 +805,26 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
                               <SelectItem value="PM">PM</SelectItem>
                             </SelectContent>
                           </Select>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <span className="text-xs text-muted-foreground">Quick picks:</span>
+                          {[
+                            { label: "+5 min", minutes: 5 },
+                            { label: "+10 min", minutes: 10 },
+                            { label: "+15 min", minutes: 15 },
+                            { label: "+30 min", minutes: 30 },
+                            { label: "+1 hour", minutes: 60 },
+                          ].map((item) => (
+                            <Button
+                              key={item.label}
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => applyQuickPick(item.minutes)}
+                            >
+                              {item.label}
+                            </Button>
+                          ))}
                         </div>
                       </div>
                     </div>
