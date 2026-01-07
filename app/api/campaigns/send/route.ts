@@ -8,7 +8,7 @@ import {
 import { replaceUrlsWithShortLinks } from "@/services/shortio-service"
 import { renderTemplate } from "@/lib/utils"
 import { assertServer } from "@/utils/assert-server"
-import { getCronRequestToken } from "@/lib/cron-auth"
+import { assertCronAuth, getBearerToken } from "@/lib/cron-auth"
 
 assertServer()
 
@@ -39,9 +39,10 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const token = getCronRequestToken(request)
-  if (!token) {
-    return NextResponse.json({ error: "Missing auth token" }, { status: 401 })
+  const cronAuth = assertCronAuth(request)
+  if (cronAuth.response) {
+    console.error("campaigns/send auth misconfigured")
+    return cronAuth.response
   }
 
   const { supabaseAdmin } = await import("@/lib/supabase")
@@ -86,23 +87,33 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const allowedTokens = [cronSecret, serviceRoleKey].filter(Boolean)
-
   let userId: string | null = null
-  if (!allowedTokens.includes(token)) {
+  let authSource: "cron" | "user" | "unknown" = "unknown"
+  if (cronAuth.ok) {
+    authSource = "cron"
+  } else {
+    const bearerToken = getBearerToken(request)
+    if (!bearerToken) {
+      console.error("campaigns/send unauthorized: missing bearer token")
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
     const {
       data: { user },
       error: userError,
-    } = await supabase.auth.getUser(token)
+    } = await supabase.auth.getUser(bearerToken)
     if (userError || !user) {
+      console.error("campaigns/send unauthorized: invalid user token", userError)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
     userId = user.id
+    authSource = "user"
     if (userId !== campaign.user_id) {
       console.error("User", userId, "not authorized for campaign", campaignId)
       return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403 })
     }
   }
+
+  console.log("campaigns/send auth ok", { source: authSource, campaignId })
 
   const groupIds: string[] = Array.isArray(campaign.group_ids)
     ? campaign.group_ids
