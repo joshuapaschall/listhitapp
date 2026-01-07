@@ -224,37 +224,23 @@ export class CampaignService {
   }
 
   static async deleteCampaign(id: string) {
-    const { error: recipientError } = await supabase
-      .from("campaign_recipients")
-      .delete()
-      .eq("campaign_id", id)
-    if (recipientError) {
-      console.error("Error deleting campaign recipients:", recipientError)
-      throw recipientError
-    }
+    const res = await fetch("/api/campaigns/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ campaignId: id }),
+    })
 
-    const { error: queueError } = await supabase
-      .from("email_campaign_queue")
-      .delete()
-      .eq("campaign_id", id)
-    if (queueError) {
-      console.error("Error deleting campaign email queue rows:", queueError)
-      throw queueError
-    }
-
-    const { error: eventError } = await supabase
-      .from("email_events")
-      .update({ campaign_id: null })
-      .eq("campaign_id", id)
-    if (eventError) {
-      console.error("Error clearing campaign email events:", eventError)
-      throw eventError
-    }
-
-    const { error } = await supabase.from("campaigns").delete().eq("id", id)
-    if (error) {
-      console.error("Error deleting campaign:", error)
-      throw error
+    if (!res.ok) {
+      let errorMsg = "Failed to delete campaign"
+      try {
+        const data = await res.json()
+        if (data?.error) {
+          errorMsg = data.error
+        }
+      } catch (err) {
+        console.error("Failed to parse delete response", err)
+      }
+      throw new Error(errorMsg)
     }
   }
 
