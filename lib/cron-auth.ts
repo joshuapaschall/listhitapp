@@ -12,6 +12,11 @@ export function getCronRequestToken(req: Request): string | null {
   return headerToken || null
 }
 
+export function isJwtLike(token: string): boolean {
+  const parts = token.split(".")
+  return parts.length === 3 && parts.every((part) => part.trim().length > 0)
+}
+
 export function assertCronAuth(req: Request): {
   ok: boolean
   token: string | null
