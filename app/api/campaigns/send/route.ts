@@ -9,6 +9,7 @@ import { replaceUrlsWithShortLinks } from "@/services/shortio-service"
 import { renderTemplate } from "@/lib/utils"
 import { assertServer } from "@/utils/assert-server"
 import { getCronRequestToken, isJwtLike } from "@/lib/cron-auth"
+import { linkifyHtml } from "@/lib/email/linkify-html"
 
 assertServer()
 
@@ -231,11 +232,12 @@ export async function POST(request: NextRequest) {
       )
 
     try {
+      const html = linkifyHtml(campaign.message || "")
       await queueEmailCampaign(
         {
           campaignId: campaign.id,
           subject: campaign.subject || "",
-          html: campaign.message,
+          html,
           contacts: emailContacts,
         },
         {
