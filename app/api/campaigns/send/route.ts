@@ -8,7 +8,7 @@ import {
 import { replaceUrlsWithShortLinks } from "@/services/shortio-service"
 import { renderTemplate } from "@/lib/utils"
 import { assertServer } from "@/utils/assert-server"
-import { assertCronAuth, getBearerToken } from "@/lib/cron-auth"
+import { getCronRequestToken, isJwtLike } from "@/lib/cron-auth"
 
 assertServer()
 
@@ -23,12 +23,13 @@ const getNowInTimezone = (tz: string) => {
 }
 
 export async function POST(request: NextRequest) {
+  const supabaseUrl = process.env.SUPABASE_URL
   const cronSecret = process.env.CRON_SECRET
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-  if (!cronSecret && !serviceRoleKey) {
+  if (!supabaseUrl) {
     return NextResponse.json(
-      { error: "CRON_SECRET or SUPABASE_SERVICE_ROLE_KEY env vars are required" },
+      { error: "SUPABASE_URL env var is required" },
       { status: 500 },
     )
   }
@@ -38,11 +39,11 @@ export async function POST(request: NextRequest) {
       { status: 500 },
     )
   }
-
-  const cronAuth = assertCronAuth(request)
-  if (cronAuth.response) {
-    console.error("campaigns/send auth misconfigured")
-    return cronAuth.response
+  if (!cronSecret) {
+    return NextResponse.json(
+      { error: "CRON_SECRET env var is required" },
+      { status: 500 },
+    )
   }
 
   const { supabaseAdmin } = await import("@/lib/supabase")
@@ -51,18 +52,51 @@ export async function POST(request: NextRequest) {
   const { campaignId } = await request.json()
 
   if (!campaignId) {
-    return new Response(JSON.stringify({ error: "campaignId required" }), { status: 400 })
+    return NextResponse.json({ error: "campaignId required" }, { status: 400 })
   }
 
-  const { data: campaign, error } = await supabase
+  const requestToken = getCronRequestToken(request)
+  if (!requestToken) {
+    console.error("campaigns/send unauthorized: missing token")
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  let userId: string | null = null
+  let authSource: "cron_secret" | "service_role" | "user_jwt"
+  if (requestToken === cronSecret) {
+    authSource = "cron_secret"
+  } else if (requestToken === serviceRoleKey) {
+    authSource = "service_role"
+  } else if (isJwtLike(requestToken)) {
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser(requestToken)
+    if (userError || !user) {
+      console.error("campaigns/send unauthorized: invalid user token", userError)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    userId = user.id
+    authSource = "user_jwt"
+  } else {
+    console.error("campaigns/send unauthorized: invalid token")
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  console.log("campaigns/send auth ok", { source: authSource, campaignId })
+
+  let campaignQuery = supabase
     .from("campaigns")
     .select("*")
     .eq("id", campaignId)
-    .maybeSingle()
+  if (authSource === "user_jwt" && userId) {
+    campaignQuery = campaignQuery.eq("created_by", userId)
+  }
+  const { data: campaign, error } = await campaignQuery.maybeSingle()
 
   if (error || !campaign) {
     console.error("Campaign lookup failed", error)
-    return new Response(JSON.stringify({ error: "Campaign not found" }), { status: 404 })
+    return NextResponse.json({ error: "Campaign not found" }, { status: 404 })
   }
 
   const timezone = resolveTimezone(campaign.timezone)
@@ -86,34 +120,6 @@ export async function POST(request: NextRequest) {
       )
     }
   }
-
-  let userId: string | null = null
-  let authSource: "cron" | "user" | "unknown" = "unknown"
-  if (cronAuth.ok) {
-    authSource = "cron"
-  } else {
-    const bearerToken = getBearerToken(request)
-    if (!bearerToken) {
-      console.error("campaigns/send unauthorized: missing bearer token")
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser(bearerToken)
-    if (userError || !user) {
-      console.error("campaigns/send unauthorized: invalid user token", userError)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-    userId = user.id
-    authSource = "user"
-    if (userId !== campaign.user_id) {
-      console.error("User", userId, "not authorized for campaign", campaignId)
-      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403 })
-    }
-  }
-
-  console.log("campaigns/send auth ok", { source: authSource, campaignId })
 
   const groupIds: string[] = Array.isArray(campaign.group_ids)
     ? campaign.group_ids
@@ -232,7 +238,10 @@ export async function POST(request: NextRequest) {
           html: campaign.message,
           contacts: emailContacts,
         },
-        { scheduledFor: campaign.scheduled_at || undefined, createdBy: userId || campaign.user_id || undefined },
+        {
+          scheduledFor: campaign.scheduled_at || undefined,
+          createdBy: userId || campaign.created_by || undefined,
+        },
       )
     } catch (err: any) {
       console.error("Queue insertion failed", err)
