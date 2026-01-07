@@ -28,6 +28,7 @@ interface CampaignData {
 }
 
 export class CampaignService {
+  static readonly DEFAULT_PAGE_SIZE = 10
   static async createCampaign(data: CampaignData) {
     const {
       buyerIds = [],
@@ -241,6 +242,15 @@ export class CampaignService {
       throw queueError
     }
 
+    const { error: eventError } = await supabase
+      .from("email_events")
+      .update({ campaign_id: null })
+      .eq("campaign_id", id)
+    if (eventError) {
+      console.error("Error clearing campaign email events:", eventError)
+      throw eventError
+    }
+
     const { error } = await supabase.from("campaigns").delete().eq("id", id)
     if (error) {
       console.error("Error deleting campaign:", error)
@@ -251,10 +261,10 @@ export class CampaignService {
   static async listCampaigns(
     page = 1,
     filters: { channel?: string; status?: string } = {},
+    pageSize: number = CampaignService.DEFAULT_PAGE_SIZE,
   ) {
-    const PAGE_SIZE = 20
-    const from = (page - 1) * PAGE_SIZE
-    const to = from + PAGE_SIZE - 1
+    const from = (page - 1) * pageSize
+    const to = from + pageSize - 1
 
     let query = supabase
       .from("campaigns")

@@ -47,6 +47,7 @@ export default function CampaignsPage() {
   const [channel, setChannel] = useState<string>("all")
   const [status, setStatus] = useState<string>("all")
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(CampaignService.DEFAULT_PAGE_SIZE)
   const [open, setOpen] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [smsOpen, setSmsOpen] = useState(false)
@@ -62,17 +63,17 @@ export default function CampaignsPage() {
   }, [searchParams])
 
   const { data, isLoading } = useQuery({
-    queryKey: ["campaigns", page, channel, status],
+    queryKey: ["campaigns", page, channel, status, pageSize],
     queryFn: () =>
       CampaignService.listCampaigns(page, {
         ...(channel === "all" ? {} : { channel }),
         status,
-      }),
+      }, pageSize),
   })
 
   const campaigns = data?.campaigns || []
   const total = data?.totalCount || 0
-  const pageCount = Math.ceil(total / 20) || 1
+  const pageCount = Math.ceil(total / pageSize) || 1
 
   return (
     <MainLayout>
@@ -129,6 +130,25 @@ export default function CampaignsPage() {
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="completed">Completed</SelectItem>
                 <SelectItem value="all">All</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="block text-sm mb-1">Page size</label>
+            <Select
+              value={String(pageSize)}
+              onValueChange={(value) => {
+                setPage(1)
+                setPageSize(Number(value))
+              }}
+            >
+              <SelectTrigger className="w-28">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="10">10</SelectItem>
+                <SelectItem value="20">20</SelectItem>
+                <SelectItem value="50">50</SelectItem>
               </SelectContent>
             </Select>
           </div>
