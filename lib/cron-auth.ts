@@ -12,6 +12,38 @@ export function getCronRequestToken(req: Request): string | null {
   return headerToken || null
 }
 
+export function assertCronAuth(req: Request): {
+  ok: boolean
+  token: string | null
+  response: Response | null
+} {
+  const token = getCronRequestToken(req)
+  const allowedTokens = [process.env.CRON_SECRET, process.env.SUPABASE_SERVICE_ROLE_KEY].filter(
+    Boolean,
+  )
+
+  if (!token) {
+    return { ok: false, token: null, response: null }
+  }
+
+  if (!allowedTokens.length) {
+    return {
+      ok: false,
+      token,
+      response: new Response(JSON.stringify({ error: "Server misconfigured" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      }),
+    }
+  }
+
+  if (!allowedTokens.includes(token)) {
+    return { ok: false, token, response: null }
+  }
+
+  return { ok: true, token, response: null }
+}
+
 export function requireCronAuth(req: Request): Response | null {
   const token = getCronRequestToken(req)
   const allowedTokens = [process.env.CRON_SECRET, process.env.SUPABASE_SERVICE_ROLE_KEY].filter(
