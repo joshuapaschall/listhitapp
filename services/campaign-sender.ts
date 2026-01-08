@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { createLogger } from "@/lib/logger"
 import { renderTemplate } from "@/lib/utils"
 import { sendSesEmail } from "@/lib/ses"
+import { getSesQuota } from "@/lib/ses-quota"
 import { appendUnsubscribeFooter, buildUnsubscribeUrl } from "@/lib/unsubscribe"
 
 const log = createLogger("campaign-sender")
@@ -16,9 +17,9 @@ const EMAIL_RETRY_BACKOFF_MS = Number(
 const EMAIL_RATE_MAX_RETRY = Number(
   process.env.EMAIL_RATE_MAX_RETRY ?? process.env.SENDFOX_RATE_MAX_RETRY ?? 3,
 )
-const EMAIL_QUEUE_SPACING_MS = Number(
-  process.env.EMAIL_QUEUE_SPACING_MS || process.env.SENDFOX_QUEUE_SPACING_MS || 500,
-)
+const EMAIL_RATE_HEADROOM = Number(process.env.EMAIL_RATE_HEADROOM ?? 0.8)
+const EMAIL_SPACING_MS_MIN = Number(process.env.EMAIL_SPACING_MS_MIN ?? 0)
+const EMAIL_SPACING_MS_MAX = Number(process.env.EMAIL_SPACING_MS_MAX ?? 2000)
 const EMAIL_QUEUE_WORKER_ID =
   process.env.EMAIL_QUEUE_WORKER_ID ||
   `campaign-sender-${process.pid}-${Math.random().toString(36).slice(2, 8)}`
@@ -135,6 +136,35 @@ export async function queueEmailCampaign(
   const scheduledFor = opts.scheduledFor ? new Date(opts.scheduledFor) : new Date()
   const contacts = payload.contacts || []
   if (!contacts.length) return []
+  const quota = await getSesQuota()
+  const maxSendRate = Number.isFinite(quota.maxSendRate) ? quota.maxSendRate : 0
+  const max24HourSend = Number.isFinite(quota.max24HourSend) ? quota.max24HourSend : 0
+  const sentLast24Hours = Number.isFinite(quota.sentLast24Hours) ? quota.sentLast24Hours : 0
+  const rateHeadroom =
+    Number.isFinite(EMAIL_RATE_HEADROOM) && EMAIL_RATE_HEADROOM > 0
+      ? EMAIL_RATE_HEADROOM
+      : 0.8
+  const targetRate = Math.floor(maxSendRate * rateHeadroom)
+  const baseSpacingMs = targetRate >= 1 ? Math.ceil(1000 / targetRate) : 1000
+  const spacingMin = Number.isFinite(EMAIL_SPACING_MS_MIN) ? EMAIL_SPACING_MS_MIN : 0
+  const spacingMax = Number.isFinite(EMAIL_SPACING_MS_MAX) ? EMAIL_SPACING_MS_MAX : 2000
+  const spacingMs = Math.min(Math.max(baseSpacingMs, spacingMin), spacingMax)
+  const windowSizeRaw = Math.floor(max24HourSend * 0.9)
+  const windowSize =
+    max24HourSend === -1 || !Number.isFinite(windowSizeRaw) || windowSizeRaw < 1
+      ? Infinity
+      : windowSizeRaw
+  const remaining24h =
+    max24HourSend === -1 ? Infinity : Math.max(0, Math.floor(max24HourSend - sentLast24Hours))
+
+  log("queue", "SES quota scheduling", {
+    maxSendRate,
+    max24HourSend,
+    sentLast24Hours,
+    remaining24h,
+    spacingMs,
+    windowSize: windowSize === Infinity ? "unlimited" : windowSize,
+  })
   const baseTime = scheduledFor.getTime()
   const rows = contacts.map((contact, idx) => ({
     campaign_id: payload.campaignId ?? null,
@@ -153,7 +183,17 @@ export async function queueEmailCampaign(
         buyerId: contact.buyerId,
       },
     },
-    scheduled_for: new Date(baseTime + idx * EMAIL_QUEUE_SPACING_MS).toISOString(),
+    scheduled_for: (() => {
+      const idxEffective = idx
+      if (windowSize === Infinity) {
+        return new Date(baseTime + idxEffective * spacingMs).toISOString()
+      }
+      const dayOffset = Math.floor((sentLast24Hours + idxEffective) / windowSize)
+      const withinWindowIndex = (sentLast24Hours + idxEffective) % windowSize
+      return new Date(
+        baseTime + dayOffset * 24 * 60 * 60 * 1000 + withinWindowIndex * spacingMs,
+      ).toISOString()
+    })(),
     created_by: opts.createdBy ?? null,
     status: "pending",
     max_attempts: EMAIL_QUEUE_MAX_ATTEMPTS,
