@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
     .select("*")
     .eq("id", campaignId)
   if (authSource === "user_jwt" && userId) {
-    campaignQuery = campaignQuery.eq("created_by", userId)
+    campaignQuery = campaignQuery.eq("user_id", userId)
   }
   const { data: campaign, error } = await campaignQuery.maybeSingle()
 
@@ -242,7 +242,7 @@ export async function POST(request: NextRequest) {
         },
         {
           scheduledFor: campaign.scheduled_at || undefined,
-          createdBy: userId || campaign.created_by || undefined,
+          createdBy: userId || campaign.user_id || undefined,
         },
       )
     } catch (err: any) {
