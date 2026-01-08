@@ -181,6 +181,7 @@ $$;
 
 grant execute on function public.claim_email_queue_jobs(int, text, int) to service_role;
 
+drop function if exists public.requeue_stuck_email_jobs(integer, integer);
 create or replace function public.requeue_stuck_email_jobs(
   p_stuck_seconds int,
   p_limit int default 50
@@ -319,50 +320,40 @@ language sql as $$
 $$;
 
 -- Realtime publication helpers
-alter publication supabase_realtime add table if not exists public.messages;
-alter publication supabase_realtime add table if not exists public.message_threads;
-alter publication supabase_realtime add table if not exists public.active_conferences;
-
 do $$
+declare
+  table_name text;
 begin
-  if exists (
-    select 1
-    from pg_class c
-    join pg_namespace n on n.oid = c.relnamespace
-    where n.nspname = 'public'
-      and c.relname = 'campaign_recipients'
-  ) then
-    if not exists (
+  for table_name in
+    select unnest(array[
+      'messages',
+      'message_threads',
+      'active_conferences',
+      'campaign_recipients',
+      'email_events'
+    ])
+  loop
+    if exists (
       select 1
-      from pg_publication_tables
-      where pubname = 'supabase_realtime'
-        and schemaname = 'public'
-        and tablename = 'campaign_recipients'
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'public'
+        and c.relname = table_name
     ) then
-      execute 'alter publication supabase_realtime add table public.campaign_recipients';
+      if not exists (
+        select 1
+        from pg_publication_tables
+        where pubname = 'supabase_realtime'
+          and schemaname = 'public'
+          and tablename = table_name
+      ) then
+        execute format('alter publication supabase_realtime add table public.%I', table_name);
+      end if;
+
+      if table_name in ('campaign_recipients', 'email_events') then
+        execute format('alter table public.%I replica identity full', table_name);
+      end if;
     end if;
-
-    execute 'alter table public.campaign_recipients replica identity full';
-  end if;
-
-  if exists (
-    select 1
-    from pg_class c
-    join pg_namespace n on n.oid = c.relnamespace
-    where n.nspname = 'public'
-      and c.relname = 'email_events'
-  ) then
-    if not exists (
-      select 1
-      from pg_publication_tables
-      where pubname = 'supabase_realtime'
-        and schemaname = 'public'
-        and tablename = 'email_events'
-    ) then
-      execute 'alter publication supabase_realtime add table public.email_events';
-    end if;
-
-    execute 'alter table public.email_events replica identity full';
-  end if;
+  end loop;
 end;
 $$;
