@@ -392,8 +392,8 @@ create table if not exists public.buyer_list_consent (
 );
 
 create unique index if not exists buyer_list_consent_token_idx on public.buyer_list_consent(consent_token) where consent_token is not null;
-alter table public.buyer_list_consent
-  add constraint if not exists buyer_list_consent_email_list_unique unique (email_norm, list_id);
+create unique index if not exists buyer_list_consent_email_list_unique
+  on public.buyer_list_consent (email_norm, list_id);
 
 -- Last used SMS sender per buyer
 create table if not exists public.buyer_sms_senders (
