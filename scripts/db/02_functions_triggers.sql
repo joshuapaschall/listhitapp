@@ -322,8 +322,47 @@ $$;
 alter publication supabase_realtime add table if not exists public.messages;
 alter publication supabase_realtime add table if not exists public.message_threads;
 alter publication supabase_realtime add table if not exists public.active_conferences;
-alter publication supabase_realtime add table if not exists public.campaign_recipients;
-alter publication supabase_realtime add table if not exists public.email_events;
 
-alter table public.campaign_recipients replica identity full;
-alter table public.email_events replica identity full;
+do $$
+begin
+  if exists (
+    select 1
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relname = 'campaign_recipients'
+  ) then
+    if not exists (
+      select 1
+      from pg_publication_tables
+      where pubname = 'supabase_realtime'
+        and schemaname = 'public'
+        and tablename = 'campaign_recipients'
+    ) then
+      execute 'alter publication supabase_realtime add table public.campaign_recipients';
+    end if;
+
+    execute 'alter table public.campaign_recipients replica identity full';
+  end if;
+
+  if exists (
+    select 1
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relname = 'email_events'
+  ) then
+    if not exists (
+      select 1
+      from pg_publication_tables
+      where pubname = 'supabase_realtime'
+        and schemaname = 'public'
+        and tablename = 'email_events'
+    ) then
+      execute 'alter publication supabase_realtime add table public.email_events';
+    end if;
+
+    execute 'alter table public.email_events replica identity full';
+  end if;
+end;
+$$;
