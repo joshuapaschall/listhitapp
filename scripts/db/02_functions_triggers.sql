@@ -319,6 +319,115 @@ language sql as $$
 $$;
 
 -- Realtime publication helpers
-alter publication supabase_realtime add table if not exists public.messages;
-alter publication supabase_realtime add table if not exists public.message_threads;
-alter publication supabase_realtime add table if not exists public.active_conferences;
+do $$
+begin
+  if exists (
+    select 1
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relname = 'messages'
+  ) then
+    if not exists (
+      select 1
+      from pg_publication p
+      join pg_publication_rel pr on pr.prpubid = p.oid
+      join pg_class c on c.oid = pr.prrelid
+      join pg_namespace n on n.oid = c.relnamespace
+      where p.pubname = 'supabase_realtime'
+        and n.nspname = 'public'
+        and c.relname = 'messages'
+    ) then
+      execute 'alter publication supabase_realtime add table public.messages';
+    end if;
+  end if;
+
+  if exists (
+    select 1
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relname = 'message_threads'
+  ) then
+    if not exists (
+      select 1
+      from pg_publication p
+      join pg_publication_rel pr on pr.prpubid = p.oid
+      join pg_class c on c.oid = pr.prrelid
+      join pg_namespace n on n.oid = c.relnamespace
+      where p.pubname = 'supabase_realtime'
+        and n.nspname = 'public'
+        and c.relname = 'message_threads'
+    ) then
+      execute 'alter publication supabase_realtime add table public.message_threads';
+    end if;
+  end if;
+
+  if exists (
+    select 1
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relname = 'active_conferences'
+  ) then
+    if not exists (
+      select 1
+      from pg_publication p
+      join pg_publication_rel pr on pr.prpubid = p.oid
+      join pg_class c on c.oid = pr.prrelid
+      join pg_namespace n on n.oid = c.relnamespace
+      where p.pubname = 'supabase_realtime'
+        and n.nspname = 'public'
+        and c.relname = 'active_conferences'
+    ) then
+      execute 'alter publication supabase_realtime add table public.active_conferences';
+    end if;
+  end if;
+
+  if exists (
+    select 1
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relname = 'campaign_recipients'
+  ) then
+    if not exists (
+      select 1
+      from pg_publication p
+      join pg_publication_rel pr on pr.prpubid = p.oid
+      join pg_class c on c.oid = pr.prrelid
+      join pg_namespace n on n.oid = c.relnamespace
+      where p.pubname = 'supabase_realtime'
+        and n.nspname = 'public'
+        and c.relname = 'campaign_recipients'
+    ) then
+      execute 'alter publication supabase_realtime add table public.campaign_recipients';
+    end if;
+
+    execute 'alter table public.campaign_recipients replica identity full';
+  end if;
+
+  if exists (
+    select 1
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relname = 'email_events'
+  ) then
+    if not exists (
+      select 1
+      from pg_publication p
+      join pg_publication_rel pr on pr.prpubid = p.oid
+      join pg_class c on c.oid = pr.prrelid
+      join pg_namespace n on n.oid = c.relnamespace
+      where p.pubname = 'supabase_realtime'
+        and n.nspname = 'public'
+        and c.relname = 'email_events'
+    ) then
+      execute 'alter publication supabase_realtime add table public.email_events';
+    end if;
+
+    execute 'alter table public.email_events replica identity full';
+  end if;
+end;
+$$;
