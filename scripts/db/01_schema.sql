@@ -100,6 +100,8 @@ create table if not exists public.buyers (
   email_suppressed boolean not null default false,
   email_bounced_at timestamptz,
   email_complained_at timestamptz,
+  is_unsubscribed boolean not null default false,
+  unsubscribed_at timestamptz,
   deleted_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
