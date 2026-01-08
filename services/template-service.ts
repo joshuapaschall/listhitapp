@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase"
-import type { TemplateRecord, TemplateType } from "@/lib/supabase"
+import type { TemplateKind, TemplateRecord, TemplateType } from "@/lib/supabase"
 
 const TEMPLATE_TABLES: Record<TemplateType, string> = {
   sms: "sms_templates",
@@ -12,11 +12,27 @@ export class TemplateService {
     return TEMPLATE_TABLES[type]
   }
 
-  static async listTemplates(type: TemplateType = "sms") {
-    const { data, error } = await supabase
+  static async listTemplates(
+    type: TemplateType = "sms",
+    options?: {
+      createdBy?: string
+      templateKind?: TemplateKind
+    },
+  ) {
+    let query = supabase
       .from(this.tableFor(type))
       .select("*")
       .order("created_at", { ascending: false })
+
+    if (options?.createdBy) {
+      query = query.eq("created_by", options.createdBy)
+    }
+
+    if (options?.templateKind) {
+      query = query.eq("template_kind", options.templateKind)
+    }
+
+    const { data, error } = await query
 
     if (error) {
       console.error("Error fetching templates:", error)

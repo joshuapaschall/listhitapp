@@ -210,7 +210,10 @@ create table if not exists public.sms_templates (
 create table if not exists public.email_templates (
   id uuid primary key default gen_random_uuid(),
   name text not null,
+  subject text,
   message text not null,
+  template_kind text not null default 'template',
+  created_by uuid references auth.users(id) not null default auth.uid(),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
