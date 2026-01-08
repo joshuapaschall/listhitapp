@@ -227,7 +227,10 @@ CREATE TABLE IF NOT EXISTS sms_templates (
 CREATE TABLE IF NOT EXISTS email_templates (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name text NOT NULL,
+  subject text,
   message text NOT NULL,
+  template_kind text NOT NULL DEFAULT 'template',
+  created_by uuid REFERENCES auth.users(id) NOT NULL DEFAULT auth.uid(),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );

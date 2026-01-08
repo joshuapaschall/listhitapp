@@ -40,11 +40,15 @@ export const supabaseAdmin: SupabaseClient | null =
     : null
 
 export type TemplateType = "sms" | "email" | "quick_reply"
+export type TemplateKind = "template" | "snippet"
 
 export interface TemplateRecord {
   id: string
   name: string
   message: string
+  subject?: string | null
+  created_by?: string | null
+  template_kind?: TemplateKind | null
   created_at?: string
   updated_at?: string
 }
