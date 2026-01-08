@@ -95,16 +95,6 @@ const roundToNearestFive = (date: Date) => {
 
 const STEPS = ["recipients", "message"] as const
 
-const quillModules = {
-  toolbar: [
-    [{ header: [1, 2, false] }],
-    ["bold", "italic", "underline", "strike"],
-    [{ list: "ordered" }, { list: "bullet" }],
-    ["link"],
-    ["clean"],
-  ],
-}
-
 interface EmailCampaignModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -236,6 +226,35 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
   const router = useRouter()
   const timeZone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, [])
 
+  const quillModules = useMemo(() => ({
+    toolbar: {
+      container: [
+        [{ header: [1, 2, false] }],
+        ["bold", "italic", "underline", "strike"],
+        [{ list: "ordered" }, { list: "bullet" }],
+        ["link"],
+        ["clean"],
+      ],
+      handlers: {
+        link: () => {
+          const editor = quillRef.current?.getEditor()
+          if (!editor) return
+          const range = editor.getSelection()
+          if (!range) return
+          const input = window.prompt("Enter link URL (https://...):")
+          if (!input) return editor.format("link", false)
+          const url = /^https?:\/\//i.test(input) ? input : `https://${input}`
+          if (range.length === 0) {
+            editor.insertText(range.index, url, "link", url)
+            editor.setSelection(range.index + url.length, 0)
+          } else {
+            editor.format("link", url)
+          }
+        },
+      },
+    },
+  }), [])
+
   const syncScheduleAt = useCallback(({
     date = scheduleDate,
     hour = scheduleHour,
@@ -296,7 +315,6 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
     const rounded = roundToNearestFive(target)
     setScheduleStateFromDate(rounded)
   }, [setScheduleStateFromDate])
-
 
   useEffect(() => {
     if (open) {
@@ -671,6 +689,7 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
                   <label className="block text-sm font-medium mb-1">Message</label>
                   <ReactQuill
                     ref={quillRef}
+                    theme="snow"
                     value={html}
                     onChange={setHtml}
                     className="bg-white h-64 w-full"
@@ -938,4 +957,3 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
     </Dialog>
   )
 }
-
