@@ -70,8 +70,28 @@ function extractTagValue(tags: Record<string, string[]> | undefined, key: string
   return undefined
 }
 
+function normalizeSesEventType(raw: string): string {
+  const normalized = raw.toLowerCase().replace(/[^a-z0-9]/g, "")
+  // Examples: "Rendering Failure" -> "renderingfailure"
+  // Examples: "Delivery Delay" -> "deliverydelay"
+  // Examples: "Un-Subscribe" -> "unsubscribe"
+  const knownVariants: Record<string, string> = {
+    delivery: "delivery",
+    open: "open",
+    click: "click",
+    bounce: "bounce",
+    complaint: "complaint",
+    reject: "reject",
+    deliverydelay: "deliverydelay",
+    renderingfailure: "renderingfailure",
+    unsubscribe: "unsubscribe",
+  }
+  return knownVariants[normalized] ?? normalized
+}
+
 function eventName(payload: SesEvent): string {
-  return (payload.eventType || payload.notificationType || "").toLowerCase()
+  const rawEvent = payload.eventType || payload.notificationType || ""
+  return normalizeSesEventType(rawEvent)
 }
 
 function eventTimestamp(payload: SesEvent): string {

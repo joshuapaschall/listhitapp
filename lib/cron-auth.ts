@@ -17,36 +17,27 @@ export function isJwtLike(token: string): boolean {
   return parts.length === 3 && parts.every((part) => part.trim().length > 0)
 }
 
-export function assertCronAuth(req: Request): {
-  ok: boolean
-  token: string | null
-  response: Response | null
-} {
+export function assertCronAuth(req: Request): string {
   const token = getCronRequestToken(req)
   const allowedTokens = [process.env.CRON_SECRET, process.env.SUPABASE_SERVICE_ROLE_KEY].filter(
     Boolean,
   )
 
-  if (!token) {
-    return { ok: false, token: null, response: null }
-  }
-
   if (!allowedTokens.length) {
-    return {
-      ok: false,
-      token,
-      response: new Response(JSON.stringify({ error: "Server misconfigured" }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      }),
-    }
+    throw new Response(JSON.stringify({ error: "Server misconfigured" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    })
   }
 
-  if (!allowedTokens.includes(token)) {
-    return { ok: false, token, response: null }
+  if (!token || !allowedTokens.includes(token)) {
+    throw new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    })
   }
 
-  return { ok: true, token, response: null }
+  return token
 }
 
 export function requireCronAuth(req: Request): Response | null {
