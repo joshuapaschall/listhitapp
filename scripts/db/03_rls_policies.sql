@@ -31,7 +31,7 @@ begin
   for tbl in select unnest(array[
     'tags','groups','buyer_groups','buyers','buyer_sms_senders','buyer_list_consent','properties',
     'property_images','property_buyers','showings','offers','gmail_threads','email_threads','email_messages',
-    'sms_templates','email_templates','quick_reply_templates','campaigns','campaign_recipients',
+    'sms_templates','quick_reply_templates','campaigns','campaign_recipients',
     'sendfox_list_sync_logs','sendfox_list_mismatches','ai_prompts','negative_keywords','media_links'
   ]) loop
     execute format('drop policy if exists "authenticated all on %I" on public.%I', tbl, tbl);
@@ -100,6 +100,12 @@ create policy "agent can manage own presence" on public.agents_sessions
 -- Email builder: creators can manage their resources
 drop policy if exists "Users manage their email_builder_templates" on public.email_builder_templates;
 create policy "Users manage their email_builder_templates" on public.email_builder_templates
+  for all to authenticated
+  using (auth.uid() = created_by)
+  with check (auth.uid() = created_by);
+
+drop policy if exists "Users manage their email_templates" on public.email_templates;
+create policy "Users manage their email_templates" on public.email_templates
   for all to authenticated
   using (auth.uid() = created_by)
   with check (auth.uid() = created_by);

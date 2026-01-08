@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
 
   const { data: campaign, error: campaignError } = await supabase
     .from("campaigns")
-    .select("id, user_id, created_by")
+    .select("id, user_id")
     .eq("id", campaignId)
     .maybeSingle()
 
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     })
   }
 
-  if (campaign.user_id !== user.id && campaign.created_by !== user.id) {
+  if (campaign.user_id !== user.id) {
     return new Response(JSON.stringify({ error: "Forbidden" }), {
       status: 403,
       headers: { "Content-Type": "application/json" },

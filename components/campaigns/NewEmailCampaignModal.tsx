@@ -43,10 +43,11 @@ import { Calendar } from "@/components/ui/calendar"
 
 import { Command, CommandInput, CommandList, CommandGroup, CommandItem } from "@/components/ui/command"
 import GroupTreeSelector from "@/components/buyers/group-tree-selector"
-import type { Buyer, Group, Tag } from "@/lib/supabase"
+import type { Buyer, Group, Tag, TemplateRecord } from "@/lib/supabase"
 import { getGroups } from "@/lib/group-service"
 import { CampaignService } from "@/services/campaign-service"
 import { BuyerService } from "@/services/buyer-service"
+import { TemplateService } from "@/services/template-service"
 import { toast } from "sonner"
 import {
   Users,
@@ -94,16 +95,6 @@ const roundToNearestFive = (date: Date) => {
 }
 
 const STEPS = ["recipients", "message"] as const
-
-const quillModules = {
-  toolbar: [
-    [{ header: [1, 2, false] }],
-    ["bold", "italic", "underline", "strike"],
-    [{ list: "ordered" }, { list: "bullet" }],
-    ["link"],
-    ["clean"],
-  ],
-}
 
 interface EmailCampaignModalProps {
   open: boolean
@@ -203,6 +194,11 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
   const [maxScore, setMaxScore] = useState("")
   const [subject, setSubject] = useState("")
   const [html, setHtml] = useState("")
+  const [templates, setTemplates] = useState<TemplateRecord[]>([])
+  const [snippets, setSnippets] = useState<TemplateRecord[]>([])
+  const [selectedTemplateId, setSelectedTemplateId] = useState("")
+  const [templatesLoading, setTemplatesLoading] = useState(false)
+  const [snippetsLoading, setSnippetsLoading] = useState(false)
   const [sendNow, setSendNow] = useState(true)
   const [scheduleAt, setScheduleAt] = useState("")
   const [scheduleDate, setScheduleDate] = useState<Date | null>(null)
@@ -235,6 +231,69 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
   const [authToastShown, setAuthToastShown] = useState(false)
   const router = useRouter()
   const timeZone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, [])
+
+  const fetchTemplates = useCallback(async () => {
+    if (!user) return
+    setTemplatesLoading(true)
+    try {
+      const list = await TemplateService.listTemplates("email", {
+        createdBy: user.id,
+        templateKind: "template",
+      })
+      setTemplates(list)
+    } catch (err) {
+      console.error("Failed to load templates", err)
+      setTemplates([])
+    } finally {
+      setTemplatesLoading(false)
+    }
+  }, [user])
+
+  const fetchSnippets = useCallback(async () => {
+    if (!user) return
+    setSnippetsLoading(true)
+    try {
+      const list = await TemplateService.listTemplates("email", {
+        createdBy: user.id,
+        templateKind: "snippet",
+      })
+      setSnippets(list)
+    } catch (err) {
+      console.error("Failed to load snippets", err)
+      setSnippets([])
+    } finally {
+      setSnippetsLoading(false)
+    }
+  }, [user])
+
+  const quillModules = useMemo(() => ({
+    toolbar: {
+      container: [
+        [{ header: [1, 2, false] }],
+        ["bold", "italic", "underline", "strike"],
+        [{ list: "ordered" }, { list: "bullet" }],
+        ["link"],
+        ["clean"],
+      ],
+      handlers: {
+        link: () => {
+          const editor = quillRef.current?.getEditor()
+          if (!editor) return
+          const range = editor.getSelection()
+          if (!range) return
+          const input = window.prompt("Enter link URL (https://...):")
+          if (!input) return editor.format("link", false)
+          const url = /^https?:\/\//i.test(input) ? input : `https://${input}`
+          if (range.length === 0) {
+            editor.insertText(range.index, url, "link", url)
+            editor.setSelection(range.index + url.length, 0)
+          } else {
+            editor.format("link", url)
+          }
+        },
+      },
+    },
+  }), [])
 
   const syncScheduleAt = useCallback(({
     date = scheduleDate,
@@ -297,7 +356,6 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
     setScheduleStateFromDate(rounded)
   }, [setScheduleStateFromDate])
 
-
   useEffect(() => {
     if (open) {
       getGroups().then((list) => {
@@ -310,6 +368,13 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
       BuyerService.getTags().then(setAvailableTags).catch(() => setAvailableTags([]))
     }
   }, [open])
+
+  useEffect(() => {
+    if (open && user) {
+      fetchTemplates()
+      fetchSnippets()
+    }
+  }, [open, user, fetchTemplates, fetchSnippets])
 
   useEffect(() => {
     if (groups.length) {
@@ -365,6 +430,85 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
     quill.setSelection(index + text.length, 0)
   }
 
+  const insertSnippet = (snippet: TemplateRecord) => {
+    const quill = quillRef.current?.getEditor()
+    if (!quill || !snippet.message) return
+    const range = quill.getSelection(true)
+    const index = range ? range.index : quill.getLength()
+    const beforeLength = quill.getLength()
+    quill.clipboard.dangerouslyPasteHTML(index, snippet.message)
+    const afterLength = quill.getLength()
+    quill.setSelection(index + Math.max(afterLength - beforeLength, 0), 0)
+  }
+
+  const handleSaveTemplate = async () => {
+    if (!user) {
+      toast.error("Please sign in again")
+      return
+    }
+    if (!subject.trim() || !html.trim()) {
+      toast.error("Add a subject and message before saving")
+      return
+    }
+    const nameInput = window.prompt("Template name")
+    if (!nameInput || !nameInput.trim()) return
+    try {
+      const saved = await TemplateService.addTemplate(
+        {
+          name: nameInput.trim(),
+          subject: subject.trim(),
+          message: html,
+          created_by: user.id,
+          template_kind: "template",
+        },
+        "email",
+      )
+      toast.success("Template saved")
+      setSelectedTemplateId(saved.id)
+      await fetchTemplates()
+    } catch (err) {
+      console.error("Failed to save template", err)
+      toast.error("Failed to save template")
+    }
+  }
+
+  const handleSaveSnippet = async () => {
+    if (!user) {
+      toast.error("Please sign in again")
+      return
+    }
+    const quill = quillRef.current?.getEditor()
+    if (!quill) return
+    const range = quill.getSelection()
+    if (!range || range.length === 0) {
+      toast.error("Select content in the editor to save a section")
+      return
+    }
+    const snippetHtml = quill.getSemanticHTML(range.index, range.length)
+    if (!snippetHtml.trim()) {
+      toast.error("Selected content is empty")
+      return
+    }
+    const nameInput = window.prompt("Section name")
+    if (!nameInput || !nameInput.trim()) return
+    try {
+      await TemplateService.addTemplate(
+        {
+          name: nameInput.trim(),
+          message: snippetHtml,
+          created_by: user.id,
+          template_kind: "snippet",
+        },
+        "email",
+      )
+      toast.success("Section saved")
+      await fetchSnippets()
+    } catch (err) {
+      console.error("Failed to save section", err)
+      toast.error("Failed to save section")
+    }
+  }
+
   useEffect(() => {
     if (!open) {
       setAuthToastShown(false)
@@ -386,6 +530,18 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
     if (onAiInsert) onAiInsert(text)
   }
 
+  const handleTemplateSelect = (value: string) => {
+    if (value === "none") {
+      setSelectedTemplateId("")
+      return
+    }
+    const selected = templates.find((template) => template.id === value)
+    if (!selected) return
+    setSelectedTemplateId(selected.id)
+    setSubject(selected.subject || "")
+    setHtml(selected.message || "")
+  }
+
   const reset = () => {
     setStep("recipients")
     setName("")
@@ -397,6 +553,9 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
     setMaxScore("")
     setSubject("")
     setHtml("")
+    setSelectedTemplateId("")
+    setTemplates([])
+    setSnippets([])
     setSendNow(true)
     setScheduleAt("")
     setScheduleDate(null)
@@ -657,6 +816,56 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
                 </div>
               </TabsContent>
               <TabsContent value="message" className="space-y-4">
+                <div className="rounded-lg border p-3 space-y-3">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                    <div className="flex-1">
+                      <label className="block mb-1 text-sm font-medium">Template</label>
+                      <Select
+                        value={selectedTemplateId || "none"}
+                        onValueChange={handleTemplateSelect}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Choose a template" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No template</SelectItem>
+                          {templatesLoading && (
+                            <SelectItem value="loading" disabled>Loading templates...</SelectItem>
+                          )}
+                          {!templatesLoading && templates.length === 0 && (
+                            <SelectItem value="empty" disabled>No saved templates yet.</SelectItem>
+                          )}
+                          {templates.map((template) => (
+                            <SelectItem key={template.id} value={template.id}>
+                              {template.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleSaveTemplate}
+                        disabled={!subject.trim() || !html.trim() || !user || templatesLoading}
+                      >
+                        Save as Template
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleSaveSnippet}
+                        disabled={!html.trim() || !user || snippetsLoading}
+                      >
+                        Save as Section
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Templates load the full email. Sections insert reusable blocks into the editor.
+                  </p>
+                </div>
                 <div>
                   <label htmlFor="campaign-subject" className="block mb-1 text-sm font-medium">Subject</label>
                   <Input
@@ -671,6 +880,7 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
                   <label className="block text-sm font-medium mb-1">Message</label>
                   <ReactQuill
                     ref={quillRef}
+                    theme="snow"
                     value={html}
                     onChange={setHtml}
                     className="bg-white h-64 w-full"
@@ -684,6 +894,27 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
                       <DropdownMenuContent>
                         <DropdownMenuItem onSelect={() => insertPlaceholder("{{first_name}}")}>First Name</DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => insertPlaceholder("{{last_name}}")}>Last Name</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm">Insert Section</Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent>
+                        {snippetsLoading && (
+                          <DropdownMenuItem disabled>Loading sections...</DropdownMenuItem>
+                        )}
+                        {!snippetsLoading && snippets.length === 0 && (
+                          <DropdownMenuItem disabled>No saved sections yet</DropdownMenuItem>
+                        )}
+                        {snippets.map((snippet) => (
+                          <DropdownMenuItem
+                            key={snippet.id}
+                            onSelect={() => insertSnippet(snippet)}
+                          >
+                            {snippet.name}
+                          </DropdownMenuItem>
+                        ))}
                       </DropdownMenuContent>
                     </DropdownMenu>
                     <ChatAssistantButton onInsert={handleAiInsert} />
@@ -938,4 +1169,3 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
     </Dialog>
   )
 }
-
