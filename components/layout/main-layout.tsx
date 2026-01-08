@@ -81,7 +81,7 @@ const navigation = [
   {
     title: "Reports",
     icon: BarChart3,
-    href: "/reports",
+    href: "/reports/deliverability",
     badge: null,
   },
 ]
