@@ -322,3 +322,8 @@ $$;
 alter publication supabase_realtime add table if not exists public.messages;
 alter publication supabase_realtime add table if not exists public.message_threads;
 alter publication supabase_realtime add table if not exists public.active_conferences;
+alter publication supabase_realtime add table if not exists public.campaign_recipients;
+alter publication supabase_realtime add table if not exists public.email_events;
+
+alter table public.campaign_recipients replica identity full;
+alter table public.email_events replica identity full;
