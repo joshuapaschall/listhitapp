@@ -53,7 +53,6 @@ function TelnyxDeviceProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<TelnyxContextValue["status"]>("connecting");
   const [isReady, setIsReady] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
-  const [authWarning, setAuthWarning] = useState<string | null>(null);
   const [sipUsername, setSipUsername] = useState<string | null>(null);
 
   const activeCallRef = useRef(activeCall);
@@ -537,17 +536,10 @@ function TelnyxDeviceProvider({ children }: { children: ReactNode }) {
         if (!accessToken) {
           console.warn("[Telnyx] No Supabase session; user must sign in.");
           if (isMounted) {
-            setAuthWarning(
-              "You must be signed in to connect your Telnyx phone. Please refresh after signing in."
-            );
-            setStatus("error");
+            setStatus("idle");
             setIsInitializing(false);
           }
           return;
-        }
-
-        if (isMounted) {
-          setAuthWarning(null);
         }
 
         const res = await fetch("/api/telnyx/token", {
@@ -1539,11 +1531,6 @@ function TelnyxDeviceProvider({ children }: { children: ReactNode }) {
         addToConference,
       }}
     >
-      {authWarning ? (
-        <div className="m-4 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
-          {authWarning}
-        </div>
-      ) : null}
       {children}
       <IncomingCall 
         device={device} 
