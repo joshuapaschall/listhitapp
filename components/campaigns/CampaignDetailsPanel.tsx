@@ -16,6 +16,7 @@ import {
   XCircle,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Separator } from "@/components/ui/separator"
@@ -35,8 +36,10 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Line, LineChart, XAxis, YAxis } from "recharts"
 import { supabaseBrowser } from "@/lib/supabase-browser"
+import RecipientDrilldownSheet from "@/components/campaigns/RecipientDrilldownSheet"
 
 type Campaign = {
   id: string
@@ -45,6 +48,28 @@ type Campaign = {
   subject?: string | null
   message?: string | null
   campaign_recipients: any[]
+}
+
+type RecipientBuyer = {
+  id: string
+  first_name?: string | null
+  last_name?: string | null
+  email?: string | null
+}
+
+type Recipient = {
+  id: string
+  status?: string | null
+  sent_at?: string | null
+  delivered_at?: string | null
+  opened_at?: string | null
+  clicked_at?: string | null
+  bounced_at?: string | null
+  unsubscribed_at?: string | null
+  complained_at?: string | null
+  error?: string | null
+  buyer_id?: string | null
+  buyer?: RecipientBuyer | null
 }
 
 type AnalyticsResponse = {
@@ -76,7 +101,14 @@ type AnalyticsResponse = {
   }
   topLinks: { url: string; totalClicks: number; uniqueClickers: number }[]
   timeline: { bucket: string; opens: number; clicks: number }[]
-  recentEvents: { at: string; type: string; recipientEmail?: string | null; url?: string | null }[]
+  recentEvents: {
+    at: string
+    type: string
+    recipientEmail?: string | null
+    recipientId?: string | null
+    url?: string | null
+    buyer?: RecipientBuyer | null
+  }[]
 }
 
 function formatNumber(val: number) {
@@ -95,6 +127,12 @@ function formatDate(value?: string | null) {
   } catch {
     return value
   }
+}
+
+function formatBuyerName(buyer?: RecipientBuyer | null) {
+  if (!buyer) return "Unknown recipient"
+  const fullName = [buyer.first_name, buyer.last_name].filter(Boolean).join(" ")
+  return fullName || buyer.email || "Unknown recipient"
 }
 
 function useCampaignAnalytics(campaignId: string) {
@@ -118,6 +156,12 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
   const { data, isLoading, isFetching } = useCampaignAnalytics(campaign.id)
   const [activeTab, setActiveTab] = useState("overview")
   const [isLive, setIsLive] = useState(false)
+  const [recipients, setRecipients] = useState<Recipient[]>([])
+  const [recipientsLoading, setRecipientsLoading] = useState(false)
+  const [recipientSheetOpen, setRecipientSheetOpen] = useState(false)
+  const [selectedRecipientId, setSelectedRecipientId] = useState<string | null>(null)
+  const [activityFilter, setActivityFilter] = useState("all")
+  const [visibleSeries, setVisibleSeries] = useState<string[]>(["opens", "clicks"])
 
   useEffect(() => {
     const supabase = supabaseBrowser()
@@ -164,20 +208,137 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
     }
   }, [campaign.id, queryClient])
 
+  useEffect(() => {
+    const supabase = supabaseBrowser()
+    let isActive = true
+
+    const fetchRecipients = async () => {
+      setRecipientsLoading(true)
+      const { data: recipientsData, error } = await supabase
+        .from("campaign_recipients")
+        .select(
+          "id,status,sent_at,delivered_at,opened_at,clicked_at,bounced_at,unsubscribed_at,complained_at,error,buyer_id,buyer:buyers(id,first_name,last_name,email)",
+        )
+        .eq("campaign_id", campaign.id)
+        .order("created_at", { ascending: true })
+
+      if (!isActive) return
+
+      if (error) {
+        console.error("Failed to fetch recipients", error)
+        setRecipients([])
+      } else {
+        setRecipients((recipientsData || []) as Recipient[])
+      }
+      setRecipientsLoading(false)
+    }
+
+    const hydrateRecipient = async (recipientId: string) => {
+      const { data: row, error } = await supabase
+        .from("campaign_recipients")
+        .select(
+          "id,status,sent_at,delivered_at,opened_at,clicked_at,bounced_at,unsubscribed_at,complained_at,error,buyer_id,buyer:buyers(id,first_name,last_name,email)",
+        )
+        .eq("id", recipientId)
+        .maybeSingle()
+      if (error || !row) return null
+      return row as Recipient
+    }
+
+    fetchRecipients()
+
+    const channel = supabase
+      .channel(`campaign-recipients-${campaign.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "campaign_recipients",
+          filter: `campaign_id=eq.${campaign.id}`,
+        },
+        async (payload) => {
+          if (!isActive) return
+          if (payload.eventType === "DELETE") {
+            setRecipients((prev) => prev.filter((item) => item.id !== payload.old?.id))
+            return
+          }
+          const recordId = payload.new?.id
+          if (!recordId) return
+          const updatedRecipient = await hydrateRecipient(recordId)
+          if (!updatedRecipient) return
+          setRecipients((prev) => {
+            const existingIndex = prev.findIndex((item) => item.id === updatedRecipient.id)
+            if (existingIndex >= 0) {
+              const next = [...prev]
+              next[existingIndex] = updatedRecipient
+              return next
+            }
+            return [...prev, updatedRecipient]
+          })
+        },
+      )
+      .subscribe()
+
+    return () => {
+      isActive = false
+      supabase.removeChannel(channel)
+    }
+  }, [campaign.id])
+
   const summary = data?.summary
   const timelineData = useMemo(() => {
     if (!data?.timeline) return []
-    return data.timeline.map((item) => ({
-      bucket: new Date(item.bucket).toLocaleString(undefined, {
-        hour: "numeric",
-        minute: "2-digit",
-        month: "short",
-        day: "numeric",
-      }),
-      opens: item.opens,
-      clicks: item.clicks,
-    }))
+    return data.timeline.map((item) => {
+      const ts = new Date(item.bucket).getTime()
+      return {
+        ts,
+        label: new Date(item.bucket).toLocaleString(undefined, {
+          hour: "numeric",
+          minute: "2-digit",
+          month: "short",
+          day: "numeric",
+        }),
+        opens: item.opens,
+        clicks: item.clicks,
+      }
+    })
   }, [data?.timeline])
+
+  const selectedRecipient = useMemo(() => {
+    if (!selectedRecipientId) return null
+    return recipients.find((recipient) => recipient.id === selectedRecipientId) || null
+  }, [recipients, selectedRecipientId])
+
+  const filteredActivity = useMemo(() => {
+    const events = data?.recentEvents || []
+    if (activityFilter === "all") return events
+    if (activityFilter === "deliveries") {
+      return events.filter((event) => event.type === "delivery")
+    }
+    if (activityFilter === "opens") {
+      return events.filter((event) => event.type === "open")
+    }
+    if (activityFilter === "clicks") {
+      return events.filter((event) => event.type === "click")
+    }
+    if (activityFilter === "bounces") {
+      return events.filter((event) => event.type === "bounce")
+    }
+    if (activityFilter === "complaints") {
+      return events.filter((event) => event.type === "complaint")
+    }
+    if (activityFilter === "unsubs") {
+      return events.filter((event) => event.type === "unsubscribe" || event.type === "unsub")
+    }
+    return events
+  }, [activityFilter, data?.recentEvents])
+
+  const handleOpenRecipient = (recipientId?: string | null) => {
+    if (!recipientId) return
+    setSelectedRecipientId(recipientId)
+    setRecipientSheetOpen(true)
+  }
 
   const statusBadge = (type: string) => {
     const colors: Record<string, string> = {
@@ -320,14 +481,35 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
           <div className="grid gap-4 lg:grid-cols-3">
             <Card className="lg:col-span-2">
               <CardHeader className="pb-3">
-                <CardTitle className="text-lg">Performance over time</CardTitle>
-                <CardDescription>Hourly buckets via campaign_event_timeline()</CardDescription>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <CardTitle className="text-lg">Performance over time</CardTitle>
+                    <CardDescription>Hourly buckets via campaign_event_timeline()</CardDescription>
+                  </div>
+                  <ToggleGroup
+                    type="multiple"
+                    value={visibleSeries}
+                    onValueChange={(value) => setVisibleSeries(value)}
+                    variant="outline"
+                    size="sm"
+                    className="justify-start"
+                  >
+                    <ToggleGroupItem value="opens" aria-label="Toggle opens">
+                      Opens
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value="clicks" aria-label="Toggle clicks">
+                      Clicks
+                    </ToggleGroupItem>
+                  </ToggleGroup>
+                </div>
               </CardHeader>
               <CardContent className="h-80">
                 {isLoading ? (
-                  <div className="text-sm text-muted-foreground">Loading chart…</div>
+                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading chart…</div>
                 ) : timelineData.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">No activity yet.</div>
+                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                    No activity yet.
+                  </div>
                 ) : (
                   <ChartContainer
                     config={{
@@ -337,11 +519,31 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
                     className="h-full"
                   >
                     <LineChart data={timelineData}>
-                      <XAxis dataKey="bucket" />
+                      <XAxis
+                        dataKey="ts"
+                        type="number"
+                        scale="time"
+                        domain={["dataMin", "dataMax"]}
+                        tickFormatter={(value) => new Date(value).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                      />
                       <YAxis allowDecimals={false} />
-                      <ChartTooltip content={<ChartTooltipContent />} />
-                      <Line type="monotone" dataKey="opens" stroke="var(--color-opens)" strokeWidth={2} dot={false} />
-                      <Line type="monotone" dataKey="clicks" stroke="var(--color-clicks)" strokeWidth={2} dot={false} />
+                      <ChartTooltip
+                        content={<ChartTooltipContent />}
+                        labelFormatter={(value) =>
+                          new Date(Number(value)).toLocaleString(undefined, {
+                            hour: "numeric",
+                            minute: "2-digit",
+                            month: "short",
+                            day: "numeric",
+                          })
+                        }
+                      />
+                      {visibleSeries.includes("opens") && (
+                        <Line type="monotone" dataKey="opens" stroke="var(--color-opens)" strokeWidth={2} dot={false} />
+                      )}
+                      {visibleSeries.includes("clicks") && (
+                        <Line type="monotone" dataKey="clicks" stroke="var(--color-clicks)" strokeWidth={2} dot={false} />
+                      )}
                       <ChartLegend content={<ChartLegendContent />} />
                     </LineChart>
                   </ChartContainer>
@@ -388,22 +590,27 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
             </CardHeader>
             <CardContent className="space-y-3">
               {data?.recentEvents?.length ? (
-                data.recentEvents.slice(0, 8).map((evt, idx) => (
-                  <div key={`${evt.at}-${idx}`} className="flex items-start gap-3 rounded-md border p-3 bg-white">
-                    <Badge className={statusBadge(evt.type)}>{evt.type}</Badge>
-                    <div className="space-y-1">
-                      <div className="text-sm font-medium">{evt.recipientEmail || "Unknown recipient"}</div>
-                      <div className="text-xs text-muted-foreground">{formatDate(evt.at)}</div>
-                      {evt.url && (
-                        <div className="text-xs">
-                          <Link href={evt.url} className="text-blue-600 hover:underline" target="_blank">
-                            {evt.url}
-                          </Link>
-                        </div>
-                      )}
+                data.recentEvents.slice(0, 8).map((evt, idx) => {
+                  const recipientName = evt.buyer ? formatBuyerName(evt.buyer) : evt.recipientEmail || "Unknown recipient"
+                  const recipientEmail = evt.buyer?.email || evt.recipientEmail
+                  return (
+                    <div key={`${evt.at}-${idx}`} className="flex items-start gap-3 rounded-md border p-3 bg-white">
+                      <Badge className={statusBadge(evt.type)}>{evt.type}</Badge>
+                      <div className="space-y-1">
+                        <div className="text-sm font-medium">{recipientName}</div>
+                        {recipientEmail && <div className="text-xs text-muted-foreground">{recipientEmail}</div>}
+                        <div className="text-xs text-muted-foreground">{formatDate(evt.at)}</div>
+                        {evt.url && (
+                          <div className="text-xs">
+                            <Link href={evt.url} className="text-blue-600 hover:underline" target="_blank">
+                              {evt.url}
+                            </Link>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))
+                  )
+                })
               ) : (
                 <div className="text-sm text-muted-foreground">
                   {isLoading ? "Loading activity…" : "No events yet."}
@@ -438,39 +645,50 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {campaign.campaign_recipients?.map((r: any) => (
-                    <TableRow key={r.id}>
-                      <TableCell className="font-mono text-xs">
-                        {r.buyers?.full_name ||
-                          `${r.buyers?.fname || ""} ${r.buyers?.lname || ""}`.trim() ||
-                          r.buyer_id}
+                  {recipients.length > 0 ? (
+                    recipients.map((recipient) => (
+                      <TableRow
+                        key={recipient.id}
+                        className="cursor-pointer hover:bg-muted/60"
+                        onClick={() => handleOpenRecipient(recipient.id)}
+                      >
+                        <TableCell>
+                          <div className="text-sm font-medium">{formatBuyerName(recipient.buyer)}</div>
+                          <div className="text-xs text-muted-foreground">{recipient.buyer?.email || "-"}</div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="capitalize">
+                            {recipient.status || "pending"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">
+                          {formatDate(recipient.sent_at)}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">
+                          {formatDate(recipient.delivered_at)}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">
+                          {formatDate(recipient.opened_at)}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">
+                          {formatDate(recipient.clicked_at)}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">
+                          {formatDate(recipient.bounced_at)}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">
+                          {formatDate(recipient.unsubscribed_at)}
+                        </TableCell>
+                        <TableCell className="text-xs text-red-700">{recipient.error || "-"}</TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={9} className="text-sm text-muted-foreground">
+                        {recipientsLoading ? "Loading recipients…" : "No recipients yet."}
                       </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="capitalize">
-                          {r.status || "pending"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">
-                        {formatDate(r.sent_at)}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">
-                        {formatDate(r.delivered_at)}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">
-                        {formatDate(r.opened_at)}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">
-                        {formatDate(r.clicked_at)}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">
-                        {formatDate(r.bounced_at)}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">
-                        {formatDate(r.unsubscribed_at)}
-                      </TableCell>
-                      <TableCell className="text-xs text-red-700">{r.error || "-"}</TableCell>
                     </TableRow>
-                  ))}
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
@@ -524,24 +742,55 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
               <CardTitle className="text-lg">Recent activity</CardTitle>
               <CardDescription>Latest 50 events</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {data?.recentEvents?.length ? (
-                data.recentEvents.map((evt, idx) => (
-                  <div key={`${evt.at}-${idx}`} className="flex items-start gap-3">
-                    <Badge className={statusBadge(evt.type)}>{evt.type}</Badge>
-                    <div className="space-y-1">
-                      <div className="text-sm font-medium">{evt.recipientEmail || "Unknown recipient"}</div>
-                      <div className="text-xs text-muted-foreground">{formatDate(evt.at)}</div>
-                      {evt.url && (
-                        <div className="text-xs">
-                          <Link href={evt.url} className="text-blue-600 hover:underline" target="_blank">
-                            {evt.url}
-                          </Link>
-                        </div>
-                      )}
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { value: "all", label: "All" },
+                  { value: "deliveries", label: "Deliveries" },
+                  { value: "opens", label: "Opens" },
+                  { value: "clicks", label: "Clicks" },
+                  { value: "bounces", label: "Bounces" },
+                  { value: "complaints", label: "Complaints" },
+                  { value: "unsubs", label: "Unsubs" },
+                ].map((filter) => (
+                  <Button
+                    key={filter.value}
+                    size="sm"
+                    variant={activityFilter === filter.value ? "default" : "outline"}
+                    className="rounded-full"
+                    onClick={() => setActivityFilter(filter.value)}
+                  >
+                    {filter.label}
+                  </Button>
+                ))}
+              </div>
+              {filteredActivity.length ? (
+                filteredActivity.map((evt, idx) => {
+                  const recipientName = evt.buyer ? formatBuyerName(evt.buyer) : evt.recipientEmail || "Unknown recipient"
+                  const recipientEmail = evt.buyer?.email || evt.recipientEmail
+                  const isClickable = Boolean(evt.recipientId)
+                  return (
+                    <div
+                      key={`${evt.at}-${idx}`}
+                      className={`flex items-start gap-3 rounded-md border p-3 ${isClickable ? "cursor-pointer hover:bg-muted/60" : ""}`}
+                      onClick={() => handleOpenRecipient(evt.recipientId)}
+                    >
+                      <Badge className={statusBadge(evt.type)}>{evt.type}</Badge>
+                      <div className="space-y-1">
+                        <div className="text-sm font-medium">{recipientName}</div>
+                        {recipientEmail && <div className="text-xs text-muted-foreground">{recipientEmail}</div>}
+                        <div className="text-xs text-muted-foreground">{formatDate(evt.at)}</div>
+                        {evt.url && (
+                          <div className="text-xs">
+                            <Link href={evt.url} className="text-blue-600 hover:underline" target="_blank">
+                              {evt.url}
+                            </Link>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))
+                  )
+                })
               ) : (
                 <div className="text-sm text-muted-foreground">
                   {isLoading ? "Loading activity…" : "No events yet."}
@@ -553,6 +802,12 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
       </Tabs>
       <Separator className="mt-6" />
       <div className="text-xs text-muted-foreground mt-2">Realtime updates via Supabase Live.</div>
+      <RecipientDrilldownSheet
+        open={recipientSheetOpen}
+        onOpenChange={setRecipientSheetOpen}
+        campaignId={campaign.id}
+        recipient={selectedRecipient}
+      />
     </div>
   )
 }
