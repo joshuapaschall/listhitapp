@@ -69,6 +69,8 @@ Provision a fresh Supabase instance by running the consolidated SQL files in `sc
 5. `scripts/db/04_seed.sql` (optional demo data)
 6. `scripts/db/05_scheduler.sql` (optional pg_cron jobs)
 
+For existing production databases, run `scripts/db/98_schema_patch.sql` first to apply safe fixes, then re-run `scripts/db/03_rls_policies.sql`.
+
 The Supabase Dashboard SQL editor is sufficient—paste or upload each file in order and run it. If you prefer the CLI, pipe each file through `psql $SUPABASE_URL -f <file>` after exporting your database connection string. The `db/legacy` folder retains the historical migrations and prior bootstrap scripts but is not applied to new environments.
 
 ## Voice Routing & Tenancy
