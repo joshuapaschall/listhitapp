@@ -204,12 +204,12 @@ async function storeEmailEvent(input: {
 
 async function updateRecipient(
   eventType: string,
-  ctx: { timestamp: string; recipientId?: string; providerId?: string },
+  ctx: { timestamp: string; recipientId?: string; providerId?: string; skipClickUpdate?: boolean },
 ) {
   if (!supabase) return
   const updates: Record<string, any> = {}
   if (eventType === "open") updates.opened_at = ctx.timestamp
-  if (eventType === "click") updates.clicked_at = ctx.timestamp
+  if (eventType === "click" && !ctx.skipClickUpdate) updates.clicked_at = ctx.timestamp
   if (eventType === "delivery") updates.delivered_at = ctx.timestamp
   if (eventType === "bounce") {
     updates.bounced_at = ctx.timestamp
@@ -324,6 +324,8 @@ export async function POST(req: NextRequest) {
   const recipientId = extractTagValue(tags, "recipient_id")
   const buyerIdTag = extractTagValue(tags, "buyer_id")
   const campaignId = extractTagValue(tags, "campaign_id")
+  const clickUrl = payload && (payload as any).click?.link
+  const skipClickUpdate = evt === "click" && typeof clickUrl === "string" && clickUrl.includes("/api/unsubscribe")
 
   await storeEmailEvent({
     messageId,
@@ -335,7 +337,12 @@ export async function POST(req: NextRequest) {
     buyerId: buyerIdTag,
     createdAt: timestamp,
   })
-  await updateRecipient(evt, { timestamp, recipientId: recipientId || undefined, providerId: messageId })
+  await updateRecipient(evt, {
+    timestamp,
+    recipientId: recipientId || undefined,
+    providerId: messageId,
+    skipClickUpdate,
+  })
 
   if (evt === "bounce" || evt === "complaint") {
     const buyerId = await findBuyerId(buyerIdTag, { recipientId, providerId: messageId })
