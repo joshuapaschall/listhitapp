@@ -93,7 +93,23 @@ export async function GET(_req: NextRequest, { params }: { params: { campaignId:
     clicks: Number(row.clicks) || 0,
   }))
 
-  const recentEvents = (recentRes.data || []).map((row: any) => {
+  const recentRows = recentRes.data || []
+  const buyerIds = Array.from(
+    new Set(recentRows.map((row: any) => row.buyer_id).filter(Boolean)),
+  )
+  const buyersById = new Map<string, { id: string; first_name?: string | null; last_name?: string | null; email?: string | null }>()
+
+  if (buyerIds.length > 0) {
+    const { data: buyers } = await supabaseAdmin
+      .from("buyers")
+      .select("id,first_name,last_name,email")
+      .in("id", buyerIds)
+    ;(buyers || []).forEach((buyer: any) => {
+      buyersById.set(buyer.id, buyer)
+    })
+  }
+
+  const recentEvents = recentRows.map((row: any) => {
     const type = (row.type || "").toLowerCase()
     const payload = row.payload || {}
     let url: string | null = null
@@ -101,11 +117,14 @@ export async function GET(_req: NextRequest, { params }: { params: { campaignId:
       url = payload?.click?.link || payload?.link || null
     }
     const recipientEmail = payload?.mail?.destination?.[0] || payload?.destination?.[0] || null
+    const buyer = row.buyer_id ? buyersById.get(row.buyer_id) || null : null
     return {
       at: row.at,
       type,
+      recipientId: row.recipient_id || null,
       recipientEmail,
       url,
+      buyer,
     }
   })
 

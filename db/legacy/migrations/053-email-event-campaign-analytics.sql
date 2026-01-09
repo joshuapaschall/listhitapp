@@ -55,6 +55,7 @@ language sql as $$
   where campaign_id = p_campaign_id
     and event_type = 'click'
     and payload->'click'->>'link' is not null
+    and payload->'click'->>'link' not like '%/api/unsubscribe%'
   group by url
   order by total_clicks desc
   limit 50;
