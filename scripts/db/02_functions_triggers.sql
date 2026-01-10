@@ -235,6 +235,12 @@ create or replace view public.campaign_event_metrics as
   where campaign_id is not null
   group by campaign_id, event_type;
 
+drop function if exists public.campaign_event_summary(uuid);
+drop function if exists public.campaign_recipient_summary(uuid);
+drop function if exists public.campaign_top_links(uuid);
+drop function if exists public.campaign_event_timeline(uuid);
+drop function if exists public.campaign_recent_events(uuid);
+
 create or replace function public.campaign_event_summary(p_campaign_id uuid)
 returns table(event_type text, total bigint, unique_recipients bigint)
 stable
@@ -287,7 +293,7 @@ language sql as $$
     payload
   from public.email_events
   where campaign_id = p_campaign_id
-  order by coalesce(event_ts, created_at) desc, created_at desc, id desc
+  order by event_time desc, created_at desc, id desc
   limit 50;
 $$;
 
