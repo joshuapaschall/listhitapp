@@ -94,9 +94,27 @@ function eventName(payload: SesEvent): string {
   return normalizeSesEventType(rawEvent)
 }
 
-function eventTimestamp(payload: SesEvent): string {
-  const ts = payload.timestamp || payload.mail?.timestamp
-  return ts ? new Date(ts).toISOString() : new Date().toISOString()
+function parseTimestamp(value?: string | null): string | null {
+  if (!value) return null
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return null
+  return parsed.toISOString()
+}
+
+function eventTimestamp(payload: SesEvent): string | null {
+  const candidates = [
+    (payload as any)?.click?.timestamp,
+    (payload as any)?.open?.timestamp,
+    (payload as any)?.delivery?.timestamp,
+    (payload as any)?.bounce?.timestamp,
+    (payload as any)?.complaint?.timestamp,
+    payload.mail?.timestamp,
+  ]
+  for (const candidate of candidates) {
+    const parsed = parseTimestamp(candidate)
+    if (parsed) return parsed
+  }
+  return null
 }
 
 function buildStringToSign(message: SnsMessage): string {
@@ -182,6 +200,7 @@ async function storeEmailEvent(input: {
   recipientId?: string
   buyerId?: string
   createdAt?: string
+  eventTs?: string | null
 }) {
   if (!supabase) return
   await supabase
@@ -197,6 +216,7 @@ async function storeEmailEvent(input: {
         buyer_id: input.buyerId || null,
         payload: input.payload,
         created_at: input.createdAt || new Date().toISOString(),
+        event_ts: input.eventTs || null,
       },
       { onConflict: "sns_message_id", ignoreDuplicates: true },
     )
@@ -318,7 +338,7 @@ export async function POST(req: NextRequest) {
   }
 
   const evt = eventName(payload)
-  const timestamp = eventTimestamp(payload)
+  const timestamp = eventTimestamp(payload) || parseTimestamp(snsMessage.Timestamp)
   const messageId = payload.mail?.messageId
   const tags = payload.mail?.tags
   const recipientId = extractTagValue(tags, "recipient_id")
@@ -335,18 +355,25 @@ export async function POST(req: NextRequest) {
     campaignId,
     recipientId,
     buyerId: buyerIdTag,
-    createdAt: timestamp,
+    createdAt: timestamp || undefined,
+    eventTs: timestamp,
   })
-  await updateRecipient(evt, {
-    timestamp,
-    recipientId: recipientId || undefined,
-    providerId: messageId,
-    skipClickUpdate,
-  })
+  if (timestamp) {
+    await updateRecipient(evt, {
+      timestamp,
+      recipientId: recipientId || undefined,
+      providerId: messageId,
+      skipClickUpdate,
+    })
+  } else {
+    log("warn", "Missing SES event timestamp", { messageId, eventType: evt })
+  }
 
   if (evt === "bounce" || evt === "complaint") {
     const buyerId = await findBuyerId(buyerIdTag, { recipientId, providerId: messageId })
-    await suppressBuyer(evt, buyerId, timestamp)
+    if (timestamp) {
+      await suppressBuyer(evt, buyerId, timestamp)
+    }
   }
 
   return NextResponse.json({ ok: true })
