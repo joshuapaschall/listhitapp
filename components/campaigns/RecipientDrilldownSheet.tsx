@@ -65,9 +65,9 @@ const statusBadgeStyles: Record<string, string> = {
 }
 
 function formatName(buyer?: RecipientBuyer | null) {
-  if (!buyer) return "Unknown buyer"
+  if (!buyer) return "Unknown recipient"
   const fullName = [buyer.first_name, buyer.last_name].filter(Boolean).join(" ")
-  return fullName || buyer.email || "Unknown buyer"
+  return fullName || buyer.email || "Recipient"
 }
 
 function getEventUrl(payload: any) {
@@ -88,7 +88,14 @@ function isSystemLink(url?: string | null) {
 function formatDate(value?: string | null) {
   if (!value) return "-"
   try {
-    return new Date(value).toLocaleString()
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return value
+    return date.toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    })
   } catch {
     return value
   }
@@ -240,7 +247,7 @@ export default function RecipientDrilldownSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-[420px] sm:w-[640px] p-0">
+      <SheetContent side="right" className="w-[480px] sm:w-[640px] p-0">
         <SheetHeader className="px-6 py-4 border-b">
           <SheetTitle>{formatName(recipient?.buyer)}</SheetTitle>
           <SheetDescription>

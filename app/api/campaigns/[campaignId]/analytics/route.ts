@@ -111,7 +111,11 @@ export async function GET(_req: NextRequest, { params }: { params: { campaignId:
     clicks: Number(row.clicks) || 0,
   }))
 
-  const recentRows = recentRes.data || []
+  const recentRows = (recentRes.data || []).sort((a: any, b: any) => {
+    const timeDiff = new Date(b.event_time).getTime() - new Date(a.event_time).getTime()
+    if (timeDiff !== 0) return timeDiff
+    return String(a.id || "").localeCompare(String(b.id || ""))
+  })
   const buyerIds = Array.from(
     new Set(recentRows.map((row: any) => row.buyer_id).filter(Boolean)),
   )
@@ -139,6 +143,7 @@ export async function GET(_req: NextRequest, { params }: { params: { campaignId:
     return {
       at: row.event_time,
       type,
+      buyerId: row.buyer_id || null,
       recipientId: row.recipient_id || null,
       recipientEmail,
       url,
