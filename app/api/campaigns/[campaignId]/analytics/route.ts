@@ -42,18 +42,34 @@ export async function GET(_req: NextRequest, { params }: { params: { campaignId:
   const topLinksQuery = supabaseAdmin.rpc("campaign_top_links", { p_campaign_id: campaignId })
   const timelineQuery = supabaseAdmin.rpc("campaign_event_timeline", { p_campaign_id: campaignId })
   const recentQuery = supabaseAdmin.rpc("campaign_recent_events", { p_campaign_id: campaignId })
+  const recipientsQuery = supabaseAdmin
+    .from("campaign_recipients")
+    .select(
+      "id,buyer_id,status,sent_at,delivered_at,opened_at,clicked_at,bounced_at,complained_at,unsubscribed_at,error,buyer:buyers(id,email,first_name,last_name,company_name)",
+    )
+    .eq("campaign_id", campaignId)
+    .order("id", { ascending: true })
   const bounceBreakdownQuery = supabaseAdmin
     .from("email_events")
     .select("payload")
     .eq("campaign_id", campaignId)
     .eq("event_type", "bounce")
 
-  const [summaryRes, recipientSummaryRes, linksRes, timelineRes, recentRes, bounceBreakdownRes] = await Promise.all([
+  const [
+    summaryRes,
+    recipientSummaryRes,
+    linksRes,
+    timelineRes,
+    recentRes,
+    recipientsRes,
+    bounceBreakdownRes,
+  ] = await Promise.all([
     summaryQuery,
     recipientSummaryQuery,
     topLinksQuery,
     timelineQuery,
     recentQuery,
+    recipientsQuery,
     bounceBreakdownQuery,
   ])
 
@@ -63,6 +79,7 @@ export async function GET(_req: NextRequest, { params }: { params: { campaignId:
     linksRes.error ||
     timelineRes.error ||
     recentRes.error ||
+    recipientsRes.error ||
     bounceBreakdownRes.error
   ) {
     console.error("Analytics query failed", {
@@ -71,6 +88,7 @@ export async function GET(_req: NextRequest, { params }: { params: { campaignId:
       links: linksRes.error,
       timeline: timelineRes.error,
       recent: recentRes.error,
+      recipientRows: recipientsRes.error,
       bounce: bounceBreakdownRes.error,
     })
     return NextResponse.json({ error: "Failed to load analytics" }, { status: 500 })
@@ -119,7 +137,7 @@ export async function GET(_req: NextRequest, { params }: { params: { campaignId:
     const recipientEmail = payload?.mail?.destination?.[0] || payload?.destination?.[0] || null
     const buyer = row.buyer_id ? buyersById.get(row.buyer_id) || null : null
     return {
-      at: row.at,
+      at: row.event_time,
       type,
       recipientId: row.recipient_id || null,
       recipientEmail,
@@ -128,11 +146,28 @@ export async function GET(_req: NextRequest, { params }: { params: { campaignId:
     }
   })
 
+  const recipients = (recipientsRes.data || []).map((row: any) => ({
+    id: row.id,
+    buyer_id: row.buyer_id,
+    email: row.buyer?.email ?? null,
+    status: row.status,
+    sent_at: row.sent_at,
+    delivered_at: row.delivered_at,
+    opened_at: row.opened_at,
+    clicked_at: row.clicked_at,
+    bounced_at: row.bounced_at,
+    complained_at: row.complained_at,
+    unsubscribed_at: row.unsubscribed_at,
+    error: row.error,
+    buyer: row.buyer ?? null,
+  }))
+
   return NextResponse.json({
     summary,
     topLinks,
     timeline,
     recentEvents,
+    recipients,
   })
 }
 

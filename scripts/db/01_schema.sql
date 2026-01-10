@@ -722,6 +722,7 @@ create table if not exists public.email_events (
   event_type text,
   payload jsonb not null,
   created_at timestamptz not null default now(),
+  event_ts timestamptz,
   campaign_id uuid references public.campaigns(id),
   recipient_id uuid references public.campaign_recipients(id),
   buyer_id uuid references public.buyers(id),
