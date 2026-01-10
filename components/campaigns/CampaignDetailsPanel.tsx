@@ -220,7 +220,6 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
           "id,status,sent_at,delivered_at,opened_at,clicked_at,bounced_at,unsubscribed_at,complained_at,error,buyer_id,buyer:buyers(id,first_name,last_name,email)",
         )
         .eq("campaign_id", campaign.id)
-        .order("created_at", { ascending: true })
 
       if (!isActive) return
 
