@@ -18,8 +18,10 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
 import { Separator } from "@/components/ui/separator"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table,
   TableBody,
@@ -29,6 +31,12 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import {
   ChartContainer,
   ChartLegend,
@@ -101,6 +109,7 @@ type AnalyticsResponse = {
   }
   topLinks: { url: string; totalClicks: number; uniqueClickers: number }[]
   timeline: { bucket: string; opens: number; clicks: number }[]
+  recipients: Recipient[]
   recentEvents: {
     at: string
     type: string
@@ -123,7 +132,12 @@ function formatPercent(val: number) {
 function formatDate(value?: string | null) {
   if (!value) return "-"
   try {
-    return new Date(value).toLocaleString()
+    return new Date(value).toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    })
   } catch {
     return value
   }
@@ -153,11 +167,12 @@ function useCampaignAnalytics(campaignId: string) {
 
 export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
   const queryClient = useQueryClient()
-  const { data, isLoading, isFetching } = useCampaignAnalytics(campaign.id)
+  const { data, isLoading, isFetching, isError, error } = useCampaignAnalytics(campaign.id)
   const [activeTab, setActiveTab] = useState("overview")
   const [isLive, setIsLive] = useState(false)
   const [recipients, setRecipients] = useState<Recipient[]>([])
-  const [recipientsLoading, setRecipientsLoading] = useState(false)
+  const [recipientsFilter, setRecipientsFilter] = useState("all")
+  const [recipientSearch, setRecipientSearch] = useState("")
   const [recipientSheetOpen, setRecipientSheetOpen] = useState(false)
   const [selectedRecipientId, setSelectedRecipientId] = useState<string | null>(null)
   const [activityFilter, setActivityFilter] = useState("all")
@@ -212,27 +227,6 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
     const supabase = supabaseBrowser()
     let isActive = true
 
-    const fetchRecipients = async () => {
-      setRecipientsLoading(true)
-      const { data: recipientsData, error } = await supabase
-        .from("campaign_recipients")
-        .select(
-          "id,status,sent_at,delivered_at,opened_at,clicked_at,bounced_at,unsubscribed_at,complained_at,error,buyer_id,buyer:buyers(id,first_name,last_name,email)",
-        )
-        .eq("campaign_id", campaign.id)
-        .order("created_at", { ascending: true })
-
-      if (!isActive) return
-
-      if (error) {
-        console.error("Failed to fetch recipients", error)
-        setRecipients([])
-      } else {
-        setRecipients((recipientsData || []) as Recipient[])
-      }
-      setRecipientsLoading(false)
-    }
-
     const hydrateRecipient = async (recipientId: string) => {
       const { data: row, error } = await supabase
         .from("campaign_recipients")
@@ -244,8 +238,6 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
       if (error || !row) return null
       return row as Recipient
     }
-
-    fetchRecipients()
 
     const channel = supabase
       .channel(`campaign-recipients-${campaign.id}`)
@@ -286,23 +278,43 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
     }
   }, [campaign.id])
 
+  useEffect(() => {
+    if (data?.recipients) {
+      setRecipients(data.recipients)
+    }
+  }, [data?.recipients])
+
   const summary = data?.summary
   const timelineData = useMemo(() => {
-    if (!data?.timeline) return []
-    return data.timeline.map((item) => {
-      const ts = new Date(item.bucket).getTime()
-      return {
-        ts,
-        label: new Date(item.bucket).toLocaleString(undefined, {
-          hour: "numeric",
-          minute: "2-digit",
-          month: "short",
-          day: "numeric",
-        }),
-        opens: item.opens,
-        clicks: item.clicks,
-      }
+    const timeline = data?.timeline || []
+    const bucketMap = new Map<string, { opens: number; clicks: number }>()
+    timeline.forEach((item) => {
+      const bucketDate = new Date(item.bucket)
+      if (Number.isNaN(bucketDate.getTime())) return
+      const normalized = new Date(bucketDate)
+      normalized.setMinutes(0, 0, 0)
+      const key = normalized.toISOString()
+      const existing = bucketMap.get(key) || { opens: 0, clicks: 0 }
+      existing.opens += item.opens || 0
+      existing.clicks += item.clicks || 0
+      bucketMap.set(key, existing)
     })
+
+    const now = new Date()
+    now.setMinutes(0, 0, 0)
+    const buckets: { bucket: string; opens: number; clicks: number }[] = []
+    for (let i = 23; i >= 0; i -= 1) {
+      const bucketDate = new Date(now)
+      bucketDate.setHours(now.getHours() - i)
+      const key = bucketDate.toISOString()
+      const counts = bucketMap.get(key) || { opens: 0, clicks: 0 }
+      buckets.push({
+        bucket: key,
+        opens: counts.opens,
+        clicks: counts.clicks,
+      })
+    }
+    return buckets
   }, [data?.timeline])
 
   const selectedRecipient = useMemo(() => {
@@ -310,8 +322,20 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
     return recipients.find((recipient) => recipient.id === selectedRecipientId) || null
   }, [recipients, selectedRecipientId])
 
-  const filteredActivity = useMemo(() => {
+  const sortedRecentEvents = useMemo(() => {
     const events = data?.recentEvents || []
+    return events
+      .map((event, index) => ({ ...event, __index: index }))
+      .sort((a, b) => {
+        const timeDiff = new Date(b.at).getTime() - new Date(a.at).getTime()
+        if (timeDiff !== 0) return timeDiff
+        return a.__index - b.__index
+      })
+      .map(({ __index, ...event }) => event)
+  }, [data?.recentEvents])
+
+  const filteredActivity = useMemo(() => {
+    const events = sortedRecentEvents
     if (activityFilter === "all") return events
     if (activityFilter === "deliveries") {
       return events.filter((event) => event.type === "delivery")
@@ -331,14 +355,149 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
     if (activityFilter === "unsubs") {
       return events.filter((event) => event.type === "unsubscribe" || event.type === "unsub")
     }
+    if (activityFilter === "errors") {
+      return events.filter((event) => event.type === "error")
+    }
     return events
-  }, [activityFilter, data?.recentEvents])
+  }, [activityFilter, sortedRecentEvents])
 
   const handleOpenRecipient = (recipientId?: string | null) => {
     if (!recipientId) return
     setSelectedRecipientId(recipientId)
     setRecipientSheetOpen(true)
   }
+
+  const resolveRate = (provided: number | undefined, numerator: number, denominator: number) => {
+    if (typeof provided === "number" && !Number.isNaN(provided)) return provided
+    if (!denominator) return 0
+    return (numerator / denominator) * 100
+  }
+
+  const baseSent = summary?.sent || 0
+  const deliveryRate = resolveRate(summary?.rates?.deliveryRate, summary?.delivered || 0, baseSent)
+  const openRate = resolveRate(summary?.rates?.openRate, summary?.uniqueOpens || 0, baseSent)
+  const clickRate = resolveRate(summary?.rates?.ctr, summary?.uniqueClicks || 0, baseSent)
+  const bounceRate = resolveRate(summary?.rates?.bounceRate, summary?.bounces || 0, baseSent)
+  const complaintRate = resolveRate(summary?.rates?.complaintRate, summary?.complaints || 0, baseSent)
+  const unsubRate = resolveRate(summary?.rates?.unsubRate, summary?.unsubs || 0, baseSent)
+  const errorRate = resolveRate(undefined, summary?.errors || 0, baseSent)
+
+  const statCards = [
+    {
+      label: "Sent",
+      value: summary?.sent,
+      rate: baseSent ? 100 : 0,
+      formula: "sent / sent",
+      icon: <Inbox className="h-4 w-4 text-muted-foreground" />,
+      tone: "bg-white",
+      recipientFilter: "all",
+      activityFilter: "all",
+    },
+    {
+      label: "Delivered",
+      value: summary?.delivered,
+      rate: deliveryRate,
+      formula: "delivered / sent",
+      icon: <MailCheck className="h-4 w-4 text-emerald-600" />,
+      tone: "bg-emerald-50 border border-emerald-100",
+      recipientFilter: "delivered",
+      activityFilter: "deliveries",
+    },
+    {
+      label: "Opens",
+      value: summary?.uniqueOpens,
+      rate: openRate,
+      formula: "unique opens / sent",
+      icon: <CheckCircle2 className="h-4 w-4 text-blue-600" />,
+      tone: "bg-blue-50 border border-blue-100",
+      sublabel: `${formatNumber(summary?.totalOpens || 0)} total opens`,
+      recipientFilter: "opened",
+      activityFilter: "opens",
+    },
+    {
+      label: "Clicks",
+      value: summary?.uniqueClicks,
+      rate: clickRate,
+      formula: "unique clicks / sent",
+      icon: <MousePointerClick className="h-4 w-4 text-indigo-600" />,
+      tone: "bg-indigo-50 border border-indigo-100",
+      sublabel: `${formatNumber(summary?.totalClicks || 0)} total clicks`,
+      recipientFilter: "clicked",
+      activityFilter: "clicks",
+    },
+    {
+      label: "Unsubscribes",
+      value: summary?.unsubs,
+      rate: unsubRate,
+      formula: "unsubscribes / sent",
+      icon: <ThumbsDown className="h-4 w-4 text-amber-600" />,
+      tone: "bg-amber-50 border border-amber-100",
+      recipientFilter: "unsubscribed",
+      activityFilter: "unsubs",
+    },
+    {
+      label: "Bounces",
+      value: summary?.bounces,
+      rate: bounceRate,
+      formula: "bounces / sent",
+      icon: <XCircle className="h-4 w-4 text-rose-600" />,
+      tone: "bg-rose-50 border border-rose-100",
+      sublabel:
+        summary?.bounceBreakdown &&
+        `Permanent ${formatNumber(summary.bounceBreakdown.permanent)} · Transient ${formatNumber(summary.bounceBreakdown.transient)}${summary.bounceBreakdown.other ? ` · Other ${formatNumber(summary.bounceBreakdown.other)}` : ""}`,
+      recipientFilter: "bounced",
+      activityFilter: "bounces",
+    },
+    {
+      label: "Complaints",
+      value: summary?.complaints,
+      rate: complaintRate,
+      formula: "complaints / sent",
+      icon: <Bell className="h-4 w-4 text-orange-600" />,
+      tone: "bg-orange-50 border border-orange-100",
+      recipientFilter: "complained",
+      activityFilter: "complaints",
+    },
+    {
+      label: "Errors",
+      value: summary?.errors,
+      rate: errorRate,
+      formula: "errors / sent",
+      icon: <AlertTriangle className="h-4 w-4 text-red-600" />,
+      tone: "bg-red-50 border border-red-100",
+      recipientFilter: "errors",
+      activityFilter: "errors",
+    },
+  ]
+
+  const recipientsFiltered = useMemo(() => {
+    const searchValue = recipientSearch.trim().toLowerCase()
+    return recipients.filter((recipient) => {
+      if (recipientsFilter === "delivered" && !recipient.delivered_at) return false
+      if (recipientsFilter === "opened" && !recipient.opened_at) return false
+      if (recipientsFilter === "clicked" && !recipient.clicked_at) return false
+      if (recipientsFilter === "bounced" && !recipient.bounced_at) return false
+      if (recipientsFilter === "complained" && !recipient.complained_at) return false
+      if (recipientsFilter === "unsubscribed" && !recipient.unsubscribed_at) return false
+      if (recipientsFilter === "errors" && !recipient.error) return false
+
+      if (!searchValue) return true
+      const buyerName = formatBuyerName(recipient.buyer).toLowerCase()
+      const buyerEmail = recipient.buyer?.email?.toLowerCase() || ""
+      return buyerName.includes(searchValue) || buyerEmail.includes(searchValue)
+    })
+  }, [recipientSearch, recipients, recipientsFilter])
+
+  const recipientFilters = [
+    { value: "all", label: "All" },
+    { value: "delivered", label: "Delivered" },
+    { value: "opened", label: "Opened" },
+    { value: "clicked", label: "Clicked" },
+    { value: "bounced", label: "Bounced" },
+    { value: "complained", label: "Complained" },
+    { value: "unsubscribed", label: "Unsubscribed" },
+    { value: "errors", label: "Errors" },
+  ]
 
   const statusBadge = (type: string) => {
     const colors: Record<string, string> = {
@@ -354,62 +513,15 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
     return colors[type] || "bg-muted text-muted-foreground"
   }
 
-  const statCards = [
-    {
-      label: "Sent",
-      value: summary?.sent,
-      icon: <Inbox className="h-4 w-4 text-muted-foreground" />,
-      tone: "bg-white",
-    },
-    {
-      label: "Delivered",
-      value: summary?.delivered,
-      icon: <MailCheck className="h-4 w-4 text-emerald-600" />,
-      tone: "bg-emerald-50 border border-emerald-100",
-      sublabel: `${formatPercent(summary?.rates?.deliveryRate || 0)} delivery`,
-    },
-    {
-      label: "Opens",
-      value: summary?.uniqueOpens,
-      icon: <CheckCircle2 className="h-4 w-4 text-blue-600" />,
-      tone: "bg-blue-50 border border-blue-100",
-      sublabel: `${formatNumber(summary?.totalOpens || 0)} total opens`,
-    },
-    {
-      label: "Clicks",
-      value: summary?.uniqueClicks,
-      icon: <MousePointerClick className="h-4 w-4 text-indigo-600" />,
-      tone: "bg-indigo-50 border border-indigo-100",
-      sublabel: `${formatNumber(summary?.totalClicks || 0)} total clicks`,
-    },
-    {
-      label: "Unsubscribes",
-      value: summary?.unsubs,
-      icon: <ThumbsDown className="h-4 w-4 text-amber-600" />,
-      tone: "bg-amber-50 border border-amber-100",
-    },
-    {
-      label: "Bounces",
-      value: summary?.bounces,
-      icon: <XCircle className="h-4 w-4 text-rose-600" />,
-      tone: "bg-rose-50 border border-rose-100",
-      sublabel:
-        summary?.bounceBreakdown &&
-        `Permanent ${formatNumber(summary.bounceBreakdown.permanent)} · Transient ${formatNumber(summary.bounceBreakdown.transient)}${summary.bounceBreakdown.other ? ` · Other ${formatNumber(summary.bounceBreakdown.other)}` : ""}`,
-    },
-    {
-      label: "Complaints",
-      value: summary?.complaints,
-      icon: <Bell className="h-4 w-4 text-orange-600" />,
-      tone: "bg-orange-50 border border-orange-100",
-    },
-    {
-      label: "Errors",
-      value: summary?.errors,
-      icon: <AlertTriangle className="h-4 w-4 text-red-600" />,
-      tone: "bg-red-50 border border-red-100",
-    },
-  ]
+  const handleKpiClick = (filter?: string) => {
+    setActiveTab("recipients")
+    setRecipientsFilter(filter || "all")
+  }
+
+  const handleViewEvents = (filter?: string) => {
+    setActiveTab("activity")
+    setActivityFilter(filter || "all")
+  }
 
   return (
     <div className="bg-muted/60 p-4 rounded-b-md border-t">
@@ -436,20 +548,58 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
         </div>
         <TabsContent value="overview" className="mt-4 space-y-4">
           <div className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
-            {statCards.map((kpi) => (
-              <Card key={kpi.label} className={`${kpi.tone || ""} shadow-sm`}>
-                <CardHeader className="pb-2 flex flex-row items-center justify-between gap-3">
-                  <div>
-                    <CardDescription className="flex items-center gap-2">
-                      {kpi.icon}
-                      {kpi.label}
-                    </CardDescription>
-                    <CardTitle className="text-3xl mt-2">{isLoading ? "…" : formatNumber(kpi.value || 0)}</CardTitle>
-                    {kpi.sublabel && <p className="text-xs text-muted-foreground">{kpi.sublabel}</p>}
-                  </div>
-                </CardHeader>
-              </Card>
-            ))}
+            <TooltipProvider>
+              {statCards.map((kpi) => {
+                const showEventsLink = kpi.label !== "Sent"
+                return (
+                  <Card
+                    key={kpi.label}
+                    className={`${kpi.tone || ""} shadow-sm transition hover:shadow-md cursor-pointer`}
+                    onClick={() => handleKpiClick(kpi.recipientFilter)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        handleKpiClick(kpi.recipientFilter)
+                      }
+                    }}
+                  >
+                    <CardHeader className="pb-2 flex flex-row items-center justify-between gap-3">
+                      <div className="space-y-1">
+                        <CardDescription className="flex items-center gap-2">
+                          {kpi.icon}
+                          {kpi.label}
+                        </CardDescription>
+                        <CardTitle className="text-3xl mt-2 flex items-baseline gap-2">
+                          <span>{isLoading ? "…" : formatNumber(kpi.value || 0)}</span>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="text-sm text-muted-foreground">
+                                {isLoading ? "…" : formatPercent(kpi.rate || 0)}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>{kpi.formula}</TooltipContent>
+                          </Tooltip>
+                        </CardTitle>
+                        {kpi.sublabel && <p className="text-xs text-muted-foreground">{kpi.sublabel}</p>}
+                        {showEventsLink && (
+                          <button
+                            type="button"
+                            className="text-xs text-blue-600 hover:underline"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              handleViewEvents(kpi.activityFilter)
+                            }}
+                          >
+                            View events instead
+                          </button>
+                        )}
+                      </div>
+                    </CardHeader>
+                  </Card>
+                )
+              })}
+            </TooltipProvider>
           </div>
 
           <Card>
@@ -506,10 +656,6 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
               <CardContent className="h-80">
                 {isLoading ? (
                   <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading chart…</div>
-                ) : timelineData.length === 0 ? (
-                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                    No activity yet.
-                  </div>
                 ) : (
                   <ChartContainer
                     config={{
@@ -520,17 +666,16 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
                   >
                     <LineChart data={timelineData}>
                       <XAxis
-                        dataKey="ts"
-                        type="number"
-                        scale="time"
-                        domain={["dataMin", "dataMax"]}
-                        tickFormatter={(value) => new Date(value).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                        dataKey="bucket"
+                        tickFormatter={(value) =>
+                          new Date(value).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+                        }
                       />
-                      <YAxis allowDecimals={false} />
+                      <YAxis allowDecimals={false} domain={[0, "dataMax"]} />
                       <ChartTooltip
                         content={<ChartTooltipContent />}
                         labelFormatter={(value) =>
-                          new Date(Number(value)).toLocaleString(undefined, {
+                          new Date(value).toLocaleString(undefined, {
                             hour: "numeric",
                             minute: "2-digit",
                             month: "short",
@@ -539,10 +684,10 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
                         }
                       />
                       {visibleSeries.includes("opens") && (
-                        <Line type="monotone" dataKey="opens" stroke="var(--color-opens)" strokeWidth={2} dot={false} />
+                        <Line type="monotone" dataKey="opens" stroke="var(--color-opens)" strokeWidth={2} dot />
                       )}
                       {visibleSeries.includes("clicks") && (
-                        <Line type="monotone" dataKey="clicks" stroke="var(--color-clicks)" strokeWidth={2} dot={false} />
+                        <Line type="monotone" dataKey="clicks" stroke="var(--color-clicks)" strokeWidth={2} dot />
                       )}
                       <ChartLegend content={<ChartLegendContent />} />
                     </LineChart>
@@ -589,8 +734,8 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
               <CardDescription>Live feed from campaign_recent_events()</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {data?.recentEvents?.length ? (
-                data.recentEvents.slice(0, 8).map((evt, idx) => {
+              {sortedRecentEvents.length ? (
+                sortedRecentEvents.slice(0, 8).map((evt, idx) => {
                   const recipientName = evt.buyer ? formatBuyerName(evt.buyer) : evt.recipientEmail || "Unknown recipient"
                   const recipientEmail = evt.buyer?.email || evt.recipientEmail
                   return (
@@ -630,6 +775,28 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
               <CardDescription>Email delivery lifecycle</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
+              <div className="border-b p-4 space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  {recipientFilters.map((filter) => (
+                    <Button
+                      key={filter.value}
+                      size="sm"
+                      variant={recipientsFilter === filter.value ? "default" : "outline"}
+                      className="rounded-full"
+                      onClick={() => setRecipientsFilter(filter.value)}
+                    >
+                      {filter.label}
+                    </Button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    placeholder="Search name or email..."
+                    value={recipientSearch}
+                    onChange={(event) => setRecipientSearch(event.target.value)}
+                  />
+                </div>
+              </div>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -645,8 +812,24 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {recipients.length > 0 ? (
-                    recipients.map((recipient) => (
+                  {isLoading ? (
+                    Array.from({ length: 6 }).map((_, index) => (
+                      <TableRow key={`skeleton-${index}`}>
+                        {Array.from({ length: 9 }).map((__, cellIndex) => (
+                          <TableCell key={`skeleton-${index}-${cellIndex}`}>
+                            <Skeleton className="h-4 w-full" />
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))
+                  ) : isError ? (
+                    <TableRow>
+                      <TableCell colSpan={9} className="text-sm text-red-600">
+                        {error instanceof Error ? error.message : "Failed to load recipients."}
+                      </TableCell>
+                    </TableRow>
+                  ) : recipientsFiltered.length > 0 ? (
+                    recipientsFiltered.map((recipient) => (
                       <TableRow
                         key={recipient.id}
                         className="cursor-pointer hover:bg-muted/60"
@@ -685,7 +868,7 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
                   ) : (
                     <TableRow>
                       <TableCell colSpan={9} className="text-sm text-muted-foreground">
-                        {recipientsLoading ? "Loading recipients…" : "No recipients yet."}
+                        {recipients.length === 0 ? "No recipients yet." : "No recipients match the current filters."}
                       </TableCell>
                     </TableRow>
                   )}
@@ -752,6 +935,7 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
                   { value: "bounces", label: "Bounces" },
                   { value: "complaints", label: "Complaints" },
                   { value: "unsubs", label: "Unsubs" },
+                  { value: "errors", label: "Errors" },
                 ].map((filter) => (
                   <Button
                     key={filter.value}

@@ -42,18 +42,34 @@ export async function GET(_req: NextRequest, { params }: { params: { campaignId:
   const topLinksQuery = supabaseAdmin.rpc("campaign_top_links", { p_campaign_id: campaignId })
   const timelineQuery = supabaseAdmin.rpc("campaign_event_timeline", { p_campaign_id: campaignId })
   const recentQuery = supabaseAdmin.rpc("campaign_recent_events", { p_campaign_id: campaignId })
+  const recipientsQuery = supabaseAdmin
+    .from("campaign_recipients")
+    .select(
+      "id,status,sent_at,delivered_at,opened_at,clicked_at,bounced_at,unsubscribed_at,complained_at,error,buyer_id,buyer:buyers(id,first_name,last_name,email)",
+    )
+    .eq("campaign_id", campaignId)
+    .order("created_at", { ascending: true })
   const bounceBreakdownQuery = supabaseAdmin
     .from("email_events")
     .select("payload")
     .eq("campaign_id", campaignId)
     .eq("event_type", "bounce")
 
-  const [summaryRes, recipientSummaryRes, linksRes, timelineRes, recentRes, bounceBreakdownRes] = await Promise.all([
+  const [
+    summaryRes,
+    recipientSummaryRes,
+    linksRes,
+    timelineRes,
+    recentRes,
+    recipientsRes,
+    bounceBreakdownRes,
+  ] = await Promise.all([
     summaryQuery,
     recipientSummaryQuery,
     topLinksQuery,
     timelineQuery,
     recentQuery,
+    recipientsQuery,
     bounceBreakdownQuery,
   ])
 
@@ -63,6 +79,7 @@ export async function GET(_req: NextRequest, { params }: { params: { campaignId:
     linksRes.error ||
     timelineRes.error ||
     recentRes.error ||
+    recipientsRes.error ||
     bounceBreakdownRes.error
   ) {
     console.error("Analytics query failed", {
@@ -71,6 +88,7 @@ export async function GET(_req: NextRequest, { params }: { params: { campaignId:
       links: linksRes.error,
       timeline: timelineRes.error,
       recent: recentRes.error,
+      recipientsList: recipientsRes.error,
       bounce: bounceBreakdownRes.error,
     })
     return NextResponse.json({ error: "Failed to load analytics" }, { status: 500 })
@@ -132,6 +150,7 @@ export async function GET(_req: NextRequest, { params }: { params: { campaignId:
     summary,
     topLinks,
     timeline,
+    recipients: recipientsRes.data || [],
     recentEvents,
   })
 }
