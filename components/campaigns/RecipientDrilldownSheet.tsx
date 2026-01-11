@@ -247,10 +247,10 @@ export default function RecipientDrilldownSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-[480px] sm:w-[640px] p-0">
+      <SheetContent side="right" className="w-[360px] sm:w-[560px] p-0">
         <SheetHeader className="px-6 py-4 border-b">
           <SheetTitle>{formatName(recipient?.buyer)}</SheetTitle>
-          <SheetDescription>
+          <SheetDescription className="break-words">
             {buyerEmail ? buyerEmail : "Recipient drilldown"}
           </SheetDescription>
         </SheetHeader>
@@ -289,7 +289,7 @@ export default function RecipientDrilldownSheet({
               </Button>
               {recipient?.buyer?.id && (
                 <Button size="sm" variant="secondary" asChild>
-                  <Link href={`/buyers/${recipient.buyer.id}`}>Open buyer</Link>
+                  <Link href={`/?buyerId=${encodeURIComponent(recipient.buyer.id)}`}>Open buyer</Link>
                 </Button>
               )}
             </div>
@@ -345,7 +345,7 @@ export default function RecipientDrilldownSheet({
                   <TableBody>
                     {clickRows.map((row) => (
                       <TableRow key={row.url}>
-                        <TableCell className="max-w-[320px] truncate">
+                        <TableCell className="max-w-[320px] break-all">
                           <Link href={row.url} className="text-blue-600 hover:underline" target="_blank">
                             {row.url}
                           </Link>
@@ -367,9 +367,9 @@ export default function RecipientDrilldownSheet({
                 <CollapsibleContent className="px-4 pb-4">
                   <div className="space-y-2 text-sm">
                     {diagnosticDetails.map((detail) => (
-                      <div key={detail.label} className="flex items-start justify-between gap-4">
-                        <span className="text-muted-foreground">{detail.label}</span>
-                        <span className="text-right break-all">{detail.value}</span>
+                      <div key={detail.label} className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+                        <span className="text-muted-foreground sm:w-40 sm:shrink-0">{detail.label}</span>
+                        <span className="break-words sm:text-right">{detail.value}</span>
                       </div>
                     ))}
                   </div>
