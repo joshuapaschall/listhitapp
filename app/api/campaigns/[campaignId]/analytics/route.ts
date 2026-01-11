@@ -73,31 +73,33 @@ export async function GET(_req: NextRequest, { params }: { params: { campaignId:
     bounceBreakdownQuery,
   ])
 
-  if (
-    summaryRes.error ||
-    recipientSummaryRes.error ||
-    linksRes.error ||
-    timelineRes.error ||
-    recentRes.error ||
-    recipientsRes.error ||
-    bounceBreakdownRes.error
-  ) {
+  const rpcErrors = [
+    { name: "campaign_event_summary", error: summaryRes.error },
+    { name: "campaign_recipient_summary", error: recipientSummaryRes.error },
+    { name: "campaign_top_links", error: linksRes.error },
+    { name: "campaign_event_timeline", error: timelineRes.error },
+    { name: "campaign_recent_events", error: recentRes.error },
+  ].filter((item) => item.error)
+
+  if (rpcErrors.length > 0) {
+    const first = rpcErrors[0]
+    console.error("Analytics RPC failed", { rpc: first.name, error: first.error })
+    return NextResponse.json({ error: `Analytics RPC failed: ${first.name}` }, { status: 500 })
+  }
+
+  if (recipientsRes.error || bounceBreakdownRes.error) {
     console.error("Analytics query failed", {
-      summary: summaryRes.error,
-      recipients: recipientSummaryRes.error,
-      links: linksRes.error,
-      timeline: timelineRes.error,
-      recent: recentRes.error,
-      recipientRows: recipientsRes.error,
+      recipients: recipientsRes.error,
       bounce: bounceBreakdownRes.error,
     })
-    return NextResponse.json({ error: "Failed to load analytics" }, { status: 500 })
+    return NextResponse.json({ error: "Analytics query failed" }, { status: 500 })
   }
 
   const summaryRows = summaryRes.data || []
   const recipientSummary = (recipientSummaryRes.data || [])[0] || {}
   const bounceBreakdown = buildBounceBreakdown(bounceBreakdownRes.data || [])
   const summary = buildSummary(summaryRows, recipientSummary, bounceBreakdown)
+  const rates = buildRates(summary)
 
   const topLinks = (linksRes.data || []).map((row: any) => ({
     url: row.url,
@@ -111,55 +113,13 @@ export async function GET(_req: NextRequest, { params }: { params: { campaignId:
     clicks: Number(row.clicks) || 0,
   }))
 
-  const recentRows = (recentRes.data || []).sort((a: any, b: any) => {
-    const timeDiff = new Date(b.event_time).getTime() - new Date(a.event_time).getTime()
-    if (timeDiff !== 0) return timeDiff
-    return String(a.id || "").localeCompare(String(b.id || ""))
-  })
-  const buyerIds = Array.from(
-    new Set(recentRows.map((row: any) => row.buyer_id).filter(Boolean)),
-  )
-  const buyersById = new Map<
-    string,
-    {
-      id: string
-      fname?: string | null
-      lname?: string | null
-      full_name?: string | null
-      company?: string | null
-      email?: string | null
-    }
-  >()
-
-  if (buyerIds.length > 0) {
-    const { data: buyers } = await supabaseAdmin
-      .from("buyers")
-      .select("id,fname,lname,full_name,company,email")
-      .in("id", buyerIds)
-    ;(buyers || []).forEach((buyer: any) => {
-      buyersById.set(buyer.id, buyer)
-    })
-  }
-
-  const recentEvents = recentRows.map((row: any) => {
-    const type = (row.type || "").toLowerCase()
-    const payload = row.payload || {}
-    let url: string | null = null
-    if (type === "click") {
-      url = payload?.click?.link || payload?.link || null
-    }
-    const recipientEmail = payload?.mail?.destination?.[0] || payload?.destination?.[0] || null
-    const buyer = row.buyer_id ? buyersById.get(row.buyer_id) || null : null
-    return {
-      at: row.event_time,
-      type,
-      buyerId: row.buyer_id || null,
-      recipientId: row.recipient_id || null,
-      recipientEmail,
-      url,
-      buyer,
-    }
-  })
+  const recentEvents = (recentRes.data || []).map((row: any) => ({
+    eventTime: row.event_time,
+    type: row.type,
+    recipientId: row.recipient_id,
+    buyerId: row.buyer_id,
+    payload: row.payload || {},
+  }))
 
   const recipients = (recipientsRes.data || []).map((row: any) => ({
     id: row.id,
@@ -179,14 +139,31 @@ export async function GET(_req: NextRequest, { params }: { params: { campaignId:
 
   return NextResponse.json({
     summary,
-    topLinks,
+    rates,
     timeline,
+    topLinks,
     recentEvents,
     recipients,
   })
 }
 
-function buildSummary(rows: any[], recipientSummary: any, bounceBreakdown: BounceBreakdown) {
+type CampaignSummary = {
+  recipients: number
+  sent: number
+  delivered: number
+  uniqueOpens: number
+  totalOpens: number
+  uniqueClicks: number
+  totalClicks: number
+  bounces: number
+  complaints: number
+  unsubscribes: number
+  errors: number
+  permanentBounces: number
+  transientBounces: number
+}
+
+function buildSummary(rows: any[], recipientSummary: any, bounceBreakdown: BounceBreakdown): CampaignSummary {
   const totals: Record<string, { total: number; unique: number }> = {}
   rows.forEach((r) => {
     const key = (r.event_type || "").toLowerCase()
@@ -214,24 +191,16 @@ function buildSummary(rows: any[], recipientSummary: any, bounceBreakdown: Bounc
   const uniqueClicks = Number(totals["click"]?.unique || 0)
   const bounces = Number(recipientSummary?.bounced ?? totals["bounce"]?.total ?? 0)
   const complaints = Number(recipientSummary?.complained ?? totals["complaint"]?.total ?? 0)
-  const unsubs = Number(recipientSummary?.unsubscribed ?? totals["unsubscribe"]?.total ?? totals["unsub"]?.total ?? 0)
-  const errors = Number(recipientSummary?.errors ?? 0)
-  const baseRecipients = Number(
-    recipientSummary?.sent ??
-      recipientSummary?.total ??
-      sent ??
+  const unsubscribes = Number(
+    recipientSummary?.unsubscribed ??
+      totals["unsubscribe"]?.total ??
+      totals["unsub"]?.total ??
       0,
   )
-
-  const deliveryRate = baseRecipients ? (delivered / baseRecipients) * 100 : 0
-  const openRate = baseRecipients ? (uniqueOpens / baseRecipients) * 100 : 0
-  const ctr = baseRecipients ? (uniqueClicks / baseRecipients) * 100 : 0
-  const bounceRate = baseRecipients ? (bounces / baseRecipients) * 100 : 0
-  const unsubRate = baseRecipients ? (unsubs / baseRecipients) * 100 : 0
-  const complaintRate = baseRecipients ? (complaints / baseRecipients) * 100 : 0
-  const cto = uniqueOpens ? (uniqueClicks / uniqueOpens) * 100 : 0
+  const errors = Number(recipientSummary?.errors ?? 0)
 
   return {
+    recipients: Number(recipientSummary?.total ?? 0),
     sent,
     delivered,
     uniqueOpens,
@@ -239,19 +208,11 @@ function buildSummary(rows: any[], recipientSummary: any, bounceBreakdown: Bounc
     uniqueClicks,
     totalClicks,
     bounces,
-    bounceBreakdown,
     complaints,
-    unsubs,
+    unsubscribes,
     errors,
-    rates: {
-      deliveryRate,
-      openRate,
-      ctr,
-      bounceRate,
-      unsubRate,
-      complaintRate,
-      clickToOpen: cto,
-    },
+    permanentBounces: bounceBreakdown.permanent,
+    transientBounces: bounceBreakdown.transient,
   }
 }
 
@@ -284,4 +245,37 @@ function buildBounceBreakdown(rows: any[]): BounceBreakdown {
     },
     { permanent: 0, transient: 0, other: 0 },
   )
+}
+
+type CampaignRates = {
+  deliveryRate: number
+  openRate: number
+  ctr: number
+  clickToOpen: number
+  bounceRate: number
+  unsubRate: number
+  complaintRate: number
+}
+
+function buildRates(summary: CampaignSummary): CampaignRates {
+  const rateDenominator = summary.delivered || summary.sent || 0
+  const deliveryRate = summary.sent ? (summary.delivered / summary.sent) * 100 : 0
+  const openRate = rateDenominator ? (summary.uniqueOpens / rateDenominator) * 100 : 0
+  const ctr = rateDenominator ? (summary.uniqueClicks / rateDenominator) * 100 : 0
+  const bounceRate = rateDenominator ? (summary.bounces / rateDenominator) * 100 : 0
+  const unsubRate = rateDenominator ? (summary.unsubscribes / rateDenominator) * 100 : 0
+  const complaintRate = rateDenominator ? (summary.complaints / rateDenominator) * 100 : 0
+  const clickToOpen = summary.uniqueOpens
+    ? (summary.uniqueClicks / summary.uniqueOpens) * 100
+    : 0
+
+  return {
+    deliveryRate,
+    openRate,
+    ctr,
+    clickToOpen,
+    bounceRate,
+    unsubRate,
+    complaintRate,
+  }
 }
