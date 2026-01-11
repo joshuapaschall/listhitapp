@@ -45,13 +45,13 @@ export async function GET(_req: NextRequest, { params }: { params: { campaignId:
   const recipientsQuery = supabaseAdmin
     .from("campaign_recipients")
     .select(
-      "id,buyer_id,status,sent_at,delivered_at,opened_at,clicked_at,bounced_at,complained_at,unsubscribed_at,error,buyer:buyers(id,email,first_name,last_name,company_name)",
+      "id,buyer_id,status,sent_at,delivered_at,opened_at,clicked_at,bounced_at,complained_at,unsubscribed_at,error,buyer:buyers(id,email,fname,lname,full_name,company)",
     )
     .eq("campaign_id", campaignId)
     .order("id", { ascending: true })
   const bounceBreakdownQuery = supabaseAdmin
     .from("email_events")
-    .select("payload")
+    .select("payload,buyer:buyers(id,email,fname,lname,full_name,company)")
     .eq("campaign_id", campaignId)
     .eq("event_type", "bounce")
 
@@ -119,12 +119,22 @@ export async function GET(_req: NextRequest, { params }: { params: { campaignId:
   const buyerIds = Array.from(
     new Set(recentRows.map((row: any) => row.buyer_id).filter(Boolean)),
   )
-  const buyersById = new Map<string, { id: string; first_name?: string | null; last_name?: string | null; email?: string | null }>()
+  const buyersById = new Map<
+    string,
+    {
+      id: string
+      fname?: string | null
+      lname?: string | null
+      full_name?: string | null
+      company?: string | null
+      email?: string | null
+    }
+  >()
 
   if (buyerIds.length > 0) {
     const { data: buyers } = await supabaseAdmin
       .from("buyers")
-      .select("id,first_name,last_name,email")
+      .select("id,fname,lname,full_name,company,email")
       .in("id", buyerIds)
     ;(buyers || []).forEach((buyer: any) => {
       buyersById.set(buyer.id, buyer)

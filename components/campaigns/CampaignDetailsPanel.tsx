@@ -54,8 +54,13 @@ type Campaign = {
 
 type RecipientBuyer = {
   id: string
+  fname?: string | null
+  lname?: string | null
+  full_name?: string | null
+  company?: string | null
   first_name?: string | null
   last_name?: string | null
+  company_name?: string | null
   email?: string | null
 }
 
@@ -143,8 +148,16 @@ function formatDate(value?: string | null) {
 
 function formatBuyerName(buyer?: RecipientBuyer | null) {
   if (!buyer) return "Unknown recipient"
-  const fullName = [buyer.first_name, buyer.last_name].filter(Boolean).join(" ")
-  return fullName || buyer.email || "Unknown recipient"
+  const preferredFullName = buyer.full_name || ""
+  const fallbackFullName = [buyer.fname, buyer.lname].filter(Boolean).join(" ")
+  const legacyFullName = [buyer.first_name, buyer.last_name].filter(Boolean).join(" ")
+  return (
+    preferredFullName ||
+    fallbackFullName ||
+    legacyFullName ||
+    buyer.email ||
+    "Unknown recipient"
+  )
 }
 
 function useCampaignAnalytics(campaignId: string) {
@@ -453,8 +466,13 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
       if (!query) return true
       const buyer = recipient.buyer
       const haystack = [
+        buyer?.full_name,
+        buyer?.fname,
+        buyer?.lname,
         buyer?.first_name,
         buyer?.last_name,
+        buyer?.company,
+        buyer?.company_name,
         buyer?.email,
         recipient.email,
       ]
@@ -494,6 +512,14 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
 
   return (
     <div className="bg-muted/60 p-4 rounded-b-md border-t">
+      {isError && (
+        <div className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+          <div className="font-medium">Analytics unavailable</div>
+          <div>
+            {error instanceof Error ? error.message : "Unable to load campaign analytics."}
+          </div>
+        </div>
+      )}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <div className="flex items-center justify-between flex-wrap gap-2">
           <TabsList>
