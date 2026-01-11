@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import {
   AlertTriangle,
   Bell,
@@ -82,6 +83,7 @@ type Recipient = {
 
 type AnalyticsResponse = {
   summary: {
+    recipients: number
     sent: number
     delivered: number
     uniqueOpens: number
@@ -89,34 +91,29 @@ type AnalyticsResponse = {
     uniqueClicks: number
     totalClicks: number
     bounces: number
-    bounceBreakdown?: {
-      permanent: number
-      transient: number
-      other: number
-    }
     complaints: number
-    unsubs: number
+    unsubscribes: number
     errors: number
-    rates: {
-      deliveryRate: number
-      openRate: number
-      ctr: number
-      bounceRate: number
-      unsubRate: number
-      complaintRate: number
-      clickToOpen: number
-    }
+    permanentBounces: number
+    transientBounces: number
+  }
+  rates: {
+    deliveryRate: number
+    openRate: number
+    ctr: number
+    clickToOpen: number
+    bounceRate: number
+    unsubRate: number
+    complaintRate: number
   }
   topLinks: { url: string; totalClicks: number; uniqueClickers: number }[]
   timeline: { bucket: string; opens: number; clicks: number }[]
   recentEvents: {
-    at: string
+    eventTime: string
     type: string
-    buyerId?: string | null
-    recipientEmail?: string | null
     recipientId?: string | null
-    url?: string | null
-    buyer?: RecipientBuyer | null
+    buyerId?: string | null
+    payload: any
   }[]
   recipients: Recipient[]
 }
@@ -166,7 +163,8 @@ function useCampaignAnalytics(campaignId: string) {
     queryFn: async () => {
       const res = await fetch(`/api/campaigns/${campaignId}/analytics`, { cache: "no-store" })
       if (!res.ok) {
-        throw new Error("Failed to load analytics")
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error || "Failed to load analytics")
       }
       return res.json()
     },
@@ -178,6 +176,9 @@ function useCampaignAnalytics(campaignId: string) {
 
 export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
   const queryClient = useQueryClient()
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const { data, isLoading, isFetching, isError, error } = useCampaignAnalytics(campaign.id)
   const [activeTab, setActiveTab] = useState("overview")
   const [isLive, setIsLive] = useState(false)
@@ -187,6 +188,44 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
   const [selectedRecipientId, setSelectedRecipientId] = useState<string | null>(null)
   const [activityFilter, setActivityFilter] = useState("all")
   const [visibleSeries, setVisibleSeries] = useState<string[]>(["opens", "clicks"])
+
+  useEffect(() => {
+    const tabParam = searchParams.get("tab")
+    const filterParam = searchParams.get("filter")
+    const allowedTabs = new Set(["overview", "recipients", "links", "activity"])
+    const allowedFilters = new Set([
+      "all",
+      "delivery",
+      "open",
+      "click",
+      "bounce",
+      "complaint",
+      "unsubscribe",
+      "error",
+    ])
+    if (tabParam && allowedTabs.has(tabParam)) {
+      setActiveTab(tabParam)
+    }
+    if (filterParam && allowedFilters.has(filterParam)) {
+      setActivityFilter(filterParam)
+    }
+  }, [searchParams])
+
+  const updateUrlParams = (next: { tab?: string | null; filter?: string | null }) => {
+    const params = new URLSearchParams(searchParams.toString())
+    if (next.tab === null) {
+      params.delete("tab")
+    } else if (next.tab) {
+      params.set("tab", next.tab)
+    }
+    if (next.filter === null) {
+      params.delete("filter")
+    } else if (next.filter) {
+      params.set("filter", next.filter)
+    }
+    const query = params.toString()
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
+  }
 
   useEffect(() => {
     const supabase = supabaseBrowser()
@@ -234,6 +273,7 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
   }, [campaign.id, queryClient])
 
   const summary = data?.summary
+  const rates = data?.rates
   const recipients = useMemo(() => data?.recipients || [], [data?.recipients])
   const recipientsLoading = isLoading
   const timelineData = useMemo(() => {
@@ -269,37 +309,60 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
     return recipients.find((recipient) => recipient.id === selectedRecipientId) || null
   }, [recipients, selectedRecipientId])
 
+  const buyerById = useMemo(() => {
+    const lookup = new Map<string, RecipientBuyer>()
+    recipients.forEach((recipient) => {
+      if (recipient.buyer_id && recipient.buyer) {
+        lookup.set(recipient.buyer_id, recipient.buyer)
+      }
+    })
+    return lookup
+  }, [recipients])
+
   const sortedRecentEvents = useMemo(() => {
-    const events = [...(data?.recentEvents || [])]
+    const events = (data?.recentEvents || []).map((event) => {
+      const payload = event.payload || {}
+      const type = (event.type || "").toLowerCase()
+      const url = type === "click" ? payload?.click?.link || payload?.link || null : null
+      const recipientEmail = payload?.mail?.destination?.[0] || payload?.destination?.[0] || null
+      const buyer = event.buyerId ? buyerById.get(event.buyerId) || null : null
+      return {
+        ...event,
+        type,
+        url,
+        recipientEmail,
+        buyer,
+      }
+    })
     return events.sort((a, b) => {
-      const timeDiff = new Date(b.at).getTime() - new Date(a.at).getTime()
+      const timeDiff = new Date(b.eventTime).getTime() - new Date(a.eventTime).getTime()
       if (timeDiff !== 0) return timeDiff
       return (a.recipientId || "").localeCompare(b.recipientId || "")
     })
-  }, [data?.recentEvents])
+  }, [data?.recentEvents, buyerById])
 
   const filteredActivity = useMemo(() => {
     const events = sortedRecentEvents
     if (activityFilter === "all") return events
-    if (activityFilter === "deliveries") {
+    if (activityFilter === "delivery") {
       return events.filter((event) => event.type === "delivery")
     }
-    if (activityFilter === "opens") {
+    if (activityFilter === "open") {
       return events.filter((event) => event.type === "open")
     }
-    if (activityFilter === "clicks") {
+    if (activityFilter === "click") {
       return events.filter((event) => event.type === "click")
     }
-    if (activityFilter === "bounces") {
+    if (activityFilter === "bounce") {
       return events.filter((event) => event.type === "bounce")
     }
-    if (activityFilter === "complaints") {
+    if (activityFilter === "complaint") {
       return events.filter((event) => event.type === "complaint")
     }
-    if (activityFilter === "unsubs") {
+    if (activityFilter === "unsubscribe") {
       return events.filter((event) => event.type === "unsubscribe" || event.type === "unsub")
     }
-    if (activityFilter === "errors") {
+    if (activityFilter === "error") {
       return events.filter((event) => event.type === "error")
     }
     return events
@@ -342,17 +405,26 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
   const uniqueClicks = summary?.uniqueClicks || 0
   const bounces = summary?.bounces || 0
   const complaints = summary?.complaints || 0
-  const unsubs = summary?.unsubs || 0
+  const unsubs = summary?.unsubscribes || 0
   const errors = summary?.errors || 0
+  const rateDenominator = baseDelivered || baseSent || 0
+  const errorRate = rateDenominator ? (errors / rateDenominator) * 100 : 0
+  const sentRate = summary?.recipients
+    ? (baseSent / summary.recipients) * 100
+    : baseSent
+      ? 100
+      : 0
 
   const computedRates = {
-    deliveryRate: summary?.rates?.deliveryRate ?? (baseSent ? (baseDelivered / baseSent) * 100 : 0),
-    openRate: summary?.rates?.openRate ?? (baseSent ? (uniqueOpens / baseSent) * 100 : 0),
-    ctr: summary?.rates?.ctr ?? (baseSent ? (uniqueClicks / baseSent) * 100 : 0),
-    bounceRate: summary?.rates?.bounceRate ?? (baseSent ? (bounces / baseSent) * 100 : 0),
-    complaintRate: summary?.rates?.complaintRate ?? (baseSent ? (complaints / baseSent) * 100 : 0),
-    unsubRate: summary?.rates?.unsubRate ?? (baseSent ? (unsubs / baseSent) * 100 : 0),
-    errorRate: baseSent ? (errors / baseSent) * 100 : 0,
+    deliveryRate: Number.isFinite(rates?.deliveryRate) ? rates?.deliveryRate ?? 0 : 0,
+    openRate: Number.isFinite(rates?.openRate) ? rates?.openRate ?? 0 : 0,
+    ctr: Number.isFinite(rates?.ctr) ? rates?.ctr ?? 0 : 0,
+    bounceRate: Number.isFinite(rates?.bounceRate) ? rates?.bounceRate ?? 0 : 0,
+    complaintRate: Number.isFinite(rates?.complaintRate) ? rates?.complaintRate ?? 0 : 0,
+    unsubRate: Number.isFinite(rates?.unsubRate) ? rates?.unsubRate ?? 0 : 0,
+    clickToOpen: Number.isFinite(rates?.clickToOpen) ? rates?.clickToOpen ?? 0 : 0,
+    errorRate,
+    sentRate,
   }
 
   const statCards = [
@@ -361,9 +433,10 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
       value: summary?.sent,
       icon: <Inbox className="h-4 w-4 text-muted-foreground" />,
       tone: "bg-white",
-      rateLabel: formatPercent(baseSent ? 100 : 0),
-      rateFormula: "sent / sent",
-      recipientFilter: "all",
+      rateLabel: formatPercent(computedRates.sentRate),
+      rateFormula: "sent / recipients",
+      rateDetail: "of recipients",
+      activityFilter: "all",
     },
     {
       label: "Delivered",
@@ -372,8 +445,8 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
       tone: "bg-emerald-50 border border-emerald-100",
       rateLabel: formatPercent(computedRates.deliveryRate),
       rateFormula: "delivered / sent",
-      recipientFilter: "delivered",
-      activityFilter: "deliveries",
+      rateDetail: "of sent",
+      activityFilter: "delivery",
     },
     {
       label: "Opens",
@@ -381,9 +454,9 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
       icon: <CheckCircle2 className="h-4 w-4 text-blue-600" />,
       tone: "bg-blue-50 border border-blue-100",
       rateLabel: formatPercent(computedRates.openRate),
-      rateFormula: "unique opens / sent",
-      recipientFilter: "opened",
-      activityFilter: "opens",
+      rateFormula: "unique opens / delivered",
+      rateDetail: "of delivered",
+      activityFilter: "open",
       sublabel: `${formatNumber(summary?.totalOpens || 0)} total opens`,
     },
     {
@@ -392,9 +465,9 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
       icon: <MousePointerClick className="h-4 w-4 text-indigo-600" />,
       tone: "bg-indigo-50 border border-indigo-100",
       rateLabel: formatPercent(computedRates.ctr),
-      rateFormula: "unique clicks / sent",
-      recipientFilter: "clicked",
-      activityFilter: "clicks",
+      rateFormula: "unique clicks / delivered",
+      rateDetail: "of delivered",
+      activityFilter: "click",
       sublabel: `${formatNumber(summary?.totalClicks || 0)} total clicks`,
     },
     {
@@ -403,9 +476,9 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
       icon: <ThumbsDown className="h-4 w-4 text-amber-600" />,
       tone: "bg-amber-50 border border-amber-100",
       rateLabel: formatPercent(computedRates.unsubRate),
-      rateFormula: "unsubscribes / sent",
-      recipientFilter: "unsubscribed",
-      activityFilter: "unsubs",
+      rateFormula: "unsubscribes / delivered",
+      rateDetail: "of delivered",
+      activityFilter: "unsubscribe",
     },
     {
       label: "Bounces",
@@ -413,12 +486,12 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
       icon: <XCircle className="h-4 w-4 text-rose-600" />,
       tone: "bg-rose-50 border border-rose-100",
       rateLabel: formatPercent(computedRates.bounceRate),
-      rateFormula: "bounces / sent",
-      recipientFilter: "bounced",
-      activityFilter: "bounces",
+      rateFormula: "bounces / delivered",
+      rateDetail: "of delivered",
+      activityFilter: "bounce",
       sublabel:
-        summary?.bounceBreakdown &&
-        `Permanent ${formatNumber(summary.bounceBreakdown.permanent)} · Transient ${formatNumber(summary.bounceBreakdown.transient)}${summary.bounceBreakdown.other ? ` · Other ${formatNumber(summary.bounceBreakdown.other)}` : ""}`,
+        summary &&
+        `Permanent ${formatNumber(summary.permanentBounces)} · Transient ${formatNumber(summary.transientBounces)}`,
     },
     {
       label: "Complaints",
@@ -426,9 +499,9 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
       icon: <Bell className="h-4 w-4 text-orange-600" />,
       tone: "bg-orange-50 border border-orange-100",
       rateLabel: formatPercent(computedRates.complaintRate),
-      rateFormula: "complaints / sent",
-      recipientFilter: "complained",
-      activityFilter: "complaints",
+      rateFormula: "complaints / delivered",
+      rateDetail: "of delivered",
+      activityFilter: "complaint",
     },
     {
       label: "Errors",
@@ -436,9 +509,9 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
       icon: <AlertTriangle className="h-4 w-4 text-red-600" />,
       tone: "bg-red-50 border border-red-100",
       rateLabel: formatPercent(computedRates.errorRate),
-      rateFormula: "errors / sent",
-      recipientFilter: "errors",
-      activityFilter: "errors",
+      rateFormula: "errors / delivered",
+      rateDetail: "of delivered",
+      activityFilter: "error",
     },
   ]
 
@@ -483,14 +556,10 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
     })
   }, [recipientFilter, recipientSearch, recipients])
 
-  const handleKpiRecipientsView = (filter: string) => {
-    setRecipientFilter(filter)
-    setActiveTab("recipients")
-  }
-
   const handleKpiEventsView = (filter: string) => {
     setActivityFilter(filter)
     setActiveTab("activity")
+    updateUrlParams({ tab: "activity", filter: filter === "all" ? null : filter })
   }
 
   const formatBucketTick = (value: string) => {
@@ -501,7 +570,7 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
 
   const formatBucketLabel = (value: string) => {
     const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return value
+    if (Number.isNaN(date.getTime())) return "Unknown time"
     return date.toLocaleString(undefined, {
       hour: "numeric",
       minute: "2-digit",
@@ -520,7 +589,13 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
           </div>
         </div>
       )}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => {
+          setActiveTab(value)
+          updateUrlParams({ tab: value, filter: value === "activity" ? activityFilter : null })
+        }}
+      >
         <div className="flex items-center justify-between flex-wrap gap-2">
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -547,13 +622,13 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
               <Card
                 key={kpi.label}
                 className={`${kpi.tone || ""} shadow-sm cursor-pointer transition hover:shadow-md`}
-                onClick={() => handleKpiRecipientsView(kpi.recipientFilter)}
+                onClick={() => handleKpiEventsView(kpi.activityFilter)}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault()
-                    handleKpiRecipientsView(kpi.recipientFilter)
+                    handleKpiEventsView(kpi.activityFilter)
                   }
                 }}
               >
@@ -565,21 +640,9 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
                     </CardDescription>
                     <CardTitle className="text-3xl mt-2">{isLoading ? "…" : formatNumber(kpi.value || 0)}</CardTitle>
                     <p className="text-xs text-muted-foreground" title={kpi.rateFormula}>
-                      {kpi.rateLabel}
+                      {kpi.rateLabel} {kpi.rateDetail ? `· ${kpi.rateDetail}` : ""}
                     </p>
                     {kpi.sublabel && <p className="text-xs text-muted-foreground">{kpi.sublabel}</p>}
-                    {kpi.activityFilter && (
-                      <button
-                        type="button"
-                        className="text-xs text-blue-600 hover:underline mt-2"
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          handleKpiEventsView(kpi.activityFilter)
-                        }}
-                      >
-                        View events instead
-                      </button>
-                    )}
                   </div>
                 </CardHeader>
               </Card>
@@ -593,13 +656,13 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-3">
               {[
-                { label: "Delivery rate", value: summary?.rates?.deliveryRate },
-                { label: "Open rate", value: summary?.rates?.openRate },
-                { label: "CTR", value: summary?.rates?.ctr },
-                { label: "Click-to-open", value: summary?.rates?.clickToOpen },
-                { label: "Bounce rate", value: summary?.rates?.bounceRate },
-                { label: "Unsub rate", value: summary?.rates?.unsubRate },
-                { label: "Complaint rate", value: summary?.rates?.complaintRate },
+                { label: "Delivery rate", value: computedRates.deliveryRate },
+                { label: "Open rate", value: computedRates.openRate },
+                { label: "CTR", value: computedRates.ctr },
+                { label: "Click-to-open", value: computedRates.clickToOpen },
+                { label: "Bounce rate", value: computedRates.bounceRate },
+                { label: "Unsub rate", value: computedRates.unsubRate },
+                { label: "Complaint rate", value: computedRates.complaintRate },
               ].map((rate) => (
                 <div key={rate.label} className="space-y-2">
                   <div className="flex items-center justify-between text-sm font-medium">
@@ -641,41 +704,48 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
                 {isLoading ? (
                   <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading chart…</div>
                 ) : (
-                  <ChartContainer
-                    config={{
-                      opens: { label: "Opens", color: "hsl(var(--chart-2))" },
-                      clicks: { label: "Clicks", color: "hsl(var(--chart-1))" },
-                    }}
-                    className="h-full"
-                  >
-                    <LineChart data={timelineData}>
-                      <XAxis dataKey="bucket" tickFormatter={formatBucketTick} />
-                      <YAxis allowDecimals={false} domain={[0, "dataMax"]} />
-                      <ChartTooltip
-                        content={<ChartTooltipContent />}
-                        labelFormatter={formatBucketLabel}
-                      />
-                      {visibleSeries.includes("opens") && (
-                        <Line
-                          type="monotone"
-                          dataKey="opens"
-                          stroke="var(--color-opens)"
-                          strokeWidth={2}
-                          dot={{ r: 3 }}
+                  <div className="relative h-full">
+                    <ChartContainer
+                      config={{
+                        opens: { label: "Opens", color: "hsl(var(--chart-2))" },
+                        clicks: { label: "Clicks", color: "hsl(var(--chart-1))" },
+                      }}
+                      className="h-full"
+                    >
+                      <LineChart data={timelineData}>
+                        <XAxis dataKey="bucket" tickFormatter={formatBucketTick} />
+                        <YAxis allowDecimals={false} domain={[0, "dataMax"]} />
+                        <ChartTooltip
+                          content={<ChartTooltipContent />}
+                          labelFormatter={formatBucketLabel}
                         />
-                      )}
-                      {visibleSeries.includes("clicks") && (
-                        <Line
-                          type="monotone"
-                          dataKey="clicks"
-                          stroke="var(--color-clicks)"
-                          strokeWidth={2}
-                          dot={{ r: 3 }}
-                        />
-                      )}
-                      <ChartLegend content={<ChartLegendContent />} />
-                    </LineChart>
-                  </ChartContainer>
+                        {visibleSeries.includes("opens") && (
+                          <Line
+                            type="monotone"
+                            dataKey="opens"
+                            stroke="var(--color-opens)"
+                            strokeWidth={2}
+                            dot={{ r: 3 }}
+                          />
+                        )}
+                        {visibleSeries.includes("clicks") && (
+                          <Line
+                            type="monotone"
+                            dataKey="clicks"
+                            stroke="var(--color-clicks)"
+                            strokeWidth={2}
+                            dot={{ r: 3 }}
+                          />
+                        )}
+                        <ChartLegend content={<ChartLegendContent />} />
+                      </LineChart>
+                    </ChartContainer>
+                    {timelineData.every((item) => item.opens === 0 && item.clicks === 0) && (
+                      <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
+                        Waiting for events
+                      </div>
+                    )}
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -723,12 +793,12 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
                   const recipientName = evt.buyer ? formatBuyerName(evt.buyer) : evt.recipientEmail || "Unknown recipient"
                   const recipientEmail = evt.buyer?.email || evt.recipientEmail
                   return (
-                    <div key={`${evt.at}-${idx}`} className="flex items-start gap-3 rounded-md border p-3 bg-white">
+                    <div key={`${evt.eventTime}-${idx}`} className="flex items-start gap-3 rounded-md border p-3 bg-white">
                       <Badge className={statusBadge(evt.type)}>{evt.type}</Badge>
                       <div className="space-y-1">
                         <div className="text-sm font-medium">{recipientName}</div>
                         {recipientEmail && <div className="text-xs text-muted-foreground">{recipientEmail}</div>}
-                        <div className="text-xs text-muted-foreground">{formatDate(evt.at)}</div>
+                        <div className="text-xs text-muted-foreground">{formatDate(evt.eventTime)}</div>
                         {evt.url && (
                           <div className="text-xs">
                             <Link href={evt.url} className="text-blue-600 hover:underline" target="_blank">
@@ -915,20 +985,23 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
               <div className="flex flex-wrap gap-2">
                 {[
                   { value: "all", label: "All" },
-                  { value: "deliveries", label: "Deliveries" },
-                  { value: "opens", label: "Opens" },
-                  { value: "clicks", label: "Clicks" },
-                  { value: "bounces", label: "Bounces" },
-                  { value: "complaints", label: "Complaints" },
-                  { value: "unsubs", label: "Unsubs" },
-                  { value: "errors", label: "Errors" },
+                  { value: "delivery", label: "Deliveries" },
+                  { value: "open", label: "Opens" },
+                  { value: "click", label: "Clicks" },
+                  { value: "bounce", label: "Bounces" },
+                  { value: "complaint", label: "Complaints" },
+                  { value: "unsubscribe", label: "Unsubs" },
+                  { value: "error", label: "Errors" },
                 ].map((filter) => (
                   <Button
                     key={filter.value}
                     size="sm"
                     variant={activityFilter === filter.value ? "default" : "outline"}
                     className="rounded-full"
-                    onClick={() => setActivityFilter(filter.value)}
+                    onClick={() => {
+                      setActivityFilter(filter.value)
+                      updateUrlParams({ tab: "activity", filter: filter.value === "all" ? null : filter.value })
+                    }}
                   >
                     {filter.label}
                   </Button>
@@ -942,7 +1015,7 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
                   const isClickable = Boolean(resolvedRecipientId)
                   return (
                     <div
-                      key={`${evt.at}-${idx}`}
+                      key={`${evt.eventTime}-${idx}`}
                       className={`flex items-start gap-3 rounded-md border p-3 ${isClickable ? "cursor-pointer hover:bg-muted/60" : ""}`}
                       onClick={() => handleOpenRecipient(resolvedRecipientId, evt.buyerId)}
                     >
@@ -950,7 +1023,7 @@ export function CampaignDetailsPanel({ campaign }: { campaign: Campaign }) {
                       <div className="space-y-1">
                         <div className="text-sm font-medium">{recipientName}</div>
                         {recipientEmail && <div className="text-xs text-muted-foreground">{recipientEmail}</div>}
-                        <div className="text-xs text-muted-foreground">{formatDate(evt.at)}</div>
+                        <div className="text-xs text-muted-foreground">{formatDate(evt.eventTime)}</div>
                         {evt.url && (
                           <div className="text-xs">
                             <Link href={evt.url} className="text-blue-600 hover:underline" target="_blank">

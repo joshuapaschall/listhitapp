@@ -65,9 +65,10 @@ Provision a fresh Supabase instance by running the consolidated SQL files in `sc
 1. `scripts/db/00_extensions.sql`
 2. `scripts/db/01_schema.sql`
 3. `scripts/db/02_functions_triggers.sql`
-4. `scripts/db/03_rls_policies.sql`
-5. `scripts/db/04_seed.sql` (optional demo data)
-6. `scripts/db/05_scheduler.sql` (optional pg_cron jobs)
+4. `scripts/db/20260111_campaign_analytics.sql`
+5. `scripts/db/03_rls_policies.sql`
+6. `scripts/db/04_seed.sql` (optional demo data)
+7. `scripts/db/05_scheduler.sql` (optional pg_cron jobs)
 
 For existing production databases, run `scripts/db/98_schema_patch.sql` first to apply safe fixes, then re-run `scripts/db/03_rls_policies.sql`.
 

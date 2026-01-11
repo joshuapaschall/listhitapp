@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import { useDebounce } from "@/hooks/use-debounce"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -478,6 +479,7 @@ const fetchBuyersByIds = async (ids: string[]): Promise<Buyer[]> => {
 
 function BuyersPageContent() {
   const queryClient = useQueryClient()
+  const searchParams = useSearchParams()
 
   // UI state
   const [selectedBuyers, setSelectedBuyers] = useState<string[]>([])
@@ -585,9 +587,42 @@ function BuyersPageContent() {
     gcTime: 60 * 60 * 1000,
   })
 
-  const buyers = buyersData?.buyers || []
+  const buyers = useMemo(() => buyersData?.buyers || [], [buyersData])
   const totalPages = buyersData?.totalPages || 1
   const totalCount = buyersData?.totalCount || 0
+
+  useEffect(() => {
+    const buyerId = searchParams.get("buyerId")
+    if (!buyerId) return
+    if (editingBuyer?.id === buyerId && showEditBuyerModal) return
+    const existingBuyer = buyers.find((buyer: Buyer) => buyer.id === buyerId)
+    if (existingBuyer) {
+      setEditingBuyer(existingBuyer)
+      setShowEditBuyerModal(true)
+      return
+    }
+
+    let isActive = true
+    supabase
+      .from("buyers")
+      .select("*")
+      .eq("id", buyerId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!isActive) return
+        if (error) {
+          log("error", "Failed to fetch buyer for deep link", { buyerId, error })
+          return
+        }
+        if (data) {
+          setEditingBuyer(data as Buyer)
+          setShowEditBuyerModal(true)
+        }
+      })
+    return () => {
+      isActive = false
+    }
+  }, [buyers, editingBuyer?.id, searchParams, showEditBuyerModal])
 
   const loading =
     (buyersLoading && !buyersData) || tagsLoading || countsLoading || totalCountLoading
