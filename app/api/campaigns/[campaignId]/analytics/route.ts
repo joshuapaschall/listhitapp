@@ -6,7 +6,7 @@ import { assertServer } from "@/utils/assert-server"
 assertServer()
 
 export async function GET(_req: NextRequest, { params }: { params: { campaignId: string } }) {
-  const campaignId = params.campaignId
+  const campaignId = (params.campaignId ?? "").trim().replace(/^<+/, "").replace(/>+$/, "")
   const cookieStore = cookies()
   const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
   const { supabaseAdmin } = await import("@/lib/supabase")
@@ -81,39 +81,36 @@ export async function GET(_req: NextRequest, { params }: { params: { campaignId:
     { name: "campaign_recent_events", error: recentRes.error },
   ].filter((item) => item.error)
 
-  if (rpcErrors.length > 0) {
-    const first = rpcErrors[0]
-    console.error("Analytics RPC failed", { rpc: first.name, error: first.error })
-    return NextResponse.json({ error: `Analytics RPC failed: ${first.name}` }, { status: 500 })
-  }
+  rpcErrors.forEach((item) => {
+    console.error("Analytics RPC failed", { rpc: item.name, error: item.error })
+  })
 
   if (recipientsRes.error || bounceBreakdownRes.error) {
     console.error("Analytics query failed", {
       recipients: recipientsRes.error,
       bounce: bounceBreakdownRes.error,
     })
-    return NextResponse.json({ error: "Analytics query failed" }, { status: 500 })
   }
 
-  const summaryRows = summaryRes.data || []
-  const recipientSummary = (recipientSummaryRes.data || [])[0] || {}
-  const bounceBreakdown = buildBounceBreakdown(bounceBreakdownRes.data || [])
+  const summaryRows = summaryRes.error ? [] : summaryRes.data || []
+  const recipientSummary = recipientSummaryRes.error ? {} : (recipientSummaryRes.data || [])[0] || {}
+  const bounceBreakdown = bounceBreakdownRes.error ? { permanent: 0, transient: 0, other: 0 } : buildBounceBreakdown(bounceBreakdownRes.data || [])
   const summary = buildSummary(summaryRows, recipientSummary, bounceBreakdown)
   const rates = buildRates(summary)
 
-  const topLinks = (linksRes.data || []).map((row: any) => ({
+  const topLinks = (linksRes.error ? [] : linksRes.data || []).map((row: any) => ({
     url: row.url,
     totalClicks: Number(row.total_clicks) || 0,
     uniqueClickers: Number(row.unique_clickers) || 0,
   }))
 
-  const timeline = (timelineRes.data || []).map((row: any) => ({
+  const timeline = (timelineRes.error ? [] : timelineRes.data || []).map((row: any) => ({
     bucket: row.bucket,
     opens: Number(row.opens) || 0,
     clicks: Number(row.clicks) || 0,
   }))
 
-  const recentEvents = (recentRes.data || []).map((row: any) => ({
+  const recentEvents = (recentRes.error ? [] : recentRes.data || []).map((row: any) => ({
     eventTime: row.event_time,
     type: row.type,
     recipientId: row.recipient_id,
@@ -121,7 +118,7 @@ export async function GET(_req: NextRequest, { params }: { params: { campaignId:
     payload: row.payload || {},
   }))
 
-  const recipients = (recipientsRes.data || []).map((row: any) => ({
+  const recipients = (recipientsRes.error ? [] : recipientsRes.data || []).map((row: any) => ({
     id: row.id,
     buyer_id: row.buyer_id,
     email: row.buyer?.email ?? null,
