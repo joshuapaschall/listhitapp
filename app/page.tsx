@@ -885,7 +885,6 @@ function BuyersPageContent() {
   }
 
   const handleEditBuyerModalChange = (open: boolean) => {
-    setShowEditBuyerModal(open)
     if (!open) {
       setEditingBuyer(null)
       const params = new URLSearchParams(searchParams.toString())
@@ -896,6 +895,7 @@ function BuyersPageContent() {
         router.replace(query ? `${pathname}?${query}` : pathname)
       }
     }
+    setShowEditBuyerModal(open)
   }
 
   const handleSendSms = (buyer: Buyer) => {
