@@ -29,9 +29,15 @@ const SYSTEM_LINK_FRAGMENT = "/api/unsubscribe"
 
 type RecipientBuyer = {
   id: string
+  fname?: string | null
+  lname?: string | null
+  full_name?: string | null
   first_name?: string | null
   last_name?: string | null
   email?: string | null
+  email_address?: string | null
+  phone?: string | null
+  phone_number?: string | null
 }
 
 type Recipient = {
@@ -44,6 +50,7 @@ type EmailEvent = {
   id: string
   event_type: string
   created_at: string
+  event_ts?: string | null
   payload: any
 }
 
@@ -66,15 +73,18 @@ const statusBadgeStyles: Record<string, string> = {
 
 function formatName(buyer?: RecipientBuyer | null) {
   if (!buyer) return "Unknown recipient"
-  const fullName = [buyer.first_name, buyer.last_name].filter(Boolean).join(" ")
-  return fullName || buyer.email || "Recipient"
+  const fullName =
+    buyer.full_name
+    || [buyer.fname, buyer.lname].filter(Boolean).join(" ")
+    || [buyer.first_name, buyer.last_name].filter(Boolean).join(" ")
+  return fullName || buyer.email || buyer.email_address || "Recipient"
 }
 
 function getEventUrl(payload: any) {
   if (!payload) return null
   return (
-    payload?.click?.link ||
     payload?.click?.url ||
+    payload?.click?.link ||
     payload?.link ||
     payload?.url ||
     null
@@ -144,6 +154,8 @@ export default function RecipientDrilldownSheet({
   const [events, setEvents] = useState<EmailEvent[]>([])
   const [loading, setLoading] = useState(false)
 
+  const getEventTime = (event: EmailEvent) => event.event_ts || event.created_at
+
   useEffect(() => {
     if (!open || !recipient?.id) return
     const supabase = supabaseBrowser()
@@ -152,7 +164,7 @@ export default function RecipientDrilldownSheet({
 
     supabase
       .from("email_events")
-      .select("id,event_type,created_at,payload")
+      .select("id,event_type,created_at,event_ts,payload")
       .eq("campaign_id", campaignId)
       .eq("recipient_id", recipient.id)
       .order("created_at", { ascending: true })
@@ -191,12 +203,27 @@ export default function RecipientDrilldownSheet({
       acc[url] = (acc[url] || 0) + 1
       return acc
     }, {})
+    const lastOpenedAt = events.reduce<string | null>((latest, event) => {
+      if (event.event_type !== "open") return latest
+      const eventTime = getEventTime(event)
+      if (!eventTime) return latest
+      if (!latest) return eventTime
+      return new Date(eventTime) > new Date(latest) ? eventTime : latest
+    }, null)
+    const lastClickedAt = clickEvents.reduce<string | null>((latest, event) => {
+      const eventTime = getEventTime(event)
+      if (!eventTime) return latest
+      if (!latest) return eventTime
+      return new Date(eventTime) > new Date(latest) ? eventTime : latest
+    }, null)
 
     return {
       totalOpens,
       totalClicks: clickEvents.length,
       uniqueLinks,
       clickCounts,
+      lastOpenedAt,
+      lastClickedAt,
     }
   }, [events])
 
@@ -220,6 +247,7 @@ export default function RecipientDrilldownSheet({
         ...event,
         url,
         isSystemLink: isSystemLink(url),
+        eventTime: getEventTime(event),
       }
     })
   }, [events])
@@ -229,7 +257,7 @@ export default function RecipientDrilldownSheet({
   const diagnosticDetails = buildDiagnosticDetails(bounceEvent || complaintEvent)
   const clickRows = Object.entries(totals.clickCounts).map(([url, count]) => ({ url, count }))
 
-  const buyerEmail = recipient?.buyer?.email
+  const buyerEmail = recipient?.buyer?.email || recipient?.buyer?.email_address
 
   const handleCopyEmail = async () => {
     if (!buyerEmail) return
@@ -272,10 +300,16 @@ export default function RecipientDrilldownSheet({
               <div className="rounded-lg border bg-white p-3">
                 <div className="text-xs uppercase text-muted-foreground">Total opens</div>
                 <div className="text-2xl font-semibold">{totals.totalOpens}</div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  Last opened: {formatDate(totals.lastOpenedAt)}
+                </div>
               </div>
               <div className="rounded-lg border bg-white p-3">
                 <div className="text-xs uppercase text-muted-foreground">Total clicks</div>
                 <div className="text-2xl font-semibold">{totals.totalClicks}</div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  Last clicked: {formatDate(totals.lastClickedAt)}
+                </div>
               </div>
               <div className="rounded-lg border bg-white p-3">
                 <div className="text-xs uppercase text-muted-foreground">Unique links</div>
@@ -313,7 +347,7 @@ export default function RecipientDrilldownSheet({
                         {event.isSystemLink && (
                           <Badge variant="secondary">system link</Badge>
                         )}
-                        <span className="text-xs text-muted-foreground">{formatDate(event.created_at)}</span>
+                        <span className="text-xs text-muted-foreground">{formatDate(event.eventTime)}</span>
                       </div>
                       {event.url && (
                         <div className="mt-2 text-xs">

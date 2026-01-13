@@ -224,7 +224,13 @@ async function storeEmailEvent(input: {
 
 async function updateRecipient(
   eventType: string,
-  ctx: { timestamp: string; recipientId?: string; providerId?: string; skipClickUpdate?: boolean },
+  ctx: {
+    timestamp: string
+    recipientId?: string
+    providerId?: string
+    messageId?: string
+    skipClickUpdate?: boolean
+  },
 ) {
   if (!supabase) return
   const updates: Record<string, any> = {}
@@ -251,9 +257,12 @@ async function updateRecipient(
   }
   if (Object.keys(updates).length === 0) return
 
+  const resolvedRecipientId = ctx.recipientId
+    ?? (ctx.messageId ? (await findRecipientByMessageId(ctx.messageId))?.id : undefined)
+
   let query = supabase.from("campaign_recipients").update(updates)
-  if (ctx.recipientId) {
-    query = query.eq("id", ctx.recipientId)
+  if (resolvedRecipientId) {
+    query = query.eq("id", resolvedRecipientId)
   } else if (ctx.providerId) {
     query = query.eq("provider_id", ctx.providerId)
   } else {
@@ -262,9 +271,39 @@ async function updateRecipient(
   await query
 }
 
+async function findRecipientByMessageId(messageId: string) {
+  if (!supabase || !messageId) return null
+  try {
+    const { data, error } = await supabase
+      .from("campaign_recipients")
+      .select("id,buyer_id")
+      .or(`provider_message_id.eq.${messageId},message_id.eq.${messageId}`)
+      .maybeSingle()
+    if (error) throw error
+    return data ?? null
+  } catch (error) {
+    log("warn", "Failed to lookup recipient by message id", { messageId, error })
+    return null
+  }
+}
+
+async function findRecipientByProviderId(providerId: string) {
+  if (!supabase || !providerId) return null
+  const { data, error } = await supabase
+    .from("campaign_recipients")
+    .select("id,buyer_id")
+    .eq("provider_id", providerId)
+    .maybeSingle()
+  if (error) {
+    log("warn", "Failed to lookup recipient by provider id", { providerId, error })
+    return null
+  }
+  return data ?? null
+}
+
 async function findBuyerId(
   buyerTag: string | undefined,
-  ctx: { recipientId?: string; providerId?: string },
+  ctx: { recipientId?: string; providerId?: string; messageId?: string },
 ): Promise<string | null> {
   if (buyerTag) return buyerTag
   if (!supabase) return null
@@ -276,13 +315,13 @@ async function findBuyerId(
       .maybeSingle()
     return data?.buyer_id ?? null
   }
+  const recipientByMessageId = ctx.messageId
+    ? await findRecipientByMessageId(ctx.messageId)
+    : null
+  if (recipientByMessageId?.buyer_id) return recipientByMessageId.buyer_id
   if (ctx.providerId) {
-    const { data } = await supabase
-      .from("campaign_recipients")
-      .select("buyer_id")
-      .eq("provider_id", ctx.providerId)
-      .maybeSingle()
-    return data?.buyer_id ?? null
+    const recipientByProviderId = await findRecipientByProviderId(ctx.providerId)
+    return recipientByProviderId?.buyer_id ?? null
   }
   return null
 }
@@ -344,7 +383,7 @@ export async function POST(req: NextRequest) {
   const recipientId = extractTagValue(tags, "recipient_id")
   const buyerIdTag = extractTagValue(tags, "buyer_id")
   const campaignId = extractTagValue(tags, "campaign_id")
-  const clickUrl = payload && (payload as any).click?.link
+  const clickUrl = (payload as any)?.click?.url ?? (payload as any)?.click?.link ?? null
   const skipClickUpdate = evt === "click" && typeof clickUrl === "string" && clickUrl.includes("/api/unsubscribe")
 
   await storeEmailEvent({
@@ -363,6 +402,7 @@ export async function POST(req: NextRequest) {
       timestamp,
       recipientId: recipientId || undefined,
       providerId: messageId,
+      messageId: messageId || undefined,
       skipClickUpdate,
     })
   } else {
@@ -370,7 +410,11 @@ export async function POST(req: NextRequest) {
   }
 
   if (evt === "bounce" || evt === "complaint") {
-    const buyerId = await findBuyerId(buyerIdTag, { recipientId, providerId: messageId })
+    const buyerId = await findBuyerId(buyerIdTag, {
+      recipientId,
+      providerId: messageId,
+      messageId: messageId || undefined,
+    })
     if (timestamp) {
       await suppressBuyer(evt, buyerId, timestamp)
     }
