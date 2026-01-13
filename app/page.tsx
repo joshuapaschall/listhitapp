@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import Link from "next/link"
-import { useSearchParams } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useDebounce } from "@/hooks/use-debounce"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -479,7 +479,10 @@ const fetchBuyersByIds = async (ids: string[]): Promise<Buyer[]> => {
 
 function BuyersPageContent() {
   const queryClient = useQueryClient()
+  const router = useRouter()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
+  const suppressBuyerModalAutoOpenRef = useRef(false)
 
   // UI state
   const [selectedBuyers, setSelectedBuyers] = useState<string[]>([])
@@ -593,7 +596,11 @@ function BuyersPageContent() {
 
   useEffect(() => {
     const buyerId = searchParams.get("buyerId")
-    if (!buyerId) return
+    if (!buyerId) {
+      suppressBuyerModalAutoOpenRef.current = false
+      return
+    }
+    if (suppressBuyerModalAutoOpenRef.current) return
     if (editingBuyer?.id === buyerId && showEditBuyerModal) return
     const existingBuyer = buyers.find((buyer: Buyer) => buyer.id === buyerId)
     if (existingBuyer) {
@@ -875,6 +882,20 @@ function BuyersPageContent() {
   const handleEditBuyer = (buyer: Buyer) => {
     setEditingBuyer(buyer)
     setShowEditBuyerModal(true)
+  }
+
+  const handleEditBuyerModalChange = (open: boolean) => {
+    setShowEditBuyerModal(open)
+    if (!open) {
+      setEditingBuyer(null)
+      const params = new URLSearchParams(searchParams.toString())
+      if (params.has("buyerId")) {
+        suppressBuyerModalAutoOpenRef.current = true
+        params.delete("buyerId")
+        const query = params.toString()
+        router.replace(query ? `${pathname}?${query}` : pathname)
+      }
+    }
   }
 
   const handleSendSms = (buyer: Buyer) => {
@@ -1785,7 +1806,7 @@ function BuyersPageContent() {
       />
       <EditBuyerModal
         open={showEditBuyerModal}
-        onOpenChange={setShowEditBuyerModal}
+        onOpenChange={handleEditBuyerModalChange}
         buyer={editingBuyer}
         onSuccess={() => queryClient.invalidateQueries({ queryKey: ["buyers"] })}
       />
