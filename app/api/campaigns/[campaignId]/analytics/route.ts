@@ -42,13 +42,24 @@ export async function GET(_req: NextRequest, { params }: { params: { campaignId:
   const topLinksQuery = supabaseAdmin.rpc("campaign_top_links", { p_campaign_id: campaignId })
   const timelineQuery = supabaseAdmin.rpc("campaign_event_timeline", { p_campaign_id: campaignId })
   const recentQuery = supabaseAdmin.rpc("campaign_recent_events", { p_campaign_id: campaignId })
-  const recipientsQuery = supabaseAdmin
-    .from("campaign_recipients")
-    .select(
-      "id,buyer_id,status,sent_at,delivered_at,opened_at,clicked_at,bounced_at,complained_at,unsubscribed_at,error,buyer:buyers(id,email,fname,lname,full_name,company)",
-    )
-    .eq("campaign_id", campaignId)
-    .order("id", { ascending: true })
+  const recipientsBaseSelect =
+    "id,buyer_id,status,sent_at,delivered_at,opened_at,clicked_at,bounced_at,complained_at,unsubscribed_at,error"
+  const recipientsBuyerSelect = "buyer:buyers(id,email,phone,fname,lname,full_name,company)"
+  const recipientsLegacyBuyerSelect =
+    "buyer:buyers(id,email_address,phone_number,first_name,last_name,full_name,company)"
+  const recipientsQuery = async () => {
+    const preferred = await supabaseAdmin
+      .from("campaign_recipients")
+      .select(`${recipientsBaseSelect},${recipientsBuyerSelect}`)
+      .eq("campaign_id", campaignId)
+      .order("id", { ascending: true })
+    if (!preferred.error) return preferred
+    return supabaseAdmin
+      .from("campaign_recipients")
+      .select(`${recipientsBaseSelect},${recipientsLegacyBuyerSelect}`)
+      .eq("campaign_id", campaignId)
+      .order("id", { ascending: true })
+  }
   const bounceBreakdownQuery = supabaseAdmin
     .from("email_events")
     .select("payload,buyer:buyers(id,email,fname,lname,full_name,company)")
@@ -69,7 +80,7 @@ export async function GET(_req: NextRequest, { params }: { params: { campaignId:
     topLinksQuery,
     timelineQuery,
     recentQuery,
-    recipientsQuery,
+    recipientsQuery(),
     bounceBreakdownQuery,
   ])
 
@@ -118,21 +129,33 @@ export async function GET(_req: NextRequest, { params }: { params: { campaignId:
     payload: row.payload || {},
   }))
 
-  const recipients = (recipientsRes.error ? [] : recipientsRes.data || []).map((row: any) => ({
-    id: row.id,
-    buyer_id: row.buyer_id,
-    email: row.buyer?.email ?? null,
-    status: row.status,
-    sent_at: row.sent_at,
-    delivered_at: row.delivered_at,
-    opened_at: row.opened_at,
-    clicked_at: row.clicked_at,
-    bounced_at: row.bounced_at,
-    complained_at: row.complained_at,
-    unsubscribed_at: row.unsubscribed_at,
-    error: row.error,
-    buyer: row.buyer ?? null,
-  }))
+  const recipients = (recipientsRes.error ? [] : recipientsRes.data || []).map((row: any) => {
+    const buyer = row.buyer
+      ? {
+          ...row.buyer,
+          email: row.buyer.email ?? row.buyer.email_address ?? null,
+          phone: row.buyer.phone ?? row.buyer.phone_number ?? null,
+          fname: row.buyer.fname ?? row.buyer.first_name ?? null,
+          lname: row.buyer.lname ?? row.buyer.last_name ?? null,
+          full_name: row.buyer.full_name ?? null,
+        }
+      : null
+    return {
+      id: row.id,
+      buyer_id: row.buyer_id,
+      email: buyer?.email ?? null,
+      status: row.status,
+      sent_at: row.sent_at,
+      delivered_at: row.delivered_at,
+      opened_at: row.opened_at,
+      clicked_at: row.clicked_at,
+      bounced_at: row.bounced_at,
+      complained_at: row.complained_at,
+      unsubscribed_at: row.unsubscribed_at,
+      error: row.error,
+      buyer,
+    }
+  })
 
   return NextResponse.json({
     summary,

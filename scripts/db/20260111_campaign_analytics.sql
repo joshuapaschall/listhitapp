@@ -42,13 +42,13 @@ returns table(url text, total_clicks bigint, unique_clickers bigint)
 stable
 language sql as $$
   select
-    payload->'click'->>'link' as url,
+    coalesce(payload->'click'->>'url', payload->'click'->>'link') as url,
     count(*) as total_clicks,
     count(distinct recipient_id) as unique_clickers
   from public.email_events
   where campaign_id = p_campaign_id
     and event_type = 'click'
-    and payload->'click'->>'link' is not null
+    and coalesce(payload->'click'->>'url', payload->'click'->>'link') is not null
   group by url
   order by total_clicks desc
   limit 50;
