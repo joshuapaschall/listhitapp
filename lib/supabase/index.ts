@@ -171,12 +171,12 @@ export interface Property {
 }
 
 export interface PropertyImage {
-  id?: string
-  property_id?: string
-  image_url?: string
-  sort_order?: number
-  is_featured?: boolean | null
-  created_at?: string
+  id: string
+  property_id: string
+  image_url: string
+  sort_order: number
+  is_featured: boolean
+  created_at: string
 }
 
 export interface PropertyBuyer {

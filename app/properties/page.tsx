@@ -44,7 +44,9 @@ import { toast } from "sonner"
 const STATUSES = ["all", "available", "under_contract", "sold"]
 const ITEMS_PER_PAGE = 12
 
-type PropertyWithImages = Property & { property_images?: Pick<PropertyImage, "id" | "image_url" | "sort_order">[] }
+type PropertyWithImages = Property & {
+  property_images?: Pick<PropertyImage, "id" | "image_url" | "sort_order" | "is_featured">[]
+}
 
 const usdFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -236,7 +238,9 @@ export default function PropertiesPage() {
             </div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
               {properties.map((property) => {
-                const firstImage = (property.property_images || []).slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))[0]?.image_url
+                const images = (property.property_images || []).slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+                const featured = images.find((img) => img.is_featured)
+                const firstImage = (featured || images[0])?.image_url
                 return (
                   <Card key={property.id} className="group cursor-pointer overflow-hidden" onClick={() => openDetails(property.id)}>
                     <div className="relative h-48 w-full bg-muted">
@@ -270,7 +274,9 @@ export default function PropertiesPage() {
               <TableHeader><TableRow><TableHead className="w-10"><Checkbox checked={selectedIds.length === properties.length && properties.length > 0} onCheckedChange={toggleSelectAll} /></TableHead><TableHead>Property</TableHead><TableHead>Price</TableHead><TableHead>Specs</TableHead><TableHead>Status</TableHead><TableHead className="w-40">Actions</TableHead></TableRow></TableHeader>
               <TableBody>
                 {properties.map((property) => {
-                  const firstImage = (property.property_images || []).slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))[0]?.image_url
+                  const images = (property.property_images || []).slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+                  const featured = images.find((img) => img.is_featured)
+                  const firstImage = (featured || images[0])?.image_url
                   return (
                     <TableRow key={property.id}>
                       <TableCell><Checkbox checked={selectedIds.includes(property.id)} onCheckedChange={() => toggleSelect(property.id)} /></TableCell>

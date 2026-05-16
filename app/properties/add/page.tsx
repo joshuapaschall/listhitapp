@@ -185,6 +185,17 @@ export default function AddPropertyPage() {
         latitude: coords.lat,
         longitude: coords.lng,
       });
+      if (photos.length > 0) {
+        try {
+          const { errors } = await PropertyService.uploadImages(property.id, photos);
+          if (errors.length > 0) {
+            toast.warning(`Some photos failed to upload: ${errors.join(", ")}`);
+          }
+        } catch (uploadErr) {
+          console.error("Photo upload failed:", uploadErr);
+          toast.warning("Property saved but photo upload failed. You can add photos by editing the property.");
+        }
+      }
       for (const id of selectedBuyers)
         await PropertyService.addBuyerToProperty(property.id, id).catch(
           console.error,
@@ -614,6 +625,7 @@ export default function AddPropertyPage() {
                     ref={fileInputRef}
                     type="file"
                     multiple
+                    accept="image/jpeg,image/png,image/webp,image/heic"
                     className="hidden"
                     onChange={(e) => handleDropFiles(e.target.files)}
                   />
