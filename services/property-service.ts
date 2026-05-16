@@ -62,6 +62,11 @@ export class PropertyService {
     }
     return { latitude: null, longitude: null }
   }
+
+  private static buildIlikePattern(value: string) {
+    const sanitized = value.replace(/[%]/g, "").replace(/[(),]/g, " ").trim()
+    return `%${sanitized}%`
+  }
   // Fetch properties with optional filtering, pagination and sorting
   static async getProperties(
     filters: PropertyFilters = {},
@@ -129,9 +134,9 @@ export class PropertyService {
     }
 
     if (search) {
-      const encoded = encodeURIComponent(search)
+      const searchPattern = this.buildIlikePattern(search)
       query = query.or(
-        `address.ilike.%${encoded}%,city.ilike.%${encoded}%,state.ilike.%${encoded}%,zip.ilike.%${encoded}%`,
+        `address.ilike.${searchPattern},city.ilike.${searchPattern},state.ilike.${searchPattern},zip.ilike.${searchPattern}`,
       )
     }
 
@@ -158,12 +163,12 @@ export class PropertyService {
 
   // Search properties by address, city, state, or zip
   static async searchProperties(query: string) {
-    const encoded = encodeURIComponent(query)
+    const searchPattern = this.buildIlikePattern(query)
     const { data, error } = await supabase
       .from("properties")
       .select("id, address, city, state, zip")
       .or(
-        `address.ilike.%${encoded}%,city.ilike.%${encoded}%,state.ilike.%${encoded}%,zip.ilike.%${encoded}%`,
+        `address.ilike.${searchPattern},city.ilike.${searchPattern},state.ilike.${searchPattern},zip.ilike.${searchPattern}`,
       )
       .order("created_at", { ascending: false })
       .limit(20)
