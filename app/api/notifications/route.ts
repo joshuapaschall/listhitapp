@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase/admin"
 
 export async function GET() {
+  // If this returns "relation does not exist" error, run the migration in supabase/migrations/20260516_create_notifications.sql
   const { data, error } = await supabaseAdmin
     .from("notifications")
     .select("*")
@@ -10,6 +11,7 @@ export async function GET() {
     .limit(30)
 
   if (error) {
+    console.error("Notifications fetch error:", error)
     return NextResponse.json({ error: "Failed to fetch notifications" }, { status: 500 })
   }
 

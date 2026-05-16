@@ -1,61 +1,49 @@
-"use client";
+"use client"
 
-import {
-  DndContext,
-  KeyboardSensor,
-  PointerSensor,
-  closestCenter,
-  type DragEndEvent,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
-import { restrictToParentElement } from "@dnd-kit/modifiers";
-import {
-  SortableContext,
-  arrayMove,
-  rectSortingStrategy,
-  sortableKeyboardCoordinates,
-  useSortable,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Star, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { GripVertical, Star, X } from "lucide-react"
+
+import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 
 export interface ImageItem {
-  id: string;
-  url: string;
-  isNew: boolean;
-  isFeatured: boolean;
-  label?: string;
+  id: string
+  url: string
+  isNew: boolean
+  isFeatured: boolean
+  label?: string
 }
 
 interface SortableImageGridProps {
-  items: ImageItem[];
-  onReorder: (items: ImageItem[]) => void;
-  onDelete: (id: string) => void;
-  onSetFeatured: (id: string) => void;
+  items: ImageItem[]
+  onReorder: (items: ImageItem[]) => void
+  onDelete: (id: string) => void
+  onSetFeatured: (id: string) => void
 }
 
 interface SortableImageCardProps {
-  item: ImageItem;
-  onDelete: (id: string) => void;
-  onSetFeatured: (id: string) => void;
+  item: ImageItem
+  onDelete: (id: string) => void
+  onSetFeatured: (id: string) => void
+  onMoveLeft: (id: string) => void
+  onMoveRight: (id: string) => void
+  canMoveLeft: boolean
+  canMoveRight: boolean
 }
 
-function SortableImageCard({ item, onDelete, onSetFeatured }: SortableImageCardProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: item.id,
-  });
-
+function SortableImageCard({
+  item,
+  onDelete,
+  onSetFeatured,
+  onMoveLeft,
+  onMoveRight,
+  canMoveLeft,
+  canMoveRight,
+}: SortableImageCardProps) {
   return (
     <div
-      ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
         "group relative overflow-hidden rounded-lg border bg-card",
         item.isNew && "border-dashed border-blue-400",
-        isDragging && "z-50 scale-105 opacity-90 shadow-xl",
       )}
     >
       <img
@@ -101,52 +89,62 @@ function SortableImageCard({ item, onDelete, onSetFeatured }: SortableImageCardP
         </Button>
       )}
 
-      <div
-        {...attributes}
-        {...listeners}
-        className="absolute bottom-1 left-1/2 -translate-x-1/2 cursor-grab rounded-full bg-black/50 px-3 py-0.5 opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
-      >
-        <GripVertical className="h-3.5 w-3.5 text-white" />
+      <div className="absolute bottom-1 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full bg-black/50 px-2 py-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-5 w-5 text-white hover:bg-white/20"
+          disabled={!canMoveLeft}
+          onClick={() => onMoveLeft(item.id)}
+          aria-label="Move image left"
+        >
+          <GripVertical className="h-3.5 w-3.5 rotate-90" />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-5 w-5 text-white hover:bg-white/20"
+          disabled={!canMoveRight}
+          onClick={() => onMoveRight(item.id)}
+          aria-label="Move image right"
+        >
+          <GripVertical className="h-3.5 w-3.5 -rotate-90" />
+        </Button>
       </div>
     </div>
-  );
+  )
 }
 
 export default function SortableImageGrid({ items, onReorder, onDelete, onSetFeatured }: SortableImageGridProps) {
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
+  const moveItem = (id: string, direction: -1 | 1) => {
+    const index = items.findIndex((item) => item.id === id)
+    const nextIndex = index + direction
+    if (index < 0 || nextIndex < 0 || nextIndex >= items.length) return
 
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const oldIndex = items.findIndex((item) => item.id === active.id);
-    const newIndex = items.findIndex((item) => item.id === over.id);
-    onReorder(arrayMove(items, oldIndex, newIndex));
-  };
+    const nextItems = [...items]
+    const [moved] = nextItems.splice(index, 1)
+    nextItems.splice(nextIndex, 0, moved)
+    onReorder(nextItems)
+  }
 
-  if (items.length === 0) return null;
+  if (items.length === 0) return null
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      modifiers={[restrictToParentElement]}
-      onDragEnd={handleDragEnd}
-    >
-      <SortableContext items={items.map((item) => item.id)} strategy={rectSortingStrategy}>
-        <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
-          {items.map((item) => (
-            <SortableImageCard
-              key={item.id}
-              item={item}
-              onDelete={onDelete}
-              onSetFeatured={onSetFeatured}
-            />
-          ))}
-        </div>
-      </SortableContext>
-    </DndContext>
-  );
+    <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
+      {items.map((item, index) => (
+        <SortableImageCard
+          key={item.id}
+          item={item}
+          onDelete={onDelete}
+          onSetFeatured={onSetFeatured}
+          onMoveLeft={() => moveItem(item.id, -1)}
+          onMoveRight={() => moveItem(item.id, 1)}
+          canMoveLeft={index > 0}
+          canMoveRight={index < items.length - 1}
+        />
+      ))}
+    </div>
+  )
 }
