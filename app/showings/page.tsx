@@ -3,43 +3,31 @@
 import { useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { useQuery } from "@tanstack/react-query"
-import Link from "next/link"
+import {
+  Calendar,
+  CalendarIcon,
+  CheckCircle2,
+  List,
+  Plus,
+  RefreshCw,
+  XCircle,
+} from "lucide-react"
 import MainLayout from "@/components/layout/main-layout"
 import EditBuyerModal from "@/components/buyers/edit-buyer-modal"
 import ScheduleShowingModal from "@/components/showings/schedule-showing-modal"
 import EditShowingModal from "@/components/showings/edit-showing-modal"
 import DeleteShowingModal from "@/components/showings/delete-showing-modal"
+import ShowingsCalendarView from "@/components/showings/showings-calendar-view"
+import ShowingsListView from "@/components/showings/showings-list-view"
 import { ShowingService } from "@/services/showing-service"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { MoreVertical } from "lucide-react"
+import { Card } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination"
-import type { ShowingWithRelations, Buyer } from "@/lib/supabase"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import type { Buyer, ShowingWithRelations } from "@/lib/supabase"
 
 const STATUSES = ["all", "scheduled", "completed", "canceled", "rescheduled"]
-const ITEMS_PER_PAGE = 10
 
 export default function ShowingsPage() {
   const params = useSearchParams()
@@ -47,7 +35,6 @@ export default function ShowingsPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
-  const [currentPage, setCurrentPage] = useState(1)
   const [selectedBuyer, setSelectedBuyer] = useState<Buyer | null>(null)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showScheduleModal, setShowScheduleModal] = useState(defaultOpen)
@@ -65,210 +52,135 @@ export default function ShowingsPage() {
       }),
   })
 
-  const pageCount = Math.ceil(showings.length / ITEMS_PER_PAGE) || 1
-  const paged = showings.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE,
-  )
+  const now = new Date().toISOString()
+  const upcoming = showings.filter((s) => s.status === "scheduled" && (s.scheduled_at || "") >= now).length
+  const completed = showings.filter((s) => s.status === "completed").length
+  const cancelled = showings.filter((s) => s.status === "canceled").length
+  const rescheduled = showings.filter((s) => s.status === "rescheduled").length
 
-  const formatDate = (iso: string) => new Date(iso).toLocaleString()
+  const handleEdit = (showing: ShowingWithRelations) => {
+    setSelectedShowing(showing)
+    setShowEditShowing(true)
+  }
 
-  const displayName = (b: any) =>
-    b.full_name || `${b.fname || ""} ${b.lname || ""}`.trim() || "Unnamed Buyer"
+  const handleDelete = (showing: ShowingWithRelations) => {
+    setSelectedShowing(showing)
+    setShowDeleteShowing(true)
+  }
+
+  const handleBuyerClick = (buyer: Buyer) => {
+    setSelectedBuyer(buyer)
+    setShowEditModal(true)
+  }
 
   return (
     <MainLayout>
-      <div className="p-4 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
-          <h1 className="text-2xl font-bold">Showings</h1>
-          <div className="flex flex-wrap items-end gap-2">
-            <div>
-              <label className="block text-sm mb-1">Status</label>
-              <Select
-                value={statusFilter}
-                onValueChange={(v) => {
-                  setCurrentPage(1)
-                  setStatusFilter(v)
-                }}
-              >
-                <SelectTrigger className="w-36">
+      <div className="space-y-6 p-4 md:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Showings</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Manage property showings and appointments</p>
+          </div>
+          <Button onClick={() => setShowScheduleModal(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Schedule Showing
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <Card className="p-4">
+            <div className="mb-4 flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">Upcoming</p>
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <p className="text-2xl font-bold">{upcoming}</p>
+          </Card>
+          <Card className="p-4">
+            <div className="mb-4 flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">Completed</p>
+              <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <p className="text-2xl font-bold">{completed}</p>
+          </Card>
+          <Card className="p-4">
+            <div className="mb-4 flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">Cancelled</p>
+              <XCircle className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <p className="text-2xl font-bold">{cancelled}</p>
+          </Card>
+          <Card className="p-4">
+            <div className="mb-4 flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">Rescheduled</p>
+              <RefreshCw className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <p className="text-2xl font-bold">{rescheduled}</p>
+          </Card>
+        </div>
+
+        <Tabs defaultValue="list" className="w-full">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <TabsList>
+              <TabsTrigger value="calendar">
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                Calendar
+              </TabsTrigger>
+              <TabsTrigger value="list">
+                <List className="mr-2 h-4 w-4" />
+                List
+              </TabsTrigger>
+            </TabsList>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-40">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
-                  {STATUSES.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {s === "all" ? "All" : s.replace("_", " ")}
+                  {STATUSES.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {status === "all" ? "All" : status.charAt(0).toUpperCase() + status.slice(1)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div>
-              <label htmlFor="start-date" className="block text-sm mb-1">From</label>
               <Input
-                id="start-date"
-                name="start-date"
                 type="date"
                 value={startDate}
-                onChange={(e) => {
-                  setCurrentPage(1)
-                  setStartDate(e.target.value)
-                }}
-                className="w-36"
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-40"
+                aria-label="Start date"
               />
-            </div>
-            <div>
-              <label htmlFor="end-date" className="block text-sm mb-1">To</label>
               <Input
-                id="end-date"
-                name="end-date"
                 type="date"
                 value={endDate}
-                onChange={(e) => {
-                  setCurrentPage(1)
-                  setEndDate(e.target.value)
-                }}
-                className="w-36"
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-40"
+                aria-label="End date"
               />
             </div>
-            <Button onClick={() => setShowScheduleModal(true)} className="ml-auto">
-              Schedule Showing
-            </Button>
           </div>
-        </div>
-        <div className="border rounded-md">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date / Time</TableHead>
-                <TableHead>Buyer</TableHead>
-                <TableHead>Property</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Notes</TableHead>
-                <TableHead className="w-16">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading && (
-                <TableRow>
-                  <TableCell colSpan={5}>Loading...</TableCell>
-                </TableRow>
-              )}
-              {!isLoading && paged.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5}>No showings found.</TableCell>
-                </TableRow>
-              )}
-              {paged.map((showing: any) => (
-                <TableRow key={showing.id}>
-                  <TableCell className="whitespace-nowrap font-mono text-sm">
-                    {formatDate(showing.scheduled_at)}
-                  </TableCell>
-                  <TableCell>
-                    {showing.buyers ? (
-                      <Button
-                        variant="link"
-                        className="p-0 h-auto"
-                        onClick={() => {
-                          setSelectedBuyer(showing.buyers)
-                          setShowEditModal(true)
-                        }}
-                      >
-                        {displayName(showing.buyers)}
-                      </Button>
-                    ) : (
-                      "-"
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {showing.properties ? (
-                      <Link
-                        href={`/properties/edit/${showing.properties.id}`}
-                        className="text-blue-600 underline"
-                      >
-                        {showing.properties.address}
-                      </Link>
-                    ) : (
-                      "-"
-                    )}
-                  </TableCell>
-                  <TableCell>{showing.status}</TableCell>
-                  <TableCell className="max-w-xs truncate">
-                    {showing.notes || "-"}
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <span className="sr-only">Actions</span>
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setSelectedShowing(showing)
-                            setShowEditShowing(true)
-                          }}
-                        >
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setSelectedShowing(showing)
-                            setShowDeleteShowing(true)
-                          }}
-                        >
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-        {pageCount > 1 && (
-          <Pagination className="mt-2">
-            <PaginationContent>
-              <PaginationItem>
-                <PaginationPrevious
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    setCurrentPage(Math.max(1, currentPage - 1))
-                  }}
-                  className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
-                />
-              </PaginationItem>
-              {Array.from({ length: pageCount }).map((_, i) => (
-                <PaginationItem key={i}>
-                  <PaginationLink
-                    href="#"
-                    isActive={currentPage === i + 1}
-                    onClick={(e) => {
-                      e.preventDefault()
-                      setCurrentPage(i + 1)
-                    }}
-                  >
-                    {i + 1}
-                  </PaginationLink>
-                </PaginationItem>
-              ))}
-              <PaginationItem>
-                <PaginationNext
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    setCurrentPage(Math.min(pageCount, currentPage + 1))
-                  }}
-                  className={currentPage === pageCount ? "pointer-events-none opacity-50" : ""}
-                />
-              </PaginationItem>
-            </PaginationContent>
-          </Pagination>
-        )}
+
+          <TabsContent value="calendar" className="mt-4">
+            <ShowingsCalendarView
+              showings={showings}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              onBuyerClick={handleBuyerClick}
+            />
+          </TabsContent>
+
+          <TabsContent value="list" className="mt-4">
+            <ShowingsListView
+              showings={showings}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              onBuyerClick={handleBuyerClick}
+              isLoading={isLoading}
+            />
+          </TabsContent>
+        </Tabs>
+
         <EditBuyerModal
           open={showEditModal}
           onOpenChange={setShowEditModal}
