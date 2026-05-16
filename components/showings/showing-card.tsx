@@ -33,6 +33,9 @@ export default function ShowingCard({ showing, onEdit, onDelete, onBuyerClick }:
   const initials = showing.buyers
     ? `${showing.buyers.fname?.[0] || ""}${showing.buyers.lname?.[0] || ""}`.toUpperCase() || "?"
     : ""
+  const scheduledAtLabel = showing.scheduled_at
+    ? format(parseISO(showing.scheduled_at), "EEE, MMM d · h:mm a")
+    : "Schedule pending"
 
   return (
     <Card className="relative overflow-hidden p-3">
@@ -40,7 +43,7 @@ export default function ShowingCard({ showing, onEdit, onDelete, onBuyerClick }:
       <div className="ml-2 flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-2">
           <p className="text-sm font-medium text-foreground">
-            {format(parseISO(showing.scheduled_at), "EEE, MMM d · h:mm a")}
+            {scheduledAtLabel}
           </p>
           <div>
             {showing.buyers ? (
