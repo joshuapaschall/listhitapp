@@ -112,9 +112,18 @@ async function sendShowingSms(showing: Showing, buyer: Buyer, property: Property
 }
 
 async function sendShowingEmail(subject: string, buyer: Buyer, html: string) {
-  if (!buyer.email || buyer.can_receive_email === false || !resend) return
+  if (!buyer.email || buyer.can_receive_email === false) {
+    console.log("Skipping showing email: no email or email opt-out", { email: buyer.email, canReceive: buyer.can_receive_email })
+    return
+  }
+  if (!resend) {
+    console.warn("Skipping showing email: Resend not configured (missing RESEND_API_KEY)")
+    return
+  }
   try {
-    await resend.emails.send({ from: FROM_EMAIL, to: buyer.email, subject, html })
+    console.log("Sending showing email:", { to: buyer.email, subject, from: FROM_EMAIL })
+    const result = await resend.emails.send({ from: FROM_EMAIL, to: buyer.email, subject, html })
+    console.log("Showing email sent successfully:", result)
   } catch (error) {
     console.error("Showing email notification failed:", error)
   }
@@ -137,9 +146,11 @@ function baseEmailHtml(title: string, intro: string, property: Property | null |
 }
 
 export async function sendShowingConfirmation(showing: Showing, buyer?: Buyer | null, property?: Property | null) {
+  const tz = process.env.APP_TIMEZONE || "America/New_York"
   const formattedDateTime = new Date(showing.scheduled_at || "").toLocaleString("en-US", {
     dateStyle: "medium",
     timeStyle: "short",
+    timeZone: tz,
   })
 
   await insertNotification({
@@ -166,9 +177,11 @@ export async function sendShowingConfirmation(showing: Showing, buyer?: Buyer | 
 }
 
 export async function sendShowingReminder(showing: Showing, buyer?: Buyer | null, property?: Property | null) {
+  const tz = process.env.APP_TIMEZONE || "America/New_York"
   const formattedDateTime = new Date(showing.scheduled_at || "").toLocaleString("en-US", {
     dateStyle: "medium",
     timeStyle: "short",
+    timeZone: tz,
   })
 
   await insertNotification({
