@@ -51,13 +51,6 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     sendOfferStatusNotification(updated, newStatus).catch((err) =>
       console.error("Offer notification error:", err),
     )
-
-    await insertNotification({
-      type: `offer_${newStatus}`,
-      title: `Offer ${newStatus}: ${updated.properties?.address || "Unknown property"}`,
-      body: `${updated.buyers?.full_name || "A buyer"} — $${updated.offer_price || 0}`,
-      metadata: { offer_id: updated.id, buyer_id: updated.buyer_id, property_id: updated.property_id },
-    })
   }
 
   return NextResponse.json(updated)
