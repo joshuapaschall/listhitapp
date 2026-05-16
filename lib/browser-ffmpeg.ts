@@ -7,7 +7,7 @@ import { FFmpeg } from "@ffmpeg/ffmpeg";
  * This must only ever be used in the browser.
  */
 let ffmpegInstance: FFmpeg | null = null;
-let loadPromise: Promise<void> | null = null;
+let loadPromise: Promise<unknown> | null = null;
 async function fetchFile(file: File | Blob | Uint8Array | ArrayBuffer): Promise<Uint8Array> {
   if (file instanceof Uint8Array) return file;
   if (file instanceof ArrayBuffer) return new Uint8Array(file);
@@ -90,7 +90,7 @@ export async function convertVideoToMp4(file: File): Promise<File> {
 
   await ffmpeg.exec(args);
 
-  const data = await ffmpeg.readFile(outputName);
+  const data = await ffmpeg.readFile(outputName) as Uint8Array;
   const blob = new Blob([data.buffer], { type: "video/mp4" });
 
   ffmpeg.deleteFile(outputName).catch(() => {});
@@ -122,7 +122,7 @@ export async function convertAudioToMp3(file: File): Promise<File> {
 
   await ffmpeg.exec(args);
 
-  const data = await ffmpeg.readFile(outputName);
+  const data = await ffmpeg.readFile(outputName) as Uint8Array;
   const blob = new Blob([data.buffer], { type: "audio/mpeg" });
 
   ffmpeg.deleteFile(outputName).catch(() => {});

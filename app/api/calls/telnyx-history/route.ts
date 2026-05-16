@@ -147,7 +147,7 @@ export async function GET(request: NextRequest) {
     console.log(`📅 Date range: ${startISO} to ${endISO}`);
     
     // Step 1: Pull recordings for both directions
-    const recordingParams = {
+    const recordingParams: Record<string, string> = {
       'filter[created_at][gte]': startISO,
       'filter[created_at][lte]': endISO,
       'page[size]': '250'

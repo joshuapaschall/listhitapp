@@ -1,6 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { TELNYX_API_URL, getTelnyxApiKey } from "@/lib/voice-env";
-import { v4 as uuidv4 } from "uuid";
 
 const TELNYX_API_KEY = getTelnyxApiKey();
 
@@ -89,7 +88,7 @@ export class VoicemailService {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          command_id: uuidv4(),
+          command_id: crypto.randomUUID(),
           client_state: Buffer.from(JSON.stringify({
             action: 'voicemail_answer'
           })).toString('base64')
@@ -120,7 +119,7 @@ export class VoicemailService {
         },
         body: JSON.stringify({
           media_name: mediaName,
-          command_id: uuidv4(),
+          command_id: crypto.randomUUID(),
           client_state: Buffer.from(JSON.stringify({
             action: 'voicemail_greeting',
             next_action: 'start_recording'
@@ -154,7 +153,7 @@ export class VoicemailService {
           payload: text,
           voice: 'female',
           language: 'en-US',
-          command_id: uuidv4(),
+          command_id: crypto.randomUUID(),
           client_state: Buffer.from(JSON.stringify({
             action: 'voicemail_tts_greeting',
             next_action: 'start_recording'
@@ -198,7 +197,7 @@ export class VoicemailService {
           transcription: transcriptionEnabled,
           transcription_engine: 'A', // Google engine
           transcription_language: 'en-US',
-          command_id: uuidv4(),
+          command_id: crypto.randomUUID(),
           client_state: Buffer.from(JSON.stringify({
             action: 'voicemail_recording',
             max_length: maxLength,

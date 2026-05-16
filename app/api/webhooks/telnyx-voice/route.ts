@@ -1,7 +1,6 @@
 import { Buffer } from "node:buffer";
 
 import { NextResponse } from "next/server";
-import { v4 as uuidv4 } from "uuid";
 import { formatPhoneE164 } from "@/lib/call-validation";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import {
@@ -299,7 +298,7 @@ export async function POST(req: Request) {
             buildSipUri(agent?.sip_username)!,
             ""
           );
-          const recordId = uuidv4()
+          const recordId = crypto.randomUUID()
           const { data, error } = await supabaseAdmin
             .from("agent_active_calls")
             .upsert(
@@ -334,7 +333,7 @@ export async function POST(req: Request) {
         if (client_state?.to) {
           const agent = await getAgentBySipUsername(client_state?.to);
           if (agent) {
-            const recordId = uuidv4()
+            const recordId = crypto.randomUUID()
             const { data, error } = await supabaseAdmin
               .from("agent_active_calls")
               .upsert(
