@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Bell, LogOut, Mail, Menu, MessageSquare, Phone, Search, Settings, User } from "lucide-react"
 
 import { LogoutButton } from "@/components/auth/LogoutButton"
@@ -29,7 +29,12 @@ interface HeaderProps {
 
 export function Header({ toggleSidebar }: HeaderProps) {
   const [searchQuery, setSearchQuery] = useState("")
+  const [mounted, setMounted] = useState(false)
   const { notifications, unreadCount, markAsRead } = useNotifications()
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   return (
     <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -62,42 +67,44 @@ export function Header({ toggleSidebar }: HeaderProps) {
           <Button variant="ghost" size="sm">
             <Mail className="h-4 w-4" />
           </Button>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="relative"
-                onClick={() => {
-                  const unreadIds = notifications.filter((n) => !n.read_at).map((n) => n.id)
-                  if (unreadIds.length) void markAsRead(unreadIds)
-                }}
-              >
-                <Bell className="h-4 w-4" />
-                {unreadCount > 0 && (
-                  <Badge className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center p-0 text-xs">
-                    {unreadCount > 9 ? "9+" : unreadCount}
-                  </Badge>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-80 p-0">
-              <div className="border-b p-3">
-                <h3 className="text-sm font-semibold">Notifications</h3>
-              </div>
-              <ScrollArea className="max-h-80">
-                {notifications.length === 0 ? (
-                  <div className="p-4 text-center text-sm text-muted-foreground">No notifications yet</div>
-                ) : (
-                  <div className="space-y-2 p-2">
-                    {notifications.slice(0, 20).map((n) => (
-                      <NotificationItem key={n.id} notification={n} compact />
-                    ))}
-                  </div>
-                )}
-              </ScrollArea>
-            </PopoverContent>
-          </Popover>
+          {mounted && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="relative"
+                  onClick={() => {
+                    const unreadIds = notifications.filter((n) => !n.read_at).map((n) => n.id)
+                    if (unreadIds.length) void markAsRead(unreadIds)
+                  }}
+                >
+                  <Bell className="h-4 w-4" />
+                  {unreadCount > 0 && (
+                    <Badge className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center p-0 text-xs">
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </Badge>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-80 p-0">
+                <div className="border-b p-3">
+                  <h3 className="text-sm font-semibold">Notifications</h3>
+                </div>
+                <ScrollArea className="max-h-80">
+                  {notifications.length === 0 ? (
+                    <div className="p-4 text-center text-sm text-muted-foreground">No notifications yet</div>
+                  ) : (
+                    <div className="space-y-2 p-2">
+                      {notifications.slice(0, 20).map((n) => (
+                        <NotificationItem key={n.id} notification={n} compact />
+                      ))}
+                    </div>
+                  )}
+                </ScrollArea>
+              </PopoverContent>
+            </Popover>
+          )}
           <ThemeToggle />
           <LogoutButton variant="ghost" size="sm" className="hidden gap-1 sm:inline-flex">
             <LogOut className="h-4 w-4" />

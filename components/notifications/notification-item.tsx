@@ -1,6 +1,6 @@
 "use client"
 
-import type { ComponentType } from "react"
+import { useEffect, useState, type ComponentType } from "react"
 import { formatDistanceToNow } from "date-fns"
 import {
   Bell,
@@ -26,6 +26,13 @@ interface NotificationItemProps {
 
 export function NotificationItem({ notification, onDismiss, compact = false }: NotificationItemProps) {
   const router = useRouter()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) return null
 
   const iconMap: Record<string, { icon: ComponentType<{ className?: string }>; className: string }> = {
     showing_scheduled: { icon: Calendar, className: "text-blue-500" },

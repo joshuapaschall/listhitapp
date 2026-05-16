@@ -122,6 +122,7 @@ export function Sidebar({ className }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
   const [showAddBuyerModal, setShowAddBuyerModal] = useState(false)
   const [showCreateOfferModal, setShowCreateOfferModal] = useState(false)
+  const [mounted, setMounted] = useState(false)
   const pathname = usePathname()
   const queryClient = useQueryClient()
   const { notifications: sidebarNotifications, dismiss } = useNotifications()
@@ -135,6 +136,10 @@ export function Sidebar({ className }: SidebarProps) {
     queryKey: ["unread-email"],
     queryFn: countUnreadEmailThreads,
   })
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   useEffect(() => {
     const channel = supabase
@@ -403,7 +408,7 @@ export function Sidebar({ className }: SidebarProps) {
       </div>
 
       {/* Recent Activity */}
-      {!collapsed && (
+      {mounted && !collapsed && (
         <div className="border-t px-4 pb-4 flex-shrink-0">
           <h3 className="mb-3 mt-3 text-sm font-bold text-primary">Recent Activity</h3>
           <div className="max-h-40 space-y-2 overflow-y-auto pr-1">
