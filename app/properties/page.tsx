@@ -84,6 +84,19 @@ export default function PropertiesPage() {
 
   const debouncedSearch = useDebounce(search, 400)
 
+  const minPriceNumber = minPrice.trim() === "" ? undefined : Number(minPrice)
+  const maxPriceNumber = maxPrice.trim() === "" ? undefined : Number(maxPrice)
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0
+    if (statusFilter !== "all") count += 1
+    if (debouncedSearch.trim()) count += 1
+    if (cityFilter.trim()) count += 1
+    if (minPrice.trim()) count += 1
+    if (maxPrice.trim()) count += 1
+    return count
+  }, [statusFilter, debouncedSearch, cityFilter, minPrice, maxPrice])
+
   const generateLink = async (prop: Property) => {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || window.location.origin
     try {
@@ -112,14 +125,14 @@ export default function PropertiesPage() {
   }
 
   const { data, isLoading } = useQuery({
-    queryKey: ["properties", statusFilter, debouncedSearch, cityFilter, minPrice, maxPrice, currentPage],
+    queryKey: ["properties", statusFilter, debouncedSearch, cityFilter, minPriceNumber, maxPriceNumber, currentPage],
     queryFn: () =>
       PropertyService.getProperties({
         status: statusFilter === "all" ? undefined : statusFilter,
-        search: debouncedSearch || undefined,
-        city: cityFilter || undefined,
-        minPrice: minPrice ? Number(minPrice) : undefined,
-        maxPrice: maxPrice ? Number(maxPrice) : undefined,
+        search: debouncedSearch.trim() || undefined,
+        city: cityFilter.trim() || undefined,
+        minPrice: Number.isFinite(minPriceNumber) ? minPriceNumber : undefined,
+        maxPrice: Number.isFinite(maxPriceNumber) ? maxPriceNumber : undefined,
         page: currentPage,
         perPage: ITEMS_PER_PAGE,
       }),
@@ -200,7 +213,14 @@ export default function PropertiesPage() {
             <div><label htmlFor="city-filter" className="mb-1 block text-sm">City</label><Input id="city-filter" value={cityFilter} onChange={(e) => { setCurrentPage(1); setCityFilter(e.target.value) }} className="w-40" /></div>
             <div><label htmlFor="min-price" className="mb-1 block text-sm">Min Price</label><Input id="min-price" type="number" value={minPrice} onChange={(e) => { setCurrentPage(1); setMinPrice(e.target.value) }} className="w-36" /></div>
             <div><label htmlFor="max-price" className="mb-1 block text-sm">Max Price</label><Input id="max-price" type="number" value={maxPrice} onChange={(e) => { setCurrentPage(1); setMaxPrice(e.target.value) }} className="w-36" /></div>
-            <Button variant="outline" onClick={clearFilters}>Clear filters</Button>
+            {activeFilterCount > 0 && (
+              <Button variant="outline" onClick={clearFilters}>
+                Clear filters
+                <Badge className="ml-2 rounded-full bg-blue-600 px-2 py-0 text-xs text-white hover:bg-blue-600">
+                  {activeFilterCount}
+                </Badge>
+              </Button>
+            )}
             <div className="ml-auto flex items-center gap-1 rounded-md border p-1">
               <Button size="icon" variant={viewMode === "grid" ? "default" : "ghost"} onClick={() => setViewMode("grid")}><Grid3X3 className="h-4 w-4" /></Button>
               <Button size="icon" variant={viewMode === "list" ? "default" : "ghost"} onClick={() => setViewMode("list")}><List className="h-4 w-4" /></Button>
