@@ -19,6 +19,9 @@ export default function ShowingsCalendarView({ showings, onEdit, onDelete, onBuy
   const showingsByDate = useMemo(() => {
     const map = new Map<string, ShowingWithRelations[]>()
     showings.forEach((showing) => {
+      if (!showing.scheduled_at) {
+        return
+      }
       const key = format(parseISO(showing.scheduled_at), "yyyy-MM-dd")
       const existing = map.get(key) || []
       map.set(key, [...existing, showing])
@@ -32,7 +35,12 @@ export default function ShowingsCalendarView({ showings, onEdit, onDelete, onBuy
     if (!selectedDay) {
       return []
     }
-    return showings.filter((showing) => isSameDay(parseISO(showing.scheduled_at), selectedDay))
+    return showings.filter((showing) => {
+      if (!showing.scheduled_at) {
+        return false
+      }
+      return isSameDay(parseISO(showing.scheduled_at), selectedDay)
+    })
   }, [selectedDay, showings])
 
   return (
