@@ -1,7 +1,8 @@
 import { jest } from "@jest/globals"
 /** @jest-environment jsdom */
 import { render, screen } from "@testing-library/react"
-import SendFoxListsPage, { resyncListAction } from "../app/admin/sendfox-lists/page"
+import SendFoxListsPage from "../app/admin/sendfox-lists/page"
+import { resyncListAction } from "../app/admin/sendfox-lists/actions"
 
 const mockFetchLists = jest.fn()
 const mockReconcile = jest.fn()

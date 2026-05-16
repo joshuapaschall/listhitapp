@@ -1,7 +1,6 @@
 "use client";
 
 import { FFmpeg } from "@ffmpeg/ffmpeg";
-import { fetchFile } from "@ffmpeg/util";
 
 /**
  * Singleton ffmpeg instance + lazy loader.
@@ -9,6 +8,12 @@ import { fetchFile } from "@ffmpeg/util";
  */
 let ffmpegInstance: FFmpeg | null = null;
 let loadPromise: Promise<void> | null = null;
+async function fetchFile(file: File | Blob | Uint8Array | ArrayBuffer): Promise<Uint8Array> {
+  if (file instanceof Uint8Array) return file;
+  if (file instanceof ArrayBuffer) return new Uint8Array(file);
+  const buffer = await file.arrayBuffer();
+  return new Uint8Array(buffer);
+}
 
 function ensureBrowser() {
   if (typeof window === "undefined") {
