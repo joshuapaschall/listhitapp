@@ -373,7 +373,7 @@ export function Sidebar({ className }: SidebarProps) {
                   )}
                 </AccordionItem>
               ) : (
-                <Link key={item.href} href={item.href}>
+                <Link key={item.href!} href={item.href!}>
                   <Button
                     variant={isActive ? "secondary" : "ghost"}
                     className={cn(
