@@ -21,6 +21,7 @@ import MainLayout from "@/components/layout/main-layout";
 import AddressAutocomplete from "@/components/properties/address-autocomplete";
 import MapPreview from "@/components/properties/map-preview";
 import TagSelector from "@/components/buyers/tag-selector";
+import SortableImageGrid, { type ImageItem } from "@/components/properties/sortable-image-grid";
 import { PropertyService } from "@/services/property-service";
 import { BuyerService } from "@/services/buyer-service";
 import type { Buyer, Property } from "@/lib/supabase";
@@ -110,6 +111,26 @@ export default function EditPropertyPage() {
       })),
     [photos],
   );
+  const allImageItems: ImageItem[] = useMemo(() => {
+    const existing: ImageItem[] = [...existingImages]
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((img) => ({
+        id: img.id,
+        url: img.image_url,
+        isNew: false,
+        isFeatured: img.is_featured,
+      }));
+
+    const newUploads: ImageItem[] = photoPreviews.map((p, i) => ({
+      id: `new-${i}`,
+      url: p.url,
+      isNew: true,
+      isFeatured: false,
+      label: p.name,
+    }));
+
+    return [...existing, ...newUploads];
+  }, [existingImages, photoPreviews]);
 
   useEffect(
     () => () => photoPreviews.forEach((p) => URL.revokeObjectURL(p.url)),
@@ -474,193 +495,40 @@ export default function EditPropertyPage() {
               <CardHeader>
                 <CardTitle>Disposition & Pricing</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-5">
-                <div className="space-y-2">
-                  <Label>Asking Price</Label>
-                  <div className="relative">
-                    <DollarSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      className="pl-9 text-lg"
-                      placeholder="125,000"
-                      value={form.price}
-                      onBlur={formatPrice}
-                      onChange={(e) => handleChange("price", e.target.value)}
-                    />
+              <CardContent className="grid gap-6 md:grid-cols-2">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Asking Price</Label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        className="pl-9 text-lg"
+                        placeholder="125,000"
+                        value={form.price}
+                        onBlur={formatPrice}
+                        onChange={(e) => handleChange("price", e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 rounded-lg border bg-muted/20 p-4">
+                    <div><Label>Condition</Label><Select value={form.condition} onValueChange={(v) => handleChange("condition", v)}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{CONDITIONS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select></div>
+                    <div><Label>Status</Label><Select value={form.status} onValueChange={(v) => handleChange("status", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select></div>
+                    <div><Label>Strategy</Label><Select value={form.disposition_strategy} onValueChange={(v) => handleChange("disposition_strategy", v)}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{STRATEGIES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select></div>
+                    <div><Label>Buyer Fit</Label><Select value={form.buyer_fit} onValueChange={(v) => handleChange("buyer_fit", v)}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{BUYER_FITS.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent></Select></div>
+                    <div><Label>Occupancy</Label><Select value={form.occupancy} onValueChange={(v) => handleChange("occupancy", v)}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{OCCUPANCIES.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select></div>
+                    <div><Label>Priority</Label><Select value={form.priority} onValueChange={(v) => handleChange("priority", v)}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{PRIORITIES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent></Select></div>
                   </div>
                 </div>
-                <div className="grid gap-4 rounded-lg border bg-muted/20 p-4 md:grid-cols-2">
+
+                <div className="space-y-4">
+                  <div><Label>Tags</Label><div className="mt-1 rounded-lg border bg-muted/10 p-3"><TagSelector value={form.tags} onChange={(v) => handleChange("tags", v)} allowCreate={true} /></div></div>
+                  <div><Label>Notes</Label><Textarea rows={3} placeholder="Add disposition notes, access details, or selling angle..." value={form.notes} onChange={(e) => handleChange("notes", e.target.value)} /><p className="mt-1 text-right text-xs text-muted-foreground">{form.notes.length} characters</p></div>
                   <div>
-                    <Label>Condition</Label>
-                    <Select
-                      value={form.condition}
-                      onValueChange={(v) => handleChange("condition", v)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select condition" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CONDITIONS.map((c) => (
-                          <SelectItem key={c} value={c}>
-                            {c}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Status</Label>
-                    <Select
-                      value={form.status}
-                      onValueChange={(v) => handleChange("status", v)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {STATUSES.map((s) => (
-                          <SelectItem key={s} value={s}>
-                            {s}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Strategy</Label>
-                    <Select
-                      value={form.disposition_strategy}
-                      onValueChange={(v) =>
-                        handleChange("disposition_strategy", v)
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select strategy" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {STRATEGIES.map((s) => (
-                          <SelectItem key={s} value={s}>
-                            {s}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Buyer Fit</Label>
-                    <Select
-                      value={form.buyer_fit}
-                      onValueChange={(v) => handleChange("buyer_fit", v)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select buyer fit" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {BUYER_FITS.map((b) => (
-                          <SelectItem key={b} value={b}>
-                            {b}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div>
-                    <Label>Occupancy</Label>
-                    <Select
-                      value={form.occupancy}
-                      onValueChange={(v) => handleChange("occupancy", v)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select occupancy" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {OCCUPANCIES.map((o) => (
-                          <SelectItem key={o} value={o}>
-                            {o}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Priority</Label>
-                    <Select
-                      value={form.priority}
-                      onValueChange={(v) => handleChange("priority", v)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select priority" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PRIORITIES.map((p) => (
-                          <SelectItem key={p} value={p}>
-                            {p}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div>
-                  <Label>Tags</Label>
-                  <div className="mt-1 rounded-lg border bg-muted/10 p-3">
-                    <TagSelector
-                      value={form.tags}
-                      onChange={(v) => handleChange("tags", v)}
-                      allowCreate={true}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <Label>Notes</Label>
-                  <Textarea
-                    rows={4}
-                    placeholder="Add disposition notes, access details, or selling angle..."
-                    value={form.notes}
-                    onChange={(e) => handleChange("notes", e.target.value)}
-                  />
-                  <p className="mt-1 text-right text-xs text-muted-foreground">
-                    {form.notes.length} characters
-                  </p>
-                </div>
-                <div>
-                  <Label>Matched Buyers ({matchedBuyers.length})</Label>
-                  <div className="mt-1 max-h-52 space-y-2 overflow-y-auto rounded-lg border p-3">
-                    {matchedBuyers.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">
-                        No matching buyers yet — fill in more details above to
-                        see matches
-                      </p>
-                    ) : (
-                      matchedBuyers.map((b) => (
-                        <label
-                          key={b.id}
-                          className="flex items-center justify-between gap-2 rounded-md border bg-muted/10 px-3 py-2 text-sm"
-                        >
-                          <div>
-                            <p className="font-medium">
-                              {b.full_name ||
-                                `${b.fname || ""} ${b.lname || ""}`.trim() ||
-                                "Unnamed Buyer"}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {b.mailing_city || "Any City"}
-                              {b.mailing_state ? `, ${b.mailing_state}` : ""}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="rounded bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
-                              Match
-                            </span>
-                            <Checkbox
-                              checked={selectedBuyers.includes(b.id)}
-                              onCheckedChange={() => toggleBuyer(b.id)}
-                            />
-                          </div>
-                        </label>
-                      ))
-                    )}
+                    <Label>Matched Buyers ({matchedBuyers.length})</Label>
+                    <div className="mt-1 max-h-44 space-y-2 overflow-y-auto rounded-lg border p-3">
+                      {matchedBuyers.length === 0 ? (<p className="text-sm text-muted-foreground">No matching buyers yet — fill in more details to see matches</p>) : (matchedBuyers.map((b) => (<label key={b.id} className="flex items-center justify-between gap-2 rounded-md border bg-muted/10 px-3 py-2 text-sm"><div><p className="font-medium">{b.full_name || `${b.fname || ""} ${b.lname || ""}`.trim() || "Unnamed Buyer"}</p><p className="text-xs text-muted-foreground">{b.mailing_city || "Any City"}{b.mailing_state ? `, ${b.mailing_state}` : ""}</p></div><div className="flex items-center gap-2"><span className="rounded bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">Match</span><Checkbox checked={selectedBuyers.includes(b.id)} onCheckedChange={() => toggleBuyer(b.id)} /></div></label>)))}
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -672,145 +540,21 @@ export default function EditPropertyPage() {
               <CardHeader>
                 <CardTitle>Photos & Links</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label>Photo Uploads</Label>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    accept="image/jpeg,image/png,image/webp,image/heic"
-                    className="hidden"
-                    onChange={(e) => handleDropFiles(e.target.files)}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      handleDropFiles(e.dataTransfer.files);
-                    }}
-                    className="mt-1 flex w-full flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 text-muted-foreground hover:bg-muted/30"
-                  >
-                    <Upload className="mb-2 h-5 w-5" />
-                    Drag photos here or click to browse
-                  </button>
-                  {(existingImages.length > 0 || photoPreviews.length > 0) && (
-                    <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
-                      {existingImages
-                        .slice()
-                        .sort((a, b) => a.sort_order - b.sort_order)
-                        .map((img) => (
-                          <div
-                            key={img.id}
-                            className="relative overflow-hidden rounded-lg border"
-                          >
-                            <img
-                              src={img.image_url}
-                              alt="Property"
-                              className="h-24 w-full object-cover"
-                            />
-                            {img.is_featured && (
-                              <span className="absolute left-1 top-1 rounded bg-blue-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                                Featured
-                              </span>
-                            )}
-                            <Button
-                              type="button"
-                              variant="destructive"
-                              size="icon"
-                              className="absolute right-1 top-1 h-6 w-6"
-                              onClick={async () => {
-                                try {
-                                  await PropertyService.deleteImageViaApi(id, img.id);
-                                  setExistingImages((prev) => prev.filter((i) => i.id !== img.id));
-                                  toast.success("Photo removed");
-                                } catch {
-                                  toast.error("Failed to remove photo");
-                                }
-                              }}
-                            >
-                              <X className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        ))}
-                      {photoPreviews.map((p, i) => (
-                        <div
-                          key={p.name + i}
-                          className="relative overflow-hidden rounded-lg border border-dashed border-blue-300"
-                        >
-                          <img
-                            src={p.url}
-                            alt={p.name}
-                            className="h-24 w-full object-cover opacity-80"
-                          />
-                          <span className="absolute left-1 top-1 rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                            New
-                          </span>
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            size="icon"
-                            className="absolute right-1 top-1 h-6 w-6"
-                            onClick={() =>
-                              setPhotos((prev) =>
-                                prev.filter((_, idx) => idx !== i),
-                              )
-                            }
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+              <CardContent className="grid gap-6 md:grid-cols-[1fr_1fr]">
+                <div className="space-y-3 md:col-span-1">
+                  <div>
+                    <Label>Property Photos</Label>
+                    <input ref={fileInputRef} type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic" className="hidden" onChange={(e) => handleDropFiles(e.target.files)} />
+                    <button type="button" onClick={() => fileInputRef.current?.click()} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); handleDropFiles(e.dataTransfer.files); }} className="mt-1 flex w-full flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-muted-foreground transition-colors hover:border-blue-400 hover:bg-muted/30">
+                      <Upload className="mb-2 h-5 w-5" /><span className="text-sm">Drag photos here or click to browse</span><span className="mt-1 text-xs text-muted-foreground/60">JPEG, PNG, WebP — up to 10MB each</span>
+                    </button>
+                  </div>
+                  <SortableImageGrid items={allImageItems} onReorder={(reordered) => { const existingReordered = reordered.filter((i) => !i.isNew); const newReordered = reordered.filter((i) => i.isNew); setExistingImages((prev) => existingReordered.map((item, index) => { const orig = prev.find((image) => image.id === item.id); return orig ? { ...orig, sort_order: index } : null; }).filter((image): image is { id: string; image_url: string; sort_order: number; is_featured: boolean } => image !== null)); const newOrder = newReordered.map((item) => { const idx = parseInt(item.id.replace("new-", ""), 10); return photos[idx]; }).filter((image): image is File => Boolean(image)); setPhotos(newOrder); const reorderPayload = existingReordered.map((item, index) => ({ id: item.id, sort_order: index })); if (reorderPayload.length > 0) { PropertyService.reorderImages(id, reorderPayload).catch((err) => { console.error("Reorder failed:", err); toast.error("Failed to save photo order"); }); } }} onDelete={async (itemId) => { if (itemId.startsWith("new-")) { const idx = parseInt(itemId.replace("new-", ""), 10); setPhotos((prev) => prev.filter((_, i) => i !== idx)); return; } try { await PropertyService.deleteImageViaApi(id, itemId); setExistingImages((prev) => prev.filter((image) => image.id !== itemId)); toast.success("Photo removed"); } catch { toast.error("Failed to remove photo"); } }} onSetFeatured={async (imageId) => { try { await PropertyService.setFeaturedImage(id, imageId); setExistingImages((prev) => prev.map((img) => ({ ...img, is_featured: img.id === imageId }))); toast.success("Featured image updated"); } catch { toast.error("Failed to set featured image"); } }} />
                 </div>
-                <div className="grid gap-3">
-                  <div>
-                    <Label>Video Link</Label>
-                    <div className="relative">
-                      <Play className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        className="pl-9"
-                        placeholder="https://youtube.com/..."
-                        value={form.video_link}
-                        onChange={(e) =>
-                          handleChange("video_link", e.target.value)
-                        }
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <Label>Website URL</Label>
-                    <div className="relative">
-                      <Globe className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        className="pl-9"
-                        placeholder="https://yourpropertysite.com"
-                        value={form.website_url}
-                        onChange={(e) =>
-                          handleChange("website_url", e.target.value)
-                        }
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <Label>Short Link Slug</Label>
-                    <div className="flex items-center rounded-md border bg-muted/10">
-                      <span className="px-3 text-sm text-muted-foreground">
-                        short.io/
-                      </span>
-                      <Input
-                        className="border-0 bg-transparent"
-                        placeholder="123-main-st"
-                        value={form.short_slug}
-                        onChange={(e) =>
-                          handleChange("short_slug", e.target.value)
-                        }
-                      />
-                    </div>
-                  </div>
+                <div className="space-y-4 md:col-span-1">
+                  <div><Label>Video Link</Label><div className="relative"><Play className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="https://youtube.com/..." value={form.video_link} onChange={(e) => handleChange("video_link", e.target.value)} /></div></div>
+                  <div><Label>Website URL</Label><div className="relative"><Globe className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="https://yourpropertysite.com" value={form.website_url} onChange={(e) => handleChange("website_url", e.target.value)} /></div></div>
+                  <div><Label>Short Link Slug</Label><div className="flex items-center rounded-md border bg-muted/10"><span className="px-3 text-sm text-muted-foreground">short.io/</span><Input className="border-0 bg-transparent" placeholder="123-main-st" value={form.short_slug} onChange={(e) => handleChange("short_slug", e.target.value)} /></div></div>
                 </div>
               </CardContent>
             </Card>
