@@ -15,7 +15,7 @@ export interface PropertyFilters {
   maxBathrooms?: number
   search?: string
   page?: number
-  pageSize?: number
+  perPage?: number
   sortBy?: string
   sortOrder?: "asc" | "desc"
 }
@@ -65,7 +65,7 @@ export class PropertyService {
   // Fetch properties with optional filtering, pagination and sorting
   static async getProperties(
     filters: PropertyFilters = {},
-  ): Promise<{ properties: Property[]; totalCount: number }> {
+  ): Promise<{ properties: Property[]; totalCount: number; totalPages: number }> {
     const {
       status,
       city,
@@ -79,14 +79,14 @@ export class PropertyService {
       maxBathrooms,
       search,
       page,
-      pageSize,
+      perPage = 10,
       sortBy = "created_at",
       sortOrder = "desc",
     } = filters
 
     let query = supabase
       .from("properties")
-      .select("*", { count: "exact" })
+      .select("*, property_images(image_url, sort_order)", { count: "exact" })
 
     if (status) {
       query = query.eq("status", status)
@@ -137,11 +137,11 @@ export class PropertyService {
 
     query = query.order(sortBy, { ascending: sortOrder === "asc" })
 
-    if (page && pageSize) {
-      const from = (page - 1) * pageSize
-      const to = from + pageSize - 1
-      query = query.range(from, to)
-    }
+    const safePage = Math.max(1, page || 1)
+    const safePerPage = Math.max(1, perPage)
+    const from = (safePage - 1) * safePerPage
+    const to = from + safePerPage - 1
+    query = query.range(from, to)
 
     const { data, error, count } = await query
 
@@ -150,7 +150,10 @@ export class PropertyService {
       throw error
     }
 
-    return { properties: (data as Property[]) || [], totalCount: count || 0 }
+    const totalCount = count || 0
+    const totalPages = Math.max(1, Math.ceil(totalCount / safePerPage))
+
+    return { properties: (data as Property[]) || [], totalCount, totalPages }
   }
 
   // Search properties by address, city, state, or zip
