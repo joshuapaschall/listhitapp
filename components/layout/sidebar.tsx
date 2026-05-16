@@ -49,8 +49,8 @@ const navigation = [
     title: "Inbox",
     icon: Inbox,
     items: [
-      { title: "SMS Inbox", href: "/inbox" },
-      { title: "Email Inbox", href: "/gmail" },
+      { title: "SMS Inbox", href: "/inbox", badge: null as string | null },
+      { title: "Email Inbox", href: "/gmail", badge: null as string | null },
     ],
     badge: null,
   },
@@ -106,7 +106,7 @@ const navigation = [
     title: "Admin",
     icon: Shield,
     items: [
-      { title: "Health", href: "/api/diag/health" },
+      { title: "Health", href: "/api/diag/health", badge: null as string | null },
     ],
     badge: null,
   },
