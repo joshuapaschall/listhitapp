@@ -9,6 +9,8 @@ import { assertServer } from "@/utils/assert-server"
 assertServer()
 
 export async function resolveFromNumber(buyerId: string): Promise<string | null> {
+  console.log(`[showing-sms] resolveFromNumber called for buyer ${buyerId}`)
+
   const { data: recentThread } = await supabaseAdmin
     .from("message_threads")
     .select("preferred_from_number")
@@ -18,7 +20,10 @@ export async function resolveFromNumber(buyerId: string): Promise<string | null>
     .maybeSingle()
 
   const threadNumber = formatPhoneE164(recentThread?.preferred_from_number)
-  if (threadNumber) return threadNumber
+  if (threadNumber) {
+    console.log(`[showing-sms] resolved from thread.preferred_from_number: ${threadNumber}`)
+    return threadNumber
+  }
 
   const { data: stickySender } = await supabaseAdmin
     .from("buyer_sms_senders")
@@ -27,23 +32,62 @@ export async function resolveFromNumber(buyerId: string): Promise<string | null>
     .maybeSingle()
 
   const stickyNumber = formatPhoneE164(stickySender?.from_number)
-  if (stickyNumber) return stickyNumber
+  if (stickyNumber) {
+    console.log(`[showing-sms] resolved from sticky buyer_sms_senders: ${stickyNumber}`)
+    return stickyNumber
+  }
 
-  return formatPhoneE164(process.env.DEFAULT_OUTBOUND_DID) || null
+  const fallback = formatPhoneE164(process.env.DEFAULT_OUTBOUND_DID)
+  if (fallback) {
+    console.log(`[showing-sms] resolved from DEFAULT_OUTBOUND_DID: ${fallback}`)
+    return fallback
+  }
+
+  console.warn(`[showing-sms] NO from number resolved — DEFAULT_OUTBOUND_DID env: ${process.env.DEFAULT_OUTBOUND_DID || "<unset>"}`)
+  return null
 }
 
 async function sendShowingSms(showing: Showing, buyer: Buyer, property: Property | null | undefined, messageBody: string) {
-  if (!buyer.id || !buyer.phone || buyer.can_receive_sms === false) return
+  console.log(`[showing-sms] sendShowingSms START for showing ${showing.id}`, {
+    buyerId: buyer?.id,
+    hasPhone: !!buyer?.phone,
+    phoneValue: buyer?.phone,
+    canReceiveSms: buyer?.can_receive_sms,
+  })
+
+  if (!buyer.id) {
+    console.warn(`[showing-sms] BAIL: buyer.id is missing`)
+    return
+  }
+  if (!buyer.phone) {
+    console.warn(`[showing-sms] BAIL: buyer.phone is missing for buyer ${buyer.id}`)
+    return
+  }
+  if (buyer.can_receive_sms === false) {
+    console.warn(`[showing-sms] BAIL: buyer.can_receive_sms === false for buyer ${buyer.id}`)
+    return
+  }
 
   const to = formatPhoneE164(buyer.phone)
   const normalizedTo = normalizePhone(buyer.phone)
-  if (!to || !normalizedTo) return
+  if (!to || !normalizedTo) {
+    console.warn(`[showing-sms] BAIL: phone format invalid`, { rawPhone: buyer.phone, to, normalizedTo })
+    return
+  }
 
   const from = await resolveFromNumber(buyer.id)
   if (!from) {
-    console.warn(`No sender DID resolved for buyer ${buyer.id}; skipping showing SMS`)
+    console.warn(`[showing-sms] BAIL: no sender DID resolved for buyer ${buyer.id}`)
     return
   }
+
+  const messagingProfileId = process.env.TELNYX_MESSAGING_PROFILE_ID
+  console.log(`[showing-sms] About to send via Telnyx`, {
+    from,
+    to,
+    bodyPreview: messageBody.slice(0, 60),
+    hasMessagingProfileId: !!messagingProfileId,
+  })
 
   try {
     const response = await fetch(`${TELNYX_API_URL}/messages`, {
@@ -53,19 +97,22 @@ async function sendShowingSms(showing: Showing, buyer: Buyer, property: Property
         from,
         to,
         text: messageBody,
-        messaging_profile_id: process.env.TELNYX_MESSAGING_PROFILE_ID,
+        messaging_profile_id: messagingProfileId,
         type: "SMS",
         use_profile_webhooks: true,
       }),
     })
 
     const responseText = await response.text()
+    console.log(`[showing-sms] Telnyx responded`, { status: response.status, body: responseText.slice(0, 500) })
+
     if (!response.ok) {
       throw new Error(`Telnyx send failed (${response.status}): ${responseText}`)
     }
 
     const payload = responseText ? JSON.parse(responseText) : {}
     const providerId: string | null = payload?.data?.id || null
+    console.log(`[showing-sms] Telnyx accepted, provider_id: ${providerId}`)
 
     const { data: existingThread } = await supabaseAdmin
       .from("message_threads")
@@ -87,16 +134,21 @@ async function sendShowingSms(showing: Showing, buyer: Buyer, property: Property
         })
         .select("id")
         .single()
-      if (threadError) throw threadError
+      if (threadError) {
+        console.error(`[showing-sms] Failed to create thread:`, threadError)
+        throw threadError
+      }
       threadId = createdThread.id
+      console.log(`[showing-sms] Created new thread ${threadId}`)
     } else {
       await supabaseAdmin
         .from("message_threads")
         .update({ preferred_from_number: from, updated_at: new Date().toISOString() })
         .eq("id", threadId)
+      console.log(`[showing-sms] Updated existing thread ${threadId}`)
     }
 
-    await supabaseAdmin.from("messages").insert({
+    const { error: msgError } = await supabaseAdmin.from("messages").insert({
       thread_id: threadId,
       buyer_id: buyer.id,
       direction: "outbound",
@@ -106,8 +158,13 @@ async function sendShowingSms(showing: Showing, buyer: Buyer, property: Property
       provider_id: providerId,
       is_bulk: false,
     })
+    if (msgError) {
+      console.error(`[showing-sms] Failed to insert message row:`, msgError)
+    } else {
+      console.log(`[showing-sms] SUCCESS — SMS sent and logged to messages table`)
+    }
   } catch (error) {
-    console.error("Showing SMS notification failed:", error)
+    console.error(`[showing-sms] Showing SMS notification failed:`, error)
   }
 }
 
