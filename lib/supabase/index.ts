@@ -216,6 +216,22 @@ export interface Showing {
   updated_at?: string
 }
 
+
+export interface ShowingWithRelations extends Showing {
+  buyers?: Pick<Buyer, "id" | "fname" | "lname" | "full_name" | "phone" | "email" | "can_receive_sms" | "can_receive_email"> | null
+  properties?: Pick<Property, "id" | "address" | "city" | "state" | "zip"> | null
+}
+
+export interface Notification {
+  id: string
+  type: string
+  title: string
+  body?: string | null
+  metadata?: Record<string, any>
+  read_at?: string | null
+  dismissed_at?: string | null
+  created_at?: string
+}
 export interface Message {
   id: string
   thread_id?: string | null

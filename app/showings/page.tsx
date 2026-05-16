@@ -36,9 +36,9 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination"
-import type { Showing, Buyer } from "@/lib/supabase"
+import type { ShowingWithRelations, Buyer } from "@/lib/supabase"
 
-const STATUSES = ["all", "scheduled", "completed", "canceled"]
+const STATUSES = ["all", "scheduled", "completed", "canceled", "rescheduled"]
 const ITEMS_PER_PAGE = 10
 
 export default function ShowingsPage() {
@@ -51,7 +51,7 @@ export default function ShowingsPage() {
   const [selectedBuyer, setSelectedBuyer] = useState<Buyer | null>(null)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showScheduleModal, setShowScheduleModal] = useState(defaultOpen)
-  const [selectedShowing, setSelectedShowing] = useState<Showing | null>(null)
+  const [selectedShowing, setSelectedShowing] = useState<ShowingWithRelations | null>(null)
   const [showEditShowing, setShowEditShowing] = useState(false)
   const [showDeleteShowing, setShowDeleteShowing] = useState(false)
 
