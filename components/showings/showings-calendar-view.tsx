@@ -29,7 +29,7 @@ export default function ShowingsCalendarView({ showings, onEdit, onDelete, onBuy
     return map
   }, [showings])
 
-  const showingDays = useMemo(() => Array.from(showingsByDate.keys()).map((d) => new Date(d)), [showingsByDate])
+  const showingDays = useMemo(() => Array.from(showingsByDate.keys()).map((d) => parseISO(d)), [showingsByDate])
 
   const selectedDayShowings = useMemo(() => {
     if (!selectedDay) {
