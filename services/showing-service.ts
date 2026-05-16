@@ -1,92 +1,48 @@
-import { supabase } from "@/lib/supabase"
-import type { Showing } from "@/lib/supabase"
+import type { Showing, ShowingWithRelations } from "@/lib/supabase"
 
 export class ShowingService {
-  // Get showings with optional filtering
   static async getShowings(filters?: {
     buyerId?: string
     propertyId?: string
     status?: string
     startDate?: string
     endDate?: string
-  }) {
-    let query = supabase
-      .from("showings")
-      .select(
-        "*, buyers(id,fname,lname,full_name), properties(id,address,city,state,zip)"
-      )
-      .order("scheduled_at", { ascending: false })
+  }): Promise<ShowingWithRelations[]> {
+    const search = new URLSearchParams()
+    if (filters?.buyerId) search.set("buyerId", filters.buyerId)
+    if (filters?.propertyId) search.set("propertyId", filters.propertyId)
+    if (filters?.status) search.set("status", filters.status)
+    if (filters?.startDate) search.set("startDate", filters.startDate)
+    if (filters?.endDate) search.set("endDate", filters.endDate)
 
-    if (filters?.buyerId) {
-      query = query.eq("buyer_id", filters.buyerId)
-    }
-
-    if (filters?.propertyId) {
-      query = query.eq("property_id", filters.propertyId)
-    }
-
-    if (filters?.status) {
-      query = query.eq("status", filters.status)
-    }
-
-    if (filters?.startDate) {
-      query = query.gte("scheduled_at", filters.startDate)
-    }
-
-    if (filters?.endDate) {
-      query = query.lte("scheduled_at", filters.endDate)
-    }
-
-    const { data, error } = await query
-
-    if (error) {
-      console.error("Error fetching showings:", error)
-      throw error
-    }
-
-    return data as Showing[]
+    const url = `/api/showings${search.toString() ? `?${search.toString()}` : ""}`
+    const response = await fetch(url, { method: "GET" })
+    if (!response.ok) throw new Error(`Failed to fetch showings: ${response.status}`)
+    return (await response.json()) as ShowingWithRelations[]
   }
 
-  // Add a new showing
-  static async addShowing(showing: Partial<Showing>) {
-    const { data, error } = await supabase
-      .from("showings")
-      .insert([showing])
-      .select()
-      .single()
-
-    if (error) {
-      console.error("Error adding showing:", error)
-      throw error
-    }
-
-    return data as Showing
+  static async addShowing(showing: Partial<Showing>): Promise<ShowingWithRelations> {
+    const response = await fetch("/api/showings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(showing),
+    })
+    if (!response.ok) throw new Error(`Failed to add showing: ${response.status}`)
+    return (await response.json()) as ShowingWithRelations
   }
 
-  // Update an existing showing
-  static async updateShowing(id: string, updates: Partial<Showing>) {
-    const { data, error } = await supabase
-      .from("showings")
-      .update(updates)
-      .eq("id", id)
-      .select()
-      .single()
-
-    if (error) {
-      console.error("Error updating showing:", error)
-      throw error
-    }
-
-    return data as Showing
+  static async updateShowing(id: string, updates: Partial<Showing>): Promise<ShowingWithRelations> {
+    const response = await fetch(`/api/showings/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    })
+    if (!response.ok) throw new Error(`Failed to update showing ${id}: ${response.status}`)
+    return (await response.json()) as ShowingWithRelations
   }
 
-  // Delete a showing
-  static async deleteShowing(id: string) {
-    const { error } = await supabase.from("showings").delete().eq("id", id)
-
-    if (error) {
-      console.error("Error deleting showing:", error)
-      throw error
-    }
+  static async deleteShowing(id: string): Promise<void> {
+    const response = await fetch(`/api/showings/${id}`, { method: "DELETE" })
+    if (!response.ok) throw new Error(`Failed to delete showing ${id}: ${response.status}`)
   }
 }

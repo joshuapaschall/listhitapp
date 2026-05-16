@@ -24,6 +24,7 @@ const STATUS_OPTIONS = [
   { value: "scheduled", label: "Scheduled" },
   { value: "completed", label: "Completed" },
   { value: "canceled", label: "Canceled" },
+  { value: "rescheduled", label: "Rescheduled" },
 ]
 
 export default function ScheduleShowingModal({ open, onOpenChange, onSuccess, buyer: defaultBuyer = null, property: defaultProperty = null }: ScheduleShowingModalProps) {

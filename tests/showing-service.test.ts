@@ -1,81 +1,47 @@
-import { describe, expect, test, beforeEach } from "@jest/globals"
+import { beforeEach, describe, expect, jest, test } from "@jest/globals"
 import { ShowingService } from "../services/showing-service"
-
-let showings: any[] = []
-let idCounter = 1
-
-jest.mock("../lib/supabase", () => {
-  const client = {
-      from: (table: string) => {
-        if (table !== "showings") throw new Error(`Unexpected table ${table}`)
-
-        return {
-          insert: (rows: any[]) => {
-            const record = { id: String(idCounter++), ...rows[0] }
-            showings.push(record)
-            return {
-              select: () => ({ single: async () => ({ data: record, error: null }) })
-            }
-          },
-
-          select: () => {
-            let result = [...showings]
-            const chain: any = {
-              order: () => chain,
-              eq: (column: string, value: any) => {
-                result = result.filter((r) => r[column] === value)
-                return chain
-              },
-              gte: (column: string, value: any) => {
-                result = result.filter((r) => r[column] >= value)
-                return chain
-              },
-              lte: (column: string, value: any) => {
-                result = result.filter((r) => r[column] <= value)
-                return chain
-              },
-              then: async (resolve: any) => resolve({ data: result, error: null })
-            }
-            return chain
-          },
-        }
-      },
-    }
-  return { supabase: client, supabaseAdmin: client }
-})
 
 describe("ShowingService", () => {
   beforeEach(() => {
-    showings = []
-    idCounter = 1
+    ;(global.fetch as jest.Mock | undefined)?.mockReset?.()
   })
 
-  test("addShowing inserts and returns record", async () => {
-    const showing = await ShowingService.addShowing({
-      property_id: "p1",
-      buyer_id: "b1",
-      scheduled_at: "2024-01-01T00:00:00Z"
-    })
+  test("getShowings calls GET /api/showings with query params", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [{ id: "1", buyer_id: "b1" }],
+    }) as any
 
-    expect(showing.id).toBeDefined()
-    expect(showing.property_id).toBe("p1")
+    const data = await ShowingService.getShowings({ buyerId: "b1", status: "scheduled" })
+
+    expect(global.fetch).toHaveBeenCalledWith("/api/showings?buyerId=b1&status=scheduled", { method: "GET" })
+    expect(data).toHaveLength(1)
   })
 
-  test("getShowings filters by buyerId", async () => {
-    await ShowingService.addShowing({ property_id: "p1", buyer_id: "b1", scheduled_at: "2024-01-01T00:00:00Z" })
-    await ShowingService.addShowing({ property_id: "p2", buyer_id: "b2", scheduled_at: "2024-01-02T00:00:00Z" })
+  test("addShowing calls POST /api/showings with body", async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ id: "2" }) }) as any
 
-    const results = await ShowingService.getShowings({ buyerId: "b1" })
-    expect(results.length).toBe(1)
-    expect(results[0].buyer_id).toBe("b1")
+    await ShowingService.addShowing({ property_id: "p1", scheduled_at: "2024-01-01T00:00:00Z" })
+
+    expect(global.fetch).toHaveBeenCalledWith("/api/showings", expect.objectContaining({
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    }))
   })
 
-  test("getShowings filters by date range", async () => {
-    await ShowingService.addShowing({ property_id: "p1", buyer_id: "b1", scheduled_at: "2024-01-01T00:00:00Z" })
-    await ShowingService.addShowing({ property_id: "p2", buyer_id: "b2", scheduled_at: "2024-02-01T00:00:00Z" })
+  test("updateShowing calls PATCH /api/showings/{id}", async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ id: "3" }) }) as any
 
-    const results = await ShowingService.getShowings({ startDate: "2024-01-15", endDate: "2024-02-15" })
-    expect(results.length).toBe(1)
-    expect(results[0].scheduled_at).toBe("2024-02-01T00:00:00Z")
+    await ShowingService.updateShowing("3", { status: "completed" })
+
+    expect(global.fetch).toHaveBeenCalledWith("/api/showings/3", expect.objectContaining({ method: "PATCH" }))
+  })
+
+  test("deleteShowing calls DELETE /api/showings/{id}", async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true }) as any
+
+    await ShowingService.deleteShowing("4")
+
+    expect(global.fetch).toHaveBeenCalledWith("/api/showings/4", { method: "DELETE" })
   })
 })

@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client"
 
 import { useEffect, useState } from "react"
@@ -16,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import BuyerSelector from "@/components/buyers/buyer-selector"
 import PropertySelector from "@/components/buyers/property-selector"
-import type { Buyer, Property, Showing } from "@/lib/supabase"
+import type { Buyer, Property, ShowingWithRelations } from "@/lib/supabase"
 import { ShowingService } from "@/services/showing-service"
 import { toast } from "sonner"
 import DeleteShowingModal from "./delete-showing-modal"
@@ -24,7 +23,7 @@ import DeleteShowingModal from "./delete-showing-modal"
 interface EditShowingModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  showing: Showing | null
+  showing: ShowingWithRelations | null
   onSuccess?: () => void
 }
 
@@ -32,6 +31,7 @@ const STATUS_OPTIONS = [
   { value: "scheduled", label: "Scheduled" },
   { value: "completed", label: "Completed" },
   { value: "canceled", label: "Canceled" },
+  { value: "rescheduled", label: "Rescheduled" },
 ]
 
 export default function EditShowingModal({ open, onOpenChange, showing, onSuccess }: EditShowingModalProps) {
@@ -47,9 +47,9 @@ export default function EditShowingModal({ open, onOpenChange, showing, onSucces
     if (open && showing) {
       setBuyer(showing.buyers ?? null)
       setProperty(showing.properties ?? null)
-      setScheduledAt(showing.scheduled_at.slice(0, 16))
+      setScheduledAt(showing.scheduled_at?.slice(0, 16) || "")
       setNotes(showing.notes ?? "")
-      setStatus(showing.status)
+      setStatus(showing.status || "scheduled")
     }
   }, [open, showing])
 
