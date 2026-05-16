@@ -175,6 +175,7 @@ export interface PropertyImage {
   property_id?: string
   image_url?: string
   sort_order?: number
+  is_featured?: boolean | null
   created_at?: string
 }
 

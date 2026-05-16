@@ -353,10 +353,11 @@ export class PropertyService {
     propertyId: string,
     imageUrl: string,
     sortOrder = 0,
+    isFeatured = false,
   ) {
     const { data, error } = await supabase
       .from("property_images")
-      .insert([{ property_id: propertyId, image_url: imageUrl, sort_order: sortOrder }])
+      .insert([{ property_id: propertyId, image_url: imageUrl, sort_order: sortOrder, is_featured: isFeatured }])
       .select()
       .single()
 
