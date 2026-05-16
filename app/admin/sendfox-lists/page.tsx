@@ -17,9 +17,9 @@ export const dynamic = "force-dynamic"
 
 export default async function AdminSendFoxListsPage() {
   const devBypass = process.env.NEXT_PUBLIC_DEV_MODE === "1"
+  const cookieStore = cookies()
+  const supabase = createServerComponentClient({ cookies: () => cookieStore })
   if (!devBypass) {
-    const cookieStore = cookies()
-    const supabase = createServerComponentClient({ cookies: () => cookieStore })
     const role = await getUserRole(supabase)
     if (role !== "admin") {
       return <div className="p-4">You must be an admin to view this page.</div>

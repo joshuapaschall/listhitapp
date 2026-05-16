@@ -1,7 +1,6 @@
 export const runtime = "nodejs"
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
-import { v4 as uuidv4 } from "uuid"
 import { cookies } from "next/headers"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 
@@ -65,7 +64,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const recordId = uuidv4()
+    const recordId = crypto.randomUUID()
 
     const { data, error } = await supabaseAdmin
       .from("agent_active_calls")

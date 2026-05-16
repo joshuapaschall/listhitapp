@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
   }
   const { email } = await request.json()
   if (!email) return NextResponse.json({ error: "Missing email" }, { status: 400 })
-  const { error } = await supabaseAdmin.auth.admin.resetPasswordForEmail(email)
+  const { error } = await (supabaseAdmin.auth.admin as any).resetPasswordForEmail(email)
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
   return NextResponse.json({ success: true })
 }

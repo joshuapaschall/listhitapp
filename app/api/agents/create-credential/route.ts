@@ -39,7 +39,7 @@ export async function POST(_request: NextRequest) {
       )
     }
 
-    const agent = await requireAgent()
+    const agent = (await requireAgent()) as any
 
     if (agent.telephony_credential_id) {
       return NextResponse.json({

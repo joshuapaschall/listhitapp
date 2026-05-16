@@ -29,12 +29,16 @@ export default async function AdminUsersPage() {
     return <div className="p-4">Access denied</div>
   }
 
+  if (!supabaseAdmin) {
+    return <div className="p-4">Admin client not configured</div>
+  }
+
   const { data } = await supabaseAdmin
     .from("auth.users")
     .select("id,email,created_at,profiles(role)")
     .order("created_at", { ascending: false })
 
-  const rows = data || []
+  const rows = (data || []) as any[]
 
   return (
     <div className="p-6">
