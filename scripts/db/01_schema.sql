@@ -289,6 +289,7 @@ create table if not exists public.property_images (
   property_id uuid references public.properties(id) on delete cascade,
   image_url text not null,
   sort_order integer not null default 0,
+  is_featured boolean not null default false,
   created_at timestamptz not null default now()
 );
 

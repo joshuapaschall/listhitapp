@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -53,14 +52,15 @@ const OCCUPANCIES = ["Vacant", "Tenant", "Owner-Occupied"];
 const PRIORITIES = ["High", "Medium", "Low"];
 
 export default function EditPropertyPage() {
-  const params = useParams();
-  const id = params.id as string;
+  const params = useParams() as { id: string };
+  const id = params.id;
   const router = useRouter();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [photos, setPhotos] = useState<File[]>([]);
+  const [existingImages, setExistingImages] = useState<Array<{ id: string; image_url: string; sort_order: number; is_featured: boolean }>>([]);
   const [similarProperty, setSimilarProperty] = useState<Property | null>(null);
   const [coords, setCoords] = useState<{
     lat: number | null;
@@ -122,9 +122,15 @@ export default function EditPropertyPage() {
       form.city || null,
       form.zip || null,
     )
-      .then(setSimilarProperty)
+      .then((result) => {
+        if (result && result.id === id) {
+          setSimilarProperty(null);
+        } else {
+          setSimilarProperty(result);
+        }
+      })
       .catch(() => setSimilarProperty(null));
-  }, [debouncedAddress, form.address, form.city, form.zip]);
+  }, [debouncedAddress, form.address, form.city, form.zip, id]);
 
   useEffect(() => {
     if (!form.city && !form.state && !form.property_type && !numericPrice)
@@ -173,6 +179,15 @@ export default function EditPropertyPage() {
       setSelectedBuyers(
         await PropertyService.getPropertyBuyers(id).catch(() => []),
       );
+      const images = await PropertyService.getImages(id);
+      setExistingImages(
+        images.map((img) => ({
+          id: img.id,
+          image_url: img.image_url,
+          sort_order: img.sort_order,
+          is_featured: img.is_featured,
+        })),
+      );
     };
     fetchProperty().catch(console.error);
   }, [id]);
@@ -198,7 +213,7 @@ export default function EditPropertyPage() {
         form.city || null,
         form.zip || null,
       );
-      if (existing)
+      if (existing && existing.id !== id)
         return toast.error("Property already exists at this address");
       await PropertyService.updateProperty(id, {
         address: form.address,
@@ -224,6 +239,17 @@ export default function EditPropertyPage() {
         latitude: coords.lat,
         longitude: coords.lng,
       });
+      if (photos.length > 0) {
+        try {
+          const { errors } = await PropertyService.uploadImages(id, photos);
+          if (errors.length > 0) {
+            toast.warning(`Some photos failed to upload: ${errors.join(", ")}`);
+          }
+        } catch (uploadErr) {
+          console.error("Photo upload failed:", uploadErr);
+          toast.warning("Property updated but photo upload failed.");
+        }
+      }
       for (const buyerId of selectedBuyers)
         await PropertyService.addBuyerToProperty(id, buyerId).catch(
           console.error,
@@ -233,7 +259,7 @@ export default function EditPropertyPage() {
       router.push(`/properties/${id}`);
     } catch (err) {
       console.error(err);
-      toast.error("Failed to add property");
+      toast.error("Failed to update property");
     } finally {
       setLoading(false);
     }
@@ -653,6 +679,7 @@ export default function EditPropertyPage() {
                     ref={fileInputRef}
                     type="file"
                     multiple
+                    accept="image/jpeg,image/png,image/webp,image/heic"
                     className="hidden"
                     onChange={(e) => handleDropFiles(e.target.files)}
                   />
@@ -669,18 +696,58 @@ export default function EditPropertyPage() {
                     <Upload className="mb-2 h-5 w-5" />
                     Drag photos here or click to browse
                   </button>
-                  {photoPreviews.length > 0 && (
+                  {(existingImages.length > 0 || photoPreviews.length > 0) && (
                     <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
+                      {existingImages
+                        .slice()
+                        .sort((a, b) => a.sort_order - b.sort_order)
+                        .map((img) => (
+                          <div
+                            key={img.id}
+                            className="relative overflow-hidden rounded-lg border"
+                          >
+                            <img
+                              src={img.image_url}
+                              alt="Property"
+                              className="h-24 w-full object-cover"
+                            />
+                            {img.is_featured && (
+                              <span className="absolute left-1 top-1 rounded bg-blue-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                                Featured
+                              </span>
+                            )}
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="icon"
+                              className="absolute right-1 top-1 h-6 w-6"
+                              onClick={async () => {
+                                try {
+                                  await PropertyService.deleteImageViaApi(id, img.id);
+                                  setExistingImages((prev) => prev.filter((i) => i.id !== img.id));
+                                  toast.success("Photo removed");
+                                } catch {
+                                  toast.error("Failed to remove photo");
+                                }
+                              }}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ))}
                       {photoPreviews.map((p, i) => (
                         <div
                           key={p.name + i}
-                          className="relative overflow-hidden rounded-lg border"
+                          className="relative overflow-hidden rounded-lg border border-dashed border-blue-300"
                         >
                           <img
                             src={p.url}
                             alt={p.name}
-                            className="h-24 w-full object-cover"
+                            className="h-24 w-full object-cover opacity-80"
                           />
+                          <span className="absolute left-1 top-1 rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                            New
+                          </span>
                           <Button
                             type="button"
                             variant="destructive"

@@ -91,7 +91,7 @@ export class PropertyService {
 
     let query = supabase
       .from("properties")
-      .select("*, property_images(id, image_url, sort_order)", { count: "exact" })
+      .select("*, property_images(id, image_url, sort_order, is_featured)", { count: "exact" })
 
     if (status) {
       query = query.eq("status", status)
@@ -353,6 +353,48 @@ export class PropertyService {
     return data as PropertyImage[]
   }
 
+
+  // Upload image files for a property via the API route
+  static async uploadImages(propertyId: string, files: File[]): Promise<{ uploaded: PropertyImage[]; errors: string[] }> {
+    const formData = new FormData()
+    for (const file of files) formData.append("files", file)
+    const res = await fetch(`/api/properties/${propertyId}/images`, { method: "POST", body: formData })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "Upload failed" }))
+      throw new Error(err.error || "Upload failed")
+    }
+    return res.json() as Promise<{ uploaded: PropertyImage[]; errors: string[] }>
+  }
+
+  // Delete a property image via the API route
+  static async deleteImageViaApi(propertyId: string, imageId: string): Promise<void> {
+    const res = await fetch(`/api/properties/${propertyId}/images`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ imageId }),
+    })
+    if (!res.ok) throw new Error("Failed to delete image")
+  }
+
+  // Reorder images via the API route
+  static async reorderImages(propertyId: string, reorder: Array<{ id: string; sort_order: number }>): Promise<void> {
+    const res = await fetch(`/api/properties/${propertyId}/images`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reorder }),
+    })
+    if (!res.ok) throw new Error("Failed to reorder images")
+  }
+
+  // Set featured image via the API route
+  static async setFeaturedImage(propertyId: string, imageId: string): Promise<void> {
+    const res = await fetch(`/api/properties/${propertyId}/images`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ setFeatured: imageId }),
+    })
+    if (!res.ok) throw new Error("Failed to set featured image")
+  }
   // Add an image to a property
   static async addImage(
     propertyId: string,
