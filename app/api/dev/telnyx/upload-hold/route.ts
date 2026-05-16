@@ -3,9 +3,14 @@ import { NextResponse } from "next/server";
 
 import { TELNYX_API_URL, getTelnyxApiKey } from "@/lib/voice-env";
 
-export async function POST(req: Request) {
+export async function POST(request: Request) {
+  const token = request.headers.get("authorization")?.replace("Bearer ", "")
+  if (!token || token !== process.env.ADMIN_TASKS_TOKEN) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   try {
-    const { mediaUrl, name } = await req.json().catch(() => ({}));
+    const { mediaUrl, name } = await request.json().catch(() => ({}));
     const publicUrl = mediaUrl || `${process.env.NEXT_PUBLIC_BASE_URL}/sounds/on-hold.mp3`;
     const mediaName = name || "hold-music";
     const apiKey = getTelnyxApiKey();

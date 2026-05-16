@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server"
 import { createClient as createAdmin } from "@supabase/supabase-js"
 
-export async function GET(req: Request) {
-  const email = new URL(req.url).searchParams.get("email")?.toLowerCase() || ""
+export async function GET(request: Request) {
+  const token = request.headers.get("authorization")?.replace("Bearer ", "")
+  if (!token || token !== process.env.ADMIN_TASKS_TOKEN) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  const email = new URL(request.url).searchParams.get("email")?.toLowerCase() || ""
   if (!email) {
     return NextResponse.json({ ok: false, error: "email required" }, { status: 400 })
   }

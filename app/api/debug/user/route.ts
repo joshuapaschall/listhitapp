@@ -48,9 +48,14 @@ async function listUserByEmail(email: string) {
   return user;
 }
 
-export async function GET(req: Request) {
+export async function GET(request: Request) {
+  const token = request.headers.get("authorization")?.replace("Bearer ", "")
+  if (!token || token !== process.env.ADMIN_TASKS_TOKEN) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   try {
-    const { searchParams } = new URL(req.url);
+    const { searchParams } = new URL(request.url);
     const email = (searchParams.get('email') || '').trim().toLowerCase();
     if (!email) return NextResponse.json({ ok: false, error: 'email required' }, { status: 400 });
 
@@ -66,9 +71,14 @@ export async function GET(req: Request) {
   }
 }
 
-export async function POST(req: Request) {
+export async function POST(request: Request) {
+  const token = request.headers.get("authorization")?.replace("Bearer ", "")
+  if (!token || token !== process.env.ADMIN_TASKS_TOKEN) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   try {
-    const body = (await req.json()) as Body;
+    const body = (await request.json()) as Body;
     const email = (body.email || '').trim().toLowerCase();
     const password = body.password || '';
     const confirmEmail = body.confirmEmail ?? true;

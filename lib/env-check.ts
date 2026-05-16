@@ -104,3 +104,8 @@ export function assertVoiceEnv() {
 if (process.env.NEXT_RUNTIME === "nodejs") {
   try { logStartupWarnings() } catch {}
 }
+
+
+if (process.env.NODE_ENV === "production" && process.env.SKIP_TELNYX_SIG === "1") {
+  console.error("CRITICAL: SKIP_TELNYX_SIG=1 in production! Telnyx webhook verification is disabled.")
+}

@@ -3,9 +3,14 @@ import { NextResponse } from "next/server";
 
 import { TELNYX_API_URL, getCallControlAppId, getTelnyxApiKey } from "@/lib/voice-env";
 
-export async function GET(req: Request) {
+export async function GET(request: Request) {
+  const token = request.headers.get("authorization")?.replace("Bearer ", "")
+  if (!token || token !== process.env.ADMIN_TASKS_TOKEN) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   try {
-    const url = new URL(req.url);
+    const url = new URL(request.url);
     const sip = url.searchParams.get("sip"); // e.g. ?sip=myagentuser
     if (!sip) return NextResponse.json({ error: "Missing ?sip=" }, { status: 400 });
 

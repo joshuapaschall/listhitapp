@@ -5,7 +5,12 @@ import { TELNYX_API_URL, getTelnyxApiKey } from "@/lib/voice-env"
 export const dynamic = "force-dynamic"
 export const revalidate = 0
 
-export async function GET() {
+export async function GET(request: Request) {
+  const token = request.headers.get("authorization")?.replace("Bearer ", "")
+  if (!token || token !== process.env.ADMIN_TASKS_TOKEN) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   const key = getTelnyxApiKey()
   if (!key) {
     return NextResponse.json(
