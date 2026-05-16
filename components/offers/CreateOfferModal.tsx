@@ -25,14 +25,7 @@ import type { Buyer, Property } from "@/lib/supabase"
 import { OfferService } from "@/services/offer-service"
 import { toast } from "sonner"
 
-const STATUS_OPTIONS = [
-  "submitted",
-  "accepted",
-  "rejected",
-  "withdrawn",
-  "countered",
-  "closed",
-]
+const STATUS_OPTIONS = ["submitted", "accepted", "rejected", "withdrawn", "countered", "closed"]
 
 interface CreateOfferModalProps {
   open: boolean
@@ -51,8 +44,11 @@ export default function CreateOfferModal({
 }: CreateOfferModalProps) {
   const [buyer, setBuyer] = useState<Buyer | null>(defaultBuyer)
   const [property, setProperty] = useState<Property | null>(defaultProperty)
-  const [offerType, setOfferType] = useState("")
+  const [offerType, setOfferType] = useState("cash")
   const [offerPrice, setOfferPrice] = useState("")
+  const [downPayment, setDownPayment] = useState("")
+  const [monthlyPayment, setMonthlyPayment] = useState("")
+  const [earnestMoney, setEarnestMoney] = useState("")
   const [status, setStatus] = useState("submitted")
   const [notes, setNotes] = useState("")
   const [loading, setLoading] = useState(false)
@@ -66,8 +62,11 @@ export default function CreateOfferModal({
 
   const handleClose = () => {
     if (!loading) {
-      setOfferType("")
+      setOfferType("cash")
       setOfferPrice("")
+      setDownPayment("")
+      setMonthlyPayment("")
+      setEarnestMoney("")
       setStatus("submitted")
       setNotes("")
       onOpenChange(false)
@@ -83,11 +82,14 @@ export default function CreateOfferModal({
         property_id: property.id,
         offer_type: offerType || null,
         offer_price: offerPrice ? Number(offerPrice) : null,
+        down_payment: downPayment ? Number(downPayment) : null,
+        monthly_payment: offerType === "cash" ? null : monthlyPayment ? Number(monthlyPayment) : null,
+        earnest_money: earnestMoney ? Number(earnestMoney) : null,
         status,
         notes: notes || null,
       })
       toast.success("Offer created")
-      if (onSuccess) onSuccess()
+      onSuccess?.()
       handleClose()
     } catch (err) {
       console.error("Error creating offer:", err)
@@ -115,23 +117,33 @@ export default function CreateOfferModal({
           </div>
           <div>
             <label htmlFor="offer-type" className="block mb-1 text-sm font-medium">Offer Type</label>
-            <Input
-              id="offer-type"
-              name="offer-type"
-              value={offerType}
-              onChange={(e) => setOfferType(e.target.value)}
-              placeholder="cash"
-            />
+            <Select value={offerType} onValueChange={setOfferType}>
+              <SelectTrigger id="offer-type">
+                <SelectValue placeholder="Offer Type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="cash">cash</SelectItem>
+                <SelectItem value="financing">financing</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <label htmlFor="offer-price" className="block mb-1 text-sm font-medium">Offer Price</label>
-            <Input
-              id="offer-price"
-              name="offer-price"
-              type="number"
-              value={offerPrice}
-              onChange={(e) => setOfferPrice(e.target.value)}
-            />
+            <Input id="offer-price" name="offer-price" type="number" value={offerPrice} onChange={(e) => setOfferPrice(e.target.value)} />
+          </div>
+          <div>
+            <label htmlFor="down-payment" className="block mb-1 text-sm font-medium">Down Payment</label>
+            <Input id="down-payment" name="down-payment" type="number" value={downPayment} onChange={(e) => setDownPayment(e.target.value)} />
+          </div>
+          {offerType !== "cash" && (
+            <div>
+              <label htmlFor="monthly-payment" className="block mb-1 text-sm font-medium">Monthly Payment</label>
+              <Input id="monthly-payment" name="monthly-payment" type="number" value={monthlyPayment} onChange={(e) => setMonthlyPayment(e.target.value)} />
+            </div>
+          )}
+          <div>
+            <label htmlFor="earnest-money" className="block mb-1 text-sm font-medium">Earnest Money</label>
+            <Input id="earnest-money" name="earnest-money" type="number" value={earnestMoney} onChange={(e) => setEarnestMoney(e.target.value)} />
           </div>
           <div>
             <label className="block mb-1 text-sm font-medium">Status</label>
@@ -154,15 +166,10 @@ export default function CreateOfferModal({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={handleClose} disabled={loading}>
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit} disabled={loading || !buyer || !property}>
-            {loading ? "Saving..." : "Save"}
-          </Button>
+          <Button variant="outline" onClick={handleClose} disabled={loading}>Cancel</Button>
+          <Button onClick={handleSubmit} disabled={loading || !buyer || !property}>{loading ? "Saving..." : "Save"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   )
 }
-

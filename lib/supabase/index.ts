@@ -199,8 +199,15 @@ export interface Offer {
   accepted_at?: string | null
   rejected_at?: string | null
   withdrawn_at?: string | null
+  countered_at?: string | null
+  closed_at?: string | null
   created_at?: string
   updated_at?: string
+}
+
+export interface OfferWithRelations extends Offer {
+  buyers?: Buyer | null
+  properties?: Property | null
 }
 
 export interface Showing {
