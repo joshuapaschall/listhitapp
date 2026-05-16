@@ -171,7 +171,7 @@ export interface Property {
 }
 
 export interface PropertyImage {
-  id: string
+  id?: string
   property_id?: string
   image_url?: string
   sort_order?: number

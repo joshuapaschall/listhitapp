@@ -44,7 +44,7 @@ import { toast } from "sonner"
 const STATUSES = ["all", "available", "under_contract", "sold"]
 const ITEMS_PER_PAGE = 12
 
-type PropertyWithImages = Property & { property_images?: Pick<PropertyImage, "image_url" | "sort_order">[] }
+type PropertyWithImages = Property & { property_images?: Pick<PropertyImage, "id" | "image_url" | "sort_order">[] }
 
 const usdFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
