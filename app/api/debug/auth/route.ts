@@ -6,13 +6,18 @@ import { cookies } from "next/headers";
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { createClient as createAdmin } from "@supabase/supabase-js";
 
-export async function GET(req: Request) {
+export async function GET(request: Request) {
+  const token = request.headers.get("authorization")?.replace("Bearer ", "")
+  if (!token || token !== process.env.ADMIN_TASKS_TOKEN) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   const cookieClient = createRouteHandlerClient({ cookies });
   const {
     data: { user: cookieUser }
   } = await cookieClient.auth.getUser();
 
-  const authHeader = req.headers.get("authorization") || "";
+  const authHeader = request.headers.get("authorization") || "";
   const bearerToken = authHeader.startsWith("Bearer ")
     ? authHeader.slice(7)
     : "";

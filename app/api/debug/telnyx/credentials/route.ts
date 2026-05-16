@@ -7,7 +7,12 @@ import {
   getTelnyxApiKey,
 } from "@/lib/voice-env"
 
-export async function GET() {
+export async function GET(request: Request) {
+  const token = request.headers.get("authorization")?.replace("Bearer ", "")
+  if (!token || token !== process.env.ADMIN_TASKS_TOKEN) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   const apiKey = getTelnyxApiKey()
   const connectionId = getSipCredentialConnectionId()
 

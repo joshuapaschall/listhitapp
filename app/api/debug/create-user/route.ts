@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server'
 
-export async function POST() {
+export async function POST(request: Request) {
+  const token = request.headers.get("authorization")?.replace("Bearer ", "")
+  if (!token || token !== process.env.ADMIN_TASKS_TOKEN) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY!  // make sure this is set in Vercel
 

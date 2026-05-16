@@ -8,8 +8,8 @@ import "@/lib/env-check"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "DispoTool - Real Estate Disposition Management",
-  description: "Real estate disposition tool for managing buyers, properties, and deals",
+  title: "ListHit - Real Estate Disposition CRM",
+  description: "ListHit.io — manage buyers, blast properties, track deals, and close faster.",
     generator: "v0.dev"
 }
 

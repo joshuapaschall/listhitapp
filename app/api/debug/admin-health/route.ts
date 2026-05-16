@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server"
 import { createClient as createAdmin } from "@supabase/supabase-js"
 
-export async function GET() {
+export async function GET(request: Request) {
+  const token = request.headers.get("authorization")?.replace("Bearer ", "")
+  if (!token || token !== process.env.ADMIN_TASKS_TOKEN) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   const url = process.env.SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) {

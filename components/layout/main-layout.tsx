@@ -17,7 +17,6 @@ import {
   Building,
   DollarSign,
   Calendar,
-  FileText,
   BarChart3,
   Target,
   Inbox,
@@ -37,22 +36,10 @@ const navigation = [
     badge: "247",
   },
   {
-    title: "Sellers",
-    icon: Building,
-    href: "/sellers",
-    badge: "89",
-  },
-  {
     title: "Properties",
     icon: Home,
     href: "/properties",
     badge: "156",
-  },
-  {
-    title: "Deals",
-    icon: DollarSign,
-    href: "/deals",
-    badge: "23",
   },
   {
     title: "Showings",
@@ -70,12 +57,6 @@ const navigation = [
     title: "Email",
     icon: Inbox,
     href: "/gmail",
-    badge: null,
-  },
-  {
-    title: "Documents",
-    icon: FileText,
-    href: "/documents",
     badge: null,
   },
   {

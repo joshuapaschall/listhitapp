@@ -2,9 +2,14 @@ import { NextResponse } from "next/server"
 
 import { TELNYX_API_URL, getTelnyxApiKey } from "@/lib/voice-env"
 
-export async function GET(req: Request) {
+export async function GET(request: Request) {
+  const token = request.headers.get("authorization")?.replace("Bearer ", "")
+  if (!token || token !== process.env.ADMIN_TASKS_TOKEN) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   const key = getTelnyxApiKey()
-  const { searchParams } = new URL(req.url)
+  const { searchParams } = new URL(request.url)
   const cred = searchParams.get("cred")
 
   if (!key) {
