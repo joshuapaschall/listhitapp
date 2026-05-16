@@ -1,12 +1,27 @@
 "use client"
 
-import { useCallback, useEffect } from "react"
+import { createContext, createElement, useCallback, useContext, useEffect, useState, type ReactNode } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { supabase, type Notification } from "@/lib/supabase"
 
-export function useNotifications() {
+interface NotificationsContextValue {
+  notifications: Notification[]
+  unreadCount: number
+  isLoading: boolean
+  markAsRead: (ids: string[]) => Promise<void>
+  dismiss: (id: string) => Promise<void>
+}
+
+const NotificationsContext = createContext<NotificationsContextValue | null>(null)
+
+export function NotificationsProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const { data: notifications = [], isLoading } = useQuery<Notification[]>({
     queryKey: ["notifications"],
@@ -16,9 +31,12 @@ export function useNotifications() {
       return res.json() as Promise<Notification[]>
     },
     refetchInterval: 60_000,
+    enabled: mounted,
   })
 
   useEffect(() => {
+    if (!mounted) return
+
     const channel = supabase
       .channel("notifications:realtime")
       .on(
@@ -31,11 +49,12 @@ export function useNotifications() {
       .subscribe()
 
     return () => {
-      supabase.removeChannel(channel)
+      void supabase.removeChannel(channel)
     }
-  }, [queryClient])
+  }, [mounted, queryClient])
 
-  const unreadCount = notifications.filter((n) => !n.read_at && !n.dismissed_at).length
+  const visible = notifications.filter((n) => !n.dismissed_at)
+  const unreadCount = visible.filter((n) => !n.read_at).length
 
   const markAsRead = useCallback(
     async (ids: string[]) => {
@@ -62,7 +81,23 @@ export function useNotifications() {
     [queryClient],
   )
 
-  const visible = notifications.filter((n) => !n.dismissed_at)
+  return createElement(
+    NotificationsContext.Provider,
+    { value: { notifications: visible, unreadCount, isLoading, markAsRead, dismiss } },
+    children,
+  )
+}
 
-  return { notifications: visible, unreadCount, isLoading, markAsRead, dismiss }
+export function useNotifications(): NotificationsContextValue {
+  const ctx = useContext(NotificationsContext)
+  if (!ctx) {
+    return {
+      notifications: [],
+      unreadCount: 0,
+      isLoading: false,
+      markAsRead: async () => {},
+      dismiss: async () => {},
+    }
+  }
+  return ctx
 }
