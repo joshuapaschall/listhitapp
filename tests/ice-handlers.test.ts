@@ -1,3 +1,4 @@
+import { jest } from "@jest/globals"
 /** @jest-environment jsdom */
 import { _onIceSdp, _onIce } from "../components/voice/ice-handlers"
 

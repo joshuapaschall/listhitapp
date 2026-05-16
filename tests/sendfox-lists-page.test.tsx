@@ -1,3 +1,4 @@
+import { jest } from "@jest/globals"
 /** @jest-environment jsdom */
 import { render, screen } from "@testing-library/react"
 import SendFoxListsPage, { resyncListAction } from "../app/admin/sendfox-lists/page"

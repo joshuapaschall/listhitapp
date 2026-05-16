@@ -1,3 +1,4 @@
+import { jest } from "@jest/globals"
 /** @jest-environment jsdom */
 import { render, screen, waitFor, within } from "@testing-library/react"
 import "@testing-library/jest-dom"
