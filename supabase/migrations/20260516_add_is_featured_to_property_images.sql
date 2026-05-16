@@ -1,3 +1,6 @@
+-- After running this migration, run: NOTIFY pgrst, 'reload schema';
+-- to refresh PostgREST's cached schema.
+
 ALTER TABLE public.property_images
 ADD COLUMN IF NOT EXISTS is_featured boolean NOT NULL DEFAULT false;
 

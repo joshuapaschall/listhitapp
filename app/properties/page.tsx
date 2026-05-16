@@ -126,7 +126,7 @@ export default function PropertiesPage() {
     }
   }
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ["properties", statusFilter, debouncedSearch, cityFilter, minPriceNumber, maxPriceNumber, currentPage],
     queryFn: () =>
       PropertyService.getProperties({
@@ -308,6 +308,15 @@ export default function PropertiesPage() {
 
         <ConfirmInputDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog} title="Delete Properties" description={`You are about to delete ${selectedIds.length} properties.`} confirmationText="delete" actionText="Delete" onConfirm={handleBulkDelete} />
 
+
+        {error && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            <p className="font-medium">Failed to load properties</p>
+            <p className="mt-1 text-xs text-red-500">
+              {error instanceof Error ? error.message : "Unknown error"}
+            </p>
+          </div>
+        )}
         <PropertyDetailModal open={showDetailModal} onOpenChange={(o) => { if (!o) setDetailId(null); setShowDetailModal(o) }} propertyId={detailId} onUpdated={() => queryClient.invalidateQueries({ queryKey: ["properties"] })} />
       </div>
     </MainLayout>
