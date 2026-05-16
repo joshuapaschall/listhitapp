@@ -172,7 +172,7 @@ export default function EditPropertyPage() {
       const property = await PropertyService.getProperty(id);
       if (!property) return;
       setForm({
-        address: property.address,
+        address: property.address ?? "",
         city: property.city ?? "",
         state: property.state ?? "",
         zip: property.zip ?? "",
@@ -182,7 +182,7 @@ export default function EditPropertyPage() {
         sqft: property.sqft?.toString() ?? "",
         price: property.price?.toString() ?? "",
         condition: property.condition ?? "",
-        status: property.status,
+        status: property.status ?? "available",
         disposition_strategy: property.disposition_strategy ?? "",
         buyer_fit: property.buyer_fit ?? "",
         occupancy: property.occupancy ?? "",
