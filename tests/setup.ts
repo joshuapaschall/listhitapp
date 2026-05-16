@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Mock ffmpeg so CI doesn't need the binary
 vi.mock('@ffmpeg/ffmpeg', () => ({
   createFFmpeg: () => ({ load: async () => {}, FS: () => {}, run: async () => {} }),

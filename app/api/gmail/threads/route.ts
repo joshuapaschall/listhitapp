@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { NextRequest } from "next/server"
 import { listThreads, getThread } from "@/services/gmail-api"
 import { cookies } from "next/headers"

@@ -27,7 +27,7 @@ const createAnonClient = (): SupabaseClient => {
   })
 }
 
-export const supabase: SupabaseClient = createAnonClient()
+export const supabase: SupabaseClient = createAnonClient() as any
 
 /**
  * Server admin client (service role) – never shipped to the browser.

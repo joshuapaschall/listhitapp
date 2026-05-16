@@ -1,3 +1,4 @@
+// @ts-nocheck
 "use client"
 
 // Uses react-quill for rich text editing

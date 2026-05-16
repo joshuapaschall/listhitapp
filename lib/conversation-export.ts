@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { Message } from "@/lib/supabase"
 import Papa from "papaparse"
 

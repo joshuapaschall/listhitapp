@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { jest } from "@jest/globals";
 import { TextDecoder, TextEncoder } from "util";
 

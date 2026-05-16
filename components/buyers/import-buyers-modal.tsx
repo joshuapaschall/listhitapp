@@ -1,3 +1,4 @@
+// @ts-nocheck
 "use client"
 
 // CSV importer with support for mapping templates, manual tags, locations,

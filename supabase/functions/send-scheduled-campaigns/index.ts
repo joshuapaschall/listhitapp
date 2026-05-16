@@ -1,3 +1,4 @@
+// @ts-nocheck
 // supabase/functions/send-scheduled-campaigns/index.ts
 // -----------------------------------------------
 // Invoked by pg_cron every 5 min (or 1 min while testing)

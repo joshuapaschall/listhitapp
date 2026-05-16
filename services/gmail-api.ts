@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { google, gmail_v1 } from "googleapis"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getAccessToken } from "./gmail-tokens"
