@@ -132,7 +132,7 @@ export default function CallModal({ open, onOpenChange }: Props) {
   const handleJoinConference = async () => {
     // Simple approach - remove conference for WebRTC
     alert("Conference calls not available. To add another person:\n1. Ask them to call you\n2. Or hang up and call them");
-    setShowConference(false);
+    setInConference(false);
   };
 
   const handleAddParticipant = async () => {

@@ -580,8 +580,8 @@ export default function AddPropertyPage() {
                                 "Unnamed Buyer"}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              {b.city || "Any City"}
-                              {b.state ? `, ${b.state}` : ""}
+                              {b.mailing_city || "Any City"}
+                              {b.mailing_state ? `, ${b.mailing_state}` : ""}
                             </p>
                           </div>
                           <div className="flex items-center gap-2">

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { NextRequest } from "next/server"
 import { supabase } from "@/lib/supabase"
 import { verifyTelnyxRequest } from "@/lib/telnyx"

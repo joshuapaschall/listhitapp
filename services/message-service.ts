@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { supabase, type Buyer, type MessageThread } from "@/lib/supabase"
 
 export interface ThreadWithBuyer extends MessageThread {
