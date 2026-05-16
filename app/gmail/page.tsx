@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query"
 import MainLayout from "@/components/layout/main-layout"
 import { ListPane, ConversationPane, ComposeModal, Sidebar, TopBar } from "@/components/gmail"
 
@@ -23,7 +23,7 @@ export default function GmailPage() {
       }
       return json.threads as SimpleThread[]
     },
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
   })
 
   return (

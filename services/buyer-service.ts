@@ -306,7 +306,8 @@ export class BuyerService {
       .from("buyer_groups")
       .select("buyer_id, buyers!inner(id)", { count: "exact", head: true })
       .eq("group_id", groupId)
-      .eq("buyers.sendfox_hidden", false)
+       .eq("buyers.sendfox_hidden", false)
+      .is("buyers.deleted_at", null)
 
     if (error) {
       log("error", "Failed to get buyer count", { error })
@@ -321,7 +322,8 @@ export class BuyerService {
     const { data, error } = await supabase
       .from("buyer_groups")
       .select("group_id, buyers!inner(id)")
-      .eq("buyers.sendfox_hidden", false)
+       .eq("buyers.sendfox_hidden", false)
+      .is("buyers.deleted_at", null)
 
     if (error) {
       log("error", "Failed to get buyer counts", { error })
@@ -340,6 +342,8 @@ export class BuyerService {
     const { count, error } = await supabase
       .from("buyers")
       .select("*", { count: "exact", head: true })
+      .eq("sendfox_hidden", false)
+      .is("deleted_at", null)
 
     if (error) {
       log("error", "Failed to get total buyer count", { error })
