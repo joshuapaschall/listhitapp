@@ -227,15 +227,12 @@ export default function EditPropertyPage() {
     files && setPhotos((prev) => [...prev, ...Array.from(files)]);
 
   const handleSubmit = async () => {
+    if (!form.address.trim()) {
+      toast.error("Address is required");
+      return;
+    }
     setLoading(true);
     try {
-      const existing = await PropertyService.findByAddress(
-        form.address,
-        form.city || null,
-        form.zip || null,
-      );
-      if (existing && existing.id !== id)
-        return toast.error("Property already exists at this address");
       await PropertyService.updateProperty(id, {
         address: form.address,
         city: form.city || null,

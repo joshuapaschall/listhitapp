@@ -21,48 +21,6 @@ export interface PropertyFilters {
 }
 
 export class PropertyService {
-  private static async geocodeAddress(property: Partial<Property>) {
-    const addressParts = [
-      property.address,
-      property.city,
-      property.state,
-      property.zip,
-    ]
-      .filter(Boolean)
-      .join(", ")
-
-    if (!addressParts) {
-      return { latitude: null, longitude: null }
-    }
-
-    try {
-      const baseUrl =
-        process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
-      const url =
-        typeof window === "undefined"
-          ? `${baseUrl}/api/geocode`
-          : "/api/geocode"
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: addressParts }),
-      })
-      if (!res.ok) {
-        return { latitude: null, longitude: null }
-      }
-      const result = await res.json()
-      if (result && result.latitude != null && result.longitude != null) {
-        return {
-          latitude: result.latitude,
-          longitude: result.longitude,
-        }
-      }
-    } catch (err) {
-      console.error("Geocoding failed", err)
-    }
-    return { latitude: null, longitude: null }
-  }
-
   private static buildIlikePattern(value: string) {
     const sanitized = value.replace(/[%]/g, "").replace(/[(),]/g, " ").trim()
     return `%${sanitized}%`
@@ -241,39 +199,23 @@ export class PropertyService {
   }
 
   // Create a new property
-  static async addProperty(property: Partial<Property>) {
-    const insertData = {
-      ...property,
-      video_link: property.video_link || null,
-      tags: property.tags?.length ? property.tags : null,
-      website_url: property.website_url || null,
-      short_slug: property.short_slug || null,
+  static async addProperty(property: Partial<Property>): Promise<Property> {
+    const res = await fetch("/api/properties", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(property),
+    })
+    const body = await res.json().catch(() => ({ error: "Failed to parse response" }))
+    if (!res.ok) {
+      console.error("addProperty failed:", res.status, body)
+      throw new Error(body.error || `Add property failed with status ${res.status}`)
     }
 
-    if (insertData.latitude == null || insertData.longitude == null) {
-      const geo = await this.geocodeAddress(insertData)
-      insertData.latitude = geo.latitude
-      insertData.longitude = geo.longitude
-    }
-
-    const { data, error } = await supabase
-      .from("properties")
-      .insert([insertData])
-      .select()
-      .single()
-
-    if (error) {
-      console.error("Error adding property:", error)
-      throw error
-    }
-
-    const propertyData = data as Property
+    const propertyData = body.property as Property
 
     try {
-      const baseUrl =
-        process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
-      const targetUrl =
-        property.website_url || `${baseUrl}/properties/${propertyData.id}`
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || window.location.origin
+      const targetUrl = property.website_url || `${baseUrl}/properties/${propertyData.id}`
       const { shortURL, path, idString } = await createShortLink(
         targetUrl,
         property.short_slug || undefined,
@@ -286,54 +228,36 @@ export class PropertyService {
       })
       return updated
     } catch (err) {
-      console.error("Short link creation failed", err)
+      console.error("Short link creation failed (non-fatal):", err)
     }
 
     return propertyData
   }
 
-
   // Update an existing property
-  static async updateProperty(id: string, updates: Partial<Property>) {
-    const updateData = {
-      ...updates,
-      video_link: updates.video_link || null,
-      tags: updates.tags?.length ? updates.tags : null,
-      website_url: updates.website_url || null,
-      short_slug: updates.short_slug || null,
+  static async updateProperty(id: string, updates: Partial<Property>): Promise<Property> {
+    const res = await fetch(`/api/properties/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    })
+    const body = await res.json().catch(() => ({ error: "Failed to parse response" }))
+    if (!res.ok) {
+      console.error("updateProperty failed:", res.status, body)
+      throw new Error(body.error || `Update property failed with status ${res.status}`)
     }
-
-    if (
-      (updates.address || updates.city || updates.state || updates.zip) &&
-      updates.latitude == null &&
-      updates.longitude == null
-    ) {
-      const geo = await this.geocodeAddress({ ...updates })
-      updateData.latitude = geo.latitude
-      updateData.longitude = geo.longitude
-    }
-    const { data, error } = await supabase
-      .from("properties")
-      .update(updateData)
-      .eq("id", id)
-      .select()
-      .single()
-
-    if (error) {
-      console.error("Error updating property:", error)
-      throw error
-    }
-
-    return data as Property
+    return body.property as Property
   }
 
   // Delete a property
-  static async deleteProperty(id: string) {
-    const { error } = await supabase.from("properties").delete().eq("id", id)
-
-    if (error) {
-      console.error("Error deleting property:", error)
-      throw error
+  static async deleteProperty(id: string): Promise<void> {
+    const res = await fetch(`/api/properties/${id}`, {
+      method: "DELETE",
+    })
+    const body = await res.json().catch(() => ({ error: "Failed to parse response" }))
+    if (!res.ok) {
+      console.error("deleteProperty failed:", res.status, body)
+      throw new Error(body.error || `Delete property failed with status ${res.status}`)
     }
   }
 
