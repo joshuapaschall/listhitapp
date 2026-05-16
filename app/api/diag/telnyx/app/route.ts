@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { TELNYX_API_URL, getCallControlAppId, getTelnyxApiKey } from "@/lib/voice-env";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   const id = getCallControlAppId();
   if (!id) {
