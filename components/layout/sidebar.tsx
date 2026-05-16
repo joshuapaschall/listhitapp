@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client"
 
 import { useState, useEffect } from "react"
@@ -34,6 +33,8 @@ import {
 import { countUnreadThreads } from "@/services/message-service"
 import { countUnreadEmailThreads } from "@/services/gmail-supabase"
 import { supabase } from "@/lib/supabase"
+import { NotificationItem } from "@/components/notifications/notification-item"
+import { useNotifications } from "@/hooks/use-notifications"
 import AddBuyerModal from "@/components/buyers/add-buyer-modal"
 import CreateOfferModal from "@/components/offers/CreateOfferModal"
 
@@ -48,8 +49,8 @@ const navigation = [
     title: "Inbox",
     icon: Inbox,
     items: [
-      { title: "SMS Inbox", href: "/inbox" },
-      { title: "Email Inbox", href: "/gmail" },
+      { title: "SMS Inbox", href: "/inbox", badge: null as string | null },
+      { title: "Email Inbox", href: "/gmail", badge: null as string | null },
     ],
     badge: null,
   },
@@ -105,7 +106,7 @@ const navigation = [
     title: "Admin",
     icon: Shield,
     items: [
-      { title: "Health", href: "/api/diag/health" },
+      { title: "Health", href: "/api/diag/health", badge: null as string | null },
     ],
     badge: null,
   },
@@ -123,6 +124,7 @@ export function Sidebar({ className }: SidebarProps) {
   const [showCreateOfferModal, setShowCreateOfferModal] = useState(false)
   const pathname = usePathname()
   const queryClient = useQueryClient()
+  const { notifications: sidebarNotifications, dismiss } = useNotifications()
 
   const { data: unreadSms } = useQuery({
     queryKey: ["unread-sms"],
@@ -371,7 +373,7 @@ export function Sidebar({ className }: SidebarProps) {
                   )}
                 </AccordionItem>
               ) : (
-                <Link key={item.href} href={item.href}>
+                <Link key={item.href!} href={item.href!}>
                   <Button
                     variant={isActive ? "secondary" : "ghost"}
                     className={cn(
@@ -402,17 +404,16 @@ export function Sidebar({ className }: SidebarProps) {
 
       {/* Recent Activity */}
       {!collapsed && (
-        <div className="px-4 pb-4 border-t flex-shrink-0">
-          <h3 className="text-sm font-bold text-primary mb-3">Recent Activity</h3>
-          <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-            <div className="p-2 rounded-lg bg-muted/70 text-sm">
-              <div className="font-medium">New buyer inquiry</div>
-              <div className="text-muted-foreground text-xs">John Smith - 2 min ago</div>
-            </div>
-            <div className="p-2 rounded-lg bg-muted/70 text-sm">
-              <div className="font-medium">Property showing scheduled</div>
-              <div className="text-muted-foreground text-xs">123 Main St - 1 hour ago</div>
-            </div>
+        <div className="border-t px-4 pb-4 flex-shrink-0">
+          <h3 className="mb-3 mt-3 text-sm font-bold text-primary">Recent Activity</h3>
+          <div className="max-h-40 space-y-2 overflow-y-auto pr-1">
+            {sidebarNotifications.length === 0 ? (
+              <div className="p-2 text-sm text-muted-foreground">No recent activity</div>
+            ) : (
+              sidebarNotifications.slice(0, 5).map((n) => (
+                <NotificationItem key={n.id} notification={n} compact onDismiss={dismiss} />
+              ))
+            )}
           </div>
         </div>
       )}
