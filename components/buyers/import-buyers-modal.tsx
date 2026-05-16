@@ -183,23 +183,25 @@ export async function importBuyersFromCsv(
   for (let i = 0; i < buyersToInsert.length; i += BATCH_SIZE) {
     const batch = buyersToInsert.slice(i, i + BATCH_SIZE)
 
-    const emails = batch.map((b) => b.email).filter(Boolean)
-    const phones = batch.map((b) => b.phone).filter(Boolean)
+    const emails = Array.from(new Set(batch.map((b) => b.email).filter(Boolean)))
+    const phones = Array.from(new Set(batch.map((b) => b.phone).filter(Boolean)))
 
     const existingMap: Record<string, any> = {}
 
     if (emails.length) {
-      const { data } = await supabase.from("buyers").select("*").in("email", emails)
+      const { data, error } = await supabase.from("buyers").select("*").in("email_norm", emails)
+      if (error) throw error
       data?.forEach((b) => {
-        const key = normalizeEmail(b.email)
+        const key = normalizeEmail(b.email_norm || b.email)
         if (key) existingMap["e:" + key] = b
       })
     }
 
     if (phones.length) {
-      const { data } = await supabase.from("buyers").select("*").in("phone", phones)
+      const { data, error } = await supabase.from("buyers").select("*").in("phone_norm", phones)
+      if (error) throw error
       data?.forEach((b) => {
-        const key = normalizePhone(b.phone)
+        const key = normalizePhone(b.phone_norm || b.phone)
         if (key) existingMap["p:" + key] = b
       })
     }

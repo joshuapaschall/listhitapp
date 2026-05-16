@@ -29,7 +29,7 @@ import {
   clearAllGroupsForBuyers,
 } from "@/lib/group-service"
 import MainLayout from "@/components/layout/main-layout"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   Plus,
   Search,
@@ -112,6 +112,7 @@ const fetchBuyers = async (
 
   query = query
     .eq("sendfox_hidden", false)
+    .is("deleted_at", null)
     .range((page - 1) * perPage, page * perPage - 1)
     .order("created_at", { ascending: false })
 
@@ -250,7 +251,7 @@ const fetchBuyerIds = async (
     query = query.select("id")
   }
 
-  query = query.eq("sendfox_hidden", false)
+  query = query.eq("sendfox_hidden", false).is("deleted_at", null)
   // Apply same filters as fetchBuyers
   if (filters.search) {
     const encoded = encodeURIComponent(filters.search)
@@ -361,6 +362,8 @@ const fetchAllBuyersData = async (
   } else {
     query = query.select("*")
   }
+
+  query = query.eq("sendfox_hidden", false).is("deleted_at", null)
 
   // Apply same filters as above
   if (filters.search) {
@@ -556,7 +559,7 @@ function BuyersPageContent() {
     refetchOnWindowFocus: false,
     retry: 1,
     retryDelay: 1000,
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
   })
 
   // React Query for tags with caching
@@ -776,6 +779,8 @@ function BuyersPageContent() {
 
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ["buyers"] })
+      queryClient.invalidateQueries({ queryKey: ["buyerCountsByGroup"] })
+      queryClient.invalidateQueries({ queryKey: ["totalBuyersCount"] })
       setSelectedBuyers([])
       toast.success("Tags added")
     } catch (err) {
@@ -803,6 +808,8 @@ function BuyersPageContent() {
       }
 
       queryClient.invalidateQueries({ queryKey: ["buyers"] })
+      queryClient.invalidateQueries({ queryKey: ["buyerCountsByGroup"] })
+      queryClient.invalidateQueries({ queryKey: ["totalBuyersCount"] })
       setSelectedBuyers([])
       toast.success("Tags removed")
     } catch (err) {
@@ -814,7 +821,9 @@ function BuyersPageContent() {
   const handleBulkAddToGroup = async (groupIds: string[]) => {
     try {
       await addBuyersToGroups(selectedBuyers, groupIds)
+      queryClient.invalidateQueries({ queryKey: ["buyers"] })
       queryClient.invalidateQueries({ queryKey: ["buyerCountsByGroup"] })
+      queryClient.invalidateQueries({ queryKey: ["totalBuyersCount"] })
       setSelectedBuyers([])
       toast.success("Added to groups")
     } catch (err) {
@@ -826,7 +835,9 @@ function BuyersPageContent() {
   const handleBulkRemoveFromGroup = async (groupIds: string[]) => {
     try {
       await removeBuyersFromGroups(selectedBuyers, groupIds)
+      queryClient.invalidateQueries({ queryKey: ["buyers"] })
       queryClient.invalidateQueries({ queryKey: ["buyerCountsByGroup"] })
+      queryClient.invalidateQueries({ queryKey: ["totalBuyersCount"] })
       setSelectedBuyers([])
       toast.success("Removed from groups")
     } catch (err) {
@@ -838,7 +849,9 @@ function BuyersPageContent() {
   const handleBulkMoveToGroup = async (groupIds: string[]) => {
     try {
       await replaceGroupsForBuyers(selectedBuyers, groupIds)
+      queryClient.invalidateQueries({ queryKey: ["buyers"] })
       queryClient.invalidateQueries({ queryKey: ["buyerCountsByGroup"] })
+      queryClient.invalidateQueries({ queryKey: ["totalBuyersCount"] })
       setSelectedBuyers([])
       toast.success("Moved to groups")
     } catch (err) {
@@ -850,7 +863,9 @@ function BuyersPageContent() {
   const handleBulkClearGroups = async () => {
     try {
       await clearAllGroupsForBuyers(selectedBuyers)
+      queryClient.invalidateQueries({ queryKey: ["buyers"] })
       queryClient.invalidateQueries({ queryKey: ["buyerCountsByGroup"] })
+      queryClient.invalidateQueries({ queryKey: ["totalBuyersCount"] })
       setSelectedBuyers([])
       toast.success("Removed from all groups")
     } catch (err) {
@@ -869,6 +884,8 @@ function BuyersPageContent() {
         if (!r.ok) throw new Error("bulk delete failed")
       })
       queryClient.invalidateQueries({ queryKey: ["buyers"] })
+      queryClient.invalidateQueries({ queryKey: ["buyerCountsByGroup"] })
+      queryClient.invalidateQueries({ queryKey: ["totalBuyersCount"] })
       setSelectedBuyers([])
       toast.success("Buyers deleted")
     } catch (err) {
@@ -912,6 +929,8 @@ function BuyersPageContent() {
         if (!r.ok) throw new Error("delete failed")
       })
       queryClient.invalidateQueries({ queryKey: ["buyers"] })
+      queryClient.invalidateQueries({ queryKey: ["buyerCountsByGroup"] })
+      queryClient.invalidateQueries({ queryKey: ["totalBuyersCount"] })
       toast.success("Buyer deleted")
     } catch (err) {
       log("error", "Failed to delete buyer", { error: err })
@@ -1109,6 +1128,7 @@ function BuyersPageContent() {
                   onSuccess={() => {
                     queryClient.invalidateQueries({ queryKey: ["buyers"] })
                     queryClient.invalidateQueries({ queryKey: ["buyerCountsByGroup"] })
+                    queryClient.invalidateQueries({ queryKey: ["totalBuyersCount"] })
                   }}
                 />
                 <DropdownMenu>
@@ -1798,7 +1818,11 @@ function BuyersPageContent() {
       <AddBuyerModal
         open={showAddBuyerModal}
         onOpenChange={setShowAddBuyerModal}
-        onSuccessAction={(_b) => queryClient.invalidateQueries({ queryKey: ["buyers"] })}
+        onSuccessAction={(_b) => {
+          queryClient.invalidateQueries({ queryKey: ["buyers"] })
+          queryClient.invalidateQueries({ queryKey: ["buyerCountsByGroup"] })
+          queryClient.invalidateQueries({ queryKey: ["totalBuyersCount"] })
+        }}
         onEditBuyer={(buyer) => {
           setEditingBuyer(buyer)
           setShowEditBuyerModal(true)
@@ -1808,13 +1832,21 @@ function BuyersPageContent() {
         open={showEditBuyerModal}
         onOpenChange={handleEditBuyerModalChange}
         buyer={editingBuyer}
-        onSuccess={() => queryClient.invalidateQueries({ queryKey: ["buyers"] })}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ["buyers"] })
+          queryClient.invalidateQueries({ queryKey: ["buyerCountsByGroup"] })
+          queryClient.invalidateQueries({ queryKey: ["totalBuyersCount"] })
+        }}
       />
       <SendSmsModal
         open={showSendSmsModal}
         onOpenChange={setShowSendSmsModal}
         buyer={smsBuyer}
-        onSuccess={() => queryClient.invalidateQueries({ queryKey: ["buyers"] })}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ["buyers"] })
+          queryClient.invalidateQueries({ queryKey: ["buyerCountsByGroup"] })
+          queryClient.invalidateQueries({ queryKey: ["totalBuyersCount"] })
+        }}
       />
       <BulkTagsDialog
         open={showTagDialog}
