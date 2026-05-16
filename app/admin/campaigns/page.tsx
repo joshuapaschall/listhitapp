@@ -15,7 +15,7 @@ import GroupTreeSelector from "@/components/buyers/group-tree-selector"
 import LocationFilterSelector from "@/components/buyers/location-filter-selector"
 import TagFilterSelector from "@/components/buyers/tag-filter-selector"
 import { useBuyerSuggestions } from "@/components/buyers/use-buyer-suggestions"
-import type { Group, Tag, Buyer } from "@/lib/supabase"
+import type { Group, Buyer } from "@/lib/supabase"
 import { getGroups } from "@/lib/group-service"
 import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
@@ -45,6 +45,12 @@ interface CampaignDefinition {
   scheduled_for?: string | null
   status?: string
   created_at?: string
+}
+
+interface CampaignTagOption {
+  id: string
+  name: string
+  color?: string | null
 }
 
 function useUsers() {
@@ -80,7 +86,7 @@ export default function CampaignAdminPage() {
   })
   const [groups, setGroups] = useState<string[]>([])
   const [groupLabels, setGroupLabels] = useState<Record<string, string>>({})
-  const [availableTags, setAvailableTags] = useState<Tag[]>([])
+  const [availableTags, setAvailableTags] = useState<CampaignTagOption[]>([])
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [locations, setLocations] = useState<string[]>([])
   const [sendfoxLists, setSendfoxLists] = useState<string>("")
@@ -102,7 +108,9 @@ export default function CampaignAdminPage() {
     supabase
       .from("tags")
       .select("id,label,color")
-      .then(({ data }) => setAvailableTags(data || []))
+      .then(({ data }) =>
+        setAvailableTags((data || []).map((tag: any) => ({ id: tag.id, name: tag.label, color: tag.color })))
+      )
   }, [])
 
   const loadTemplates = async () => {
