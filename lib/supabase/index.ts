@@ -193,6 +193,8 @@ export interface Offer {
   down_payment?: number | null
   monthly_payment?: number | null
   earnest_money?: number | null
+  due_diligence_days?: number | null
+  proposed_closing_date?: string | null
   status?: string
   notes?: string | null
   submitted_at?: string

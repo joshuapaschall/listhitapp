@@ -75,6 +75,11 @@ export default function OfferCard({ offer, onClick, className }: OfferCardProps)
         {offer.earnest_money ? (
           <p className="mt-2 text-xs text-muted-foreground">EMD: {currencyFormatter.format(offer.earnest_money)}</p>
         ) : null}
+        {offer.proposed_closing_date && (
+          <p className="text-xs text-muted-foreground">
+            Close: {new Date(offer.proposed_closing_date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+          </p>
+        )}
       </div>
     </div>
   )

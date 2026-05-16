@@ -59,18 +59,19 @@ export default function OffersListView({ offers, isLoading, onOfferClick }: Offe
               <TableHead>Offer Price</TableHead>
               <TableHead>Type</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Closing Date</TableHead>
               <TableHead className="w-16">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading && (
               <TableRow>
-                <TableCell colSpan={7}>Loading...</TableCell>
+                <TableCell colSpan={8}>Loading...</TableCell>
               </TableRow>
             )}
             {!isLoading && pagedOffers.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7}>No offers found.</TableCell>
+                <TableCell colSpan={8}>No offers found.</TableCell>
               </TableRow>
             )}
             {pagedOffers.map((offer) => {
@@ -100,6 +101,11 @@ export default function OffersListView({ offers, isLoading, onOfferClick }: Offe
                   </TableCell>
                   <TableCell>
                     <Badge className={statusClass}>{status}</Badge>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-sm">
+                    {offer.proposed_closing_date
+                      ? new Date(offer.proposed_closing_date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                      : "—"}
                   </TableCell>
                   <TableCell>
                     <DropdownMenu>
