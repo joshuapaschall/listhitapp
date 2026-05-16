@@ -1,3 +1,4 @@
+import { jest } from "@jest/globals"
 /** @jest-environment jsdom */
 import { render, screen, fireEvent, act } from "@testing-library/react"
 import NewEmailCampaignModal from "../components/campaigns/NewEmailCampaignModal"

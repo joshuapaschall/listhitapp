@@ -1,3 +1,4 @@
+import { jest } from "@jest/globals"
 /** @jest-environment jsdom */
 import { render, fireEvent, screen } from "@testing-library/react"
 import IncomingCall from "../components/voice/IncomingCall"

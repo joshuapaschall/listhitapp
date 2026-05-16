@@ -101,7 +101,7 @@ export default function CampaignAdminPage() {
     })
     supabase
       .from("tags")
-      .select("id,label,color")
+      .select("id,name,color")
       .then(({ data }) => setAvailableTags(data || []))
   }, [])
 

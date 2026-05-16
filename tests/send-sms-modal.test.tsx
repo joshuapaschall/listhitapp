@@ -1,3 +1,4 @@
+import { jest } from "@jest/globals"
 /** @jest-environment jsdom */
 import { render, screen, fireEvent } from "@testing-library/react"
 import SendSmsModal from "../components/buyers/send-sms-modal"

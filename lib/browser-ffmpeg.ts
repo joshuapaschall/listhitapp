@@ -1,13 +1,19 @@
 "use client";
 
-import { createFFmpeg, fetchFile } from "@ffmpeg/ffmpeg";
+import { FFmpeg } from "@ffmpeg/ffmpeg";
 
 /**
  * Singleton ffmpeg instance + lazy loader.
  * This must only ever be used in the browser.
  */
-let ffmpegInstance: ReturnType<typeof createFFmpeg> | null = null;
+let ffmpegInstance: FFmpeg | null = null;
 let loadPromise: Promise<void> | null = null;
+async function fetchFile(file: File | Blob | Uint8Array | ArrayBuffer): Promise<Uint8Array> {
+  if (file instanceof Uint8Array) return file;
+  if (file instanceof ArrayBuffer) return new Uint8Array(file);
+  const buffer = await file.arrayBuffer();
+  return new Uint8Array(buffer);
+}
 
 function ensureBrowser() {
   if (typeof window === "undefined") {
@@ -19,13 +25,10 @@ async function getFfmpeg() {
   ensureBrowser();
 
   if (!ffmpegInstance) {
-    ffmpegInstance = createFFmpeg({
-      log: false,
-      // If we ever want a custom core path, we can set corePath here.
-    });
+    ffmpegInstance = new FFmpeg();
   }
 
-  if (!ffmpegInstance.isLoaded()) {
+  if (!ffmpegInstance.loaded) {
     if (!loadPromise) {
       loadPromise = ffmpegInstance.load();
     }
@@ -35,30 +38,18 @@ async function getFfmpeg() {
   return ffmpegInstance;
 }
 
-/**
- * Returns true if this file is a video type that is *not* already an mp4
- * and should be normalized before upload.
- */
 export function needsVideoConversion(file: File): boolean {
   if (!file.type.startsWith("video/")) return false;
   if (file.type === "video/mp4") return false;
   return true;
 }
 
-/**
- * Returns true if this file is an audio type that is *not* already an mp3/m4a
- * and should be normalized before upload.
- */
 export function needsAudioConversion(file: File): boolean {
   if (!file.type.startsWith("audio/")) return false;
   if (file.type === "audio/mpeg" || file.type === "audio/mp4") return false;
   return true;
 }
 
-/**
- * Convert an arbitrary video file to H.264 MP4 suitable for MMS / web playback.
- * - Reasonable size and compatibility for Telnyx + browsers.
- */
 export async function convertVideoToMp4(file: File): Promise<File> {
   ensureBrowser();
 
@@ -70,13 +61,11 @@ export async function convertVideoToMp4(file: File): Promise<File> {
   const inputName = "input";
   const outputName = "output.mp4";
 
-  // Clear the FS for safety
-  ffmpeg.FS("unlink", outputName).catch(() => {});
-  ffmpeg.FS("unlink", inputName).catch(() => {});
+  ffmpeg.deleteFile(outputName).catch(() => {});
+  ffmpeg.deleteFile(inputName).catch(() => {});
 
-  ffmpeg.FS("writeFile", inputName, await fetchFile(file));
+  await ffmpeg.writeFile(inputName, await fetchFile(file));
 
-  // Very simple but safe MP4 recipe for small MMS-sized clips.
   const args = [
     "-i",
     inputName,
@@ -99,14 +88,13 @@ export async function convertVideoToMp4(file: File): Promise<File> {
     outputName,
   ];
 
-  await ffmpeg.run(...args);
+  await ffmpeg.exec(args);
 
-  const data = ffmpeg.FS("readFile", outputName);
+  const data = await ffmpeg.readFile(outputName);
   const blob = new Blob([data.buffer], { type: "video/mp4" });
 
-  // Clean up
-  ffmpeg.FS("unlink", outputName).catch(() => {});
-  ffmpeg.FS("unlink", inputName).catch(() => {});
+  ffmpeg.deleteFile(outputName).catch(() => {});
+  ffmpeg.deleteFile(inputName).catch(() => {});
 
   return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".mp4", {
     type: "video/mp4",
@@ -114,10 +102,6 @@ export async function convertVideoToMp4(file: File): Promise<File> {
   });
 }
 
-/**
- * Convert an arbitrary audio file to MP3 for playback and delivery.
- * This is mainly to normalize audio/webm and carrier audio formats.
- */
 export async function convertAudioToMp3(file: File): Promise<File> {
   ensureBrowser();
 
@@ -129,30 +113,20 @@ export async function convertAudioToMp3(file: File): Promise<File> {
   const inputName = "input";
   const outputName = "output.mp3";
 
-  ffmpeg.FS("unlink", outputName).catch(() => {});
-  ffmpeg.FS("unlink", inputName).catch(() => {});
+  ffmpeg.deleteFile(outputName).catch(() => {});
+  ffmpeg.deleteFile(inputName).catch(() => {});
 
-  ffmpeg.FS("writeFile", inputName, await fetchFile(file));
+  await ffmpeg.writeFile(inputName, await fetchFile(file));
 
-  const args = [
-    "-i",
-    inputName,
-    "-acodec",
-    "libmp3lame",
-    "-b:a",
-    "96k",
-    "-f",
-    "mp3",
-    outputName,
-  ];
+  const args = ["-i", inputName, "-acodec", "libmp3lame", "-b:a", "96k", "-f", "mp3", outputName];
 
-  await ffmpeg.run(...args);
+  await ffmpeg.exec(args);
 
-  const data = ffmpeg.FS("readFile", outputName);
+  const data = await ffmpeg.readFile(outputName);
   const blob = new Blob([data.buffer], { type: "audio/mpeg" });
 
-  ffmpeg.FS("unlink", outputName).catch(() => {});
-  ffmpeg.FS("unlink", inputName).catch(() => {});
+  ffmpeg.deleteFile(outputName).catch(() => {});
+  ffmpeg.deleteFile(inputName).catch(() => {});
 
   return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".mp3", {
     type: "audio/mpeg",
@@ -160,11 +134,6 @@ export async function convertAudioToMp3(file: File): Promise<File> {
   });
 }
 
-/**
- * Helpers for future: convert raw blobs (e.g. incoming .3gp/.amr from Supabase)
- * into playable blobs in the browser. These are not yet wired up, but we expose
- * them now for later use when we build incoming-media playback.
- */
 export async function convertIncomingVideoBlobToMp4(
   blob: Blob,
   name: string = "incoming",

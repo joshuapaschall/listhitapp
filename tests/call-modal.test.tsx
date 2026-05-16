@@ -1,3 +1,4 @@
+import { jest } from "@jest/globals"
 /** @jest-environment jsdom */
 import { render, fireEvent, screen, act } from "@testing-library/react"
 import { TelnyxDeviceProvider } from "../components/voice/TelnyxDeviceProvider"

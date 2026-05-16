@@ -32,12 +32,12 @@ export const supabase: SupabaseClient = createAnonClient()
 /**
  * Server admin client (service role) – never shipped to the browser.
  */
-export const supabaseAdmin: SupabaseClient | null =
-  typeof window === "undefined" && process.env.SUPABASE_SERVICE_ROLE_KEY
-    ? createClient(PUBLIC_URL, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+export const supabaseAdmin: SupabaseClient =
+  typeof window === "undefined"
+    ? createClient(PUBLIC_URL, process.env.SUPABASE_SERVICE_ROLE_KEY || PUBLIC_ANON, {
         auth: { persistSession: false, autoRefreshToken: false },
       })
-    : null
+    : createAnonClient()
 
 export type TemplateType = "sms" | "email" | "quick_reply"
 export type TemplateKind = "template" | "snippet"
@@ -87,8 +87,11 @@ export interface Buyer {
 
 export interface Tag {
   id: string
-  label: string
-  color?: string | null
+  name: string
+  color: string
+  is_protected?: boolean
+  usage_count?: number
+  created_at?: string
 }
 
 export interface Group {

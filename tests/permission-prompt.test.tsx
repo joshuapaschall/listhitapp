@@ -1,3 +1,4 @@
+import { jest } from "@jest/globals"
 /** @jest-environment jsdom */
 import { render, screen, waitFor } from "@testing-library/react"
 import PermissionPrompt from "../components/PermissionPrompt"

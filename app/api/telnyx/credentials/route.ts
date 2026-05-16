@@ -2,7 +2,7 @@ import { NextRequest } from "next/server"
 import { TELNYX_API_URL, telnyxHeaders } from "@/lib/telnyx"
 import { getTelnyxApiKey } from "@/lib/voice-env"
 
-export async function GET(_req?: NextRequest) {
+export async function GET(_req: NextRequest) {
   const apiKey = getTelnyxApiKey()
   if (!apiKey) {
     return new Response(JSON.stringify({ error: "Telnyx not configured" }), {

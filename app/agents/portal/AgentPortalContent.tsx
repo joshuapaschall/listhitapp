@@ -388,7 +388,7 @@ export default function AgentPortalContent({
                   <p className="text-sm text-muted-foreground">
                     {activeCall.direction === 'outbound' ? 'Calling' : 'Customer Number'}
                   </p>
-                  <p className="font-mono">{activeCall.remoteId || 'Connecting...'}</p>
+                  <p className="font-mono">{(activeCall as any).remoteId || 'Connecting...'}</p>
                   {activeCall.state && (
                     <div className="flex items-center gap-2 mt-1">
                       <p className="text-xs text-muted-foreground">

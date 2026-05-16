@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
 
   try {
     // Save call record to database only (no actual call)
-    const callRecord = {
+    const callRecord: any = {
       buyer_id: buyerId || null,
       direction: direction,
       from_number: formattedFrom,

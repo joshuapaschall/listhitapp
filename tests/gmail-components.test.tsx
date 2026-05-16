@@ -1,3 +1,4 @@
+import { jest } from "@jest/globals"
 /** @jest-environment jsdom */
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import ListPane from "../components/gmail/list-pane"

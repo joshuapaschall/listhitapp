@@ -1,7 +1,7 @@
 import { cookies } from "next/headers"
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
 import { getUserRole } from "@/lib/get-user-role"
-import { fetchLists, reconcileSendfoxList, type SendFoxList } from "@/services/sendfox-service"
+import { fetchLists, type SendFoxList } from "@/services/sendfox-service"
 import {
   buildSendfoxContextFromIntegration,
   getDefaultSendfoxContext,
@@ -11,25 +11,15 @@ import {
 import ErrorToast from "./error-toast"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
-import { revalidatePath } from "next/cache"
+import { resyncListAction } from "./actions"
 
 export const dynamic = "force-dynamic"
 
-export async function resyncListAction(formData: FormData) {
-  "use server"
-  const id = Number(formData.get("id"))
-  const mode = (formData.get("mode") as string) || "preview"
-  if (id) {
-    await reconcileSendfoxList(id, { dryRun: mode !== "apply" })
-  }
-  revalidatePath("/admin/sendfox-lists")
-}
-
 export default async function AdminSendFoxListsPage() {
   const devBypass = process.env.NEXT_PUBLIC_DEV_MODE === "1"
+  const cookieStore = cookies()
+  const supabase = createServerComponentClient({ cookies: () => cookieStore })
   if (!devBypass) {
-    const cookieStore = cookies()
-    const supabase = createServerComponentClient({ cookies: () => cookieStore })
     const role = await getUserRole(supabase)
     if (role !== "admin") {
       return <div className="p-4">You must be an admin to view this page.</div>

@@ -37,12 +37,16 @@ export default async function AdminPermissionsPage() {
     return <div className="p-4">Access denied</div>
   }
 
+  if (!supabaseAdmin) {
+    return <div className="p-4">Admin client not configured</div>
+  }
+
   const { data } = await supabaseAdmin
     .from("permissions")
     .select("id,user_id,permission_key,granted,auth.users(email)")
     .order("permission_key", { ascending: true })
 
-  const rows = data || []
+  const rows = (data || []) as any[]
 
   return (
     <div className="p-6">
@@ -66,7 +70,7 @@ export default async function AdminPermissionsPage() {
                 <form action={togglePermissionAction}>
                   <input type="hidden" name="userId" value={row.user_id} />
                   <input type="hidden" name="key" value={row.permission_key} />
-                  <input type="hidden" name="granted" value={!row.granted} />
+                  <input type="hidden" name="granted" value={String(!row.granted)} />
                   <button className="text-blue-600 hover:underline" type="submit">
                     Toggle
                   </button>
