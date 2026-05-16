@@ -98,7 +98,7 @@ export default function ShowingsListView({ showings, onEdit, onDelete, onBuyerCl
               return (
                 <TableRow key={showing.id}>
                   <TableCell className="text-sm font-medium">
-                    {format(parseISO(showing.scheduled_at), "MMM d, yyyy · h:mm a")}
+                    {showing.scheduled_at ? format(parseISO(showing.scheduled_at), "MMM d, yyyy · h:mm a") : "—"}
                   </TableCell>
                   <TableCell>
                     {showing.buyers ? (
