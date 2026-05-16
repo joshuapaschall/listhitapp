@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { supabaseBrowser } from "@/lib/supabase-browser"
 import type { Property, PropertyImage, PropertyBuyer } from "@/lib/supabase"
 import { createShortLink } from "./shortio-service"
 
@@ -279,15 +280,92 @@ export class PropertyService {
 
 
   // Upload image files for a property via the API route
-  static async uploadImages(propertyId: string, files: File[]): Promise<{ uploaded: PropertyImage[]; errors: string[] }> {
-    const formData = new FormData()
-    for (const file of files) formData.append("files", file)
-    const res = await fetch(`/api/properties/${propertyId}/images`, { method: "POST", body: formData })
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: "Upload failed" }))
-      throw new Error(err.error || "Upload failed")
+  static async uploadImages(
+    propertyId: string,
+    files: File[],
+  ): Promise<{ uploaded: PropertyImage[]; errors: string[] }> {
+    const errors: string[] = []
+
+    // Step 1 — request signed upload URLs from our API
+    const signRes = await fetch(`/api/properties/${propertyId}/images/sign`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        files: files.map((f) => ({ name: f.name, type: f.type, size: f.size })),
+      }),
+    })
+    if (!signRes.ok) {
+      const err = await signRes.json().catch(() => ({ error: "Sign failed" }))
+      throw new Error(err.error || "Failed to get signed upload URLs")
     }
-    return res.json() as Promise<{ uploaded: PropertyImage[]; errors: string[] }>
+    const { signed, errors: signErrors } = (await signRes.json()) as {
+      signed: Array<{
+        originalName: string
+        path: string
+        token: string
+        signedUrl: string
+      }>
+      errors: string[]
+    }
+    errors.push(...signErrors)
+
+    if (!signed.length) {
+      return { uploaded: [], errors }
+    }
+
+    // Step 2 — upload bytes directly to Supabase Storage (bypasses Vercel)
+    const supabase = supabaseBrowser()
+    const successfulPaths: string[] = []
+
+    // Match signed entries back to file objects. Use a counted map so duplicate
+    // filenames (e.g., two "IMG_0001.jpg" files) each map to their own File.
+    const filesByName = new Map<string, File[]>()
+    for (const f of files) {
+      const arr = filesByName.get(f.name) || []
+      arr.push(f)
+      filesByName.set(f.name, arr)
+    }
+
+    for (const entry of signed) {
+      const queue = filesByName.get(entry.originalName)
+      const file = queue?.shift()
+      if (!file) {
+        errors.push(`${entry.originalName}: file lost between sign and upload`)
+        continue
+      }
+      const { error: uploadErr } = await supabase.storage
+        .from("property-images")
+        .uploadToSignedUrl(entry.path, entry.token, file, {
+          contentType: file.type,
+        })
+      if (uploadErr) {
+        errors.push(`${entry.originalName}: ${uploadErr.message}`)
+        continue
+      }
+      successfulPaths.push(entry.path)
+    }
+
+    if (!successfulPaths.length) {
+      return { uploaded: [], errors }
+    }
+
+    // Step 3 — record DB rows for successfully uploaded files
+    const recordRes = await fetch(`/api/properties/${propertyId}/images`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paths: successfulPaths }),
+    })
+    if (!recordRes.ok) {
+      const err = await recordRes.json().catch(() => ({ error: "Record failed" }))
+      throw new Error(err.error || "Failed to record uploaded images")
+    }
+    const recordResult = (await recordRes.json()) as {
+      uploaded: PropertyImage[]
+      errors: string[]
+    }
+    errors.push(...recordResult.errors)
+
+    return { uploaded: recordResult.uploaded, errors }
   }
 
   // Delete a property image via the API route

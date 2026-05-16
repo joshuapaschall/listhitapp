@@ -9,59 +9,74 @@ type RouteContext = { params: Promise<{ id: string }> }
 
 export async function POST(request: NextRequest, context: RouteContext) {
   const { id: propertyId } = await context.params
-  const { data: property, error: propErr } = await supabaseAdmin.from("properties").select("id").eq("id", propertyId).maybeSingle()
-  if (propErr || !property) return NextResponse.json({ error: "Property not found" }, { status: 404 })
 
-  const formData = await request.formData()
-  const files = formData.getAll("files") as File[]
-  if (!files.length) return NextResponse.json({ error: "No files provided" }, { status: 400 })
+  const { data: property, error: propErr } = await supabaseAdmin
+    .from("properties")
+    .select("id")
+    .eq("id", propertyId)
+    .maybeSingle()
+  if (propErr || !property) {
+    return NextResponse.json({ error: "Property not found" }, { status: 404 })
+  }
+
+  let body: { paths?: string[] }
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
+  }
+
+  const paths = Array.isArray(body?.paths) ? body.paths : []
+  if (!paths.length) {
+    return NextResponse.json({ error: "No paths provided" }, { status: 400 })
+  }
 
   const { data: existingImages } = await supabaseAdmin
     .from("property_images")
-    .select("sort_order")
+    .select("id, sort_order")
     .eq("property_id", propertyId)
     .order("sort_order", { ascending: false })
-    .limit(1)
 
+  const existingCount = existingImages?.length ?? 0
   let nextSortOrder = (existingImages?.[0]?.sort_order ?? -1) + 1
-  const uploaded: Array<{ id: string; image_url: string; sort_order: number; is_featured: boolean }> = []
+  const uploaded: Array<{
+    id: string
+    image_url: string
+    sort_order: number
+    is_featured: boolean
+  }> = []
   const errors: string[] = []
 
-  for (const file of files) {
-    if (!ALLOWED_TYPES.includes(file.type)) {
-      errors.push(`${file.name}: unsupported type ${file.type}`)
-      continue
-    }
-    if (file.size > MAX_FILE_SIZE) {
-      errors.push(`${file.name}: exceeds 10MB limit`)
-      continue
-    }
-
-    const timestamp = Date.now()
-    const sanitized = file.name.replace(/[^a-zA-Z0-9._-]/g, "_")
-    const storagePath = `${propertyId}/${timestamp}-${sanitized}`
-    const buffer = Buffer.from(await file.arrayBuffer())
-
-    const { error: uploadErr } = await supabaseAdmin.storage.from(BUCKET).upload(storagePath, buffer, { contentType: file.type, upsert: false })
-    if (uploadErr) {
-      errors.push(`${file.name}: upload failed - ${uploadErr.message}`)
+  for (const storagePath of paths) {
+    // Security: prevent client from inserting URLs to other properties' folders
+    if (
+      typeof storagePath !== "string" ||
+      !storagePath.startsWith(`${propertyId}/`)
+    ) {
+      errors.push(`Invalid path: ${storagePath}`)
       continue
     }
 
-    const { data: urlData } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(storagePath)
-    const isFirstImage = nextSortOrder === 0 && uploaded.length === 0
-    const existingCount = existingImages?.length ?? 0
-    const shouldFeature = isFirstImage && existingCount === 0
+    const { data: urlData } = supabaseAdmin.storage
+      .from(BUCKET)
+      .getPublicUrl(storagePath)
+    const shouldFeature = existingCount === 0 && uploaded.length === 0
 
     const { data: imgRecord, error: dbErr } = await supabaseAdmin
       .from("property_images")
-      .insert({ property_id: propertyId, image_url: urlData.publicUrl, sort_order: nextSortOrder, is_featured: shouldFeature })
+      .insert({
+        property_id: propertyId,
+        image_url: urlData.publicUrl,
+        sort_order: nextSortOrder,
+        is_featured: shouldFeature,
+      })
       .select("id, image_url, sort_order, is_featured")
       .single()
 
     if (dbErr) {
+      // Clean up the orphaned storage object if DB insert fails
       await supabaseAdmin.storage.from(BUCKET).remove([storagePath])
-      errors.push(`${file.name}: DB insert failed - ${dbErr.message}`)
+      errors.push(`${storagePath}: DB insert failed - ${dbErr.message}`)
       continue
     }
 
@@ -69,7 +84,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
     nextSortOrder++
   }
 
-  return NextResponse.json({ uploaded, errors }, { status: errors.length && !uploaded.length ? 400 : 200 })
+  return NextResponse.json(
+    { uploaded, errors },
+    { status: errors.length && !uploaded.length ? 400 : 200 },
+  )
 }
 
 export async function DELETE(request: NextRequest, context: RouteContext) {
