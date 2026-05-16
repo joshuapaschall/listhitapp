@@ -91,7 +91,7 @@ export class PropertyService {
 
     let query = supabase
       .from("properties")
-      .select("*, property_images(image_url, sort_order)", { count: "exact" })
+      .select("*, property_images(id, image_url, sort_order)", { count: "exact" })
 
     if (status) {
       query = query.eq("status", status)
