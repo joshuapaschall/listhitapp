@@ -1,4 +1,3 @@
-import { Resend } from "resend"
 import { assertServer } from "@/utils/assert-server"
 
 assertServer()
@@ -6,6 +5,38 @@ assertServer()
 const apiKey = process.env.RESEND_API_KEY
 if (!apiKey) console.warn("Missing RESEND_API_KEY — email notifications disabled")
 
-export const resend = apiKey ? new Resend(apiKey) : null
-
 export const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "ListHit <notifications@listhit.io>"
+
+export const resend = apiKey
+  ? {
+      emails: {
+        send: async (params: {
+          from: string
+          to: string
+          subject: string
+          html: string
+        }) => {
+          const response = await fetch("https://api.resend.com/emails", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              from: params.from,
+              to: [params.to],
+              subject: params.subject,
+              html: params.html,
+            }),
+          })
+
+          if (!response.ok) {
+            const text = await response.text()
+            throw new Error(`Resend API error (${response.status}): ${text}`)
+          }
+
+          return await response.json()
+        },
+      },
+    }
+  : null
