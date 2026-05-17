@@ -22,6 +22,11 @@ const navItems = [
     label: "Negative Keywords",
     description: "Filter out spammy or unwanted phrases",
   },
+  {
+    href: "/settings/integrations",
+    label: "Integrations",
+    description: "SendFox, Telnyx, Gmail, and other connected services",
+  },
 ]
 
 export default function SettingsLayout({ children }: { children: ReactNode }) {

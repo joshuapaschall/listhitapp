@@ -28,7 +28,7 @@ export async function GET(req: Request) {
   try {
     const token = await exchangeSendfoxCode(code)
     await upsertSendfoxIntegration(user.id, token)
-    const res = NextResponse.redirect(new URL("/integrations", url.origin))
+    const res = NextResponse.redirect(new URL("/settings/integrations", url.origin))
     res.cookies.delete("sendfox_oauth_state")
     return res
   } catch (err: any) {

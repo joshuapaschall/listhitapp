@@ -178,9 +178,15 @@ NEXT_PUBLIC_BASE_URL=
 # OpenAI (for AI features)
 OPENAI_API_KEY=
 
-# SendFox (email campaigns)
-SENDFOX_API_TOKEN=
-# SENDFOX_API_KEY is accepted as a fallback but will be removed later
+# SendFox (email campaigns) — PAT is primary auth
+SENDFOX_API_TOKEN=                       # Required for any SendFox feature
+SENDFOX_DEFAULT_LIST_ID=                 # New buyers auto-added here
+SENDFOX_DELETED_LIST_ID=                 # Soft-deleted buyers parked here
+SENDFOX_WEBHOOK_TOKEN=                   # Shared secret for /api/webhooks/sendfox
+NEXT_PUBLIC_SENDFOX_DEFAULT_LIST_ID=     # Mirror for client-side fallback
+# SENDFOX_CLIENT_ID, SENDFOX_CLIENT_SECRET, NEXT_PUBLIC_SENDFOX_REDIRECT_URI 
+# optional — only for OAuth multi-user
+View integration status at /settings/integrations.
 
 # Mapbox (location services)
 NEXT_PUBLIC_MAPBOX_TOKEN=

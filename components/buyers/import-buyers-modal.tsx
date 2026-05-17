@@ -256,9 +256,7 @@ export async function importBuyersFromCsv(
           const id = data[i]?.id
           if (b.email && id) {
             const lists: number[] = []
-            if (process.env.SENDFOX_DEFAULT_LIST_ID) {
-              lists.push(Number(process.env.SENDFOX_DEFAULT_LIST_ID))
-            }
+            if (defaultListId) lists.push(defaultListId)
             try {
               const res = await fetch("/api/sendfox/contact", {
                 method: "POST",
@@ -300,9 +298,7 @@ export async function importBuyersFromCsv(
       const email = u.existing.email || u.buyer.email
       if (email) {
         const lists: number[] = []
-        if (process.env.SENDFOX_DEFAULT_LIST_ID) {
-          lists.push(Number(process.env.SENDFOX_DEFAULT_LIST_ID))
-        }
+        if (defaultListId) lists.push(defaultListId)
         try {
           const res = await fetch("/api/sendfox/contact", {
             method: "POST",
@@ -359,7 +355,22 @@ export default function ImportBuyersModal({ onSuccess }: ImportBuyersModalProps)
   const [importProgress, setImportProgress] = useState(0)
   const [error, setError] = useState("")
   const [importResult, setImportResult] = useState<{ inserted: number; updated: number }>({ inserted: 0, updated: 0 })
+  const [defaultListId, setDefaultListId] = useState<number | null>(
+    process.env.NEXT_PUBLIC_SENDFOX_DEFAULT_LIST_ID
+      ? Number(process.env.NEXT_PUBLIC_SENDFOX_DEFAULT_LIST_ID)
+      : null,
+  )
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (defaultListId !== null) return
+    fetch("/api/sendfox/default-list")
+      .then((r) => (r.ok ? r.json() : { listId: null }))
+      .then((d) => {
+        if (d?.listId) setDefaultListId(Number(d.listId))
+      })
+      .catch(() => {})
+  }, [defaultListId])
 
   useEffect(() => {
     const stored = localStorage.getItem("buyerImportTemplates")

@@ -165,6 +165,11 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
   const [scheduleProperty, setScheduleProperty] = useState<Property | null>(null)
   const [scheduleShowing, setScheduleShowing] = useState(false)
   const [createdBuyerId, setCreatedBuyerId] = useState<string | null>(null)
+  const [defaultListId, setDefaultListId] = useState<number | null>(
+    process.env.NEXT_PUBLIC_SENDFOX_DEFAULT_LIST_ID
+      ? Number(process.env.NEXT_PUBLIC_SENDFOX_DEFAULT_LIST_ID)
+      : null,
+  )
   const [showScheduleModal, setShowScheduleModal] = useState(false)
   const queryClient = useQueryClient()
 
@@ -362,9 +367,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
       const emailToSync = insertData.email || existingBuyer?.email
       if (emailToSync) {
         const lists: number[] = []
-        if (process.env.SENDFOX_DEFAULT_LIST_ID) {
-          lists.push(Number(process.env.SENDFOX_DEFAULT_LIST_ID))
-        }
+        if (defaultListId) lists.push(defaultListId)
         try {
           const res = await fetch("/api/sendfox/contact", {
             method: "POST",
@@ -464,6 +467,16 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
       handleClose()
     }
   }
+
+  useEffect(() => {
+    if (defaultListId !== null) return
+    fetch("/api/sendfox/default-list")
+      .then((r) => (r.ok ? r.json() : { listId: null }))
+      .then((d) => {
+        if (d?.listId) setDefaultListId(Number(d.listId))
+      })
+      .catch(() => {})
+  }, [defaultListId])
 
   const isLastTab = activeTab === "status"
   const isFirstTab = activeTab === "contact"
