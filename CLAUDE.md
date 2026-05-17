@@ -27,7 +27,7 @@
 
 ### Development Tools
 - **Package Manager**: pnpm
-- **Testing**: Jest with React Testing Library
+- **Testing**: Vitest with React Testing Library
 - **E2E Testing**: Cypress
 - **Linting**: ESLint with Next.js config
 - **TypeScript**: Strict mode enabled

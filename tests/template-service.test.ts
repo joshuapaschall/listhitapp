@@ -1,4 +1,3 @@
-import { describe, expect, test, beforeEach } from "@jest/globals"
 import { TemplateService } from "../services/template-service"
 
 type TableName = "sms_templates" | "email_templates" | "quick_reply_templates"
@@ -10,7 +9,7 @@ let tables: Record<TableName, any[]> = {
 }
 let idCounter = 1
 
-jest.mock("@/lib/supabase", () => {
+vi.mock("@/lib/supabase", () => {
   const from = (table: string) => {
     if (!(table in tables)) throw new Error(`Unexpected table ${table}`)
     const store = tables[table as TableName]

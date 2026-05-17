@@ -1,15 +1,13 @@
-import { describe, test, expect, jest } from "@jest/globals"
-
-jest.mock("../services/gmail-metrics-service", () => ({
-  getGmailMetrics: jest.fn()
+vi.mock("../services/gmail-metrics-service", () => ({
+  getGmailMetrics: vi.fn()
 }))
 
-jest.mock("../services/sendfox-service", () => ({
-  fetchUnsubscribed: jest.fn().mockResolvedValue([]),
-  getEmail: jest.fn()
+vi.mock("../services/sendfox-service", () => ({
+  fetchUnsubscribed: vi.fn().mockResolvedValue([]),
+  getEmail: vi.fn()
 }))
 
-jest.mock("../lib/supabase", () => ({
+vi.mock("../lib/supabase", () => ({
   supabaseAdmin: {
     from: () => ({
       select: () => ({
@@ -26,7 +24,7 @@ import { getGmailMetrics } from "../services/gmail-metrics-service"
 
 describe("updateEmailMetrics", () => {
   test("continues when Gmail metrics fail", async () => {
-    ;(getGmailMetrics as jest.Mock).mockRejectedValue(new Error("token"))
+    ;(getGmailMetrics as vi.Mock).mockRejectedValue(new Error("token"))
     const result = await updateEmailMetrics("u1")
     expect(result).toEqual({ unsubscribed: 0, bounces: 0, opens: 0 })
   })

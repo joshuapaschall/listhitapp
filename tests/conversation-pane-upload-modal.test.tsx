@@ -1,4 +1,3 @@
-import { jest } from "@jest/globals"
 /** @jest-environment jsdom */
 import { render, screen, fireEvent } from "@testing-library/react"
 import ConversationPane from "../components/inbox/conversation-pane"
@@ -7,9 +6,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
 // jsdom doesn't implement createObjectURL
 // @ts-ignore
-global.URL.createObjectURL = jest.fn(() => "blob:url")
+global.URL.createObjectURL = vi.fn(() => "blob:url")
 
-jest.mock("../components/inbox/upload-modal", () => ({
+vi.mock("../components/inbox/upload-modal", () => ({
   __esModule: true,
   default: ({ open, onOpenChange, onAddFiles }: any) =>
     open ? (
@@ -19,11 +18,11 @@ jest.mock("../components/inbox/upload-modal", () => ({
     ) : null,
 }))
 
-jest.mock("../services/template-service", () => ({
-  TemplateService: { listTemplates: jest.fn().mockResolvedValue([]), addTemplate: jest.fn() },
+vi.mock("../services/template-service", () => ({
+  TemplateService: { listTemplates: vi.fn().mockResolvedValue([]), addTemplate: vi.fn() },
 }))
 
-jest.mock("../lib/supabase", () => {
+vi.mock("../lib/supabase", () => {
   const client = {
     from: (table: string) => {
       if (table === "buyers") {
@@ -39,13 +38,13 @@ jest.mock("../lib/supabase", () => {
       }
     },
     channel: () => ({ on: () => ({ subscribe: () => ({}) }) }),
-    removeChannel: jest.fn(),
-    storage: { from: () => ({ upload: jest.fn().mockResolvedValue({ data: { path: "p" }, error: null }), getPublicUrl: () => ({ data: { publicUrl: "" } }) }) },
+    removeChannel: vi.fn(),
+    storage: { from: () => ({ upload: vi.fn().mockResolvedValue({ data: { path: "p" }, error: null }), getPublicUrl: () => ({ data: { publicUrl: "" } }) }) },
   }
   return { supabase: client, supabaseAdmin: client }
 })
 
-Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { value: jest.fn(), writable: true })
+Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { value: vi.fn(), writable: true })
 
 describe("ConversationPane upload modal", () => {
   test("adds files to attachments", () => {

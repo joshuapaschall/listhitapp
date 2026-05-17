@@ -1,23 +1,22 @@
-import { describe, expect, test, beforeEach } from "@jest/globals"
 let sendCampaignSMS: any
 
 let mappings: any[] = []
 let messages: any[] = []
 let threads: any[] = []
 let threadId = 1
-const fetchMock = jest.fn()
-const uploadMock = jest.fn().mockResolvedValue({ data: { path: "p" }, error: null })
+const fetchMock = vi.fn()
+const uploadMock = vi.fn().mockResolvedValue({ data: { path: "p" }, error: null })
 // @ts-ignore
 global.fetch = fetchMock
 
-jest.mock("../lib/sms-rate-limiter", () => {
+vi.mock("../lib/sms-rate-limiter", () => {
   return {
-    scheduleSMS: jest.fn((_carrier: string, _body: string, fn: () => Promise<any>) => fn()),
-    lookupCarrier: jest.fn(async () => "verizon"),
+    scheduleSMS: vi.fn((_carrier: string, _body: string, fn: () => Promise<any>) => fn()),
+    lookupCarrier: vi.fn(async () => "verizon"),
   }
 })
 
-jest.mock("../lib/supabase", () => {
+vi.mock("../lib/supabase", () => {
   const client = {
       storage: { from: () => ({ upload: uploadMock, getPublicUrl: () => ({ data: { publicUrl: "https://cdn/storage/v1/object/public/public-media/p" } }) }) },
       from: (table: string) => {
@@ -91,7 +90,7 @@ describe("sendCampaignSMS sticky sender", () => {
     process.env.TELNYX_API_KEY = "KEY123"
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://cdn"
     process.env.TELNYX_MESSAGING_PROFILE_ID = "MP123"
-    jest.resetModules()
+    vi.resetModules()
     sendCampaignSMS = require("../services/campaign-sender.server").sendCampaignSMS
   })
 

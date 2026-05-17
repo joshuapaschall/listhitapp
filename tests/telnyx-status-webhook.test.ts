@@ -1,11 +1,10 @@
-import { describe, beforeEach, test, expect } from "@jest/globals"
 import { NextRequest } from "next/server"
 import { POST } from "../app/api/webhooks/telnyx-status/route"
-jest.mock("../lib/telnyx", () => ({ verifyTelnyxRequest: () => true }))
+vi.mock("../lib/telnyx", () => ({ verifyTelnyxRequest: () => true }))
 
 let recipients: any[] = []
 
-jest.mock("../lib/supabase", () => {
+vi.mock("../lib/supabase", () => {
   const client = {
     from: (table: string) => {
       if (table !== "campaign_recipients") throw new Error(`Unexpected table ${table}`)

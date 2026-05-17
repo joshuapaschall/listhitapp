@@ -1,23 +1,22 @@
 /** @jest-environment jsdom */
-import { jest } from "@jest/globals"
 import { render, fireEvent, screen, act } from "@testing-library/react"
-jest.mock("@/lib/supabase-browser", () => ({
+vi.mock("@/lib/supabase-browser", () => ({
   __esModule: true,
   supabaseBrowser: () => ({
     auth: {
-      getSession: jest.fn().mockResolvedValue({
+      getSession: vi.fn().mockResolvedValue({
         data: { session: { access_token: "test-access" } },
       }),
     },
   }),
 }))
 
-jest.useFakeTimers()
+vi.useFakeTimers()
 // Polyfill WebRTC APIs for tests
 // @ts-ignore
-global.navigator.mediaDevices = { getUserMedia: jest.fn() }
+global.navigator.mediaDevices = { getUserMedia: vi.fn() }
 
-jest.mock("../components/buyers/buyer-selector", () => ({
+vi.mock("../components/buyers/buyer-selector", () => ({
   __esModule: true,
   default: ({ onChange }: any) => (
     <button onClick={() => onChange({ id: "b1", phone: "+1222" })}>John Doe</button>
@@ -32,7 +31,7 @@ global.ResizeObserver = class {
   disconnect() {}
 }
 
-jest.mock("../components/buyers/use-buyer-suggestions", () => ({
+vi.mock("../components/buyers/use-buyer-suggestions", () => ({
   useBuyerSuggestions: () => ({
     results: [{ id: "b1", phone: "+1222", full_name: "John Doe" }],
     loading: false,
@@ -43,11 +42,11 @@ let lastDevice: any
 let TelnyxDeviceProvider: typeof import("../components/voice/TelnyxDeviceProvider").TelnyxDeviceProvider
 let useTelnyxDevice: typeof import("../components/voice/TelnyxDeviceProvider").useTelnyxDevice
 let DialPad: typeof import("../components/voice/DialPad").default
-let TelnyxRTC: jest.Mock
+let TelnyxRTC: vi.Mock
 let SwEvent: any
 let toast: typeof import("sonner").toast
 
-const fetchMock = jest.fn()
+const fetchMock = vi.fn()
 // @ts-ignore
 global.fetch = fetchMock
 
@@ -58,35 +57,35 @@ function TestComp() {
 
 describe("TelnyxDeviceProvider", () => {
   beforeAll(async () => {
-    await jest.unstable_mockModule("sonner", () => ({
+    await vi.mock("sonner", () => ({
       __esModule: true,
       toast: {
-        info: jest.fn(() => "toast-id"),
-        dismiss: jest.fn(),
-        success: jest.fn(),
-        error: jest.fn(),
-        warning: jest.fn(),
+        info: vi.fn(() => "toast-id"),
+        dismiss: vi.fn(),
+        success: vi.fn(),
+        error: vi.fn(),
+        warning: vi.fn(),
       },
     }))
 
-    await jest.unstable_mockModule("@telnyx/webrtc", () => ({
+    await vi.mock("@telnyx/webrtc", () => ({
       __esModule: true,
-      TelnyxRTC: jest.fn().mockImplementation(() => {
+      TelnyxRTC: vi.fn().mockImplementation(() => {
         lastDevice = {
-          on: jest.fn(),
-          off: jest.fn(),
-          connect: jest.fn(),
-          enableMicrophone: jest.fn().mockResolvedValue(undefined),
-          newCall: jest.fn(() => ({
-            invite: jest.fn(),
-            on: jest.fn(),
-            disconnect: jest.fn(),
-            toggleAudioMute: jest.fn(),
-            toggleHold: jest.fn(),
-            hangup: jest.fn(),
+          on: vi.fn(),
+          off: vi.fn(),
+          connect: vi.fn(),
+          enableMicrophone: vi.fn().mockResolvedValue(undefined),
+          newCall: vi.fn(() => ({
+            invite: vi.fn(),
+            on: vi.fn(),
+            disconnect: vi.fn(),
+            toggleAudioMute: vi.fn(),
+            toggleHold: vi.fn(),
+            hangup: vi.fn(),
             telnyxIDs: { telnyxCallControlId: "C1" },
             parameters: { To: "+1222" },
-            dtmf: jest.fn(),
+            dtmf: vi.fn(),
           })),
         }
         return lastDevice
@@ -100,7 +99,7 @@ describe("TelnyxDeviceProvider", () => {
     }))
 
     const telnyxModule = await import("@telnyx/webrtc")
-    TelnyxRTC = telnyxModule.TelnyxRTC as unknown as jest.Mock
+    TelnyxRTC = telnyxModule.TelnyxRTC as unknown as vi.Mock
     SwEvent = telnyxModule.SwEvent
 
     const providerModule = await import("../components/voice/TelnyxDeviceProvider")
@@ -131,9 +130,9 @@ describe("TelnyxDeviceProvider", () => {
       }
       return Promise.resolve({ ok: true, json: async () => ({}) })
     })
-    ;(TelnyxRTC as jest.Mock).mockClear()
-    ;(toast.info as jest.Mock).mockClear()
-    ;(toast.dismiss as jest.Mock).mockClear()
+    ;(TelnyxRTC as vi.Mock).mockClear()
+    ;(toast.info as vi.Mock).mockClear()
+    ;(toast.dismiss as vi.Mock).mockClear()
     localStorage.clear()
   })
 
@@ -152,7 +151,7 @@ describe("TelnyxDeviceProvider", () => {
         headers: expect.objectContaining({ Authorization: "Bearer test-access" }),
       }),
     )
-    expect((TelnyxRTC as jest.Mock).mock.calls[0][0]).toMatchObject({ debug: true })
+    expect((TelnyxRTC as vi.Mock).mock.calls[0][0]).toMatchObject({ debug: true })
   })
 
 test.skip("dial uses TelnyxRTC newCall", async () => {
@@ -162,7 +161,7 @@ test.skip("dial uses TelnyxRTC newCall", async () => {
       </TelnyxDeviceProvider>,
     )
     await act(async () => {})
-    const ready = (lastDevice.on as jest.Mock).mock.calls.find(c => c[0] === SwEvent.Ready)?.[1]
+    const ready = (lastDevice.on as vi.Mock).mock.calls.find(c => c[0] === SwEvent.Ready)?.[1]
     if (ready) await act(async () => { ready(); await Promise.resolve() })
     fireEvent.click(screen.getByText("John Doe"))
     await act(async () => {
@@ -179,7 +178,7 @@ test.skip("dial uses TelnyxRTC newCall", async () => {
       </TelnyxDeviceProvider>,
     )
     await act(async () => {})
-    const events = (lastDevice.on as jest.Mock).mock.calls.map(c => c[0])
+    const events = (lastDevice.on as vi.Mock).mock.calls.map(c => c[0])
     expect(events).toContain(SwEvent.Notification)
   })
 
@@ -200,13 +199,13 @@ test.skip("dial uses TelnyxRTC newCall", async () => {
   })
 
   test("shows unlock toast and stores flag", async () => {
-    const play = jest.fn().mockResolvedValue(undefined)
-    const pause = jest.fn()
+    const play = vi.fn().mockResolvedValue(undefined)
+    const pause = vi.fn()
     // @ts-ignore
-    global.Audio = jest.fn().mockImplementation(() => ({
+    global.Audio = vi.fn().mockImplementation(() => ({
       play,
       pause,
-      load: jest.fn(),
+      load: vi.fn(),
       currentTime: 0,
       loop: false,
     }))
@@ -231,13 +230,13 @@ test.skip("dial uses TelnyxRTC newCall", async () => {
   })
 
   test("plays ringtone on incoming call", async () => {
-    const play = jest.fn().mockResolvedValue(undefined)
-    const pause = jest.fn()
+    const play = vi.fn().mockResolvedValue(undefined)
+    const pause = vi.fn()
     // @ts-ignore
-    global.Audio = jest.fn().mockImplementation(() => ({
+    global.Audio = vi.fn().mockImplementation(() => ({
       play,
       pause,
-      load: jest.fn(),
+      load: vi.fn(),
       currentTime: 0,
       loop: false,
     }))
@@ -251,7 +250,7 @@ test.skip("dial uses TelnyxRTC newCall", async () => {
     )
 
     await act(async () => {})
-    const handler = (lastDevice.on as jest.Mock).mock.calls.find(c => c[0] === SwEvent.Notification)?.[1]
+    const handler = (lastDevice.on as vi.Mock).mock.calls.find(c => c[0] === SwEvent.Notification)?.[1]
     const call = { state: "ringing", direction: "inbound" }
     if (handler) {
       await act(async () => {
@@ -265,13 +264,13 @@ test.skip("dial uses TelnyxRTC newCall", async () => {
   })
 
   test("dispatches telnyxCallConnected on active call", async () => {
-    const play = jest.fn().mockResolvedValue(undefined)
-    const pause = jest.fn()
+    const play = vi.fn().mockResolvedValue(undefined)
+    const pause = vi.fn()
     // @ts-ignore
-    global.Audio = jest.fn().mockImplementation(() => ({
+    global.Audio = vi.fn().mockImplementation(() => ({
       play,
       pause,
-      load: jest.fn(),
+      load: vi.fn(),
       currentTime: 0,
       loop: false,
     }))
@@ -281,7 +280,7 @@ test.skip("dial uses TelnyxRTC newCall", async () => {
 
     localStorage.setItem("audioUnlocked", "true")
 
-    const listener = jest.fn()
+    const listener = vi.fn()
     window.addEventListener(
       "telnyxCallConnected",
       listener as EventListener,
@@ -294,7 +293,7 @@ test.skip("dial uses TelnyxRTC newCall", async () => {
     )
 
     await act(async () => {})
-    const ready = (lastDevice.on as jest.Mock).mock.calls.find(
+    const ready = (lastDevice.on as vi.Mock).mock.calls.find(
       c => c[0] === SwEvent.Ready,
     )?.[1]
     if (ready) {
@@ -303,7 +302,7 @@ test.skip("dial uses TelnyxRTC newCall", async () => {
       })
       await act(async () => {})
     }
-    const handler = (lastDevice.on as jest.Mock).mock.calls.find(
+    const handler = (lastDevice.on as vi.Mock).mock.calls.find(
       c => c[0] === SwEvent.Notification,
     )?.[1]
     const call = {
@@ -331,13 +330,13 @@ test.skip("dial uses TelnyxRTC newCall", async () => {
   })
 
   test("creates call record when callRecordPending flag is set", async () => {
-    const play = jest.fn().mockResolvedValue(undefined)
-    const pause = jest.fn()
+    const play = vi.fn().mockResolvedValue(undefined)
+    const pause = vi.fn()
     // @ts-ignore
-    global.Audio = jest.fn().mockImplementation(() => ({
+    global.Audio = vi.fn().mockImplementation(() => ({
       play,
       pause,
-      load: jest.fn(),
+      load: vi.fn(),
       currentTime: 0,
       loop: false,
     }))
@@ -353,7 +352,7 @@ test.skip("dial uses TelnyxRTC newCall", async () => {
     )
 
     await act(async () => {})
-    const ready = (lastDevice.on as jest.Mock).mock.calls.find(
+    const ready = (lastDevice.on as vi.Mock).mock.calls.find(
       c => c[0] === SwEvent.Ready,
     )?.[1]
     if (ready) {
@@ -361,7 +360,7 @@ test.skip("dial uses TelnyxRTC newCall", async () => {
         ready()
       })
     }
-    const handler = (lastDevice.on as jest.Mock).mock.calls.find(
+    const handler = (lastDevice.on as vi.Mock).mock.calls.find(
       c => c[0] === SwEvent.Notification,
     )?.[1]
     const call = {
@@ -391,13 +390,13 @@ test.skip("dial uses TelnyxRTC newCall", async () => {
   })
 
   test("disconnectCall can be called multiple times", async () => {
-    const play = jest.fn().mockResolvedValue(undefined)
-    const pause = jest.fn()
+    const play = vi.fn().mockResolvedValue(undefined)
+    const pause = vi.fn()
     // @ts-ignore
-    global.Audio = jest.fn().mockImplementation(() => ({
+    global.Audio = vi.fn().mockImplementation(() => ({
       play,
       pause,
-      load: jest.fn(),
+      load: vi.fn(),
       currentTime: 0,
       loop: false,
     }))
@@ -416,7 +415,7 @@ test.skip("dial uses TelnyxRTC newCall", async () => {
     )
 
     await act(async () => {})
-    const ready = (lastDevice.on as jest.Mock).mock.calls.find(
+    const ready = (lastDevice.on as vi.Mock).mock.calls.find(
       c => c[0] === SwEvent.Ready,
     )?.[1]
     if (ready) {
@@ -424,13 +423,13 @@ test.skip("dial uses TelnyxRTC newCall", async () => {
         ready()
       })
     }
-    const handler = (lastDevice.on as jest.Mock).mock.calls.find(
+    const handler = (lastDevice.on as vi.Mock).mock.calls.find(
       c => c[0] === SwEvent.Notification,
     )?.[1]
     const call = {
       state: "active",
       direction: "outbound",
-      hangup: jest.fn(),
+      hangup: vi.fn(),
       parameters: {},
     }
     if (handler) {
@@ -446,34 +445,34 @@ test.skip("dial uses TelnyxRTC newCall", async () => {
   })
 
   test("repeated calls remove old icecandidate listener", async () => {
-    const play = jest.fn().mockResolvedValue(undefined)
-    const pause = jest.fn()
+    const play = vi.fn().mockResolvedValue(undefined)
+    const pause = vi.fn()
     // @ts-ignore
-    global.Audio = jest.fn().mockImplementation(() => ({
+    global.Audio = vi.fn().mockImplementation(() => ({
       play,
       pause,
-      load: jest.fn(),
+      load: vi.fn(),
       currentTime: 0,
       loop: false,
     }))
 
     localStorage.setItem("audioUnlocked", "true")
 
-    const pc1 = { addEventListener: jest.fn(), removeEventListener: jest.fn() }
-    const pc2 = { addEventListener: jest.fn(), removeEventListener: jest.fn() }
+    const pc1 = { addEventListener: vi.fn(), removeEventListener: vi.fn() }
+    const pc2 = { addEventListener: vi.fn(), removeEventListener: vi.fn() }
     const call1 = {
       state: "new",
       direction: "outbound",
-      hangup: jest.fn(),
-      invite: jest.fn(),
+      hangup: vi.fn(),
+      invite: vi.fn(),
       peer: { instance: pc1 },
       parameters: {},
     }
     const call2 = {
       state: "new",
       direction: "outbound",
-      hangup: jest.fn(),
-      invite: jest.fn(),
+      hangup: vi.fn(),
+      invite: vi.fn(),
       peer: { instance: pc2 },
       parameters: {},
     }
@@ -495,7 +494,7 @@ test.skip("dial uses TelnyxRTC newCall", async () => {
     )
 
     await act(async () => {})
-    const ready = (lastDevice.on as jest.Mock).mock.calls.find(
+    const ready = (lastDevice.on as vi.Mock).mock.calls.find(
       c => c[0] === SwEvent.Ready,
     )?.[1]
     if (ready) {
@@ -504,13 +503,13 @@ test.skip("dial uses TelnyxRTC newCall", async () => {
       })
     }
 
-    ;(lastDevice.newCall as jest.Mock).mockReturnValueOnce(call1).mockReturnValueOnce(call2)
+    ;(lastDevice.newCall as vi.Mock).mockReturnValueOnce(call1).mockReturnValueOnce(call2)
 
     fireEvent.click(screen.getByText("call"))
     await act(async () => {})
     expect(lastDevice.newCall).toHaveBeenCalled()
     const firstHandler = pc1.addEventListener.mock.calls[0]?.[1]
-    const notify = (lastDevice.on as jest.Mock).mock.calls.find(
+    const notify = (lastDevice.on as vi.Mock).mock.calls.find(
       c => c[0] === SwEvent.Notification,
     )?.[1]
     if (notify) {
@@ -535,7 +534,7 @@ test.skip("dial uses TelnyxRTC newCall", async () => {
     const CallClass = function () {}
     ;(TelnyxRTC as any).Call = CallClass
     const proto = CallClass.prototype
-    const orig = (proto._onIceSdp = jest.fn())
+    const orig = (proto._onIceSdp = vi.fn())
 
     render(
       <TelnyxDeviceProvider>
@@ -547,7 +546,7 @@ test.skip("dial uses TelnyxRTC newCall", async () => {
 
     expect(proto._onIceSdp).not.toBe(orig)
 
-    const dispatch = jest.spyOn(window, "dispatchEvent")
+    const dispatch = vi.spyOn(window, "dispatchEvent")
     ;(proto._onIceSdp as any)(null)
     expect(dispatch).toHaveBeenCalledWith(expect.any(CustomEvent))
     expect(orig).not.toHaveBeenCalled()
@@ -561,8 +560,8 @@ test.skip("dial uses TelnyxRTC newCall", async () => {
     const CallClass = function () {}
     ;(TelnyxRTC as any).Call = CallClass
     const proto = CallClass.prototype
-    const orig = (proto._onIce = jest.fn())
-    proto._onIceSdp = jest.fn()
+    const orig = (proto._onIce = vi.fn())
+    proto._onIceSdp = vi.fn()
 
     render(
       <TelnyxDeviceProvider>
@@ -574,7 +573,7 @@ test.skip("dial uses TelnyxRTC newCall", async () => {
 
     expect(proto._onIce).not.toBe(orig)
 
-    const dispatch = jest.spyOn(window, "dispatchEvent")
+    const dispatch = vi.spyOn(window, "dispatchEvent")
     ;(proto._onIce as any)(null)
     expect(dispatch).toHaveBeenCalledWith(expect.any(CustomEvent))
     expect(orig).not.toHaveBeenCalled()

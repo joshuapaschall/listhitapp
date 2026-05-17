@@ -1,27 +1,26 @@
-import { beforeEach, describe, expect, jest, test } from "@jest/globals"
 import { NextRequest } from "next/server"
 
 import { POST } from "../app/api/calls/outbound/route"
 
-const fetchMock = jest.fn()
+const fetchMock = vi.fn()
 // @ts-ignore
 global.fetch = fetchMock
 
-const requireAgentMock = jest.fn()
+const requireAgentMock = vi.fn()
 
-jest.mock("@/lib/agent-auth", () => ({
+vi.mock("@/lib/agent-auth", () => ({
   requireAgent: (...args: any[]) => requireAgentMock(...args),
 }))
 
-jest.mock("@/lib/calls-repo", () => ({
-  saveCustomerLeg: jest.fn(),
+vi.mock("@/lib/calls-repo", () => ({
+  saveCustomerLeg: vi.fn(),
 }))
 
 describe("/api/calls/outbound", () => {
   beforeEach(() => {
     fetchMock.mockReset()
     requireAgentMock.mockReset()
-    jest.clearAllMocks()
+    vi.clearAllMocks()
     process.env.TELNYX_API_KEY = "api_key"
     process.env.CALL_CONTROL_APP_ID = "cc-app-1"
     process.env.FROM_NUMBER = "+15551234567"

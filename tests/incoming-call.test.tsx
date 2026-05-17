@@ -1,10 +1,9 @@
-import { jest } from "@jest/globals"
 /** @jest-environment jsdom */
 import { render, fireEvent, screen } from "@testing-library/react"
 import IncomingCall from "../components/voice/IncomingCall"
 
-jest.mock("../components/voice/TelnyxDeviceProvider", () => ({
-  useTelnyxDevice: () => ({ rejectIncomingCall: jest.fn() })
+vi.mock("../components/voice/TelnyxDeviceProvider", () => ({
+  useTelnyxDevice: () => ({ rejectIncomingCall: vi.fn() })
 }))
 
 describe("IncomingCall", () => {
@@ -13,8 +12,8 @@ describe("IncomingCall", () => {
       state: "ringing",
       direction: "inbound",
       parameters: { From: "+1555" },
-      answer: jest.fn(),
-      hangup: jest.fn(),
+      answer: vi.fn(),
+      hangup: vi.fn(),
     } as any
     render(
       <IncomingCall

@@ -1,5 +1,3 @@
-import { beforeEach, describe, expect, test, jest } from "@jest/globals"
-
 type SessionRecord = {
   agent_session_id: string
   customer_call_control_id: string
@@ -16,7 +14,7 @@ const callsState: CallsState = {
   upserts: [],
 }
 
-jest.mock("../lib/supabase", () => {
+vi.mock("../lib/supabase", () => {
   const getRecord = (filters: Record<string, string>) => {
     for (const record of callsState.sessions.values()) {
       const matches = Object.entries(filters).every(([column, value]) => record[column as keyof SessionRecord] === value)

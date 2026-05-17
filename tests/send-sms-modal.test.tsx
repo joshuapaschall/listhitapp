@@ -1,4 +1,3 @@
-import { jest } from "@jest/globals"
 /** @jest-environment jsdom */
 import { render, screen, fireEvent } from "@testing-library/react"
 import SendSmsModal from "../components/buyers/send-sms-modal"
@@ -6,33 +5,33 @@ import { ALLOWED_MMS_EXTENSIONS, MAX_MMS_SIZE } from "../utils/uploadMedia"
 
 // jsdom doesn't implement createObjectURL
 // @ts-ignore
-global.URL.createObjectURL = jest.fn(() => "blob:mock")
+global.URL.createObjectURL = vi.fn(() => "blob:mock")
 
-jest.mock("../services/template-service", () => ({
-  TemplateService: { listTemplates: jest.fn().mockResolvedValue([]), addTemplate: jest.fn() }
+vi.mock("../services/template-service", () => ({
+  TemplateService: { listTemplates: vi.fn().mockResolvedValue([]), addTemplate: vi.fn() }
 }))
 
-jest.mock("../services/prompt-service", () => ({
-  PromptService: { listPrompts: jest.fn().mockResolvedValue([]) }
+vi.mock("../services/prompt-service", () => ({
+  PromptService: { listPrompts: vi.fn().mockResolvedValue([]) }
 }))
 
 
-var uploadMock: jest.Mock
-jest.mock("../utils/uploadMedia", () => {
-  uploadMock = jest.fn().mockResolvedValue("https://cdn/p")
-  const actual = jest.requireActual("../utils/uploadMedia")
+var uploadMock: vi.Mock
+vi.mock("../utils/uploadMedia", async () => {
+  uploadMock = vi.fn().mockResolvedValue("https://cdn/p")
+  const actual = await vi.importActual<typeof import("../utils/uploadMedia")>("../utils/uploadMedia")
   return { ...actual, uploadMediaFile: (...args: any[]) => uploadMock(...args) }
 })
 
-jest.mock("../services/campaign-service", () => ({
+vi.mock("../services/campaign-service", () => ({
   default: {
-    createCampaign: jest.fn().mockResolvedValue({ id: "c1" }),
-    sendNow: jest.fn().mockResolvedValue({}),
+    createCampaign: vi.fn().mockResolvedValue({ id: "c1" }),
+    sendNow: vi.fn().mockResolvedValue({}),
   }
 }))
 
-jest.mock("sonner", () => {
-  const toast = { success: jest.fn(), error: jest.fn() }
+vi.mock("sonner", () => {
+  const toast = { success: vi.fn(), error: vi.fn() }
   return { toast }
 })
 

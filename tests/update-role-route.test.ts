@@ -1,10 +1,9 @@
-import { describe, beforeEach, test, expect, jest } from "@jest/globals"
 import { NextRequest } from "next/server"
 import { POST } from "../app/api/admin/update-role/route"
 
 let profiles: any[] = []
 
-jest.mock("../lib/supabase", () => {
+vi.mock("../lib/supabase", () => {
   const client = {
     from: (table: string) => {
       if (table !== "profiles") throw new Error(`Unexpected table ${table}`)

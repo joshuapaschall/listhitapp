@@ -1,6 +1,6 @@
-import { jest } from "@jest/globals";
+import { vi } from "vitest";
 
-export const updateEmailMetricsMock = jest.fn();
+export const updateEmailMetricsMock = vi.fn();
 
 export function updateEmailMetrics(...args: any[]) {
   return updateEmailMetricsMock(...args);

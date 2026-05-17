@@ -1,4 +1,4 @@
-import { jest } from "@jest/globals"
+import { vi } from "vitest"
 
 type AgentRecord = {
   id: string
@@ -16,7 +16,7 @@ let agentRecord: AgentRecord = {
   telnyx_credential_id: "cred-1",
 }
 
-export const supabaseAdminAuthGetUserMock = jest.fn(async () => ({
+export const supabaseAdminAuthGetUserMock = vi.fn(async () => ({
   data: { user: null },
   error: null,
 }))

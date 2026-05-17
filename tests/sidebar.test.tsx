@@ -1,24 +1,23 @@
-import { jest } from "@jest/globals"
 /** @jest-environment jsdom */
 import { render, screen, fireEvent } from "@testing-library/react"
 import { Sidebar } from "../components/layout/sidebar"
 
-const roleMock = jest.fn()
-const invalidateQueries = jest.fn()
+const roleMock = vi.fn()
+const invalidateQueries = vi.fn()
 
-jest.mock("../hooks/use-user-role", () => ({
+vi.mock("../hooks/use-user-role", () => ({
   __esModule: true,
   default: () => roleMock(),
 }))
 
-jest.mock("@tanstack/react-query", () => ({
-  useQuery: jest.fn(() => ({ data: 0 })),
+vi.mock("@tanstack/react-query", () => ({
+  useQuery: vi.fn(() => ({ data: 0 })),
   useQueryClient: () => ({ invalidateQueries }),
 }))
 
-jest.mock("../lib/supabase", () => {
+vi.mock("../lib/supabase", () => {
   const channel = { on: () => channel, subscribe: () => ({}) }
-  const client = { channel: () => channel, removeChannel: jest.fn() }
+  const client = { channel: () => channel, removeChannel: vi.fn() }
   return { supabase: client, supabaseAdmin: client }
 })
 

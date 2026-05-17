@@ -1,17 +1,16 @@
-import { jest } from "@jest/globals"
 /** @jest-environment jsdom */
 import { render, screen, waitFor, within } from "@testing-library/react"
 import "@testing-library/jest-dom"
 import SmartGroupsSidebar from "../components/buyers/smart-groups-sidebar"
 
-jest.mock("../lib/group-service", () => ({
-  getGroups: jest.fn(async () => [
+vi.mock("../lib/group-service", () => ({
+  getGroups: vi.fn(async () => [
     { id: "1", name: "Synced", created_at: "", sendfox_list_id: 5 },
     { id: "2", name: "Local", created_at: "", sendfox_list_id: null },
   ]),
-  createGroup: jest.fn(),
-  updateGroup: jest.fn(),
-  deleteGroup: jest.fn(),
+  createGroup: vi.fn(),
+  updateGroup: vi.fn(),
+  deleteGroup: vi.fn(),
 }))
 
 describe("SmartGroupsSidebar", () => {

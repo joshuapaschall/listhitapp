@@ -1,22 +1,20 @@
-import { describe, beforeEach, test, expect, jest } from "@jest/globals"
-
 let listThreadsFn: any
 let sendEmailFn: any
-let upsertMock = jest.fn()
-let listMock = jest.fn()
-let sendMock = jest.fn()
-let modifyMock = jest.fn()
-let updateMock = jest.fn(() => ({ eq: jest.fn(async () => ({})) }))
-let selectMock = jest.fn(() => ({ in: jest.fn(async () => ({ data: [] })) }))
+let upsertMock = vi.fn()
+let listMock = vi.fn()
+let sendMock = vi.fn()
+let modifyMock = vi.fn()
+let updateMock = vi.fn(() => ({ eq: vi.fn(async () => ({})) }))
+let selectMock = vi.fn(() => ({ in: vi.fn(async () => ({ data: [] })) }))
 let tokenSelect: any
 let tokenUpdate: any
 let tokenRow: any
 
-jest.mock("googleapis", () => {
+vi.mock("googleapis", () => {
   return {
     google: {
-      auth: { OAuth2: jest.fn(() => ({ setCredentials: jest.fn() })) },
-      gmail: jest.fn(() => ({
+      auth: { OAuth2: vi.fn(() => ({ setCredentials: vi.fn() })) },
+      gmail: vi.fn(() => ({
         users: {
           threads: {
             list: (...args: any[]) => listMock(...args),
@@ -29,17 +27,17 @@ jest.mock("googleapis", () => {
   }
 })
 
-jest.mock("@supabase/supabase-js", () => ({
+vi.mock("@supabase/supabase-js", () => ({
   createClient: () => ({
     from: (table: string) => {
       if (table === "gmail_tokens") {
-        tokenSelect = jest.fn(() => ({
-          eq: jest.fn(() => ({
+        tokenSelect = vi.fn(() => ({
+          eq: vi.fn(() => ({
             maybeSingle: async () => ({ data: tokenRow, error: null }),
           })),
         }))
-        tokenUpdate = jest.fn((data: any) => ({
-          eq: jest.fn(async () => {
+        tokenUpdate = vi.fn((data: any) => ({
+          eq: vi.fn(async () => {
             tokenRow = { ...tokenRow, ...data }
             return { data: tokenRow, error: null }
           }),
@@ -60,7 +58,7 @@ jest.mock("@supabase/supabase-js", () => ({
 
 describe("gmail-service", () => {
   beforeEach(() => {
-    jest.resetModules()
+    vi.resetModules()
     listMock.mockReset()
     sendMock.mockReset()
     upsertMock.mockReset()
@@ -104,7 +102,7 @@ describe("gmail-service", () => {
 
   test("getAccessToken refreshes expired token", async () => {
     tokenRow.expires_at = 0
-    ;(global as any).fetch = jest.fn(async () => ({
+    ;(global as any).fetch = vi.fn(async () => ({
       ok: true,
       json: async () => ({ access_token: "new", expires_in: 3600 }),
     }))
@@ -131,7 +129,7 @@ describe("gmail-service", () => {
 
   test("countUnreadEmailThreads returns count", async () => {
     selectMock.mockImplementation(() => ({
-      eq: jest.fn(async () => ({ count: 2, error: null })),
+      eq: vi.fn(async () => ({ count: 2, error: null })),
     }))
     const mod = require("../services/gmail-supabase")
     const count = await mod.countUnreadEmailThreads()

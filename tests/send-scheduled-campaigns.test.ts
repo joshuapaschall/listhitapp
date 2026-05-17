@@ -1,5 +1,3 @@
-import { describe, beforeEach, afterEach, test, expect, jest } from "@jest/globals"
-
 interface Campaign {
   id: string
   scheduled_at: string
@@ -12,7 +10,7 @@ interface Campaign {
 
 let campaigns: Campaign[] = []
 let updateCalls: any[] = []
-const fetchMock = jest.fn()
+const fetchMock = vi.fn()
 
 const supabase = {
   from: (table: string) => {
@@ -98,17 +96,17 @@ describe("send-scheduled-campaigns", () => {
     campaigns = []
     updateCalls = []
     fetchMock.mockReset()
-    jest.useFakeTimers()
+    vi.useFakeTimers()
     process.env.SUPABASE_SERVICE_ROLE_KEY = "key"
     process.env.DISPOTOOL_BASE_URL = "http://localhost"
   })
 
   afterEach(() => {
-    jest.useRealTimers()
+    vi.useRealTimers()
   })
 
   test("marks processing then pending on failure", async () => {
-    jest.setSystemTime(new Date("2024-06-21T16:00:00Z"))
+    vi.setSystemTime(new Date("2024-06-21T16:00:00Z"))
     campaigns.push({ id: "c1", scheduled_at: "2024-06-21T15:00:00Z", status: "pending" })
     fetchMock.mockResolvedValue({ ok: false, text: async () => "bad" })
 
@@ -126,7 +124,7 @@ describe("send-scheduled-campaigns", () => {
   })
 
   test("skips on weekend when weekday_only", async () => {
-    jest.setSystemTime(new Date("2024-06-22T16:00:00Z"))
+    vi.setSystemTime(new Date("2024-06-22T16:00:00Z"))
     campaigns.push({ id: "c1", scheduled_at: "2024-06-22T15:00:00Z", status: "pending", weekday_only: true })
     fetchMock.mockResolvedValue({ ok: true })
 
@@ -138,7 +136,7 @@ describe("send-scheduled-campaigns", () => {
   })
 
   test("skips outside time window", async () => {
-    jest.setSystemTime(new Date("2024-06-21T06:00:00Z"))
+    vi.setSystemTime(new Date("2024-06-21T06:00:00Z"))
     campaigns.push({
       id: "c1",
       scheduled_at: "2024-06-21T05:00:00Z",
@@ -157,7 +155,7 @@ describe("send-scheduled-campaigns", () => {
   })
 
   test("exits early when base url missing", async () => {
-    jest.setSystemTime(new Date("2024-06-21T16:00:00Z"))
+    vi.setSystemTime(new Date("2024-06-21T16:00:00Z"))
     campaigns.push({ id: "c1", scheduled_at: "2024-06-21T15:00:00Z", status: "pending" })
     delete process.env.DISPOTOOL_BASE_URL
     delete process.env.SITE_URL
@@ -171,7 +169,7 @@ describe("send-scheduled-campaigns", () => {
   })
 
   test("treats redirects as failures", async () => {
-    jest.setSystemTime(new Date("2024-06-21T16:00:00Z"))
+    vi.setSystemTime(new Date("2024-06-21T16:00:00Z"))
     campaigns.push({ id: "c1", scheduled_at: "2024-06-21T15:00:00Z", status: "pending", timezone: "America/New_York" })
     fetchMock.mockResolvedValue({
       ok: false,
@@ -188,7 +186,7 @@ describe("send-scheduled-campaigns", () => {
   })
 
   test("uses campaign timezone for send window checks", async () => {
-    jest.setSystemTime(new Date("2024-06-21T06:45:00Z"))
+    vi.setSystemTime(new Date("2024-06-21T06:45:00Z"))
     campaigns.push({
       id: "c1",
       scheduled_at: "2024-06-21T06:00:00Z",

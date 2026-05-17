@@ -1,4 +1,3 @@
-import { describe, beforeEach, test, expect, jest } from "@jest/globals"
 import { NextRequest } from "next/server"
 import { POST } from "../app/api/calls/record/route"
 
@@ -6,7 +5,7 @@ let insertedCalls: any[] = []
 let senderMappings: any[] = []
 let callId = 1
 
-jest.mock("../lib/supabase", () => {
+vi.mock("../lib/supabase", () => {
   const client = {
     from: (table: string) => {
       if (table === "calls") {

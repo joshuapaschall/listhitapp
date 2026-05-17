@@ -1,10 +1,9 @@
-import { jest } from "@jest/globals"
 /** @jest-environment jsdom */
 import { _onIceSdp, _onIce } from "../components/voice/ice-handlers"
 
 describe("ice handlers", () => {
   test("_onIceSdp handles null", () => {
-    const dispatch = jest.spyOn(window, "dispatchEvent")
+    const dispatch = vi.spyOn(window, "dispatchEvent")
     expect(() => _onIceSdp(null as any)).not.toThrow()
     expect(dispatch).toHaveBeenCalledWith(expect.any(CustomEvent))
   })
@@ -15,7 +14,7 @@ describe("ice handlers", () => {
 
   test("_onIce forwards localDescription", () => {
     const desc = { sdp: "s", type: "offer" }
-    const spy = jest.spyOn(require("../components/voice/ice-handlers"), "_onIceSdp")
+    const spy = vi.spyOn(require("../components/voice/ice-handlers"), "_onIceSdp")
     _onIce({ localDescription: desc })
     expect(spy).toHaveBeenCalledWith(desc)
   })

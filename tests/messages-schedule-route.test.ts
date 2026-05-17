@@ -1,18 +1,17 @@
-import { describe, beforeEach, test, expect, jest } from "@jest/globals"
 import { NextRequest } from "next/server"
 
-const fetchMock = jest.fn()
-const ensureMock = jest.fn(async (urls: string[]) => urls)
+const fetchMock = vi.fn()
+const ensureMock = vi.fn(async (urls: string[]) => urls)
 let insertedRow: any = null
 
 // @ts-ignore
 global.fetch = fetchMock
 
-jest.unstable_mockModule("@/utils/mms.server", () => ({
+vi.mock("@/utils/mms.server", () => ({
   ensurePublicMediaUrls: (...args: any[]) => ensureMock(...args),
 }))
 
-jest.unstable_mockModule("@/lib/supabase", () => ({
+vi.mock("@/lib/supabase", () => ({
   supabase: {
     from: (table: string) => {
       if (table !== "messages") throw new Error(`Unexpected table ${table}`)
@@ -36,7 +35,7 @@ jest.unstable_mockModule("@/lib/supabase", () => ({
 
 describe("messages schedule route", () => {
   beforeEach(() => {
-    jest.resetModules()
+    vi.resetModules()
     fetchMock.mockReset()
     ensureMock.mockClear()
     insertedRow = null

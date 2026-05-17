@@ -1,14 +1,13 @@
-import { describe, beforeEach, test, expect, jest } from "@jest/globals"
 import { NextRequest } from "next/server"
 import { POST } from "../app/api/webhooks/telnyx-incoming-sms/route"
 import * as mms from "../utils/mms.server"
-jest.mock("../lib/telnyx", () => ({ verifyTelnyxRequest: () => true }))
+vi.mock("../lib/telnyx", () => ({ verifyTelnyxRequest: () => true }))
 
-const fetchMock = jest.fn()
+const fetchMock = vi.fn()
 // @ts-ignore
 global.fetch = fetchMock
 
-const uploadMock = jest.fn().mockResolvedValue({ data: { path: "p" }, error: null })
+const uploadMock = vi.fn().mockResolvedValue({ data: { path: "p" }, error: null })
 
 let buyers: any[] = []
 let messages: any[] = []
@@ -16,14 +15,14 @@ let threads: any[] = []
 let threadId = 1
 let recipients: any[] = []
 
-jest.mock("../lib/supabase", () => {
+vi.mock("../lib/supabase", () => {
   const client = {
 
     storage: {
       from: () => ({
         upload: uploadMock,
         getPublicUrl: () => ({ data: { publicUrl: "https://cdn/storage/v1/object/public/public-media/p" } }),
-        remove: jest.fn().mockResolvedValue({ data: null, error: null })
+        remove: vi.fn().mockResolvedValue({ data: null, error: null })
       })
     },
     from: (table: string) => {
@@ -525,7 +524,7 @@ describe.skip("Telnyx incoming SMS webhook", () => {
   test("logs error when media download fails but still returns 204", async () => {
     process.env.TELNYX_API_KEY = "KEY"
     fetchMock.mockRejectedValueOnce(new Error("fail"))
-    const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {})
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
     const body = {
       data: {
         event_type: "message.received",

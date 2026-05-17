@@ -1,21 +1,20 @@
-import { describe, beforeEach, test, expect, jest } from "@jest/globals"
 import { NextRequest } from "next/server"
 import { POST } from "../app/api/admin/delete-user/route"
-jest.mock("next/headers", () => ({
-  cookies: () => ({ get: jest.fn(), set: jest.fn(), delete: jest.fn() }),
+vi.mock("next/headers", () => ({
+  cookies: () => ({ get: vi.fn(), set: vi.fn(), delete: vi.fn() }),
 }))
 
 let deleted: string[] = []
 
-jest.mock("../lib/supabase", () => {
+vi.mock("../lib/supabase", () => {
   const client = {
-    auth: { admin: { deleteUser: jest.fn(async (id: string) => { deleted.push(id); return { error: null } }) } },
+    auth: { admin: { deleteUser: vi.fn(async (id: string) => { deleted.push(id); return { error: null } }) } },
     from: () => ({ delete: () => ({ eq: async () => ({ error: null }) }) }),
   }
   return { supabaseAdmin: client }
 })
 
-jest.mock("@supabase/auth-helpers-nextjs", () => ({
+vi.mock("@supabase/auth-helpers-nextjs", () => ({
   createRouteHandlerClient: () => ({
     auth: { getUser: async () => ({ data: { user: { id: "a" } } }) },
     from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { role: "admin" }, error: null }) }) }) }),

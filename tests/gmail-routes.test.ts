@@ -1,24 +1,23 @@
-import { describe, beforeEach, test, expect, jest } from "@jest/globals"
 import { NextRequest } from "next/server"
 
-jest.mock("next/headers", () => ({
-  cookies: () => ({ get: jest.fn(), set: jest.fn(), delete: jest.fn() }),
+vi.mock("next/headers", () => ({
+  cookies: () => ({ get: vi.fn(), set: vi.fn(), delete: vi.fn() }),
 }))
-jest.mock("mimetext", () => ({
+vi.mock("mimetext", () => ({
   createMimeMessage: () => ({
-    setSender: jest.fn(),
-    setRecipients: jest.fn(),
-    setCc: jest.fn(),
-    setBcc: jest.fn(),
-    setSubject: jest.fn(),
-    setHeader: jest.fn(),
-    addMessage: jest.fn(),
-    addAttachment: jest.fn(),
-    asRaw: jest.fn(() => "raw"),
+    setSender: vi.fn(),
+    setRecipients: vi.fn(),
+    setCc: vi.fn(),
+    setBcc: vi.fn(),
+    setSubject: vi.fn(),
+    setHeader: vi.fn(),
+    addMessage: vi.fn(),
+    addAttachment: vi.fn(),
+    asRaw: vi.fn(() => "raw"),
   }),
 }), { virtual: true })
 
-jest.mock("@supabase/auth-helpers-nextjs", () => ({
+vi.mock("@supabase/auth-helpers-nextjs", () => ({
   __esModule: true,
   createRouteHandlerClient: () => ({
     auth: { getUser: async () => ({ data: { user: { id: "u1" } } }) },
@@ -40,13 +39,13 @@ let supabase: any
 
 function gmailApiMockFactory() {
   return {
-    listThreads: jest.fn(async () => ({ threads: [{ id: "t1" }], nextPageToken: null, resultSizeEstimate: 1 })),
-    getThread: jest.fn(async (_userId: string, id: string) => ({
+    listThreads: vi.fn(async () => ({ threads: [{ id: "t1" }], nextPageToken: null, resultSizeEstimate: 1 })),
+    getThread: vi.fn(async (_userId: string, id: string) => ({
       id,
       messages: [{ payload: { headers: [{ name: "Message-ID", value: "<m1>" }] } }],
     })),
-    listDrafts: jest.fn(async () => [{ id: "d1", messageId: "m1", threadId: "t1" }]),
-    getDraft: jest.fn(async () => ({
+    listDrafts: vi.fn(async () => [{ id: "d1", messageId: "m1", threadId: "t1" }]),
+    getDraft: vi.fn(async () => ({
       id: "d1",
       message: {
         id: "m1",
@@ -54,20 +53,20 @@ function gmailApiMockFactory() {
         payload: { headers: [{ name: "To", value: "x@test.com" }, { name: "Subject", value: "Subj" }] },
       },
     })),
-    sendDraft: jest.fn(async () => ({ id: "sent", threadId: "t1" })),
-    buildMessage: jest.fn(() => "raw"),
-    buildReply: jest.fn(() => "rawReply"),
-    sendEmail: jest.fn(async () => ({ data: { id: "sent", threadId: "thr" } })),
-    deleteThread: jest.fn(async () => ({})),
-    archiveThread: jest.fn(async () => ({})),
-    setThreadStarred: jest.fn(async () => ({})),
-    setThreadUnread: jest.fn(async () => ({})),
+    sendDraft: vi.fn(async () => ({ id: "sent", threadId: "t1" })),
+    buildMessage: vi.fn(() => "raw"),
+    buildReply: vi.fn(() => "rawReply"),
+    sendEmail: vi.fn(async () => ({ data: { id: "sent", threadId: "thr" } })),
+    deleteThread: vi.fn(async () => ({})),
+    archiveThread: vi.fn(async () => ({})),
+    setThreadStarred: vi.fn(async () => ({})),
+    setThreadUnread: vi.fn(async () => ({})),
   }
 }
-jest.mock("../services/gmail-api", gmailApiMockFactory)
-jest.mock("@/services/gmail-api", gmailApiMockFactory)
+vi.mock("../services/gmail-api", gmailApiMockFactory)
+vi.mock("@/services/gmail-api", gmailApiMockFactory)
 
-jest.mock("@supabase/supabase-js", () => ({
+vi.mock("@supabase/supabase-js", () => ({
   createClient: () => supabase,
 }))
 
@@ -113,7 +112,7 @@ function buildSupabase(rows: any[] = [], buyers: any[] = []) {
 
 describe("gmail routes", () => {
   beforeEach(async () => {
-    jest.resetModules()
+    vi.resetModules()
     const mod = await import("../services/gmail-api")
     listThreads = mod.listThreads
     getThread = mod.getThread

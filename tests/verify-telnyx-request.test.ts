@@ -1,9 +1,8 @@
-import { describe, test, expect, jest } from "@jest/globals"
 import { NextRequest } from "next/server"
 import { generateKeyPairSync, sign } from "crypto"
 import { Buffer } from "buffer"
 
-jest.mock("@noble/ed25519", () => {
+vi.mock("@noble/ed25519", () => {
   const crypto = require("crypto")
   return {
     etc: { concatBytes: (...arr) => Buffer.concat(arr) },
@@ -19,7 +18,7 @@ jest.mock("@noble/ed25519", () => {
   }
 })
 
-jest.mock("@noble/hashes/sha512", () => {
+vi.mock("@noble/hashes/sha512", () => {
   const crypto = require("crypto")
   return {
     sha512: (msg: Uint8Array) => crypto.createHash("sha512").update(Buffer.from(msg)).digest(),

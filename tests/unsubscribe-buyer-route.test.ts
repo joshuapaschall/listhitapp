@@ -1,39 +1,38 @@
-import { describe, test, expect, jest } from "@jest/globals"
 import { NextRequest } from "next/server"
 
 const sendfox = {
-  unsubscribe: jest.fn(async () => {}),
-  findContactByEmail: jest.fn(async () => ({ id: 1 })),
-  removeContactFromList: jest.fn(async () => {}),
+  unsubscribe: vi.fn(async () => {}),
+  findContactByEmail: vi.fn(async () => ({ id: 1 })),
+  removeContactFromList: vi.fn(async () => {}),
 }
 
-const selectBuyerMock = jest.fn(() => ({
-  eq: jest.fn(() => ({ single: jest.fn(async () => ({ data: { email: "a@test.com" }, error: null })) })),
+const selectBuyerMock = vi.fn(() => ({
+  eq: vi.fn(() => ({ single: vi.fn(async () => ({ data: { email: "a@test.com" }, error: null })) })),
 }))
 
-const selectBuyerGroupMock = jest.fn(() => ({
-  eq: jest.fn(async () => ({ data: [{ groups: { sendfox_list_id: 5 } }], error: null })),
+const selectBuyerGroupMock = vi.fn(() => ({
+  eq: vi.fn(async () => ({ data: [{ groups: { sendfox_list_id: 5 } }], error: null })),
 }))
 
 let updateData: any
-const updateMock = jest.fn((data) => {
+const updateMock = vi.fn((data) => {
   updateData = data
   return {
-    eq: jest.fn(async () => ({ error: null })),
+    eq: vi.fn(async () => ({ error: null })),
   }
 })
 
-const fromMock = jest.fn((table: string) => {
+const fromMock = vi.fn((table: string) => {
   if (table === "buyers") return { select: selectBuyerMock, update: updateMock }
   if (table === "buyer_groups") return { select: selectBuyerGroupMock }
   return { select: selectBuyerMock, update: updateMock }
 })
 
-jest.mock("../lib/supabase", () => ({
+vi.mock("../lib/supabase", () => ({
   supabaseAdmin: { from: fromMock },
 }))
 
-jest.mock("../services/sendfox-service", () => ({
+vi.mock("../services/sendfox-service", () => ({
   unsubscribe: (...args: any[]) => sendfox.unsubscribe(...args),
   findContactByEmail: (...args: any[]) => sendfox.findContactByEmail(...args),
   removeContactFromList: (...args: any[]) => sendfox.removeContactFromList(...args),

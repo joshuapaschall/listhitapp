@@ -1,5 +1,4 @@
 /** @jest-environment jsdom */
-import { beforeAll, describe, expect, test, jest } from "@jest/globals"
 import { render, fireEvent } from "@testing-library/react"
 import ThemeToggle from "../components/theme-toggle"
 import { ThemeProvider } from "../components/theme-provider"
@@ -11,11 +10,11 @@ beforeAll(() => {
       matches: false,
       media: query,
       onchange: null,
-      addListener: jest.fn(),
-      removeListener: jest.fn(),
-      addEventListener: jest.fn(),
-      removeEventListener: jest.fn(),
-      dispatchEvent: jest.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
     }),
   })
 })

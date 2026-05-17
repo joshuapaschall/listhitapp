@@ -1,10 +1,9 @@
-import { describe, beforeEach, test, expect } from "@jest/globals"
 import { listInboxThreads, listSentThreads, listAutosentMessages, countUnreadThreads } from "../services/message-service"
 
 let threads: any[] = []
 let messages: any[] = []
 
-jest.mock("../lib/supabase", () => {
+vi.mock("../lib/supabase", () => {
   const client = {
 
     from: (table: string) => {

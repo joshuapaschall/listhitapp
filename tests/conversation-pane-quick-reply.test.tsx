@@ -1,24 +1,23 @@
-import { jest } from "@jest/globals"
 /** @jest-environment jsdom */
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import ConversationPane from "../components/inbox/conversation-pane"
 import { NowProvider } from "../hooks/use-now"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
-const fetchMock = jest.fn()
+const fetchMock = vi.fn()
 // @ts-ignore
 global.fetch = fetchMock
-Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { value: jest.fn(), writable: true })
+Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { value: vi.fn(), writable: true })
 
 const listTemplatesMock = jest
   .fn()
   .mockResolvedValue([{ id: "qr1", name: "Quick 1", message: "Quick message" }] as any)
 
-jest.mock("../services/template-service", () => {
-  return { TemplateService: { listTemplates: listTemplatesMock, addTemplate: jest.fn() } }
+vi.mock("../services/template-service", () => {
+  return { TemplateService: { listTemplates: listTemplatesMock, addTemplate: vi.fn() } }
 })
 
-jest.mock("../lib/supabase", () => {
+vi.mock("../lib/supabase", () => {
   const client = {
     from: (table: string) => {
       if (table === "buyers") {
@@ -39,8 +38,8 @@ jest.mock("../lib/supabase", () => {
       }
     },
     channel: () => ({ on: () => ({ subscribe: () => ({}) }) }),
-    removeChannel: jest.fn(),
-    storage: { from: () => ({ upload: jest.fn().mockResolvedValue({ data: { path: "p" }, error: null }), getPublicUrl: () => ({ data: { publicUrl: "" } }) }) }
+    removeChannel: vi.fn(),
+    storage: { from: () => ({ upload: vi.fn().mockResolvedValue({ data: { path: "p" }, error: null }), getPublicUrl: () => ({ data: { publicUrl: "" } }) }) }
   }
   return { supabase: client, supabaseAdmin: client }
 })

@@ -1,4 +1,3 @@
-import { jest } from "@jest/globals"
 /** @jest-environment jsdom */
 import { render, screen, fireEvent } from "@testing-library/react"
 import ConversationPane from "../components/inbox/conversation-pane"
@@ -6,7 +5,7 @@ import { NowProvider } from "../hooks/use-now"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
 // Mock AddBuyerModal to instantly create a buyer
-jest.mock("@/components/buyers/add-buyer-modal", () => ({
+vi.mock("@/components/buyers/add-buyer-modal", () => ({
   __esModule: true,
   default: ({ open, onOpenChange, onSuccessAction }: any) =>
     open ? (
@@ -16,17 +15,17 @@ jest.mock("@/components/buyers/add-buyer-modal", () => ({
     ) : null,
 }))
 
-jest.mock("../services/template-service", () => ({
+vi.mock("../services/template-service", () => ({
   TemplateService: {
-    listTemplates: jest.fn().mockResolvedValue([]),
-    addTemplate: jest.fn(),
+    listTemplates: vi.fn().mockResolvedValue([]),
+    addTemplate: vi.fn(),
   },
 }))
 
-const updateEqMock = jest.fn().mockResolvedValue({ error: null })
-const updateMock = jest.fn(() => ({ eq: updateEqMock }))
+const updateEqMock = vi.fn().mockResolvedValue({ error: null })
+const updateMock = vi.fn(() => ({ eq: updateEqMock }))
 
-jest.mock("../lib/supabase", () => {
+vi.mock("../lib/supabase", () => {
   const client = {
     from: (table: string) => {
       if (table === "buyers") {
@@ -44,12 +43,12 @@ jest.mock("../lib/supabase", () => {
       }
     },
     channel: () => ({ on: () => ({ subscribe: () => ({}) }) }),
-    removeChannel: jest.fn(),
+    removeChannel: vi.fn(),
   }
   return { supabase: client, supabaseAdmin: client }
 })
 
-Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { value: jest.fn(), writable: true })
+Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { value: vi.fn(), writable: true })
 
 describe("ConversationPane add buyer", () => {
   test("shows add buyer button", async () => {

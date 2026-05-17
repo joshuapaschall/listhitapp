@@ -1,4 +1,3 @@
-import { describe, test, expect } from "@jest/globals"
 import { calculateSmsSegments } from "../lib/sms-utils"
 
 describe("calculateSmsSegments", () => {

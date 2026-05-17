@@ -1,5 +1,3 @@
-import { describe, test, expect } from "@jest/globals"
-
 function applyUnsubscribeTrigger(
   message: { body: string; buyer_id: string; filtered?: boolean },
   buyer: { id: string; can_receive_sms: boolean },

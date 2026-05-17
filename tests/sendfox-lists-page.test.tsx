@@ -1,30 +1,29 @@
-import { jest } from "@jest/globals"
 /** @jest-environment jsdom */
 import { render, screen } from "@testing-library/react"
 import SendFoxListsPage from "../app/admin/sendfox-lists/page"
 import { resyncListAction } from "../app/admin/sendfox-lists/actions"
 
-const mockFetchLists = jest.fn()
-const mockReconcile = jest.fn()
+const mockFetchLists = vi.fn()
+const mockReconcile = vi.fn()
 
-jest.mock("../services/sendfox-service", () => ({
+vi.mock("../services/sendfox-service", () => ({
   fetchLists: (...args: any[]) => mockFetchLists(...args),
   reconcileSendfoxList: (...args: any[]) => mockReconcile(...args),
 }))
 
-jest.mock("../lib/get-user-role", () => ({
-  getUserRole: jest.fn().mockResolvedValue("admin"),
+vi.mock("../lib/get-user-role", () => ({
+  getUserRole: vi.fn().mockResolvedValue("admin"),
 }))
 
-jest.mock("@supabase/auth-helpers-nextjs", () => ({
+vi.mock("@supabase/auth-helpers-nextjs", () => ({
   createServerComponentClient: () => ({}),
 }))
 
-jest.mock("next/headers", () => ({
+vi.mock("next/headers", () => ({
   cookies: () => ({}),
 }))
 
-jest.mock("next/cache", () => ({ revalidatePath: jest.fn() }))
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))
 
 describe("SendFoxListsPage", () => {
   test("renders lists", async () => {

@@ -1,4 +1,3 @@
-import { afterEach, describe, expect, test } from "@jest/globals"
 import { assertCronAuth } from "../lib/cron-auth"
 
 const originalCronSecret = process.env.CRON_SECRET

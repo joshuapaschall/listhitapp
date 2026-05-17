@@ -1,5 +1,4 @@
 /** @jest-environment jsdom */
-import { beforeAll, describe, expect, test, jest } from "@jest/globals"
 import { render, screen } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 // Polyfill ResizeObserver for recharts
@@ -10,28 +9,28 @@ global.ResizeObserver = class {
 }
 
 
-jest.mock("next/navigation", () => ({
+vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard",
-  useRouter: () => ({ replace: jest.fn() }),
+  useRouter: () => ({ replace: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
 }))
 
-jest.mock("@/lib/supabase-browser", () => ({
+vi.mock("@/lib/supabase-browser", () => ({
   __esModule: true,
-  supabaseBrowser: jest.fn(() => ({
-    from: jest.fn(),
+  supabaseBrowser: vi.fn(() => ({
+    from: vi.fn(),
   })),
 }))
 
-jest.mock("../lib/supabase-browser", () => ({
+vi.mock("../lib/supabase-browser", () => ({
   __esModule: true,
-  supabaseBrowser: jest.fn(() => ({
-    from: jest.fn(),
+  supabaseBrowser: vi.fn(() => ({
+    from: vi.fn(),
   })),
 }))
 
-jest.mock("../services/dashboard-service", () => ({
-  fetchKpis: jest.fn().mockResolvedValue({
+vi.mock("../services/dashboard-service", () => ({
+  fetchKpis: vi.fn().mockResolvedValue({
     buyersAdded: 1,
     propertiesAdded: 1,
     activeProperties: 1,
@@ -81,13 +80,13 @@ jest.mock("../services/dashboard-service", () => ({
     avgAssignmentFee: 0,
     closeRate: 0,
   }),
-  fetchTextTrends: jest.fn().mockResolvedValue({ data: [], delta: 0 }),
-  fetchCallTrends: jest.fn().mockResolvedValue({ data: [], delta: 0 }),
-  fetchEmailTrends: jest.fn().mockResolvedValue({ data: [], delta: 0 }),
-  fetchOfferTrends: jest.fn().mockResolvedValue({ data: [], delta: 0 }),
-  fetchShowingTrends: jest.fn().mockResolvedValue({ data: [], delta: 0 }),
-  fetchUnsubscribeTrends: jest.fn().mockResolvedValue({ data: [], delta: 0 }),
-  fetchRecentActivity: jest.fn().mockResolvedValue([]),
+  fetchTextTrends: vi.fn().mockResolvedValue({ data: [], delta: 0 }),
+  fetchCallTrends: vi.fn().mockResolvedValue({ data: [], delta: 0 }),
+  fetchEmailTrends: vi.fn().mockResolvedValue({ data: [], delta: 0 }),
+  fetchOfferTrends: vi.fn().mockResolvedValue({ data: [], delta: 0 }),
+  fetchShowingTrends: vi.fn().mockResolvedValue({ data: [], delta: 0 }),
+  fetchUnsubscribeTrends: vi.fn().mockResolvedValue({ data: [], delta: 0 }),
+  fetchRecentActivity: vi.fn().mockResolvedValue([]),
 }))
 
 describe.skip("DashboardPage", () => {

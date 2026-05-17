@@ -1,10 +1,9 @@
-import { describe, beforeEach, test, expect, jest } from "@jest/globals"
 import { NextRequest } from "next/server"
 import { POST } from "../app/api/media/convert/route"
 import { MEDIA_BUCKET } from "../utils/uploadMedia"
 
-jest.mock("fluent-ffmpeg", () => {
-  const ffmpeg = jest.fn(() => {
+vi.mock("fluent-ffmpeg", () => {
+  const ffmpeg = vi.fn(() => {
     const stream = new (require("stream")).PassThrough()
     const callbacks: Record<string, () => void> = {}
     const instance: any = {
@@ -27,18 +26,18 @@ jest.mock("fluent-ffmpeg", () => {
     }
     return instance
   })
-  ffmpeg.setFfmpegPath = jest.fn()
+  ffmpeg.setFfmpegPath = vi.fn()
   return { __esModule: true, default: ffmpeg }
 })
 
-const fetchMock = jest.fn()
-const uploadMock = jest.fn().mockResolvedValue({ data: { path: "file.mp3" }, error: null })
-const removeMock = jest.fn().mockResolvedValue({ data: null, error: null })
+const fetchMock = vi.fn()
+const uploadMock = vi.fn().mockResolvedValue({ data: { path: "file.mp3" }, error: null })
+const removeMock = vi.fn().mockResolvedValue({ data: null, error: null })
 
 // @ts-ignore
 global.fetch = fetchMock
 
-jest.mock("../lib/supabase", () => ({
+vi.mock("../lib/supabase", () => ({
   supabaseAdmin: {
     storage: {
       from: () => ({

@@ -1,4 +1,3 @@
-import { describe, beforeEach, test, expect, jest } from "@jest/globals"
 import { NextRequest } from "next/server"
 
 let messages: any[] = []
@@ -8,16 +7,16 @@ let threadError: any = null
 let messageError: any = null
 let inboundDidRows: string[] = []
 let voiceDidRows: string[] = []
-const fetchMock = jest.fn()
-const uploadMock = jest.fn().mockResolvedValue({ data: { path: "p" }, error: null })
+const fetchMock = vi.fn()
+const uploadMock = vi.fn().mockResolvedValue({ data: { path: "p" }, error: null })
 // @ts-ignore
 global.fetch = fetchMock
 
 const smsRateLimiterMock = {
-  scheduleSMS: jest.fn(
+  scheduleSMS: vi.fn(
     (_c: string, _b: string, fn: () => Promise<any>) => fn(),
   ),
-  lookupCarrier: jest.fn(async () => "verizon"),
+  lookupCarrier: vi.fn(async () => "verizon"),
 }
 
 const mms = await import("@/utils/mms.server")
@@ -222,8 +221,8 @@ const createSupabaseClient = () => ({
 
 const supabaseClient = createSupabaseClient()
 
-jest.unstable_mockModule("@/lib/sms-rate-limiter", () => smsRateLimiterMock)
-jest.unstable_mockModule("@/lib/supabase", () => ({
+vi.mock("@/lib/sms-rate-limiter", () => smsRateLimiterMock)
+vi.mock("@/lib/supabase", () => ({
   supabase: supabaseClient,
   supabaseAdmin: supabaseClient,
 }))

@@ -1,4 +1,4 @@
-import { jest } from "@jest/globals"
+import { vi } from "vitest"
 
 type TableHandler = (table: string) => any
 
@@ -19,12 +19,12 @@ function createChainMock(resolveData: any = []) {
     "csv", "returns",
   ]
   for (const method of methods) {
-    chain[method] = jest.fn((..._args: any[]) => chain)
+    chain[method] = vi.fn((..._args: any[]) => chain)
   }
-  chain.single = jest.fn(async () => ({ data: Array.isArray(resolveData) ? resolveData[0] ?? null : resolveData, error: null }))
-  chain.maybeSingle = jest.fn(async () => ({ data: Array.isArray(resolveData) ? resolveData[0] ?? null : resolveData, error: null }))
+  chain.single = vi.fn(async () => ({ data: Array.isArray(resolveData) ? resolveData[0] ?? null : resolveData, error: null }))
+  chain.maybeSingle = vi.fn(async () => ({ data: Array.isArray(resolveData) ? resolveData[0] ?? null : resolveData, error: null }))
   chain.then = (resolve: any) => resolve({ data: resolveData, error: null })
-  chain.throwOnError = jest.fn(() => chain)
+  chain.throwOnError = vi.fn(() => chain)
   return chain
 }
 
@@ -53,14 +53,14 @@ export const fromMock: TableHandler = (table: string) => {
 export const supabase = {
   from: (table: string) => fromMock(table),
   auth: {
-    getUser: jest.fn(async () => ({ data: { user: null }, error: null })),
+    getUser: vi.fn(async () => ({ data: { user: null }, error: null })),
   },
-  channel: jest.fn(() => ({
+  channel: vi.fn(() => ({
     on: () => ({
       subscribe: () => ({}) as any,
     }),
   })),
-  removeChannel: jest.fn(),
+  removeChannel: vi.fn(),
 }
 
 export const supabaseAdmin = supabase

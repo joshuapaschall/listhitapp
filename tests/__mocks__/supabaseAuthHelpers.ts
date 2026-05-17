@@ -1,5 +1,5 @@
 // tests/__mocks__/supabaseAuthHelpers.ts
-import { jest } from "@jest/globals"
+import { vi } from "vitest"
 
 type Client = {
   auth: {
@@ -9,7 +9,7 @@ type Client = {
 
 let mockUser: any = null
 
-export const mockGetUser = jest.fn(async () => ({
+export const mockGetUser = vi.fn(async () => ({
   data: { user: mockUser },
   error: null,
 }))

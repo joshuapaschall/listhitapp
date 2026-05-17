@@ -1,10 +1,9 @@
-import { describe, expect, test, beforeEach, jest } from "@jest/globals"
 import { __setBuyerGroups } from "@/lib/supabase"
 import { addBuyersToGroups } from "../lib/group-service"
 
 let buyerGroups: any[] = []
 
-jest.mock("@/lib/supabase", () => {
+vi.mock("@/lib/supabase", () => {
   const client = {
     from: (table: string) => {
       if (table === "buyer_groups") {
@@ -35,7 +34,7 @@ describe("addBuyersToGroups", () => {
   beforeEach(() => {
     buyerGroups = [{ buyer_id: "1", group_id: "g1" }]
     __setBuyerGroups(buyerGroups)
-    global.fetch = jest.fn(async () => new Response("{}", { status: 200 })) as any
+    global.fetch = vi.fn(async () => new Response("{}", { status: 200 })) as any
   })
 
   test("avoids duplicates and syncs buyers", async () => {

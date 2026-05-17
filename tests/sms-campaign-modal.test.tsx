@@ -1,4 +1,3 @@
-import { jest } from "@jest/globals"
 /** @jest-environment jsdom */
 import { render, screen, fireEvent } from "@testing-library/react"
 import SmsCampaignModal from "../components/campaigns/sms-campaign-modal"
@@ -7,35 +6,35 @@ import { ALLOWED_MMS_EXTENSIONS } from "../utils/uploadMedia"
 
 // jsdom doesn't implement createObjectURL
 // @ts-ignore
-global.URL.createObjectURL = jest.fn(() => "blob:mock")
+global.URL.createObjectURL = vi.fn(() => "blob:mock")
 
-var uploadMock: jest.Mock
-jest.mock("../utils/uploadMedia", () => {
-  uploadMock = jest.fn().mockResolvedValue("https://cdn/p")
-  const actual = jest.requireActual("../utils/uploadMedia")
+var uploadMock: vi.Mock
+vi.mock("../utils/uploadMedia", async () => {
+  uploadMock = vi.fn().mockResolvedValue("https://cdn/p")
+  const actual = await vi.importActual<typeof import("../utils/uploadMedia")>("../utils/uploadMedia")
   return { ...actual, uploadMediaFile: (...args: any[]) => uploadMock(...args) }
 })
 
-jest.mock("../lib/group-service", () => ({
-  getGroups: jest.fn().mockResolvedValue([])
+vi.mock("../lib/group-service", () => ({
+  getGroups: vi.fn().mockResolvedValue([])
 }))
 
-jest.mock("../services/buyer-service", () => ({
+vi.mock("../services/buyer-service", () => ({
   BuyerService: {
-    getBuyerIdsForGroups: jest.fn().mockResolvedValue([]),
-    getBuyerCountsByGroup: jest.fn().mockResolvedValue({}),
+    getBuyerIdsForGroups: vi.fn().mockResolvedValue([]),
+    getBuyerCountsByGroup: vi.fn().mockResolvedValue({}),
   },
 }))
 
-jest.mock("../services/template-service", () => ({
-  TemplateService: { listTemplates: jest.fn().mockResolvedValue([]), addTemplate: jest.fn() }
+vi.mock("../services/template-service", () => ({
+  TemplateService: { listTemplates: vi.fn().mockResolvedValue([]), addTemplate: vi.fn() }
 }))
 
-jest.mock("../services/prompt-service", () => ({
-  PromptService: { listPrompts: jest.fn().mockResolvedValue([]) }
+vi.mock("../services/prompt-service", () => ({
+  PromptService: { listPrompts: vi.fn().mockResolvedValue([]) }
 }))
 
-jest.mock("../components/chat-assistant-button", () => ({
+vi.mock("../components/chat-assistant-button", () => ({
   __esModule: true,
   default: ({ onInsert }: { onInsert?: (text: string) => void }) => (
     <button onClick={() => onInsert && onInsert("AI text")}>AI Assistant</button>
@@ -43,8 +42,8 @@ jest.mock("../components/chat-assistant-button", () => ({
 }))
 
 
-jest.mock("sonner", () => {
-  const toast = { success: jest.fn(), error: jest.fn() }
+vi.mock("sonner", () => {
+  const toast = { success: vi.fn(), error: vi.fn() }
   return { toast }
 })
 
@@ -100,7 +99,7 @@ describe("SmsCampaignModal", () => {
   })
 
   test("AI assistant inserts SMS body", async () => {
-    const aiCb = jest.fn()
+    const aiCb = vi.fn()
     render(
       <SmsCampaignModal open={true} onOpenChange={() => {}} onAiInsert={aiCb} />,
     )

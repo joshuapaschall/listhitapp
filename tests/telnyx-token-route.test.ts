@@ -1,4 +1,3 @@
-import { describe, beforeEach, test, expect, jest } from "@jest/globals"
 import { __getMockUser, __setMockUser, mockGetUser } from "@supabase/auth-helpers-nextjs"
 import { __setAgentRecord, supabaseAdminAuthGetUserMock } from "@/lib/supabase/admin"
 import {
@@ -9,18 +8,18 @@ import {
 } from "@/lib/telnyx/credentials"
 
 const cookieStoreMock = {
-  get: jest.fn(),
-  set: jest.fn(),
-  delete: jest.fn(),
+  get: vi.fn(),
+  set: vi.fn(),
+  delete: vi.fn(),
 }
 // Prevent outbound network calls from Supabase client instances
-global.fetch = jest.fn(async () => new Response("{}")) as any
+global.fetch = vi.fn(async () => new Response("{}")) as any
 
-jest.mock("next/headers", () => ({
+vi.mock("next/headers", () => ({
   cookies: () => cookieStoreMock,
 }))
 
-jest.mock("@/lib/supabase/admin", () => ({
+vi.mock("@/lib/supabase/admin", () => ({
   supabaseAdmin: {
     from: () => ({
       select: () => ({

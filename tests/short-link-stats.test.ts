@@ -1,10 +1,9 @@
-import { describe, beforeEach, test, expect, jest } from "@jest/globals"
 import { NextRequest } from "next/server"
 import { GET } from "../app/api/short-links/clicks/route"
 
-let clicksMock = jest.fn()
+let clicksMock = vi.fn()
 
-jest.mock("../services/shortio-service", () => ({
+vi.mock("../services/shortio-service", () => ({
   getShortLinkClicks: (...args: any[]) => clicksMock(...args),
 }))
 

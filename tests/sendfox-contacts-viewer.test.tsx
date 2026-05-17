@@ -4,7 +4,7 @@ import SendFoxContactsViewer from "../components/buyers/sendfox-contacts-viewer"
 
 describe("SendFoxContactsViewer", () => {
   test("fetches and displays contacts", async () => {
-    ;(global.fetch as any) = jest.fn().mockResolvedValue({
+    ;(global.fetch as any) = vi.fn().mockResolvedValue({
       ok: true,
       json: () =>
         Promise.resolve([

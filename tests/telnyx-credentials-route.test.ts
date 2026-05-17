@@ -1,7 +1,6 @@
-import { describe, beforeEach, test, expect, jest } from "@jest/globals"
 import { GET } from "../app/api/telnyx/credentials/route"
 
-const fetchMock = jest.fn()
+const fetchMock = vi.fn()
 // @ts-ignore
 global.fetch = fetchMock
 

@@ -1,15 +1,14 @@
-import { describe, beforeEach, afterAll, test, expect, jest } from "@jest/globals"
 import { NextRequest } from "next/server"
 
 import { POST } from "../app/api/webhooks/telnyx-voice/route"
 
-const fetchMock = jest.fn()
+const fetchMock = vi.fn()
 const originalFetch = global.fetch
 // @ts-ignore
 global.fetch = fetchMock
 
 const supabaseAdminMock = {
-  from: jest.fn((table: string) => {
+  from: vi.fn((table: string) => {
     if (table === "inbound_numbers") {
       return {
         select: () => ({
@@ -63,7 +62,7 @@ const supabaseAdminMock = {
   }),
 }
 
-jest.mock("@/lib/supabase/admin", () => ({ supabaseAdmin: supabaseAdminMock }))
+vi.mock("@/lib/supabase/admin", () => ({ supabaseAdmin: supabaseAdminMock }))
 
 describe("telnyx voice webhook", () => {
   beforeEach(() => {

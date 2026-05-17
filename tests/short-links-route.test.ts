@@ -1,9 +1,8 @@
-import { describe, beforeAll, afterAll, beforeEach, test, expect, jest } from "@jest/globals"
 import { NextRequest } from "next/server"
 import { POST } from "../app/api/short-links/route"
 
 const originalFetch = global.fetch
-let fetchMock: jest.Mock
+let fetchMock: vi.Mock
 
 beforeAll(() => {
   process.env.SHORTIO_API_KEY = "test-key"
@@ -16,7 +15,7 @@ afterAll(() => {
 
 describe("short links route", () => {
   beforeEach(() => {
-    fetchMock = jest.fn()
+    fetchMock = vi.fn()
     global.fetch = fetchMock as any
   })
 

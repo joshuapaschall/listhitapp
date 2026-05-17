@@ -1,4 +1,3 @@
-import { describe, beforeEach, test, expect, jest } from "@jest/globals"
 import { getUserRole } from "../lib/get-user-role"
 
 let profiles: any[] = []
@@ -6,7 +5,7 @@ let user: any
 
 const client: any = {
   auth: {
-    getUser: jest.fn(async () => ({ data: { user }, error: null })),
+    getUser: vi.fn(async () => ({ data: { user }, error: null })),
   },
   from: (table: string) => {
     if (table !== "profiles") throw new Error(`Unexpected table ${table}`)

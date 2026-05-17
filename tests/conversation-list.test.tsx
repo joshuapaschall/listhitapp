@@ -1,28 +1,26 @@
 /** @jest-environment jsdom */
-import { describe, expect, test, jest, beforeEach } from "@jest/globals"
-
 const threads = [
   { id: "t1", phone_number: "123", updated_at: new Date().toISOString(), buyers: { id: "b1", full_name: "John" } },
   { id: "t2", phone_number: "456", updated_at: new Date().toISOString(), buyers: { id: "b2", full_name: "Jane" } },
 ]
 
-const listInboxThreads = jest.fn(async () => threads)
-const listSentThreads = jest.fn(async () => [])
-const listAutosentMessages = jest.fn(async () => [])
+const listInboxThreads = vi.fn(async () => threads)
+const listSentThreads = vi.fn(async () => [])
+const listAutosentMessages = vi.fn(async () => [])
 
-jest.mock("@/services/message-service", () => ({
+vi.mock("@/services/message-service", () => ({
   __esModule: true,
   listInboxThreads: (...args: any[]) => listInboxThreads(...args),
   listSentThreads: (...args: any[]) => listSentThreads(...args),
   listAutosentMessages: (...args: any[]) => listAutosentMessages(...args),
 }))
 
-jest.mock("@/lib/supabase", () => ({
+vi.mock("@/lib/supabase", async () => ({
   __esModule: true,
-  ...jest.requireActual("./__mocks__/supabase"),
+  ...(await vi.importActual<typeof import("./__mocks__/supabase")>("./__mocks__/supabase")),
 }))
 
-jest.mock("../components/inbox/list-pane", () => {
+vi.mock("../components/inbox/list-pane", () => {
   const React = require("react")
   const { useState } = React
   return {
@@ -50,11 +48,11 @@ jest.mock("../components/inbox/list-pane", () => {
   }
 })
 
-jest.mock("@tanstack/react-virtual", () => ({
-  useVirtualizer: jest.fn(({ count }) => ({
+vi.mock("@tanstack/react-virtual", () => ({
+  useVirtualizer: vi.fn(({ count }) => ({
     getVirtualItems: () => Array.from({ length: count }, (_, i) => ({ index: i })),
     getTotalSize: () => count * 64,
-    measureElement: jest.fn(),
+    measureElement: vi.fn(),
   })),
 }))
 
@@ -72,7 +70,7 @@ describe.skip("ConversationList", () => {
   })
 
   test("filters and selects threads", async () => {
-    const handleSelect = jest.fn()
+    const handleSelect = vi.fn()
     const client = new QueryClient()
     client.setQueryData(["message-threads", "inbox"], threads)
     render(

@@ -1,16 +1,15 @@
-import { describe, expect, test, beforeEach } from "@jest/globals"
 import { PropertyService } from "../services/property-service"
 
-const shortMock = jest.fn()
+const shortMock = vi.fn()
 
 // Mock implementation of the Supabase client
 let properties: any[] = []
 let idCounter = 1
 
-const fetchMock = jest.fn()
+const fetchMock = vi.fn()
 global.fetch = fetchMock as any
 
-jest.mock("../lib/supabase", () => {
+vi.mock("../lib/supabase", () => {
   const client = {
       from: (table: string) => {
         if (table !== "properties") throw new Error(`Unexpected table ${table}`)
@@ -132,7 +131,7 @@ jest.mock("../lib/supabase", () => {
   return { supabase: client, supabaseAdmin: client }
 })
 
-jest.mock("../services/shortio-service", () => ({
+vi.mock("../services/shortio-service", () => ({
   createShortLink: (...args: any[]) => shortMock(...args),
 }))
 

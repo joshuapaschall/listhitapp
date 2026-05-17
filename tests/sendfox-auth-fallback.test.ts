@@ -1,15 +1,13 @@
-import { beforeEach, describe, expect, jest, test } from "@jest/globals"
+const getUserMock = vi.fn()
+const getSendfoxIntegrationMock = vi.fn()
+const buildSendfoxContextFromIntegrationMock = vi.fn()
+const getDefaultSendfoxContextMock = vi.fn()
 
-const getUserMock = jest.fn()
-const getSendfoxIntegrationMock = jest.fn()
-const buildSendfoxContextFromIntegrationMock = jest.fn()
-const getDefaultSendfoxContextMock = jest.fn()
-
-jest.mock("next/headers", () => ({
+vi.mock("next/headers", () => ({
   cookies: () => ({}),
 }))
 
-jest.mock("@supabase/auth-helpers-nextjs", () => ({
+vi.mock("@supabase/auth-helpers-nextjs", () => ({
   createRouteHandlerClient: () => ({
     auth: {
       getUser: getUserMock,
@@ -17,7 +15,7 @@ jest.mock("@supabase/auth-helpers-nextjs", () => ({
   }),
 }))
 
-jest.mock("@/services/sendfox-auth", () => ({
+vi.mock("@/services/sendfox-auth", () => ({
   getSendfoxIntegration: getSendfoxIntegrationMock,
   buildSendfoxContextFromIntegration: buildSendfoxContextFromIntegrationMock,
   getDefaultSendfoxContext: getDefaultSendfoxContextMock,
@@ -25,8 +23,8 @@ jest.mock("@/services/sendfox-auth", () => ({
 
 describe("loadSendfoxRouteContext auth fallback", () => {
   beforeEach(() => {
-    jest.resetModules()
-    jest.clearAllMocks()
+    vi.resetModules()
+    vi.clearAllMocks()
   })
 
   test("returns env auth context when integration is missing", async () => {

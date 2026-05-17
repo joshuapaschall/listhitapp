@@ -1,25 +1,24 @@
-import { jest } from "@jest/globals"
 /** @jest-environment jsdom */
 import { render, fireEvent, screen, act } from "@testing-library/react"
 import { TelnyxDeviceProvider } from "../components/voice/TelnyxDeviceProvider"
 import DialPad from "../components/voice/DialPad"
 
-jest.mock("@/lib/supabase-browser", () => ({
+vi.mock("@/lib/supabase-browser", () => ({
   supabaseBrowser: () => ({
     auth: {
-      getSession: jest.fn().mockResolvedValue({
+      getSession: vi.fn().mockResolvedValue({
         data: { session: { access_token: "test-access" } },
       }),
     },
   }),
 }))
 
-jest.useFakeTimers()
+vi.useFakeTimers()
 // Polyfill WebRTC APIs for tests
 // @ts-ignore
-global.navigator.mediaDevices = { getUserMedia: jest.fn() }
+global.navigator.mediaDevices = { getUserMedia: vi.fn() }
 
-jest.mock("../components/buyers/buyer-selector", () => ({
+vi.mock("../components/buyers/buyer-selector", () => ({
   __esModule: true,
   default: ({ onChange }: any) => (
     <button onClick={() => onChange({ id: "b1", phone: "+1222" })}>John Doe</button>
@@ -35,21 +34,21 @@ global.ResizeObserver = class {
 }
 
 let lastDevice: any
-jest.mock("@telnyx/webrtc", () => {
+vi.mock("@telnyx/webrtc", () => {
   return {
-    TelnyxRTC: jest.fn().mockImplementation(() => {
+    TelnyxRTC: vi.fn().mockImplementation(() => {
       lastDevice = {
-        on: jest.fn(),
-        off: jest.fn(),
-        connect: jest.fn(),
-        newCall: jest.fn(() => ({
-          invite: jest.fn(),
-          on: jest.fn(),
-          disconnect: jest.fn(),
-          toggleAudioMute: jest.fn(),
-          toggleHold: jest.fn(),
-          hangup: jest.fn(),
-          dtmf: jest.fn(),
+        on: vi.fn(),
+        off: vi.fn(),
+        connect: vi.fn(),
+        newCall: vi.fn(() => ({
+          invite: vi.fn(),
+          on: vi.fn(),
+          disconnect: vi.fn(),
+          toggleAudioMute: vi.fn(),
+          toggleHold: vi.fn(),
+          hangup: vi.fn(),
+          dtmf: vi.fn(),
           telnyxIDs: { telnyxCallControlId: "C1" },
           parameters: { To: "+1222" },
         })),
@@ -61,14 +60,14 @@ jest.mock("@telnyx/webrtc", () => {
   }
 })
 
-jest.mock("../components/buyers/use-buyer-suggestions", () => ({
+vi.mock("../components/buyers/use-buyer-suggestions", () => ({
   useBuyerSuggestions: () => ({
     results: [{ id: "b1", phone: "+1222", full_name: "John Doe" }],
     loading: false,
   }),
 }))
 
-const fetchMock = jest.fn()
+const fetchMock = vi.fn()
 // @ts-ignore
 global.fetch = fetchMock
 
@@ -98,13 +97,13 @@ test.skip("modal controls control call", async () => {
     </TelnyxDeviceProvider>,
   )
   await act(async () => {})
-  const ready = (lastDevice.on as jest.Mock).mock.calls.find(c => c[0] === 'telnyx.ready')?.[1]
+  const ready = (lastDevice.on as vi.Mock).mock.calls.find(c => c[0] === 'telnyx.ready')?.[1]
   if (ready) await act(async () => { ready(); await Promise.resolve() })
   fireEvent.click(screen.getByText("John Doe"))
   await act(async () => {
     fireEvent.click(screen.getByRole("button", { name: /call/i }))
   })
-  jest.runOnlyPendingTimers()
+  vi.runOnlyPendingTimers()
   await act(async () => {})
   expect(lastDevice.newCall).toHaveBeenCalled()
 
