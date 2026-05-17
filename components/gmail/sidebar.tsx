@@ -76,7 +76,7 @@ export default function Sidebar({ folder, selectedLabelId, onChange, onCompose, 
       return res.json()
     },
     staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
   })
 
   return (

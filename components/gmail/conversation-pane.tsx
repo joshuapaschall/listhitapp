@@ -1,64 +1,61 @@
-// @ts-nocheck
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useMemo, useState } from "react"
 import DOMPurify from "dompurify"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { decodeMessage, GmailMessage } from "@/lib/gmail-utils"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
-import {
-  ArrowLeft,
-  Archive,
-  Trash2,
-  ChevronLeft,
-  ChevronRight,
-  MoreVertical,
-  Loader2,
-} from "lucide-react"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { cn } from "@/lib/utils"
+import { Archive, ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, Forward, Inbox, Loader2, MoreVertical, Printer, Reply, ReplyAll, Star, Tag, Trash2, Clock3, OctagonAlert, MailOpen } from "lucide-react"
 
-// GmailMessage interface imported from lib
+interface GmailLabel { id: string; name: string; color?: { backgroundColor?: string; textColor?: string } }
+interface LabelsResponse { system: GmailLabel[]; categories: GmailLabel[]; user: GmailLabel[] }
+interface GmailThread { id: string; messages?: GmailMessage[]; unread?: boolean }
+interface ConversationPaneProps { threadId: string | null; onBack?: () => void; onPrev?: () => void; onNext?: () => void }
+type ReplyMode = "reply" | "reply-all" | "forward" | null
 
-interface GmailThread {
-  id: string
-  messages?: GmailMessage[]
-  unread?: boolean
+function getHeader(msg: GmailMessage | undefined, name: string): string {
+  return msg?.payload?.headers?.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value || ""
 }
-
-interface ConversationPaneProps {
-  threadId: string | null
-  onBack?: () => void
-  onPrev?: () => void
-  onNext?: () => void
+function parseDisplayName(raw: string): string {
+  const m = raw.match(/^(.*?)\s*<[^>]+>$/)
+  return (m?.[1] || raw || "Unknown").replace(/^"|"$/g, "").trim()
 }
-
-function getHeader(msg: GmailMessage | undefined, name: string) {
-  return (
-    msg?.payload?.headers?.find(
-      (h) => h.name.toLowerCase() === name.toLowerCase(),
-    )?.value || ""
-  )
+function parseEmail(raw: string): string {
+  const m = raw.match(/<([^>]+)>/)
+  return (m?.[1] || raw).trim()
+}
+function formatMessageDate(value: string): string {
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return value || ""
+  const now = new Date()
+  const opts: Intl.DateTimeFormatOptions = d.getFullYear() === now.getFullYear() ? { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" } : { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }
+  return new Intl.DateTimeFormat("en-US", opts).format(d)
+}
+function getInitials(name: string, email: string): string {
+  const clean = name.trim()
+  if (clean && clean !== "Unknown") return clean.split(/\s+/)[0].slice(0, 1).toUpperCase()
+  return email.slice(0, 2).toUpperCase()
+}
+function getAvatarColor(email: string): string {
+  const colors = ["bg-blue-500", "bg-emerald-500", "bg-violet-500", "bg-orange-500", "bg-rose-500", "bg-cyan-500"]
+  const hash = email.split("").reduce((a, c) => a + c.charCodeAt(0), 0)
+  return colors[hash % colors.length]
 }
 
 export default function ConversationPane({ threadId, onBack, onPrev, onNext }: ConversationPaneProps) {
   const queryClient = useQueryClient()
+  const [reply, setReply] = useState("")
+  const [forwardTo, setForwardTo] = useState("")
+  const [replyMode, setReplyMode] = useState<ReplyMode>(null)
+  const [showAllMessages, setShowAllMessages] = useState(false)
+  const [expandedMessageDetails, setExpandedMessageDetails] = useState<Set<string>>(new Set())
 
-  const { data, error, isLoading } = useQuery({
+  const { data, error, isLoading } = useQuery<GmailThread>({
     queryKey: ["gmail-thread", threadId],
-    enabled: !!threadId,
+    enabled: Boolean(threadId),
     queryFn: async () => {
       const res = await fetch(`/api/gmail/threads/${threadId}`)
       if (!res.ok) throw new Error("Failed to load thread")
@@ -67,177 +64,138 @@ export default function ConversationPane({ threadId, onBack, onPrev, onNext }: C
     },
   })
 
+  const { data: labelData } = useQuery<LabelsResponse>({
+    queryKey: ["gmail-labels"],
+    queryFn: async () => {
+      const res = await fetch("/api/gmail/labels")
+      if (!res.ok) throw new Error("Failed labels")
+      return res.json()
+    },
+    enabled: Boolean(threadId),
+  })
+
+  useEffect(() => { setShowAllMessages(false); setReplyMode(null); setReply(""); setExpandedMessageDetails(new Set()) }, [threadId])
+
   useEffect(() => {
     if (data?.id && data.unread) {
-      fetch("/api/gmail/unread", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ threadId: data.id, unread: false }),
-      }).then(() =>
-        queryClient.invalidateQueries({ queryKey: ["gmail-threads"] }),
-      )
+      fetch("/api/gmail/unread", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ threadId: data.id, unread: false }) })
+        .then(() => queryClient.invalidateQueries({ queryKey: ["gmail-threads"] }))
     }
   }, [data?.id, data?.unread, queryClient])
 
-  const [reply, setReply] = useState("")
+  const messages = useMemo(() => data?.messages || [], [data?.messages])
+  const visibleMessages = useMemo(() => {
+    if (showAllMessages || messages.length <= 3) return messages
+    return [messages[0], messages[messages.length - 1]].filter(Boolean) as GmailMessage[]
+  }, [messages, showAllMessages])
 
-  if (!threadId) {
-    return <div className="p-4">Select a thread</div>
-  }
+  const allLabels = useMemo(() => [...(labelData?.system || []), ...(labelData?.categories || []), ...(labelData?.user || [])], [labelData])
+  const threadLabels = useMemo(() => {
+    const ids = new Set<string>()
+    const hidden = new Set(["UNREAD", "INBOX", "IMPORTANT", "STARRED"])
+    messages.forEach((m) => ((m as GmailMessage & { labelIds?: string[] }).labelIds || []).forEach((id) => { if (!hidden.has(id) && !id.startsWith("CATEGORY_")) ids.add(id) }))
+    return Array.from(ids).map((id) => allLabels.find((l) => l.id === id)).filter(Boolean) as GmailLabel[]
+  }, [messages, allLabels])
 
-  if (isLoading) {
-    return (
-      <div className="flex h-full items-center justify-center p-4">
-        <Loader2 className="h-4 w-4 animate-spin" />
-      </div>
-    )
-  }
+  const threadSubject = getHeader(messages[messages.length - 1], "subject")
 
-  if (error) {
-    return <div className="p-4 text-destructive">Failed to load thread</div>
-  }
-
-  const messages = data?.messages || []
-
-  const handleSend = async () => {
-    if (!threadId || !reply.trim() || !messages.length) return
-    const last = messages[messages.length - 1]
-    const to = getHeader(last, "from")
-    const subject = getHeader(last, "subject")
-    try {
-      const res = await fetch("/api/gmail/reply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ threadId, to, subject, text: reply.trim() }),
-      })
-      if (!res.ok) throw new Error("Failed to send reply")
-      setReply("")
-      queryClient.invalidateQueries({ queryKey: ["gmail-threads"] })
-      queryClient.invalidateQueries({ queryKey: ["gmail-thread", threadId] })
-    } catch (err) {
-      console.error("Failed to send reply", err)
-      toast.error((err as Error).message)
-    }
-  }
-
-  const handleAction = async (url: string) => {
+  async function handleAction(url: string, body?: Record<string, unknown>) {
     if (!threadId) return
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ threadId }),
-      })
-      if (!res.ok) throw new Error("Action failed")
-      queryClient.invalidateQueries({ queryKey: ["gmail-threads"] })
-      queryClient.invalidateQueries({ queryKey: ["gmail-thread", threadId] })
-    } catch (err) {
-      console.error("Action failed", err)
-      toast.error((err as Error).message)
-    }
+    const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ threadId, ...(body || {}) }) })
+    if (!res.ok) throw new Error("Action failed")
+    await queryClient.invalidateQueries({ queryKey: ["gmail-threads"] })
+    await queryClient.invalidateQueries({ queryKey: ["gmail-thread", threadId] })
+    await queryClient.invalidateQueries({ queryKey: ["gmail-labels"] })
   }
 
-  return (
-    <div className="flex h-full flex-col">
-      <div className="flex h-12 items-center justify-between border-b px-2">
-        <div className="flex items-center gap-2">
-          {onBack && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" onClick={onBack}>
-                    <ArrowLeft className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Back</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-          <TooltipProvider>
-            {[
-              [Archive, "Archive", "/api/gmail/archive"],
-              [Trash2, "Delete", "/api/gmail/delete"],
-            ].map(([Icon, label, url]) => (
-              <Tooltip key={label}>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleAction(url as string)}
-                  >
-                    <Icon className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{label}</TooltipContent>
-              </Tooltip>
-            ))}
-          </TooltipProvider>
-        </div>
-        <div className="flex items-center gap-1">
-          {onPrev && (
-            <Button variant="ghost" size="icon" onClick={onPrev}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-          )}
-          {onNext && (
-            <Button variant="ghost" size="icon" onClick={onNext}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          )}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40">
-              <DropdownMenuItem>Reply</DropdownMenuItem>
-              <DropdownMenuItem>Reply to All</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleAction("/api/gmail/delete")}>Delete</DropdownMenuItem>
-              <DropdownMenuItem>Block</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+  async function handleSend() {
+    if (!threadId || !reply.trim() || messages.length === 0 || !replyMode) return
+    const last = messages[messages.length - 1]
+    const to = replyMode === "forward" ? forwardTo.trim() : getHeader(last, "from")
+    if (!to) return toast.error("Recipient is required")
+    const subject = getHeader(last, "subject")
+    const endpoint = replyMode === "forward" ? "/api/gmail/send" : "/api/gmail/reply"
+    const body = replyMode === "forward" ? { to, subject: `Fwd: ${subject || "(No subject)"}`, text: reply.trim() } : { threadId, to, subject, text: reply.trim() }
+    try {
+      const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      if (!res.ok) throw new Error("Failed to send")
+      setReply("")
+      setForwardTo("")
+      setReplyMode(null)
+      await queryClient.invalidateQueries({ queryKey: ["gmail-threads"] })
+      await queryClient.invalidateQueries({ queryKey: ["gmail-thread", threadId] })
+    } catch (e) { toast.error((e as Error).message) }
+  }
+
+  if (!threadId) return <div className="p-4">Select a thread</div>
+  if (isLoading) return <div className="flex h-full items-center justify-center p-4"><Loader2 className="h-4 w-4 animate-spin" /></div>
+  if (error) return <div className="p-4 text-destructive">Failed to load thread</div>
+
+  return <div className="flex h-full flex-col">
+    <div className="flex h-12 items-center justify-between border-b px-2">
+      <div className="flex items-center gap-1">
+        {onBack && <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="h-4 w-4" /></Button>}
+        <div className="mx-1 h-5 w-px bg-border" />
+        <Button variant="ghost" size="icon" onClick={() => handleAction("/api/gmail/archive").catch((e) => toast.error((e as Error).message))}><Archive className="h-4 w-4" /></Button>
+        <Button variant="ghost" size="icon" onClick={() => toast.message("Report spam coming soon") }><OctagonAlert className="h-4 w-4" /></Button>
+        <Button variant="ghost" size="icon" onClick={() => handleAction("/api/gmail/delete").catch((e) => toast.error((e as Error).message))}><Trash2 className="h-4 w-4" /></Button>
+        <div className="mx-1 h-5 w-px bg-border" />
+        <Button variant="ghost" size="icon" onClick={() => handleAction("/api/gmail/unread", { unread: true }).catch((e) => toast.error((e as Error).message))}><MailOpen className="h-4 w-4" /></Button>
+        <Button variant="ghost" size="icon"><Clock3 className="h-4 w-4" /></Button>
+        <Button variant="ghost" size="icon"><Inbox className="h-4 w-4" /></Button>
+        <Button variant="ghost" size="icon"><Tag className="h-4 w-4" /></Button>
+        <Button variant="ghost" size="icon"><MoreVertical className="h-4 w-4" /></Button>
       </div>
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((m) => {
-          const from = getHeader(m, "from")
-          const subject = getHeader(m, "subject")
-          const date = getHeader(m, "date")
-          const decoded = decodeMessage(m)
-          return (
-            <div key={m.id} className="border-b pb-4 last:border-none">
-              <div className="flex justify-between">
-                <div className="text-sm font-medium">{from}</div>
-                <div className="text-xs text-muted-foreground">{date}</div>
-              </div>
-              <div className="text-xs text-muted-foreground mb-2">{subject}</div>
-              {decoded.html ? (
-                <div
-                  className="prose max-w-none text-sm"
-                  dangerouslySetInnerHTML={{
-                    __html: DOMPurify.sanitize(decoded.html),
-                  }}
-                />
-              ) : (
-                <div className="whitespace-pre-wrap text-sm">{decoded.text}</div>
-              )}
-            </div>
-          )
-        })}
-      </div>
-      <div className="border-t p-2 space-y-2">
-        <Textarea
-          value={reply}
-          onChange={(e) => setReply(e.target.value)}
-          rows={3}
-        />
-        <div>
-          <Button size="sm" onClick={handleSend} disabled={!reply.trim()}>
-            Send
-          </Button>
-        </div>
+      <div className="flex items-center gap-1">
+        {onPrev && <Button variant="ghost" size="icon" onClick={onPrev}><ChevronLeft className="h-4 w-4" /></Button>}
+        {onNext && <Button variant="ghost" size="icon" onClick={onNext}><ChevronRight className="h-4 w-4" /></Button>}
       </div>
     </div>
-  )
+
+    <div className="border-b px-6 py-4">
+      <div className="flex items-start justify-between gap-3">
+        <h1 className="text-xl font-medium leading-tight">{threadSubject || "(No subject)"}</h1>
+        <button className="mt-1 shrink-0 text-xs text-muted-foreground hover:text-foreground"><Printer className="h-4 w-4" /></button>
+      </div>
+      {threadLabels.length > 0 && <div className="mt-2 flex flex-wrap gap-1">{threadLabels.map((label) => <span key={label.id} className="inline-flex items-center gap-1 rounded-md border bg-muted/50 px-2 py-0.5 text-xs" style={label.color?.backgroundColor ? { borderColor: label.color.backgroundColor } : undefined}>{label.name}</span>)}</div>}
+    </div>
+
+    <div className="flex-1 overflow-y-auto">
+      {visibleMessages.map((msg) => {
+        const fromHeader = getHeader(msg, "from")
+        const fromName = parseDisplayName(fromHeader)
+        const fromEmail = parseEmail(fromHeader)
+        const dateStr = formatMessageDate(getHeader(msg, "date"))
+        const decoded = decodeMessage(msg)
+        return <div key={msg.id} className="border-b px-6 py-4 last:border-none">
+          <div className="flex items-start gap-3">
+            <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white", getAvatarColor(fromEmail))}>{getInitials(fromName, fromEmail)}</div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-baseline gap-2"><p className="text-sm font-semibold">{fromName}</p><p className="text-xs text-muted-foreground">&lt;{fromEmail}&gt;</p></div>
+              <button onClick={() => setExpandedMessageDetails((prev) => { const next = new Set(prev); if (next.has(msg.id)) next.delete(msg.id); else next.add(msg.id); return next })} className="flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground">to me <ChevronDown className="h-3 w-3" /></button>
+            </div>
+            <div className="flex items-center gap-1"><span className="text-xs text-muted-foreground">{dateStr}</span><button className="rounded p-1 hover:bg-muted" title="Star"><Star className="h-4 w-4" /></button><button className="rounded p-1 hover:bg-muted" title="Reply" onClick={() => setReplyMode("reply")}><Reply className="h-4 w-4" /></button><button className="rounded p-1 hover:bg-muted" title="More"><MoreVertical className="h-4 w-4" /></button></div>
+          </div>
+          {expandedMessageDetails.has(msg.id) && <div className="ml-[52px] mt-2 space-y-1 rounded border bg-muted/30 p-3 text-xs"><div><span className="font-medium">From:</span> {getHeader(msg, "from")}</div><div><span className="font-medium">To:</span> {getHeader(msg, "to")}</div>{getHeader(msg, "cc") && <div><span className="font-medium">Cc:</span> {getHeader(msg, "cc")}</div>}<div><span className="font-medium">Date:</span> {getHeader(msg, "date")}</div><div><span className="font-medium">Subject:</span> {getHeader(msg, "subject")}</div></div>}
+          <div className="ml-[52px] mt-3 text-sm">{decoded.html ? <div className="prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(decoded.html) }} /> : <div className="whitespace-pre-wrap">{decoded.text}</div>}</div>
+        </div>
+      })}
+
+      {messages.length > 3 && !showAllMessages && <button onClick={() => setShowAllMessages(true)} className="my-2 flex w-full items-center gap-3 rounded-lg border border-dashed px-4 py-2 text-xs text-muted-foreground hover:bg-muted/50"><div className="h-px flex-1 bg-border" /><span>{messages.length - 2} earlier messages</span><div className="h-px flex-1 bg-border" /></button>}
+    </div>
+
+    {replyMode === null ? (
+      <div className="flex items-center gap-2 px-6 py-3">
+        <button onClick={() => setReplyMode("reply")} className="inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm hover:bg-muted"><Reply className="h-4 w-4" />Reply</button>
+        <button onClick={() => setReplyMode("reply-all")} className="inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm hover:bg-muted"><ReplyAll className="h-4 w-4" />Reply all</button>
+        <button onClick={() => setReplyMode("forward")} className="inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm hover:bg-muted"><Forward className="h-4 w-4" />Forward</button>
+      </div>
+    ) : (
+      <div className="space-y-2 border-t p-3">
+        {replyMode === "forward" && <input value={forwardTo} onChange={(e) => setForwardTo(e.target.value)} placeholder="Recipient email" className="w-full rounded-md border px-3 py-2 text-sm" />}
+        <Textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={4} />
+        <div className="flex items-center gap-2"><Button size="sm" onClick={handleSend} disabled={!reply.trim()}>Send</Button><Button size="sm" variant="ghost" onClick={() => setReplyMode(null)}>Cancel</Button></div>
+      </div>
+    )}
+  </div>
 }

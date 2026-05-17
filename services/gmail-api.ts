@@ -33,6 +33,16 @@ export async function getGmailClient(userId: string) {
 
 const supabase = supabaseAdmin
 
+function mapFolderToLabelId(folder: string): string | null {
+  const upper = folder.toUpperCase()
+  const systemIds = ["INBOX", "STARRED", "IMPORTANT", "SENT", "DRAFT", "DRAFTS", "TRASH", "SPAM", "UNREAD", "CHAT"]
+  if (systemIds.includes(upper)) return upper === "DRAFTS" ? "DRAFT" : upper
+  const mapping: Record<string, string> = { inbox: "INBOX", starred: "STARRED", important: "IMPORTANT", sent: "SENT", drafts: "DRAFT", trash: "TRASH", spam: "SPAM" }
+  if (mapping[folder]) return mapping[folder]
+  if (folder.startsWith("Label_")) return folder
+  return folder
+}
+
 async function safeCall<T>(fn: () => Promise<T>, fallback?: T): Promise<T> {
   try {
     return await fn()
@@ -66,16 +76,7 @@ export async function listThreads(
   options: { includeSpamTrash?: boolean } = {},
 ): Promise<GmailThread[]> {
   const gmail = await getGmailClient(userId)
-  const folderMap: Record<string, string> = {
-    inbox: "INBOX",
-    starred: "STARRED",
-    important: "IMPORTANT",
-    sent: "SENT",
-    drafts: "DRAFT",
-    trash: "TRASH",
-    spam: "SPAM",
-  }
-  const normalized = folderMap[folder.toLowerCase()] || folder
+  const normalized = mapFolderToLabelId(folder) || folder
   const includeSpamTrash =
     options.includeSpamTrash ||
     normalized === "TRASH" ||
@@ -84,28 +85,15 @@ export async function listThreads(
     folder.toLowerCase() === "spam"
 
   let threads: GmailThread[] = []
-  let res = await safeCall(
-    () =>
-      gmail.users.threads.list({
-        userId: "me",
-        maxResults,
-        labelIds: [normalized],
-        includeSpamTrash,
-        format: "full" as any,
-      }),
-    null as any,
-  )
+  const listParams: any = { userId: "me", maxResults, format: "full" as any }
+  if (normalized) listParams.labelIds = [normalized]
+  if (includeSpamTrash || options?.includeSpamTrash) listParams.includeSpamTrash = true
+
+  let res = await safeCall(() => gmail.users.threads.list(listParams), null as any)
   if (!res) {
-    res = await safeCall(
-      () =>
-        gmail.users.threads.list({
-          userId: "me",
-          maxResults,
-          labelIds: [normalized],
-          includeSpamTrash,
-        }),
-      { data: { threads: [] } } as any,
-    )
+    const fallbackParams = { ...listParams }
+    delete fallbackParams.format
+    res = await safeCall(() => gmail.users.threads.list(fallbackParams), { data: { threads: [] } } as any)
   }
   threads = res.data.threads || []
 
@@ -125,6 +113,19 @@ export async function listThreads(
       }
     })
     await supabase.from("gmail_threads").upsert(rows)
+
+    const freshIds = threads.map((t) => t.id!).filter(Boolean)
+    if (freshIds.length > 0) {
+      const labelToScopeBy: string | null = mapFolderToLabelId(folder)
+      if (labelToScopeBy) {
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+        await supabase
+          .from("gmail_threads")
+          .delete()
+          .not("id", "in", `(${freshIds.map((id) => `"${id}"`).join(",")})`)
+          .lt("updated_at", fiveMinutesAgo)
+      }
+    }
 
     const addressSet = new Set<string>()
     const threadMeta: Record<string, { subject: string | null; snippet: string | null; starred: boolean; unread: boolean; emails: string[] }> = {}
