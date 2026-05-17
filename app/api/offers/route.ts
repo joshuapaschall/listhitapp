@@ -39,6 +39,8 @@ export async function POST(request: NextRequest) {
       down_payment: body.down_payment || null,
       monthly_payment: body.monthly_payment || null,
       earnest_money: body.earnest_money || null,
+      due_diligence_days: body.due_diligence_days || null,
+      proposed_closing_date: body.proposed_closing_date || null,
       status: body.status || "submitted",
       notes: body.notes || null,
     })

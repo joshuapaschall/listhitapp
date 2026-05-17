@@ -133,6 +133,14 @@ export default function OfferDetailDrawer({ open, onOpenChange, offer, onSuccess
               <p className="text-sm text-muted-foreground">Earnest Money</p>
               <p className="font-medium">{currencyFormatter.format(offer.earnest_money || 0)}</p>
             </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Due Diligence</p>
+              <p className="font-medium">{offer.due_diligence_days != null ? `${offer.due_diligence_days} days` : "None"}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Proposed Closing</p>
+              <p className="font-medium">{offer.proposed_closing_date ? new Date(offer.proposed_closing_date + "T00:00:00").toLocaleDateString("en-US", { dateStyle: "medium" }) : "Not set"}</p>
+            </div>
           </div>
 
           <div className="space-y-3 rounded-lg border p-4">

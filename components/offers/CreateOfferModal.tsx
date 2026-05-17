@@ -12,20 +12,25 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { Separator } from "@/components/ui/separator"
 import BuyerSelector from "@/components/buyers/buyer-selector"
 import PropertySelector from "@/components/buyers/property-selector"
 import type { Buyer, Property } from "@/lib/supabase"
 import { OfferService } from "@/services/offer-service"
 import { toast } from "sonner"
+import { cn } from "@/lib/utils"
+import { Banknote, Building2 } from "lucide-react"
 
-const STATUS_OPTIONS = ["submitted", "accepted", "rejected", "withdrawn", "countered", "closed"]
+function formatCurrencyInput(value: string): string {
+  const cleaned = value.replace(/[^\d.]/g, "")
+  const num = parseFloat(cleaned)
+  if (isNaN(num)) return ""
+  return num.toLocaleString("en-US", { maximumFractionDigits: 0 })
+}
+
+function parseCurrencyInput(formatted: string): string {
+  return formatted.replace(/,/g, "")
+}
 
 interface CreateOfferModalProps {
   open: boolean
@@ -49,7 +54,8 @@ export default function CreateOfferModal({
   const [downPayment, setDownPayment] = useState("")
   const [monthlyPayment, setMonthlyPayment] = useState("")
   const [earnestMoney, setEarnestMoney] = useState("")
-  const [status, setStatus] = useState("submitted")
+  const [dueDiligenceDays, setDueDiligenceDays] = useState("")
+  const [proposedClosingDate, setProposedClosingDate] = useState("")
   const [notes, setNotes] = useState("")
   const [loading, setLoading] = useState(false)
 
@@ -67,14 +73,15 @@ export default function CreateOfferModal({
       setDownPayment("")
       setMonthlyPayment("")
       setEarnestMoney("")
-      setStatus("submitted")
+      setDueDiligenceDays("")
+      setProposedClosingDate("")
       setNotes("")
       onOpenChange(false)
     }
   }
 
   const handleSubmit = async () => {
-    if (!buyer || !property) return
+    if (!buyer || !property || !offerPrice) return
     setLoading(true)
     try {
       await OfferService.addOffer({
@@ -85,7 +92,9 @@ export default function CreateOfferModal({
         down_payment: downPayment ? Number(downPayment) : null,
         monthly_payment: offerType === "cash" ? null : monthlyPayment ? Number(monthlyPayment) : null,
         earnest_money: earnestMoney ? Number(earnestMoney) : null,
-        status,
+        due_diligence_days: dueDiligenceDays ? Number(dueDiligenceDays) : null,
+        proposed_closing_date: proposedClosingDate || null,
+        status: "submitted",
         notes: notes || null,
       })
       toast.success("Offer created")
@@ -101,73 +110,190 @@ export default function CreateOfferModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-xl">
         <DialogHeader>
           <DialogTitle>Create Offer</DialogTitle>
           <DialogDescription>Record a new offer from a buyer.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
-          <div>
-            <label className="block mb-1 text-sm font-medium">Buyer</label>
-            <BuyerSelector value={buyer} onChange={setBuyer} />
-          </div>
-          <div>
-            <label className="block mb-1 text-sm font-medium">Property</label>
-            <PropertySelector value={property} onChange={setProperty} />
-          </div>
-          <div>
-            <label htmlFor="offer-type" className="block mb-1 text-sm font-medium">Offer Type</label>
-            <Select value={offerType} onValueChange={setOfferType}>
-              <SelectTrigger id="offer-type">
-                <SelectValue placeholder="Offer Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="cash">cash</SelectItem>
-                <SelectItem value="financing">financing</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <label htmlFor="offer-price" className="block mb-1 text-sm font-medium">Offer Price</label>
-            <Input id="offer-price" name="offer-price" type="number" value={offerPrice} onChange={(e) => setOfferPrice(e.target.value)} />
-          </div>
-          <div>
-            <label htmlFor="down-payment" className="block mb-1 text-sm font-medium">Down Payment</label>
-            <Input id="down-payment" name="down-payment" type="number" value={downPayment} onChange={(e) => setDownPayment(e.target.value)} />
-          </div>
-          {offerType !== "cash" && (
+          <div className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Buyer & Property</p>
             <div>
-              <label htmlFor="monthly-payment" className="block mb-1 text-sm font-medium">Monthly Payment</label>
-              <Input id="monthly-payment" name="monthly-payment" type="number" value={monthlyPayment} onChange={(e) => setMonthlyPayment(e.target.value)} />
+              <label className="mb-1.5 block text-sm font-medium">Buyer <span className="text-destructive">*</span></label>
+              <BuyerSelector value={buyer} onChange={setBuyer} />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">Property <span className="text-destructive">*</span></label>
+              <PropertySelector value={property} onChange={setProperty} />
+            </div>
+          </div>
+
+          <Separator />
+
+          <div className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Offer Details</p>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">Offer Type</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setOfferType("cash")}
+                  className={cn(
+                    "flex items-center justify-center gap-2 rounded-lg border-2 px-4 py-2.5 text-sm font-medium transition-all",
+                    offerType === "cash"
+                      ? "border-primary bg-primary/5 text-primary"
+                      : "border-border bg-background text-muted-foreground hover:border-muted-foreground/50",
+                  )}
+                >
+                  <Banknote className="h-4 w-4" />
+                  Cash
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOfferType("financing")}
+                  className={cn(
+                    "flex items-center justify-center gap-2 rounded-lg border-2 px-4 py-2.5 text-sm font-medium transition-all",
+                    offerType === "financing"
+                      ? "border-primary bg-primary/5 text-primary"
+                      : "border-border bg-background text-muted-foreground hover:border-muted-foreground/50",
+                  )}
+                >
+                  <Building2 className="h-4 w-4" />
+                  Financing
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="offer-price" className="mb-1.5 block text-sm font-medium">
+                Offer Price <span className="text-destructive">*</span>
+              </label>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                <Input
+                  id="offer-price"
+                  name="offer-price"
+                  type="text"
+                  inputMode="decimal"
+                  className="pl-7"
+                  placeholder="0"
+                  value={offerPrice ? formatCurrencyInput(offerPrice) : ""}
+                  onChange={(e) => setOfferPrice(parseCurrencyInput(e.target.value))}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="down-payment" className="mb-1.5 block text-sm font-medium">Down Payment</label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                  <Input
+                    id="down-payment"
+                    type="text"
+                    inputMode="decimal"
+                    className="pl-7"
+                    placeholder="0"
+                    value={downPayment ? formatCurrencyInput(downPayment) : ""}
+                    onChange={(e) => setDownPayment(parseCurrencyInput(e.target.value))}
+                  />
+                </div>
+              </div>
+              <div>
+                <label htmlFor="earnest-money" className="mb-1.5 block text-sm font-medium">Earnest Money</label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                  <Input
+                    id="earnest-money"
+                    type="text"
+                    inputMode="decimal"
+                    className="pl-7"
+                    placeholder="0"
+                    value={earnestMoney ? formatCurrencyInput(earnestMoney) : ""}
+                    onChange={(e) => setEarnestMoney(parseCurrencyInput(e.target.value))}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {offerType !== "cash" && (
+              <div>
+                <label htmlFor="monthly-payment" className="mb-1.5 block text-sm font-medium">Monthly Payment</label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                  <Input
+                    id="monthly-payment"
+                    type="text"
+                    inputMode="decimal"
+                    className="pl-7"
+                    placeholder="0"
+                    value={monthlyPayment ? formatCurrencyInput(monthlyPayment) : ""}
+                    onChange={(e) => setMonthlyPayment(parseCurrencyInput(e.target.value))}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="dd-period" className="mb-1.5 block text-sm font-medium">Due Diligence Period</label>
+                <div className="relative">
+                  <Input
+                    id="dd-period"
+                    type="number"
+                    min="0"
+                    className="pr-12"
+                    placeholder="0"
+                    value={dueDiligenceDays}
+                    onChange={(e) => setDueDiligenceDays(e.target.value)}
+                  />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">days</span>
+                </div>
+              </div>
+              <div>
+                <label htmlFor="closing-date" className="mb-1.5 block text-sm font-medium">Proposed Closing</label>
+                <Input
+                  id="closing-date"
+                  type="date"
+                  value={proposedClosingDate}
+                  onChange={(e) => setProposedClosingDate(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">Notes</label>
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Any special terms, contingencies, or notes about this offer..."
+              />
+            </div>
+          </div>
+
+          {buyer && property && offerPrice && (
+            <div className="rounded-lg bg-muted/50 px-4 py-3 text-sm">
+              <span className="font-medium">{buyer.full_name || `${buyer.fname || ""} ${buyer.lname || ""}`.trim()}</span>
+              {" → "}
+              <span className="text-muted-foreground">{property.address}</span>
+              {" · "}
+              <span className="font-bold">
+                {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(Number(offerPrice))}
+              </span>
+              {" "}
+              <span className="text-muted-foreground">{offerType === "cash" ? "Cash" : "Financing"}</span>
+              {proposedClosingDate && (
+                <>
+                  {" · "}
+                  <span className="text-muted-foreground">Close {new Date(proposedClosingDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+                </>
+              )}
             </div>
           )}
-          <div>
-            <label htmlFor="earnest-money" className="block mb-1 text-sm font-medium">Earnest Money</label>
-            <Input id="earnest-money" name="earnest-money" type="number" value={earnestMoney} onChange={(e) => setEarnestMoney(e.target.value)} />
-          </div>
-          <div>
-            <label className="block mb-1 text-sm font-medium">Status</label>
-            <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger>
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                {STATUS_OPTIONS.map((s) => (
-                  <SelectItem key={s} value={s} className="capitalize">
-                    {s.replace("_", " ")}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <label className="block mb-1 text-sm font-medium">Notes</label>
-            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
-          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={handleClose} disabled={loading}>Cancel</Button>
-          <Button onClick={handleSubmit} disabled={loading || !buyer || !property}>{loading ? "Saving..." : "Save"}</Button>
+          <Button onClick={handleSubmit} disabled={loading || !buyer || !property || !offerPrice}>{loading ? "Submitting..." : "Submit Offer"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
