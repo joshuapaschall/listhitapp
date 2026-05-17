@@ -2,7 +2,7 @@
 import { render } from "@testing-library/react"
 import ConversationRow from "../components/inbox/conversation-row"
 
-jest.useFakeTimers().setSystemTime(new Date("2024-01-01T00:10:00Z"))
+vi.useFakeTimers().setSystemTime(new Date("2024-01-01T00:10:00Z"))
 
 describe("ConversationRow", () => {
   test("uses now context to set dot color", () => {

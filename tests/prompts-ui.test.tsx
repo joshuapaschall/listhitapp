@@ -4,7 +4,7 @@ import PromptForm from "../components/prompts/prompt-form"
 
 describe("PromptForm", () => {
   test("submits entered data", async () => {
-    const handleSubmit = jest.fn().mockResolvedValue(undefined)
+    const handleSubmit = vi.fn().mockResolvedValue(undefined)
     render(<PromptForm onSubmit={handleSubmit} />)
     fireEvent.change(screen.getByLabelText(/Name/i), { target: { value: "Test" } })
     fireEvent.change(screen.getByLabelText(/Description/i), { target: { value: "Desc" } })

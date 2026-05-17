@@ -1,4 +1,3 @@
-import { describe, beforeEach, test, expect, jest } from "@jest/globals"
 import { NextRequest } from "next/server"
 import { POST } from "../app/api/campaigns/send/route"
 import { POST as SendfoxPOST } from "../app/api/sendfox/contact/route"
@@ -6,21 +5,21 @@ import { POST as SendfoxPOST } from "../app/api/sendfox/contact/route"
 let campaigns: any[] = []
 let recipients: any[] = []
 let buyers: any[] = []
-let smsMock = jest.fn()
+let smsMock = vi.fn()
 let supabase: any
 let authUser: any = null
-let fetchMock = jest.fn()
+let fetchMock = vi.fn()
 let recipientCounter = 1
 
-jest.mock("@supabase/supabase-js", () => ({
+vi.mock("@supabase/supabase-js", () => ({
   createClient: () => supabase,
 }))
 
-jest.mock("../services/campaign-sender.server", () => ({
+vi.mock("../services/campaign-sender.server", () => ({
   sendCampaignSMS: (...args: any[]) => smsMock(...args),
 }))
-jest.mock("../services/campaign-sender", () => ({
-  sendEmailCampaign: jest.fn(),
+vi.mock("../services/campaign-sender", () => ({
+  sendEmailCampaign: vi.fn(),
 }))
 
 function buildSupabase() {

@@ -1,16 +1,14 @@
-import { beforeEach, describe, expect, jest, test } from "@jest/globals"
-
 let createCampaign: any
 let sendCampaign: any
 let getCampaignStats: any
 let unsubscribe: any
 let getMe: any
 
-const fetchMock = jest.fn()
+const fetchMock = vi.fn()
 // @ts-ignore
 global.fetch = fetchMock
 
-jest.mock("../lib/supabase", () => ({
+vi.mock("../lib/supabase", () => ({
   supabaseAdmin: {
     from: () => ({
       select: () => ({
@@ -24,7 +22,7 @@ describe("sendfox-service campaigns", () => {
   beforeEach(() => {
     fetchMock.mockReset()
     process.env.SENDFOX_API_TOKEN = "tok"
-    jest.resetModules()
+    vi.resetModules()
     const mod = require("../services/sendfox-service")
     createCampaign = mod.createCampaign
     sendCampaign = mod.sendCampaign

@@ -1,15 +1,14 @@
-import { describe, test, expect, jest } from "@jest/globals"
 import { NextRequest } from "next/server"
 import { GET } from "../app/api/agents/active-call/route"
 
-jest.mock("next/headers", () => ({
+vi.mock("next/headers", () => ({
   cookies: () => ({
     get: (name: string) =>
       name === "agent_session" ? { value: "agent123:token" } : undefined,
   }),
 }))
 
-jest.mock("../lib/supabase", () => ({
+vi.mock("../lib/supabase", () => ({
   supabaseAdmin: {
     from: () => ({
       select: () => ({

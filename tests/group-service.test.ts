@@ -1,4 +1,3 @@
-import { describe, expect, test, beforeEach } from "@jest/globals"
 import { toast } from "sonner"
 import { createGroup, updateGroup, deleteGroup } from "../lib/group-service"
 
@@ -7,9 +6,9 @@ let buyers: any[] = []
 let buyerGroups: any[] = []
 let idCounter = 1
 
-jest.mock("sonner", () => ({ toast: { error: jest.fn(), success: jest.fn() } }))
+vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 
-jest.mock("../lib/supabase", () => {
+vi.mock("../lib/supabase", () => {
   const client = {
     from: (table: string) => {
       if (table === "groups") {
@@ -91,11 +90,11 @@ describe("group service", () => {
     buyers = []
     buyerGroups = []
     idCounter = 1
-    ;(global.fetch as any) = jest.fn().mockResolvedValue({
+    ;(global.fetch as any) = vi.fn().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ id: 1 }),
     })
-    ;(toast.error as jest.Mock).mockClear()
+    ;(toast.error as vi.Mock).mockClear()
   })
 
   test("createGroup creates SendFox list and stores id", async () => {

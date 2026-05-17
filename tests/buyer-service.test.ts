@@ -1,9 +1,8 @@
-import { describe, expect, test, beforeEach, jest } from "@jest/globals"
 let buyers: any[] = []
 let idCounter = 1
-const fetchMock = jest.fn()
+const fetchMock = vi.fn()
 
-jest.mock("../lib/supabase", () => {
+vi.mock("../lib/supabase", () => {
   const client = {
     from: (table: string) => {
       if (table !== "buyers") throw new Error(`Unexpected table ${table}`)

@@ -1,16 +1,15 @@
-import { describe, beforeEach, test, expect, jest } from "@jest/globals"
 import { NextRequest } from "next/server"
 
 let GET: any
 let POST: any
 let DELETE_METHOD: any
-const fetchMock = jest.fn()
+const fetchMock = vi.fn()
 // @ts-ignore
 global.fetch = fetchMock
 
 describe("short domains routes", () => {
   beforeEach(async () => {
-    jest.resetModules()
+    vi.resetModules()
     fetchMock.mockReset()
     process.env.SHORTIO_API_KEY = "KEY"
     const mod = await import("../app/api/short-domains/route")

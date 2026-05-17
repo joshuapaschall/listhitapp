@@ -1,4 +1,3 @@
-import { describe, beforeEach, test, expect, jest } from "@jest/globals"
 import { NextRequest } from "next/server"
 import { POST } from "../app/api/campaigns/send/route"
 
@@ -6,29 +5,29 @@ let campaigns: any[] = []
 let recipients: any[] = []
 let buyers: any[] = []
 let buyerGroups: any[] = []
-let smsMock = jest.fn()
-let emailMock = jest.fn()
-let shortMock = jest.fn()
+let smsMock = vi.fn()
+let emailMock = vi.fn()
+let shortMock = vi.fn()
 let supabase: any
 let recipientUpdates: any[] = []
 let recipientCounter = 1
 
-jest.mock("@supabase/supabase-js", () => ({
+vi.mock("@supabase/supabase-js", () => ({
   createClient: () => supabase,
 }))
 
-jest.mock("../services/campaign-sender.server", () => ({
+vi.mock("../services/campaign-sender.server", () => ({
   sendCampaignSMS: (...args: any[]) => smsMock(...args),
 }))
-jest.mock("../services/campaign-sender", () => ({
+vi.mock("../services/campaign-sender", () => ({
   sendEmailCampaign: (...args: any[]) => emailMock(...args),
 }))
 
-jest.mock("../services/shortio-service", () => ({
+vi.mock("../services/shortio-service", () => ({
   replaceUrlsWithShortLinks: (...args: any[]) => shortMock(...args),
 }))
 
-jest.mock("@/lib/supabase", () => ({
+vi.mock("@/lib/supabase", () => ({
   get supabaseAdmin() {
     return supabase
   },

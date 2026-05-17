@@ -1,8 +1,7 @@
-import { describe, beforeEach, test, expect, jest } from "@jest/globals"
 import { NextRequest } from "next/server"
 import { POST } from "../app/api/campaigns/send-now/route"
 
-const fetchMock = jest.fn()
+const fetchMock = vi.fn()
 // @ts-ignore
 global.fetch = fetchMock
 

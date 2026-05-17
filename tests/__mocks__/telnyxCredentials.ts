@@ -1,8 +1,8 @@
-import { jest } from "@jest/globals"
+import { vi } from "vitest"
 
-export const createAgentTelephonyCredentialMock = jest.fn(async () => ({}))
-export const createWebRTCTokenMock = jest.fn(async () => ({ token: "mock-token" }))
-export const deleteTelnyxCredentialMock = jest.fn(async () => ({}))
+export const createAgentTelephonyCredentialMock = vi.fn(async () => ({}))
+export const createWebRTCTokenMock = vi.fn(async () => ({ token: "mock-token" }))
+export const deleteTelnyxCredentialMock = vi.fn(async () => ({}))
 
 export function __setTokenResponse(response: any) {
   createWebRTCTokenMock.mockResolvedValue(response)

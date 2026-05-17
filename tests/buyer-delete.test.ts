@@ -1,13 +1,11 @@
-import { describe, expect, test, beforeEach, jest } from "@jest/globals"
-
 let buyers: any[] = []
 let buyerGroups: any[] = []
 let groups: any[] = []
 
-const fetchMock = jest.fn()
+const fetchMock = vi.fn()
 global.fetch = fetchMock as any
 
-jest.mock("../lib/supabase", () => {
+vi.mock("../lib/supabase", () => {
   const client = {
     from: (table: string) => {
       if (table === "buyers") {

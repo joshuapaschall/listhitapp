@@ -1,25 +1,23 @@
-import { jest } from "@jest/globals"
-
 describe("ffmpeg path resolution", () => {
   const originalEnv = { ...process.env }
 
   afterEach(() => {
-    jest.resetModules()
-    jest.clearAllMocks()
+    vi.resetModules()
+    vi.clearAllMocks()
     process.env = { ...originalEnv }
   })
 
   test("prefers FFMPEG_PATH environment variable when executable", async () => {
     process.env.FFMPEG_PATH = "/custom/ffmpeg"
 
-    jest.doMock("fs", () => {
-      const actual = jest.requireActual("fs")
-      return { ...actual, existsSync: jest.fn(() => true) }
+    vi.doMock("fs", async () => {
+      const actual = await vi.importActual<typeof import("fs")>("fs")
+      return { ...actual, existsSync: vi.fn(() => true) }
     })
 
-    jest.doMock("child_process", () => {
-      const actual = jest.requireActual("child_process")
-      return { ...actual, spawnSync: jest.fn(() => ({ status: 0 })) }
+    vi.doMock("child_process", async () => {
+      const actual = await vi.importActual<typeof import("child_process")>("child_process")
+      return { ...actual, spawnSync: vi.fn(() => ({ status: 0 })) }
     })
 
     const { getFfmpegPath } = await import("../lib/ffmpeg")
@@ -27,19 +25,19 @@ describe("ffmpeg path resolution", () => {
   })
 
   test("falls back to ffmpeg-static binary when env is missing", async () => {
-    const ffmpegStaticPath = jest.requireActual("ffmpeg-static") as string
+    const ffmpegStaticPath = await vi.importActual<string>("ffmpeg-static")
 
-    jest.doMock("fs", () => {
-      const actual = jest.requireActual("fs")
+    vi.doMock("fs", async () => {
+      const actual = await vi.importActual<typeof import("fs")>("fs")
       return {
         ...actual,
-        existsSync: jest.fn((candidate: string) => candidate === ffmpegStaticPath),
+        existsSync: vi.fn((candidate: string) => candidate === ffmpegStaticPath),
       }
     })
 
-    jest.doMock("child_process", () => {
-      const actual = jest.requireActual("child_process")
-      return { ...actual, spawnSync: jest.fn(() => ({ status: 0 })) }
+    vi.doMock("child_process", async () => {
+      const actual = await vi.importActual<typeof import("child_process")>("child_process")
+      return { ...actual, spawnSync: vi.fn(() => ({ status: 0 })) }
     })
 
     const { getFfmpegPath } = await import("../lib/ffmpeg")
@@ -49,16 +47,16 @@ describe("ffmpeg path resolution", () => {
   test("throws in production when no FFmpeg binary can be resolved", async () => {
     process.env.NODE_ENV = "production"
 
-    jest.doMock("ffmpeg-static", () => null)
+    vi.doMock("ffmpeg-static", () => null)
 
-    jest.doMock("fs", () => {
-      const actual = jest.requireActual("fs")
-      return { ...actual, existsSync: jest.fn(() => false) }
+    vi.doMock("fs", async () => {
+      const actual = await vi.importActual<typeof import("fs")>("fs")
+      return { ...actual, existsSync: vi.fn(() => false) }
     })
 
-    jest.doMock("child_process", () => {
-      const actual = jest.requireActual("child_process")
-      return { ...actual, spawnSync: jest.fn(() => ({ status: 1 })) }
+    vi.doMock("child_process", async () => {
+      const actual = await vi.importActual<typeof import("child_process")>("child_process")
+      return { ...actual, spawnSync: vi.fn(() => ({ status: 1 })) }
     })
 
     const { ensureFfmpegAvailable } = await import("../utils/ffmpeg-path")

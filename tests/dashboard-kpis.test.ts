@@ -1,4 +1,3 @@
-import { describe, expect, test } from "@jest/globals"
 import { fetchKpis } from "../services/dashboard-service"
 
 describe("dashboard kpis", () => {

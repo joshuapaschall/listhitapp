@@ -1,18 +1,17 @@
-import { describe, beforeEach, test, expect, jest } from "@jest/globals"
 import { NextRequest } from "next/server"
 
 let upserts: any[] = []
 let fetchMock: any
 let supabase: any
 
-jest.mock("@supabase/supabase-js", () => ({
+vi.mock("@supabase/supabase-js", () => ({
   createClient: () => supabase,
 }))
 
 describe("sync voice numbers route", () => {
   beforeEach(() => {
     upserts = []
-    fetchMock = jest.fn(async () => ({ ok: true, json: async () => ({ data: [], meta: {} }) }))
+    fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ data: [], meta: {} }) }))
     // @ts-ignore
     global.fetch = fetchMock
     supabase = {

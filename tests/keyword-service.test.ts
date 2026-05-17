@@ -1,10 +1,9 @@
-import { describe, expect, test, beforeEach } from "@jest/globals"
 import { KeywordService } from "../services/keyword-service"
 
 let keywords: any[] = []
 let idCounter = 1
 
-jest.mock("../lib/supabase", () => {
+vi.mock("../lib/supabase", () => {
   const client = {
       from: (table: string) => {
         if (table !== "negative_keywords") throw new Error(`Unexpected table ${table}`)

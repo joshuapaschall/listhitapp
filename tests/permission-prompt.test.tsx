@@ -1,11 +1,10 @@
-import { jest } from "@jest/globals"
 /** @jest-environment jsdom */
 import { render, screen, waitFor } from "@testing-library/react"
 import PermissionPrompt from "../components/PermissionPrompt"
 
-jest.mock("@/utils/unlock-audio", () => ({
+vi.mock("@/utils/unlock-audio", () => ({
   __esModule: true,
-  default: jest.fn(() => jest.fn()),
+  default: vi.fn(() => vi.fn()),
 }))
 
 describe("PermissionPrompt", () => {
@@ -16,10 +15,10 @@ describe("PermissionPrompt", () => {
   test("shows dialog when permissions missing", async () => {
     Object.defineProperty(global, "Notification", {
       writable: true,
-      value: { permission: "default", requestPermission: jest.fn() },
+      value: { permission: "default", requestPermission: vi.fn() },
     })
     ;(navigator as any).permissions = {
-      query: jest.fn().mockResolvedValue({ state: "prompt" }),
+      query: vi.fn().mockResolvedValue({ state: "prompt" }),
     }
     render(<PermissionPrompt />)
     expect(await screen.findByText("Permissions Required")).not.toBeNull()
@@ -28,10 +27,10 @@ describe("PermissionPrompt", () => {
   test("does not render when permissions granted", async () => {
     Object.defineProperty(global, "Notification", {
       writable: true,
-      value: { permission: "granted", requestPermission: jest.fn() },
+      value: { permission: "granted", requestPermission: vi.fn() },
     })
     ;(navigator as any).permissions = {
-      query: jest.fn().mockResolvedValue({ state: "granted" }),
+      query: vi.fn().mockResolvedValue({ state: "granted" }),
     }
     localStorage.setItem("audioUnlocked", "true")
     render(<PermissionPrompt />)
@@ -41,18 +40,18 @@ describe("PermissionPrompt", () => {
   })
 
   test("requests all permissions on enable", async () => {
-    const requestPermission = jest.fn().mockResolvedValue("granted")
+    const requestPermission = vi.fn().mockResolvedValue("granted")
     Object.defineProperty(global, "Notification", {
       writable: true,
       value: { permission: "default", requestPermission },
     })
-    const permissionsQuery = jest.fn().mockResolvedValue({ state: "prompt" })
+    const permissionsQuery = vi.fn().mockResolvedValue({ state: "prompt" })
     ;(navigator as any).permissions = { query: permissionsQuery }
-    const getUserMedia = jest.fn().mockResolvedValue({})
+    const getUserMedia = vi.fn().mockResolvedValue({})
     ;(navigator.mediaDevices as any) = { getUserMedia }
-    const play = jest.fn().mockResolvedValue(undefined)
-    const pause = jest.fn()
-    ;(global as any).Audio = jest.fn(() => ({ play, pause, currentTime: 0 }))
+    const play = vi.fn().mockResolvedValue(undefined)
+    const pause = vi.fn()
+    ;(global as any).Audio = vi.fn(() => ({ play, pause, currentTime: 0 }))
     render(<PermissionPrompt />)
     const btn = await screen.findByText("Enable Permissions")
     btn.click()

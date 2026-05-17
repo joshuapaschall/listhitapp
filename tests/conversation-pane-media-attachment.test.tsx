@@ -1,4 +1,3 @@
-import { jest } from "@jest/globals"
 /** @jest-environment jsdom */
 import { render, screen, waitFor, fireEvent } from "@testing-library/react"
 import ConversationPane from "../components/inbox/conversation-pane"
@@ -6,21 +5,21 @@ import { NowProvider } from "../hooks/use-now"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { MAX_MMS_SIZE } from "../utils/uploadMedia"
 
-const fetchMock = jest.fn()
+const fetchMock = vi.fn()
 // @ts-ignore
 global.fetch = fetchMock
 
-const uploadMock = jest.fn()
+const uploadMock = vi.fn()
 
-jest.mock("../utils/uploadMedia", () => {
-  const actual = jest.requireActual("../utils/uploadMedia")
+vi.mock("../utils/uploadMedia", async () => {
+  const actual = await vi.importActual<typeof import("../utils/uploadMedia")>("../utils/uploadMedia")
   return { ...actual, uploadMediaFile: (...args: any[]) => uploadMock(...args) }
 })
 
 let mockRecorderFile: File | null = null
 let mockUploadFiles: File[] = []
 
-jest.mock("../components/voice/VoiceRecorder", () => ({
+vi.mock("../components/voice/VoiceRecorder", () => ({
   __esModule: true,
   default: ({ open, onOpenChange, onSave }: any) =>
     open && mockRecorderFile ? (
@@ -35,7 +34,7 @@ jest.mock("../components/voice/VoiceRecorder", () => ({
     ) : null,
 }))
 
-jest.mock("../components/inbox/upload-modal", () => ({
+vi.mock("../components/inbox/upload-modal", () => ({
   __esModule: true,
   default: ({ open, onOpenChange, onAddFiles }: any) =>
     open ? (
@@ -52,8 +51,8 @@ jest.mock("../components/inbox/upload-modal", () => ({
     ) : null,
 }))
 
-jest.mock("../services/template-service", () => ({
-  TemplateService: { listTemplates: jest.fn().mockResolvedValue([]), addTemplate: jest.fn() },
+vi.mock("../services/template-service", () => ({
+  TemplateService: { listTemplates: vi.fn().mockResolvedValue([]), addTemplate: vi.fn() },
 }))
 
 const message: any = {
@@ -72,7 +71,7 @@ const message: any = {
   deleted_at: null,
 }
 
-jest.mock("../lib/supabase", () => {
+vi.mock("../lib/supabase", () => {
   const client = {
     from: (table: string) => {
       if (table === "buyers") {
@@ -95,15 +94,15 @@ jest.mock("../lib/supabase", () => {
       return { select: () => ({}) }
     },
     channel: () => ({ on: () => ({ subscribe: () => ({}) }) }),
-    removeChannel: jest.fn(),
+    removeChannel: vi.fn(),
   }
   return { supabase: client, supabaseAdmin: client }
 })
 
-Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { value: jest.fn(), writable: true })
+Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { value: vi.fn(), writable: true })
 // jsdom doesn't implement createObjectURL
 // @ts-ignore
-global.URL.createObjectURL = jest.fn(() => "blob:url")
+global.URL.createObjectURL = vi.fn(() => "blob:url")
 
 describe("ConversationPane media attachments", () => {
   beforeEach(() => {
@@ -163,7 +162,7 @@ describe("ConversationPane media attachments", () => {
 
   test("renders weba attachments as audio", async () => {
     message.media_urls = ["http://x.com/test.weba"]
-    ;(global.fetch as jest.Mock).mockResolvedValueOnce({
+    ;(global.fetch as vi.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => ({ url: "http://x.com/test.mp3" }),
       headers: { get: () => null },
@@ -182,7 +181,7 @@ describe("ConversationPane media attachments", () => {
 
   test("shows error indicator when convert fails", async () => {
     message.media_urls = ["http://x.com/test.weba"]
-    ;(global.fetch as jest.Mock).mockResolvedValueOnce({
+    ;(global.fetch as vi.Mock).mockResolvedValueOnce({
       ok: false,
       json: async () => ({ error: "convert failed" }),
       headers: { get: () => null },

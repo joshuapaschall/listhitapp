@@ -1,18 +1,17 @@
-import { describe, beforeEach, test, expect, jest } from "@jest/globals"
 import { NextRequest } from "next/server"
 import { POST } from "../app/api/admin/create-user/route"
-jest.mock("next/headers", () => ({
-  cookies: () => ({ get: jest.fn(), set: jest.fn(), delete: jest.fn() }),
+vi.mock("next/headers", () => ({
+  cookies: () => ({ get: vi.fn(), set: vi.fn(), delete: vi.fn() }),
 }))
 
 let users: any[] = []
 let profiles: any[] = []
 
-jest.mock("../lib/supabase", () => {
+vi.mock("../lib/supabase", () => {
   const client = {
     auth: {
       admin: {
-        createUser: jest.fn(async ({ email }) => {
+        createUser: vi.fn(async ({ email }) => {
           if (users.find((u) => u.email === email)) {
             return { data: null, error: { message: "exists" } }
           }
@@ -20,8 +19,8 @@ jest.mock("../lib/supabase", () => {
           users.push(user)
           return { data: { user }, error: null }
         }),
-        deleteUser: jest.fn(),
-        resetPasswordForEmail: jest.fn(),
+        deleteUser: vi.fn(),
+        resetPasswordForEmail: vi.fn(),
       },
     },
     from: (table: string) => {
@@ -37,7 +36,7 @@ jest.mock("../lib/supabase", () => {
   return { supabaseAdmin: client }
 })
 
-jest.mock("@supabase/auth-helpers-nextjs", () => ({
+vi.mock("@supabase/auth-helpers-nextjs", () => ({
   createRouteHandlerClient: () => ({
     auth: { getUser: async () => ({ data: { user: { id: "a" } } }) },
     from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { role: "admin" }, error: null }) }) }) }),

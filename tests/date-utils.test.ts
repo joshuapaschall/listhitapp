@@ -1,7 +1,6 @@
-import { describe, test, expect } from "@jest/globals"
 import { formatSmartTimestamp } from "../utils/date"
 
-jest.useFakeTimers().setSystemTime(new Date("2024-01-08T12:00:00Z"))
+vi.useFakeTimers().setSystemTime(new Date("2024-01-08T12:00:00Z"))
 
 describe("formatSmartTimestamp", () => {
   test("formats today", () => {

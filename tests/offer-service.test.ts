@@ -1,10 +1,9 @@
-import { describe, expect, test, beforeEach } from "@jest/globals"
 import { OfferService } from "../services/offer-service"
 
 let offers: any[] = []
 let idCounter = 1
 
-jest.mock("../lib/supabase", () => {
+vi.mock("../lib/supabase", () => {
   const client = {
       from: (table: string) => {
         if (table !== "offers") throw new Error(`Unexpected table ${table}`)

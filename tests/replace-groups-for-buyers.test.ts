@@ -1,13 +1,12 @@
-import { describe, test, beforeEach, expect, jest } from "@jest/globals"
 import { NextRequest } from "next/server"
 import { POST } from "../app/api/groups/replace-for-buyers/route"
 
 const DEFAULT_GROUP_ID = "g0"
 let buyerGroups: any[] = []
 
-global.fetch = jest.fn()
+global.fetch = vi.fn()
 
-jest.mock("../lib/supabase", () => {
+vi.mock("../lib/supabase", () => {
   const client = {
     rpc: (_fn: string, args: any) => {
       const { buyer_ids, target_group_ids, keep_default } = args
@@ -48,7 +47,7 @@ describe("replace groups for buyers route", () => {
       { buyer_id: "1", group_id: "g3" },
       { buyer_id: "2", group_id: "g2" },
     ]
-    ;(global.fetch as jest.Mock).mockReset().mockResolvedValue({ ok: true })
+    ;(global.fetch as vi.Mock).mockReset().mockResolvedValue({ ok: true })
   })
 
   test("replaces memberships and syncs", async () => {

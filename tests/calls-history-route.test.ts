@@ -1,4 +1,3 @@
-import { describe, beforeEach, test, expect, jest } from "@jest/globals"
 import { NextRequest } from "next/server"
 import { GET } from "../app/api/calls/history/route"
 
@@ -20,11 +19,11 @@ const sampleCalls = [
   }
 ]
 
-const fetchMock = jest.fn().mockResolvedValue({ ok: true })
+const fetchMock = vi.fn().mockResolvedValue({ ok: true })
 // @ts-ignore
 global.fetch = fetchMock
 
-jest.mock("../lib/supabase", () => {
+vi.mock("../lib/supabase", () => {
   const result = { data: sampleCalls, error: null, count: sampleCalls.length }
   const builder: any = {
     select: (columns: string, _options?: any) => {

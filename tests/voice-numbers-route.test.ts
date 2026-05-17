@@ -1,5 +1,3 @@
-import { describe, beforeEach, test, expect, jest } from "@jest/globals"
-
 const inboundRowsRef = { value: [] as { e164: string }[] }
 const voiceRowsRef = { value: [] as { phone_number: string }[] }
 const inboundErrorRef = { value: null as any }
@@ -29,7 +27,7 @@ const mockClient = {
   },
 }
 
-jest.unstable_mockModule("@/lib/supabase", () => ({
+vi.mock("@/lib/supabase", () => ({
   supabase: mockClient,
   supabaseAdmin: mockClient,
 }))

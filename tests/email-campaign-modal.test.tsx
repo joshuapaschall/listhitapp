@@ -1,36 +1,35 @@
-import { jest } from "@jest/globals"
 /** @jest-environment jsdom */
 import { render, screen, fireEvent, act } from "@testing-library/react"
 import NewEmailCampaignModal from "../components/campaigns/NewEmailCampaignModal"
 
-jest.mock("react-quill", () => ({
+vi.mock("react-quill", () => ({
   __esModule: true,
   default: ({ value, onChange }: any) => (
     <textarea value={value} onChange={(e) => onChange(e.target.value)} />
   ),
 }))
 
-jest.mock("../lib/group-service", () => ({
-  getGroups: jest.fn().mockResolvedValue([])
+vi.mock("../lib/group-service", () => ({
+  getGroups: vi.fn().mockResolvedValue([])
 }))
 
-jest.mock("../services/buyer-service", () => ({
+vi.mock("../services/buyer-service", () => ({
   BuyerService: {
-    getBuyerIdsForGroups: jest.fn().mockResolvedValue([]),
-    getBuyerCountsByGroup: jest.fn().mockResolvedValue({}),
-    getTags: jest.fn().mockResolvedValue([]),
+    getBuyerIdsForGroups: vi.fn().mockResolvedValue([]),
+    getBuyerCountsByGroup: vi.fn().mockResolvedValue({}),
+    getTags: vi.fn().mockResolvedValue([]),
   },
 }))
 
-jest.mock("../services/campaign-service", () => ({
+vi.mock("../services/campaign-service", () => ({
   CampaignService: {
-    createCampaign: jest.fn().mockResolvedValue({ id: "c1" }),
-    sendNow: jest.fn().mockResolvedValue(undefined),
-    schedule: jest.fn(),
+    createCampaign: vi.fn().mockResolvedValue({ id: "c1" }),
+    sendNow: vi.fn().mockResolvedValue(undefined),
+    schedule: vi.fn(),
   },
 }))
 
-jest.mock("../components/chat-assistant-button", () => ({
+vi.mock("../components/chat-assistant-button", () => ({
   __esModule: true,
   default: ({ onInsert }: { onInsert?: (text: string) => void }) => (
     <button onClick={() => onInsert && onInsert("AI text")}>AI Assistant</button>
@@ -39,7 +38,7 @@ jest.mock("../components/chat-assistant-button", () => ({
 
 describe("EmailCampaignModal", () => {
   beforeEach(() => {
-    ;(global as any).fetch = jest.fn().mockResolvedValue({
+    ;(global as any).fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ count: 1, sample: [] }),
     })
@@ -67,7 +66,7 @@ describe("EmailCampaignModal", () => {
   })
 
   test("AI assistant inserts email body", async () => {
-    const aiCb = jest.fn()
+    const aiCb = vi.fn()
     render(
       <NewEmailCampaignModal
         open={true}
@@ -85,7 +84,7 @@ describe("EmailCampaignModal", () => {
   })
 
   test("submits filters to campaign service", async () => {
-    jest.useFakeTimers()
+    vi.useFakeTimers()
     const { CampaignService } = require("../services/campaign-service")
     render(<NewEmailCampaignModal open={true} onOpenChange={() => {}} />)
     const nameInput = screen.getByLabelText(/campaign name/i)
@@ -93,7 +92,7 @@ describe("EmailCampaignModal", () => {
     const minScoreInput = screen.getByLabelText(/min score/i)
     fireEvent.change(minScoreInput, { target: { value: "50" } })
     act(() => {
-      jest.runAllTimers()
+      vi.runAllTimers()
     })
     const next = screen.getByRole("button", { name: /next/i })
     fireEvent.click(next)
@@ -109,6 +108,6 @@ describe("EmailCampaignModal", () => {
         filters: expect.objectContaining({ minScore: 50 }),
       }),
     )
-    jest.useRealTimers()
+    vi.useRealTimers()
   })
 })

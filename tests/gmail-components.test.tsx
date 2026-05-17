@@ -1,4 +1,3 @@
-import { jest } from "@jest/globals"
 /** @jest-environment jsdom */
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import ListPane from "../components/gmail/list-pane"
@@ -6,15 +5,15 @@ import ComposeModal from "../components/gmail/compose-modal"
 import ConversationPane from "../components/gmail/conversation-pane"
 import { decodeMessage } from "../lib/gmail-utils"
 
-const invalidateQueries = jest.fn()
-jest.mock("@tanstack/react-query", () => ({
-  useQuery: jest.fn(),
+const invalidateQueries = vi.fn()
+vi.mock("@tanstack/react-query", () => ({
+  useQuery: vi.fn(),
   useQueryClient: () => ({ invalidateQueries }),
 }))
 
-const mockUseQuery = require("@tanstack/react-query").useQuery as jest.Mock
+const mockUseQuery = require("@tanstack/react-query").useQuery as vi.Mock
 
-const fetchMock = jest.fn()
+const fetchMock = vi.fn()
 // @ts-ignore
 global.fetch = fetchMock
 
@@ -25,7 +24,7 @@ describe("gmail components", () => {
   })
 
   test("ListPane renders threads and selects", () => {
-    const handleSelect = jest.fn()
+    const handleSelect = vi.fn()
     render(
       <ListPane
         threads={[
@@ -98,8 +97,8 @@ describe("gmail components", () => {
 
   test("ComposeModal sends email", async () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({ threadId: "t1" }) })
-    const onSent = jest.fn()
-    const onOpenChange = jest.fn()
+    const onSent = vi.fn()
+    const onOpenChange = vi.fn()
     render(<ComposeModal open={true} onOpenChange={onOpenChange} onSent={onSent} />)
     const fields = await screen.findAllByRole("textbox")
     fireEvent.change(fields[0], { target: { value: "to@test.com" } })

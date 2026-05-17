@@ -1,17 +1,16 @@
-import { jest } from "@jest/globals"
 /** @jest-environment jsdom */
 import { render, fireEvent } from "@testing-library/react"
 import { Header } from "../components/layout/header"
 
-var signOutMock: jest.Mock
-const pushMock = jest.fn()
+var signOutMock: vi.Mock
+const pushMock = vi.fn()
 
-jest.mock("../lib/supabase", () => {
-  signOutMock = jest.fn().mockResolvedValue({ error: null })
+vi.mock("../lib/supabase", () => {
+  signOutMock = vi.fn().mockResolvedValue({ error: null })
   return { supabase: { auth: { signOut: (...args: any[]) => signOutMock(...args) } } }
 })
 
-jest.mock("next/navigation", () => ({
+vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock })
 }))
 

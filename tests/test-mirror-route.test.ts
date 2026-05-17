@@ -1,10 +1,9 @@
-import { describe, beforeEach, test, expect, jest } from "@jest/globals"
 import { GET } from "../app/api/test-mirror/route"
 import { NextRequest } from "next/server"
 
-const mirrorMock = jest.fn()
+const mirrorMock = vi.fn()
 
-jest.mock("../utils/mms.server", () => ({
+vi.mock("../utils/mms.server", () => ({
   mirrorMediaUrl: (...args: any[]) => mirrorMock(...args),
 }))
 

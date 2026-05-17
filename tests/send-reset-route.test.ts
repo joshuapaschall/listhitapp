@@ -1,20 +1,19 @@
-import { describe, beforeEach, test, expect, jest } from "@jest/globals"
 import { NextRequest } from "next/server"
 import { POST } from "../app/api/admin/send-reset/route"
-jest.mock("next/headers", () => ({
-  cookies: () => ({ get: jest.fn(), set: jest.fn(), delete: jest.fn() }),
+vi.mock("next/headers", () => ({
+  cookies: () => ({ get: vi.fn(), set: vi.fn(), delete: vi.fn() }),
 }))
 
 let resets: string[] = []
 
-jest.mock("../lib/supabase", () => {
+vi.mock("../lib/supabase", () => {
   const client = {
-    auth: { admin: { resetPasswordForEmail: jest.fn(async (email: string) => { resets.push(email); return { error: null } }) } },
+    auth: { admin: { resetPasswordForEmail: vi.fn(async (email: string) => { resets.push(email); return { error: null } }) } },
   }
   return { supabaseAdmin: client }
 })
 
-jest.mock("@supabase/auth-helpers-nextjs", () => ({
+vi.mock("@supabase/auth-helpers-nextjs", () => ({
   createRouteHandlerClient: () => ({
     auth: { getUser: async () => ({ data: { user: { id: "a" } } }) },
     from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { role: "admin" }, error: null }) }) }) }),

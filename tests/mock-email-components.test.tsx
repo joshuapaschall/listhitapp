@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 
-const fetchMock = jest.fn()
+const fetchMock = vi.fn()
 // @ts-ignore
 global.fetch = fetchMock
 import ComposeModal from "../components/gmail/compose-modal"
@@ -26,8 +26,8 @@ describe("mock email components", () => {
 
   test("ComposeModal sends data", async () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({ threadId: "t2" }) })
-    const handleSent = jest.fn()
-    const handleOpen = jest.fn()
+    const handleSent = vi.fn()
+    const handleOpen = vi.fn()
     render(
       <ComposeModal open={true} onOpenChange={handleOpen} onSent={handleSent} />,
     )

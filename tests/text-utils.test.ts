@@ -1,4 +1,3 @@
-import { describe, test, expect } from "@jest/globals"
 import { insertText, renderTemplate } from "../lib/utils"
 
 describe("insertText", () => {

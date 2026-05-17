@@ -1,8 +1,6 @@
-import { describe, beforeEach, test, expect, jest } from "@jest/globals"
-
 let generateCopy: (p: string) => Promise<string>
 let chat: (m: { role: string; content: string }[]) => Promise<string>
-const fetchMock = jest.fn()
+const fetchMock = vi.fn()
 // @ts-ignore
 global.fetch = fetchMock
 
@@ -10,7 +8,7 @@ describe("openai-service", () => {
   beforeEach(() => {
     fetchMock.mockReset()
     process.env.OPENAI_API_KEY = "key"
-    jest.resetModules()
+    vi.resetModules()
     const svc = require("../services/openai-service")
     generateCopy = svc.generateCopy
     chat = svc.chat

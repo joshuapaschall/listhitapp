@@ -1,11 +1,10 @@
-import { describe, beforeEach, afterEach, test, expect } from "@jest/globals"
 import { NextRequest } from "next/server"
 import { GET } from "../app/api/export-conversation/[buyerId]/route"
 
 let messages: any[] = []
 let supabase: any
 
-jest.mock("@supabase/supabase-js", () => ({
+vi.mock("@supabase/supabase-js", () => ({
   createClient: () => supabase,
 }))
 

@@ -1,5 +1,3 @@
-import { describe, expect, test, beforeEach, jest } from "@jest/globals"
-
 let upsertContact: any
 let getOrCreateList: any
 let sendEmail: any
@@ -9,12 +7,12 @@ let SendFoxError: any
 let addContactToList: any
 let fetchLists: any
 
-const fetchMock = jest.fn()
+const fetchMock = vi.fn()
 // @ts-ignore
 global.fetch = fetchMock
 
 let groups: any[] = []
-jest.mock("../lib/supabase", () => ({
+vi.mock("../lib/supabase", () => ({
   supabaseAdmin: {
     from: () => ({
       select: () => ({
@@ -33,7 +31,7 @@ describe("sendfox-service", () => {
     fetchMock.mockReset()
     groups = []
     process.env.SENDFOX_API_TOKEN = "tok"
-    jest.resetModules()
+    vi.resetModules()
     const mod = require("../services/sendfox-service")
     upsertContact = mod.upsertContact
     addContactToList = mod.addContactToList

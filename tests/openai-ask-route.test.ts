@@ -1,8 +1,7 @@
-import { describe, beforeEach, test, expect, jest } from "@jest/globals"
 import { NextRequest } from "next/server"
 
 let POST: any
-const fetchMock = jest.fn()
+const fetchMock = vi.fn()
 // @ts-ignore
 global.fetch = fetchMock
 
@@ -10,7 +9,7 @@ describe("openai ask route", () => {
   beforeEach(async () => {
     fetchMock.mockReset()
     process.env.OPENAI_API_KEY = "key"
-    jest.resetModules()
+    vi.resetModules()
     POST = (await import("../app/api/openai/ask/route")).POST
   })
 
@@ -40,7 +39,7 @@ describe("openai ask route", () => {
 
   test("throws when API key missing at import", async () => {
     delete process.env.OPENAI_API_KEY
-    jest.resetModules()
+    vi.resetModules()
     await expect(import("../app/api/openai/ask/route")).rejects.toThrow(
       "OpenAI API key not configured",
     )

@@ -1,8 +1,6 @@
-import { describe, beforeEach, test, expect, jest } from "@jest/globals"
-
-const fetchMock = jest.fn()
-const uploadMock = jest.fn().mockResolvedValue({ data: { path: "file.mp3" }, error: null })
-const convertToMp4Mock = jest.fn(
+const fetchMock = vi.fn()
+const uploadMock = vi.fn().mockResolvedValue({ data: { path: "file.mp3" }, error: null })
+const convertToMp4Mock = vi.fn(
   async (_inputUrl: string, direction: "incoming" | "outgoing" = "incoming") => {
     const path = `${direction}/file.mp4`
     await uploadMock(path, Buffer.from("mp4"), {
@@ -13,9 +11,9 @@ const convertToMp4Mock = jest.fn(
   },
 )
 
-await jest.unstable_mockModule("../utils/audio-utils", () => ({
+await vi.mock("../utils/audio-utils", () => ({
   __esModule: true,
-  convertToMp3: jest.fn(async () => {
+  convertToMp3: vi.fn(async () => {
     await uploadMock("file.mp3", Buffer.from("mp3"), {
       contentType: "audio/mpeg",
       upsert: true,
@@ -24,7 +22,7 @@ await jest.unstable_mockModule("../utils/audio-utils", () => ({
   }),
 }))
 
-await jest.unstable_mockModule("../utils/video-utils", () => ({
+await vi.mock("../utils/video-utils", () => ({
   __esModule: true,
   convertToMp4: (...args: any[]) => convertToMp4Mock(...args),
 }))
@@ -34,7 +32,7 @@ let mms: typeof import("../utils/mms.server")
 // @ts-ignore
 global.fetch = fetchMock
 
-await jest.unstable_mockModule("@/lib/supabase", () => ({
+await vi.mock("@/lib/supabase", () => ({
   __esModule: true,
   supabaseAdmin: {
     storage: {
@@ -45,7 +43,7 @@ await jest.unstable_mockModule("@/lib/supabase", () => ({
             publicUrl: `https://cdn/storage/v1/object/public/public-media/${path}`,
           },
         }),
-        remove: jest.fn().mockResolvedValue({ error: null }),
+        remove: vi.fn().mockResolvedValue({ error: null }),
       }),
     },
   },

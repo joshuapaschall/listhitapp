@@ -1,4 +1,3 @@
-import { jest } from "@jest/globals"
 /** @jest-environment jsdom */
 import { importBuyersFromCsv } from "../components/buyers/import-buyers-modal"
 
@@ -9,7 +8,7 @@ let idCounter = 1
 const originalFetch = global.fetch
 
 const groupService = {
-  addBuyersToGroups: jest.fn(async (buyerIds: string[], groupIds: string[]) => {
+  addBuyersToGroups: vi.fn(async (buyerIds: string[], groupIds: string[]) => {
     for (const b of buyerIds) {
       for (const g of groupIds) {
         buyerGroups.push({ buyer_id: b, group_id: g })
@@ -18,7 +17,7 @@ const groupService = {
   }),
 }
 
-jest.mock("../lib/supabase", () => {
+vi.mock("../lib/supabase", () => {
   const client = {
       from: (table: string) => {
         if (table === "tags") {
@@ -54,7 +53,7 @@ jest.mock("../lib/supabase", () => {
   return { supabase: client, supabaseAdmin: client }
 })
 
-jest.mock("../lib/group-service", () => ({
+vi.mock("../lib/group-service", () => ({
   addBuyersToGroups: (...args: any[]) => groupService.addBuyersToGroups(...args),
 }))
 
@@ -66,7 +65,7 @@ describe("importBuyersFromCsv", () => {
     buyerGroups = []
     idCounter = 1
     groupService.addBuyersToGroups.mockClear()
-    ;(global.fetch as any) = jest.fn(async () => ({ ok: true, json: async () => ({}) }))
+    ;(global.fetch as any) = vi.fn(async () => ({ ok: true, json: async () => ({}) }))
   })
 
   afterEach(() => {
