@@ -21,9 +21,33 @@ export async function GET(request: NextRequest) {
   const userId = user.id
   const maxParam = request.nextUrl.searchParams.get("maxResults")
   const max = maxParam ? parseInt(maxParam, 10) : 20
+  const labelId = request.nextUrl.searchParams.get("labelId")
   const folder = request.nextUrl.searchParams.get("folder") || "inbox"
 
+  const isTrashOrSpam = (id: string | null, f: string) => {
+    if (id === "TRASH" || id === "SPAM") return true
+    if (f === "trash" || f === "spam") return true
+    return false
+  }
+  const includeSpamTrash = isTrashOrSpam(labelId, folder)
+
   try {
+
+    if (labelId) {
+      const basic = await listThreads(userId, max, labelId, { includeSpamTrash })
+      const threads = await Promise.all(
+        basic.map(async (t) => {
+          const full = await getThread(userId, t.id)
+          return {
+            ...full,
+            starred: t.starred ?? full.starred,
+            unread: t.unread ?? full.unread,
+          }
+        }),
+      )
+      return new Response(JSON.stringify({ threads }))
+    }
+
     await syncGmailThreads(userId, max, folder)
 
     let { data } = await supabaseAdmin

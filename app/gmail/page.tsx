@@ -25,6 +25,7 @@ const CONNECT_ERRORS: Record<string, string> = {
 export default function GmailPage() {
   const [selectedThread, setSelectedThread] = useState<string | null>(null)
   const [folder, setFolder] = useState("inbox")
+  const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [showCompose, setShowCompose] = useState(false)
   const router = useRouter()
@@ -60,9 +61,15 @@ export default function GmailPage() {
   }, [router, searchParams])
 
   const { data: threads = [], isLoading, error } = useQuery<SimpleThread[]>({
-    queryKey: ["gmail-threads", folder],
+    queryKey: ["gmail-threads", folder, selectedLabelId],
     queryFn: async () => {
-      const res = await fetch(`/api/gmail/threads?maxResults=100&folder=${folder}`)
+      const params = new URLSearchParams({ maxResults: "100" })
+      if (selectedLabelId) {
+        params.set("labelId", selectedLabelId)
+      } else {
+        params.set("folder", folder)
+      }
+      const res = await fetch(`/api/gmail/threads?${params.toString()}`)
       const json = await res.json().catch(() => null)
       if (!res.ok) {
         throw new Error(json?.error || "Failed to load threads")
@@ -125,12 +132,23 @@ export default function GmailPage() {
         <div className="flex min-h-0 flex-1">
           <Sidebar
             folder={folder}
-            onChange={setFolder}
+            selectedLabelId={selectedLabelId}
+            onChange={(f, lid) => {
+              setFolder(f)
+              setSelectedLabelId(lid)
+              setSelectedThread(null)
+            }}
             onCompose={() => setShowCompose(true)}
-            activeEmail={accounts.find((account) => account.is_active)?.email || null}
+            accounts={accounts}
           />
           <div className="flex min-w-0 flex-1 flex-col">
-            <TopBar search={search} onSearchChange={setSearch} />
+            <TopBar
+              search={search}
+              onSearchChange={setSearch}
+              totalCount={threads.length}
+              pageStart={threads.length > 0 ? 1 : 0}
+              pageEnd={threads.length}
+            />
             {!selectedThread ? (
               <ListPane
                 threads={threads}
