@@ -78,25 +78,36 @@ export default function ComposeWindow({
     }
     setSending(true)
     try {
-      let res: Response
-      if (draftId && attachments.length === 0) {
-        res = await fetch(`/api/gmail/drafts/${draftId}/send`, { method: "POST" })
+      const formData = new FormData()
+      if (from) formData.append("from", from)
+      formData.append("to", to)
+      if (cc.trim()) formData.append("cc", cc.trim())
+      if (bcc.trim()) formData.append("bcc", bcc.trim())
+      formData.append("subject", subject)
+      formData.append("html", body)
+      attachments.forEach((file) => formData.append("attachments", file))
+
+      let sendRes: Response
+      if (draftId) {
+        // Update the draft server-side with current compose state, then send it.
+        const updateRes = await fetch(`/api/gmail/drafts/${draftId}`, {
+          method: "PUT",
+          body: formData,
+        })
+        if (!updateRes.ok) {
+          const j = await updateRes.json().catch(() => null)
+          throw new Error(j?.error || "Failed to update draft")
+        }
+        sendRes = await fetch(`/api/gmail/drafts/${draftId}/send`, { method: "POST" })
       } else {
-        const formData = new FormData()
-        if (from) formData.append("from", from)
-        formData.append("to", to)
-        if (cc.trim()) formData.append("cc", cc.trim())
-        if (bcc.trim()) formData.append("bcc", bcc.trim())
-        formData.append("subject", subject)
-        formData.append("html", body)
-        attachments.forEach((file) => formData.append("attachments", file))
-        res = await fetch("/api/gmail/send", { method: "POST", body: formData })
+        sendRes = await fetch("/api/gmail/send", { method: "POST", body: formData })
       }
-      if (!res.ok) {
-        const j = await res.json().catch(() => null)
+
+      if (!sendRes.ok) {
+        const j = await sendRes.json().catch(() => null)
         throw new Error(j?.error || "Failed to send")
       }
-      const json = await res.json()
+      const json = await sendRes.json()
       toast.success(draftId ? "Draft sent" : "Email sent")
       queryClient.invalidateQueries({ queryKey: ["gmail-threads"] })
       queryClient.invalidateQueries({ queryKey: ["gmail-labels"] })
@@ -110,6 +121,7 @@ export default function ComposeWindow({
       setSending(false)
     }
   }
+
 
   if (minimized) {
     return (

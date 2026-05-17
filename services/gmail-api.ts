@@ -483,6 +483,23 @@ export async function sendDraft(userId: string, draftId: string) {
   return res.data
 }
 
+export async function updateDraft(
+  userId: string,
+  draftId: string,
+  raw: string,
+) {
+  const gmail = await getGmailClient(userId)
+  const res = await safeCall(
+    () => gmail.users.drafts.update({
+      userId: "me",
+      id: draftId,
+      requestBody: { message: { raw } },
+    }),
+    {} as any,
+  )
+  return res.data
+}
+
 export default {
   getGmailClient,
   listThreads,
@@ -499,5 +516,6 @@ export default {
   listDrafts,
   getDraft,
   sendDraft,
+  updateDraft,
 }
 
