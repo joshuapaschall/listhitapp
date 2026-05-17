@@ -98,6 +98,20 @@ const server = setupServer(
   })
 )
 
-beforeAll(() => server.listen({ onUnhandledRequest: "warn" }))
+beforeAll(() => {
+  try {
+    server.listen({ onUnhandledRequest: "warn" })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    if (!message.includes("already patched")) throw err
+    server.resetHandlers()
+  }
+})
 afterEach(() => server.resetHandlers())
-afterAll(() => server.close())
+afterAll(() => {
+  try {
+    server.close()
+  } catch {
+    // worker may have already torn down
+  }
+})

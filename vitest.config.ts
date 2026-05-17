@@ -16,7 +16,12 @@ export default defineConfig({
     ],
     css: false,
     pool: "forks",
-    poolOptions: { forks: { singleFork: true } },
+    poolOptions: {
+      forks: {
+        singleFork: false,
+      },
+    },
+    isolate: true,
     server: {
       deps: {
         inline: [
