@@ -20,6 +20,13 @@ const config: Config = {
     },
     extend: {
       colors: {
+        brand: {
+          DEFAULT: "#059669",
+          hover: "#047857",
+          tint: "#ECFDF5",
+          fg: "#FFFFFF",
+          ring: "#10B981",
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",

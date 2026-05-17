@@ -42,6 +42,7 @@ import SmsCampaignModal from "@/components/campaigns/sms-campaign-modal"
 import NewEmailCampaignModal from "@/components/campaigns/NewEmailCampaignModal"
 import CampaignDetailsPanel from "@/components/campaigns/CampaignDetailsPanel"
 import { toast } from "sonner"
+import { clearAudienceSnapshot, readAudienceSnapshot } from "@/lib/campaign-audience"
 
 export default function CampaignsPage() {
   const [channel, setChannel] = useState<string>("all")
@@ -52,14 +53,25 @@ export default function CampaignsPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [smsOpen, setSmsOpen] = useState(false)
   const [emailOpen, setEmailOpen] = useState(false)
+  const [prefillAudience, setPrefillAudience] = useState<any>(null)
   const router = useRouter()
   const searchParams = useSearchParams()
   const queryClient = useQueryClient()
 
   useEffect(() => {
     const type = searchParams.get("type")
+    const prefill = searchParams.get("prefill")
     if (type === "sms") setSmsOpen(true)
     if (type === "email") setEmailOpen(true)
+    if (prefill === "email" || prefill === "sms") {
+      const snapshot = readAudienceSnapshot()
+      if (snapshot && snapshot.channel === prefill) {
+        setPrefillAudience(snapshot)
+        if (prefill === "email") setEmailOpen(true)
+        if (prefill === "sms") setSmsOpen(true)
+      }
+      clearAudienceSnapshot()
+    }
   }, [searchParams])
 
   const { data, isLoading } = useQuery({
@@ -290,6 +302,7 @@ export default function CampaignsPage() {
       </div>
       <SmsCampaignModal
         open={smsOpen}
+        prefillAudience={prefillAudience}
         onOpenChange={(o) => {
           setSmsOpen(o)
           if (!o) router.replace("/campaigns")
@@ -300,6 +313,7 @@ export default function CampaignsPage() {
       />
       <NewEmailCampaignModal
         open={emailOpen}
+        prefillAudience={prefillAudience}
         onOpenChange={(o) => {
           setEmailOpen(o)
           if (!o) router.replace("/campaigns")

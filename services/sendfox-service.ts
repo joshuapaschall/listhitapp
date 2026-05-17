@@ -259,6 +259,16 @@ export async function deleteContact(contactId: number) {
   return sendfoxRequest(`/contacts/${contactId}`, { method: "DELETE" })
 }
 
+export async function getContactCount(): Promise<number | null> {
+  try {
+    const resp: any = await sendfoxRequest("/contacts?per_page=1")
+    if (typeof resp?.total === "number") return resp.total
+    return null
+  } catch {
+    return null
+  }
+}
+
 export async function removeContactFromList(listId: number, contactId: number) {
   return sendfoxRequest(`/lists/${listId}/contacts/${contactId}`, {
     method: "DELETE",
@@ -719,6 +729,7 @@ export default {
   batchUpsertContacts,
   deleteList,
   deleteContact,
+  getContactCount,
   findContactByEmail,
   removeContactFromList,
 }
