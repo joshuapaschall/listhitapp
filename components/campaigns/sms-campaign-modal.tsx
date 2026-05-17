@@ -60,6 +60,8 @@ import { PromptService } from "@/services/prompt-service"
 import ChatAssistantButton from "@/components/chat-assistant-button"
 import { useSession } from "@/hooks/use-session"
 import { useRouter } from "next/navigation"
+import AudienceFilterSummaryCard from "@/components/campaigns/audience-filter-summary-card"
+import RecipientsPreviewSheet from "@/components/campaigns/recipients-preview-sheet"
 
 const TIME_OPTIONS = Array.from({ length: 24 }, (_, i) => {
   const hour12 = i % 12 === 0 ? 12 : i % 12
@@ -173,6 +175,7 @@ function MultiBuyerSelector({
 
 
 export default function SmsCampaignModal({ open, onOpenChange, onSuccess, onAiInsert, prefillAudience }: SmsCampaignModalProps) {
+  const prefillSnapshot = prefillAudience as any
   const [step, setStep] = useState<(typeof STEPS)[number]>("recipients")
   const [name, setName] = useState("")
   const [groups, setGroups] = useState<string[]>([])
@@ -201,8 +204,11 @@ export default function SmsCampaignModal({ open, onOpenChange, onSuccess, onAiIn
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { user, loading: sessionLoading } = useSession()
   const [authToastShown, setAuthToastShown] = useState(false)
+  const [prefillCleared, setPrefillCleared] = useState(false)
+  const [previewSheetOpen, setPreviewSheetOpen] = useState(false)
   const router = useRouter()
   const timeZone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, [])
+  const hasLargePrefill = !!(open && !prefillCleared && prefillSnapshot?.buyerIds?.length > 50)
 
   const previewBuyers = buyers.length
     ? buyers
@@ -348,6 +354,8 @@ export default function SmsCampaignModal({ open, onOpenChange, onSuccess, onAiIn
     setWeekdayOnly(false)
     setRunFrom("")
     setRunUntil("")
+    setPrefillCleared(false)
+    setPreviewSheetOpen(false)
   }
 
   const handleClose = () => {
@@ -355,6 +363,11 @@ export default function SmsCampaignModal({ open, onOpenChange, onSuccess, onAiIn
       reset()
       onOpenChange(false)
     }
+  }
+  const handleAdjustFilter = () => router.push("/?prefillReturn=1")
+  const handleClearPrefill = () => {
+    setPrefillCleared(true)
+    setBuyers([])
   }
 
   const handleSubmit = async () => {
@@ -382,7 +395,7 @@ export default function SmsCampaignModal({ open, onOpenChange, onSuccess, onAiIn
     }
     setLoading(true)
     try {
-      const buyerIds = buyers.map((b) => b.id)
+      const buyerIds = hasLargePrefill ? (prefillSnapshot?.buyerIds || []) : buyers.map((b) => b.id)
       const mediaUrls: string[] = []
       for (const file of attachments) {
         const url = await uploadMediaFile(file, "outgoing")
@@ -498,10 +511,19 @@ export default function SmsCampaignModal({ open, onOpenChange, onSuccess, onAiIn
               <label className="block mb-1 text-sm font-medium">Groups</label>
           <GroupTreeSelector value={groups} onChange={setGroups} allowCreate={false} />
         </div>
-        <div>
-          <label className="block mb-1 text-sm font-medium">Buyers</label>
-          <MultiBuyerSelector value={buyers} onChange={setBuyers} />
-        </div>
+        {hasLargePrefill ? (
+          <AudienceFilterSummaryCard
+            snapshot={prefillSnapshot}
+            onPreview={() => setPreviewSheetOpen(true)}
+            onAdjust={handleAdjustFilter}
+            onClear={handleClearPrefill}
+          />
+        ) : (
+          <div>
+            <label className="block mb-1 text-sm font-medium">Buyers</label>
+            <MultiBuyerSelector value={buyers} onChange={setBuyers} />
+          </div>
+        )}
         <p className="text-sm text-muted-foreground">
           Total contacts selected: {selectedCount}
         </p>
@@ -753,6 +775,11 @@ export default function SmsCampaignModal({ open, onOpenChange, onSuccess, onAiIn
           )}
         </DialogFooter>
       </DialogContent>
+      <RecipientsPreviewSheet
+        open={previewSheetOpen}
+        onOpenChange={setPreviewSheetOpen}
+        buyerIds={hasLargePrefill ? (prefillSnapshot?.buyerIds || []) : buyers.map((b) => b.id)}
+      />
     </Dialog>
   )
 }

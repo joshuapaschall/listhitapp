@@ -65,6 +65,8 @@ import TagFilterSelector from "@/components/buyers/tag-filter-selector"
 import LocationFilterSelector from "@/components/buyers/location-filter-selector"
 import { useSession } from "@/hooks/use-session"
 import { useRouter } from "next/navigation"
+import AudienceFilterSummaryCard from "@/components/campaigns/audience-filter-summary-card"
+import RecipientsPreviewSheet from "@/components/campaigns/recipients-preview-sheet"
 
 const TIME_OPTIONS = Array.from({ length: 24 }, (_, i) => {
   const hour12 = i % 12 === 0 ? 12 : i % 12
@@ -192,6 +194,7 @@ function MultiBuyerSelector({
 }
 
 export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, onAiInsert, prefillAudience }: EmailCampaignModalProps) {
+  const prefillSnapshot = prefillAudience as any
   const [step, setStep] = useState<(typeof STEPS)[number]>("recipients")
   const [name, setName] = useState("")
   const [groups, setGroups] = useState<string[]>([])
@@ -238,8 +241,11 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
   ]).size
   const { user, loading: sessionLoading } = useSession()
   const [authToastShown, setAuthToastShown] = useState(false)
+  const [prefillCleared, setPrefillCleared] = useState(false)
+  const [previewSheetOpen, setPreviewSheetOpen] = useState(false)
   const router = useRouter()
   const timeZone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, [])
+  const hasLargePrefill = !!(open && !prefillCleared && prefillSnapshot?.buyerIds?.length > 50)
 
   const fetchTemplates = useCallback(async () => {
     if (!user) return
@@ -589,6 +595,8 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
     setPreviewLoading(false)
     setTestRecipient("")
     setSendingTest(false)
+    setPrefillCleared(false)
+    setPreviewSheetOpen(false)
     if (debounceRef.current) clearTimeout(debounceRef.current)
   }
 
@@ -597,6 +605,15 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
       reset()
       onOpenChange(false)
     }
+  }
+  const handleAdjustFilter = () => router.push("/?prefillReturn=1")
+  const handleClearPrefill = () => {
+    setPrefillCleared(true)
+    setBuyers([])
+    setSelectedTags([])
+    setLocations([])
+    setMinScore("")
+    setMaxScore("")
   }
 
   const handleSubmit = async () => {
@@ -630,7 +647,7 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
     }
     setLoading(true)
     try {
-      const buyerIds = buyers.map((b) => b.id)
+      const buyerIds = hasLargePrefill ? (prefillSnapshot?.buyerIds || []) : buyers.map((b) => b.id)
       const filters = {
         tags: selectedTags.length ? selectedTags : undefined,
         locations: locations.length ? locations : undefined,
@@ -763,52 +780,63 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
                   <label className="block mb-1 text-sm font-medium">Groups</label>
                   <GroupTreeSelector value={groups} onChange={setGroups} allowCreate={false} />
                 </div>
-                <div>
-                  <label className="block mb-1 text-sm font-medium">Buyers</label>
-                  <MultiBuyerSelector value={buyers} onChange={setBuyers} />
-                </div>
-                <div>
-                  <label className="block mb-1 text-sm font-medium">Tags</label>
-                  <TagFilterSelector
-                    availableTags={availableTags}
-                    selectedTags={selectedTags}
-                    onChange={setSelectedTags}
+                {hasLargePrefill ? (
+                  <AudienceFilterSummaryCard
+                    snapshot={prefillSnapshot}
+                    onPreview={() => setPreviewSheetOpen(true)}
+                    onAdjust={handleAdjustFilter}
+                    onClear={handleClearPrefill}
                   />
-                </div>
-                <div>
-                  <label className="block mb-1 text-sm font-medium">Locations</label>
-                  <LocationFilterSelector
-                    selectedLocations={locations}
-                    onChange={setLocations}
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <div className="flex-1">
-                    <label htmlFor="minScore" className="block mb-1 text-sm font-medium">Min Score</label>
-                    <Input
-                      id="minScore"
-                      type="number"
-                      value={minScore}
-                      onChange={(e) => setMinScore(e.target.value)}
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <label htmlFor="maxScore" className="block mb-1 text-sm font-medium">Max Score</label>
-                    <Input
-                      id="maxScore"
-                      type="number"
-                      value={maxScore}
-                      onChange={(e) => setMaxScore(e.target.value)}
-                    />
-                  </div>
-                </div>
+                ) : (
+                  <>
+                    <div>
+                      <label className="block mb-1 text-sm font-medium">Buyers</label>
+                      <MultiBuyerSelector value={buyers} onChange={setBuyers} />
+                    </div>
+                    <div>
+                      <label className="block mb-1 text-sm font-medium">Tags</label>
+                      <TagFilterSelector
+                        availableTags={availableTags}
+                        selectedTags={selectedTags}
+                        onChange={setSelectedTags}
+                      />
+                    </div>
+                    <div>
+                      <label className="block mb-1 text-sm font-medium">Locations</label>
+                      <LocationFilterSelector
+                        selectedLocations={locations}
+                        onChange={setLocations}
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <label htmlFor="minScore" className="block mb-1 text-sm font-medium">Min Score</label>
+                        <Input
+                          id="minScore"
+                          type="number"
+                          value={minScore}
+                          onChange={(e) => setMinScore(e.target.value)}
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label htmlFor="maxScore" className="block mb-1 text-sm font-medium">Max Score</label>
+                        <Input
+                          id="maxScore"
+                          type="number"
+                          value={maxScore}
+                          onChange={(e) => setMaxScore(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
                 <p className="text-sm text-muted-foreground">
                   Total contacts selected: {selectedCount}
                 </p>
                 <div className="mt-3 rounded-xl border p-3 text-sm">
                   <div className="flex items-center justify-between">
                     <div className="font-medium">
-                      Recipients Preview {previewLoading ? "…" : `(${preview.count})`}
+                      Recipients Preview {previewLoading ? "…" : `(${hasLargePrefill ? (prefillSnapshot?.recipientCount || 0) : preview.count})`}
                     </div>
                     <div
                       className={`px-2 py-1 rounded-lg text-xs ${
@@ -1186,6 +1214,11 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
           </DialogFooter>
         </div>
       </DialogContent>
+      <RecipientsPreviewSheet
+        open={previewSheetOpen}
+        onOpenChange={setPreviewSheetOpen}
+        buyerIds={hasLargePrefill ? (prefillSnapshot?.buyerIds || []) : buyers.map((b) => b.id)}
+      />
     </Dialog>
   )
 }
