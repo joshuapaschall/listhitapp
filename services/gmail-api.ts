@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { google, gmail_v1 } from "googleapis"
+import { createMimeMessage } from "mimetext"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getAccessToken } from "./gmail-tokens"
 import { assertServer } from "@/utils/assert-server"
@@ -371,6 +372,88 @@ function buildMime(opts: BaseMailOptions, extra: Record<string, string> = {}) {
   return lines.join("\r\n")
 }
 
+
+interface Attachment {
+  filename: string
+  contentType: string
+  data: Buffer
+}
+
+interface ExtendedMailOptions {
+  from: string
+  to: string
+  cc?: string
+  bcc?: string
+  subject: string
+  text: string
+  html?: string
+  attachments?: Attachment[]
+}
+
+interface ExtendedReplyOptions extends ExtendedMailOptions {
+  inReplyTo: string
+  references?: string[]
+}
+
+function buildMimeWithMimetext(
+  opts: ExtendedMailOptions,
+  extraHeaders: Record<string, string> = {},
+): string {
+  const msg = createMimeMessage()
+  msg.setSender(opts.from)
+  const toList = opts.to.split(",").map((part) => part.trim()).filter(Boolean)
+  msg.setRecipients(toList)
+  if (opts.cc) {
+    const ccList = opts.cc.split(",").map((part) => part.trim()).filter(Boolean)
+    if (ccList.length) msg.setCc(ccList)
+  }
+  if (opts.bcc) {
+    const bccList = opts.bcc.split(",").map((part) => part.trim()).filter(Boolean)
+    if (bccList.length) msg.setBcc(bccList)
+  }
+  msg.setSubject(opts.subject)
+
+  Object.entries(extraHeaders).forEach(([key, value]) => {
+    msg.setHeader(key, value)
+  })
+
+  msg.addMessage({ contentType: "text/plain", data: opts.text })
+  if (opts.html) {
+    msg.addMessage({ contentType: "text/html", data: opts.html })
+  }
+
+  if (opts.attachments?.length) {
+    opts.attachments.forEach((att) => {
+      msg.addAttachment({
+        filename: att.filename,
+        contentType: att.contentType || "application/octet-stream",
+        data: att.data.toString("base64"),
+      })
+    })
+  }
+
+  return msg.asRaw()
+}
+
+function encodeBase64Url(raw: string): string {
+  return Buffer.from(raw)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "")
+}
+
+export function buildMessageWithAttachments(opts: ExtendedMailOptions): string {
+  return encodeBase64Url(buildMimeWithMimetext(opts))
+}
+
+export function buildReplyWithAttachments(opts: ExtendedReplyOptions): string {
+  const headers: Record<string, string> = {
+    "In-Reply-To": opts.inReplyTo,
+    References: [...(opts.references || []), opts.inReplyTo].join(" "),
+  }
+  return encodeBase64Url(buildMimeWithMimetext(opts, headers))
+}
 export default {
   getGmailClient,
   listThreads,
@@ -378,6 +461,8 @@ export default {
   sendEmail,
   buildMessage,
   buildReply,
+  buildMessageWithAttachments,
+  buildReplyWithAttachments,
   archiveThread,
   deleteThread,
   setThreadStarred,

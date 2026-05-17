@@ -5,10 +5,10 @@ import DOMPurify from "dompurify"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { decodeMessage, GmailMessage } from "@/lib/gmail-utils"
 import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
+import RichTextEditor from "./rich-text-editor"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { Archive, ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, Forward, Inbox, Loader2, MoreVertical, Printer, Reply, ReplyAll, Star, Tag, Trash2, Clock3, OctagonAlert, MailOpen } from "lucide-react"
+import { Archive, ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, Forward, Inbox, Loader2, MoreVertical, Printer, Reply, ReplyAll, Star, Tag, Trash2, Clock3, OctagonAlert, MailOpen, Paperclip, X } from "lucide-react"
 
 interface GmailLabel { id: string; name: string; color?: { backgroundColor?: string; textColor?: string } }
 interface LabelsResponse { system: GmailLabel[]; categories: GmailLabel[]; user: GmailLabel[] }
@@ -50,6 +50,7 @@ export default function ConversationPane({ threadId, onBack, onPrev, onNext }: C
   const [reply, setReply] = useState("")
   const [forwardTo, setForwardTo] = useState("")
   const [replyMode, setReplyMode] = useState<ReplyMode>(null)
+  const [attachments, setAttachments] = useState<File[]>([])
   const [showAllMessages, setShowAllMessages] = useState(false)
   const [expandedMessageDetails, setExpandedMessageDetails] = useState<Set<string>>(new Set())
 
@@ -74,7 +75,7 @@ export default function ConversationPane({ threadId, onBack, onPrev, onNext }: C
     enabled: Boolean(threadId),
   })
 
-  useEffect(() => { setShowAllMessages(false); setReplyMode(null); setReply(""); setExpandedMessageDetails(new Set()) }, [threadId])
+  useEffect(() => { setShowAllMessages(false); setReplyMode(null); setReply(""); setAttachments([]); setExpandedMessageDetails(new Set()) }, [threadId])
 
   useEffect(() => {
     if (data?.id && data.unread) {
@@ -114,18 +115,49 @@ export default function ConversationPane({ threadId, onBack, onPrev, onNext }: C
     const to = replyMode === "forward" ? forwardTo.trim() : getHeader(last, "from")
     if (!to) return toast.error("Recipient is required")
     const subject = getHeader(last, "subject")
-    const endpoint = replyMode === "forward" ? "/api/gmail/send" : "/api/gmail/reply"
-    const body = replyMode === "forward" ? { to, subject: `Fwd: ${subject || "(No subject)"}`, text: reply.trim() } : { threadId, to, subject, text: reply.trim() }
+    const isForward = replyMode === "forward"
+    const endpoint = isForward ? "/api/gmail/send" : "/api/gmail/reply"
+    const totalSize = attachments.reduce((sum, file) => sum + file.size, 0) + reply.length
+    if (totalSize > 5 * 1024 * 1024) {
+      toast.error("Message size exceeds 5MB. Reduce attachment size.")
+      return
+    }
+
+    let finalBody = reply
+    if (isForward) {
+      const lastFrom = getHeader(last, "from")
+      const lastDate = getHeader(last, "date")
+      const decoded = decodeMessage(last)
+      const lastBodyHtml = decoded.html || decoded.text || ""
+      const quote = `<br><br><div class="gmail_quote" style="border-left:2px solid #ccc; padding-left:8px; color:#555;"><p>---------- Forwarded message ----------<br>From: ${lastFrom}<br>Date: ${lastDate}<br>Subject: ${subject}</p>${lastBodyHtml}</div>`
+      finalBody = reply + quote
+    }
+
+    const formData = new FormData()
+    if (!isForward) formData.append("threadId", threadId)
+    formData.append("to", to)
+    formData.append("subject", isForward ? `Fwd: ${subject || "(No subject)"}` : subject)
+    formData.append("html", finalBody)
+    attachments.forEach((file) => formData.append("attachments", file))
+
     try {
-      const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
-      if (!res.ok) throw new Error("Failed to send")
+      const res = await fetch(endpoint, { method: "POST", body: formData })
+      if (!res.ok) {
+        const j = await res.json().catch(() => null)
+        throw new Error(j?.error || "Failed to send")
+      }
       setReply("")
       setForwardTo("")
+      setAttachments([])
       setReplyMode(null)
       await queryClient.invalidateQueries({ queryKey: ["gmail-threads"] })
       await queryClient.invalidateQueries({ queryKey: ["gmail-thread", threadId] })
-    } catch (e) { toast.error((e as Error).message) }
+      toast.success(isForward ? "Forwarded" : "Reply sent")
+    } catch (e) {
+      toast.error((e as Error).message)
+    }
   }
+
 
   if (!threadId) return <div className="p-4">Select a thread</div>
   if (isLoading) return <div className="flex h-full items-center justify-center p-4"><Loader2 className="h-4 w-4 animate-spin" /></div>
@@ -193,8 +225,9 @@ export default function ConversationPane({ threadId, onBack, onPrev, onNext }: C
     ) : (
       <div className="space-y-2 border-t p-3">
         {replyMode === "forward" && <input value={forwardTo} onChange={(e) => setForwardTo(e.target.value)} placeholder="Recipient email" className="w-full rounded-md border px-3 py-2 text-sm" />}
-        <Textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={4} />
-        <div className="flex items-center gap-2"><Button size="sm" onClick={handleSend} disabled={!reply.trim()}>Send</Button><Button size="sm" variant="ghost" onClick={() => setReplyMode(null)}>Cancel</Button></div>
+        <div className="rounded-md border"><RichTextEditor value={reply} onChange={setReply} placeholder={replyMode === "forward" ? "Add a message..." : "Type your reply..."} minHeight={120} autoFocus /></div>
+        {attachments.length > 0 && <div className="flex flex-wrap gap-2">{attachments.map((file, i) => <div key={`${file.name}-${i}`} className="flex items-center gap-2 rounded border bg-muted/30 px-2 py-1 text-xs"><Paperclip className="h-3 w-3" /><span className="max-w-[150px] truncate">{file.name}</span><button onClick={() => setAttachments((prev) => prev.filter((_, idx) => idx !== i))} className="text-muted-foreground hover:text-destructive"><X className="h-3 w-3" /></button></div>)}</div>}
+        <div className="flex items-center gap-2"><Button size="sm" onClick={handleSend} disabled={!reply.trim()}>Send</Button><label className="cursor-pointer rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground" title="Attach files"><Paperclip className="h-4 w-4" /><input type="file" multiple className="hidden" onChange={(e) => { const files = e.target.files; if (!files) return; setAttachments((prev) => [...prev, ...Array.from(files)]); e.target.value = "" }} /></label><Button size="sm" variant="ghost" onClick={() => { setReplyMode(null); setReply(""); setAttachments([]) }}>Cancel</Button></div>
       </div>
     )}
   </div>
