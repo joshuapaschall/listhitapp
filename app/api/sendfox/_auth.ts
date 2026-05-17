@@ -1,6 +1,10 @@
 import { cookies } from "next/headers"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
-import { buildSendfoxContextFromIntegration, getSendfoxIntegration } from "@/services/sendfox-auth"
+import {
+  buildSendfoxContextFromIntegration,
+  getDefaultSendfoxContext,
+  getSendfoxIntegration,
+} from "@/services/sendfox-auth"
 
 export interface SendfoxRouteContext {
   userId: string
@@ -24,19 +28,27 @@ export async function loadSendfoxRouteContext(): Promise<SendfoxRouteContext> {
   }
 
   const integration = await getSendfoxIntegration(user.id).catch(() => null)
-  if (!integration) {
+  if (integration) {
     return {
       userId: user.id,
-      authContext: null,
-      response: new Response(
-        JSON.stringify({ connected: false, error: "SendFox account not connected" }),
-        { status: 200 },
-      ),
+      authContext: buildSendfoxContextFromIntegration(integration),
+    }
+  }
+
+  const envContext = getDefaultSendfoxContext()
+  if (envContext) {
+    return {
+      userId: user.id,
+      authContext: envContext,
     }
   }
 
   return {
     userId: user.id,
-    authContext: buildSendfoxContextFromIntegration(integration),
+    authContext: null,
+    response: new Response(
+      JSON.stringify({ connected: false, error: "SendFox account not connected" }),
+      { status: 200 },
+    ),
   }
 }
