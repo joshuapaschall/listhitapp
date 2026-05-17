@@ -1,30 +1,31 @@
 "use client"
 
-import { Fragment, useState, useEffect } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { format, formatDistanceToNow } from "date-fns"
 import { useRouter, useSearchParams } from "next/navigation"
-import Link from "next/link"
+import {
+  BarChart3,
+  Copy,
+  Mail,
+  MessageSquare,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+} from "lucide-react"
 import MainLayout from "@/components/layout/main-layout"
 import { CampaignService } from "@/services/campaign-service"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination"
 import { Button } from "@/components/ui/button"
-import { Progress } from "@/components/ui/progress"
-import ConfirmInputDialog from "@/components/ui/confirm-input-dialog"
+import { Input } from "@/components/ui/input"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Select,
   SelectContent,
@@ -32,28 +33,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import ConfirmInputDialog from "@/components/ui/confirm-input-dialog"
 import SmsCampaignModal from "@/components/campaigns/sms-campaign-modal"
 import NewEmailCampaignModal from "@/components/campaigns/NewEmailCampaignModal"
-import CampaignDetailsPanel from "@/components/campaigns/CampaignDetailsPanel"
-import { toast } from "sonner"
+import CampaignStatusBadge from "@/components/campaigns/campaign-status-badge"
 import { clearAudienceSnapshot, readAudienceSnapshot } from "@/lib/campaign-audience"
+import { toast } from "sonner"
+
+type CampaignRow = any
+type UiStatus = "draft" | "scheduled" | "sending" | "sent" | "error" | "completed_with_errors"
 
 export default function CampaignsPage() {
-  const [channel, setChannel] = useState<string>("all")
-  const [status, setStatus] = useState<string>("all")
-  const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(CampaignService.DEFAULT_PAGE_SIZE)
-  const [open, setOpen] = useState<string | null>(null)
-  const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [search, setSearch] = useState("")
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [channelFilter, setChannelFilter] = useState("all")
+  const [dateFilter, setDateFilter] = useState("all")
+  const [sortBy, setSortBy] = useState("last_edited")
   const [smsOpen, setSmsOpen] = useState(false)
   const [emailOpen, setEmailOpen] = useState(false)
   const [prefillAudience, setPrefillAudience] = useState<any>(null)
+  const [deleteId, setDeleteId] = useState<string | null>(null)
+
   const router = useRouter()
   const searchParams = useSearchParams()
   const queryClient = useQueryClient()
@@ -74,232 +75,263 @@ export default function CampaignsPage() {
     }
   }, [searchParams])
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["campaigns", page, channel, status, pageSize],
-    queryFn: () =>
-      CampaignService.listCampaigns(page, {
-        ...(channel === "all" ? {} : { channel }),
-        status,
-      }, pageSize),
+  const { data, isLoading, isFetching } = useQuery({
+    queryKey: ["campaigns", "wave-a2"],
+    queryFn: () => CampaignService.listCampaigns(1, {}, 100),
   })
 
   const campaigns = data?.campaigns || []
-  const total = data?.totalCount || 0
-  const pageCount = Math.ceil(total / pageSize) || 1
+  const sentThisMonth = useMemo(() => {
+    const now = new Date()
+    return campaigns.filter((c: CampaignRow) => {
+      if (c.status !== "sent" || !c.sent_at) return false
+      const sentAt = new Date(c.sent_at)
+      return sentAt.getMonth() === now.getMonth() && sentAt.getFullYear() === now.getFullYear()
+    }).length
+  }, [campaigns])
+
+  const normalizedStatus = (status: string): UiStatus => {
+    if (status === "processing") return "sending"
+    if (status === "pending") return "draft"
+    if (status === "draft" || status === "scheduled" || status === "sent" || status === "error" || status === "completed_with_errors") {
+      return status
+    }
+    return "draft"
+  }
+
+  const isInDateRange = (value?: string | null) => {
+    if (!value || dateFilter === "all") return true
+    const now = new Date()
+    const date = new Date(value)
+    if (dateFilter === "last_7") return date >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+    if (dateFilter === "last_30") return date >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+    if (dateFilter === "last_90") return date >= new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+    if (dateFilter === "this_year") return date.getFullYear() === now.getFullYear()
+    return true
+  }
+
+  const filteredCampaigns = useMemo(() => {
+    const list = campaigns
+      .filter((c: CampaignRow) => c.name?.toLowerCase().includes(search.toLowerCase()))
+      .filter((c: CampaignRow) => statusFilter === "all" || normalizedStatus(c.status) === statusFilter)
+      .filter((c: CampaignRow) => channelFilter === "all" || c.channel === channelFilter)
+      .filter((c: CampaignRow) => isInDateRange(c.sent_at || c.scheduled_at || c.created_at))
+
+    return list.sort((a: CampaignRow, b: CampaignRow) => {
+      if (sortBy === "last_edited") {
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      }
+      if (sortBy === "sent_date") {
+        return new Date(b.sent_at || 0).getTime() - new Date(a.sent_at || 0).getTime()
+      }
+      if (sortBy === "recipients") {
+        return (b.campaign_recipients?.length || 0) - (a.campaign_recipients?.length || 0)
+      }
+      return 0
+    })
+  }, [campaigns, search, statusFilter, channelFilter, dateFilter, sortBy])
+
+  const hasAnyFilters = search || statusFilter !== "all" || channelFilter !== "all" || dateFilter !== "all"
+
+  const formatSentScheduled = (campaign: CampaignRow) => {
+    const uiStatus = normalizedStatus(campaign.status)
+    if (uiStatus === "sent" && campaign.sent_at) {
+      const sentDate = new Date(campaign.sent_at)
+      const daysAgo = (Date.now() - sentDate.getTime()) / (1000 * 60 * 60 * 24)
+      return daysAgo < 7 ? `${formatDistanceToNow(sentDate)} ago` : format(sentDate, "MMM d")
+    }
+    if (uiStatus === "scheduled" && campaign.scheduled_at) {
+      return `Scheduled: ${format(new Date(campaign.scheduled_at), "MMM d, h:mm a")}`
+    }
+    if ((uiStatus === "error" || uiStatus === "completed_with_errors") && campaign.sent_at) {
+      return `Failed ${format(new Date(campaign.sent_at), "MMM d")}`
+    }
+    return "—"
+  }
+
+  const handleDuplicate = async (campaignId: string) => {
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/duplicate`, { method: "POST" })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to duplicate campaign")
+      }
+      toast.success("Duplicated to drafts")
+      await queryClient.invalidateQueries({ queryKey: ["campaigns"] })
+    } catch (error: any) {
+      toast.error(error.message || "Failed to duplicate campaign")
+    }
+  }
 
   return (
     <MainLayout>
-      <div className="p-4 space-y-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Campaigns</h1>
+      <div className="px-6 py-8 max-w-[1400px] mx-auto">
+        <div className="mb-8 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight">Campaigns</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {campaigns.length} campaigns • {sentThisMonth} sent this month
+            </p>
+          </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button>New Campaign</Button>
+              <Button variant="brand"><Plus className="size-4" />New Campaign</Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => setSmsOpen(true)}>
-                New SMS Campaign
-              </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => setEmailOpen(true)}>
-                New Email Campaign
+                Email campaign
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setSmsOpen(true)}>
+                SMS campaign
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        <div className="flex items-end gap-2">
-          <div>
-            <label className="block text-sm mb-1">Channel</label>
-            <Select
-              value={channel}
-              onValueChange={(v) => {
-                setPage(1)
-                setChannel(v)
-              }}
-            >
-              <SelectTrigger className="w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="sms">SMS</SelectItem>
-                <SelectItem value="email">Email</SelectItem>
-              </SelectContent>
-            </Select>
+
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <div className="relative w-72">
+            <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" />
+            <Input className="h-9 pl-9" placeholder="Search campaigns…" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <div>
-            <label className="block text-sm mb-1">Status</label>
-            <Select
-              value={status}
-              onValueChange={(v) => {
-                setPage(1)
-                setStatus(v)
-              }}
-            >
-              <SelectTrigger className="w-36">
-                <SelectValue />
-              </SelectTrigger>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-9 w-[150px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="draft">Draft</SelectItem>
+              <SelectItem value="scheduled">Scheduled</SelectItem>
+              <SelectItem value="sending">Sending</SelectItem>
+              <SelectItem value="sent">Sent</SelectItem>
+              <SelectItem value="error">Error</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={channelFilter} onValueChange={setChannelFilter}>
+            <SelectTrigger className="h-9 w-[140px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All channels</SelectItem>
+              <SelectItem value="email">Email</SelectItem>
+              <SelectItem value="sms">SMS</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={dateFilter} onValueChange={setDateFilter}>
+            <SelectTrigger className="h-9 w-[150px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All time</SelectItem>
+              <SelectItem value="last_7">Last 7 days</SelectItem>
+              <SelectItem value="last_30">Last 30 days</SelectItem>
+              <SelectItem value="last_90">Last 90 days</SelectItem>
+              <SelectItem value="this_year">This year</SelectItem>
+            </SelectContent>
+          </Select>
+          <div className="ml-auto">
+            <Select value={sortBy} onValueChange={setSortBy}>
+              <SelectTrigger className="h-9 w-[220px]"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="all">All</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <label className="block text-sm mb-1">Page size</label>
-            <Select
-              value={String(pageSize)}
-              onValueChange={(value) => {
-                setPage(1)
-                setPageSize(Number(value))
-              }}
-            >
-              <SelectTrigger className="w-28">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="10">10</SelectItem>
-                <SelectItem value="20">20</SelectItem>
-                <SelectItem value="50">50</SelectItem>
+                <SelectItem value="last_edited">Sort: Last edited</SelectItem>
+                <SelectItem value="sent_date">Sent date</SelectItem>
+                <SelectItem value="recipients">Recipients (high to low)</SelectItem>
+                <SelectItem value="open_rate">Open rate</SelectItem>
+                <SelectItem value="click_rate">Click rate</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </div>
-        <div className="border rounded-md">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Channel</TableHead>
-                <TableHead>Campaign</TableHead>
-                <TableHead>Subject/Message</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead>Scheduled</TableHead>
-                <TableHead>Recipients</TableHead>
-                <TableHead>Results</TableHead>
-                <TableHead className="w-24">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading && (
+
+        {isLoading || isFetching ? (
+          <div className="space-y-2 rounded-lg border bg-card p-4">
+            {Array.from({ length: 5 }).map((_, idx) => <div key={idx} className="h-16 animate-pulse rounded-md bg-muted" />)}
+          </div>
+        ) : campaigns.length === 0 ? (
+          <div className="rounded-lg border bg-card py-24 text-center">
+            <Mail className="mx-auto size-12 text-muted-foreground" />
+            <h2 className="mt-4 text-xl font-semibold">No campaigns yet</h2>
+            <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">Send your first email or SMS campaign to start reaching your buyers.</p>
+            <Button variant="brand" className="mt-6" onClick={() => setEmailOpen(true)}>Create your first campaign</Button>
+          </div>
+        ) : filteredCampaigns.length === 0 ? (
+          <div className="rounded-lg border bg-card py-24 text-center">
+            <Mail className="mx-auto size-12 text-muted-foreground" />
+            <h2 className="mt-4 text-xl font-semibold">No campaigns match your filters</h2>
+            <Button variant="outline" className="mt-6" onClick={() => {
+              setSearch("")
+              setStatusFilter("all")
+              setChannelFilter("all")
+              setDateFilter("all")
+            }}>Clear filters</Button>
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-lg border bg-card">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={8}>Loading...</TableCell>
+                  <TableHead>Campaign</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Recipients</TableHead>
+                  <TableHead>Sent / Scheduled</TableHead>
+                  <TableHead>Engagement</TableHead>
+                  <TableHead className="w-12" />
                 </TableRow>
-              )}
-              {!isLoading && campaigns.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={8}>No campaigns found.</TableCell>
-                </TableRow>
-              )}
-              {campaigns.map((c: any) => (
-                <Fragment key={c.id}>
-                  <TableRow>
-                    <TableCell className="capitalize">{c.channel}</TableCell>
-                    <TableCell>{c.name}</TableCell>
-                    <TableCell>
-                      {c.channel === "email" ? c.subject : c.message?.slice(0, 40)}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap font-mono text-sm text-muted-foreground">
-                      {new Date(c.created_at).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap font-mono text-sm text-muted-foreground">
-                      {c.scheduled_at
-                        ? new Date(c.scheduled_at).toLocaleString()
-                        : "-"}
-                    </TableCell>
-                    <TableCell>{c.campaign_recipients?.length || 0}</TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <div className="text-xs space-y-0.5">
+              </TableHeader>
+              <TableBody>
+                {filteredCampaigns.map((campaign: CampaignRow) => {
+                  const uiStatus = normalizedStatus(campaign.status)
+                  const recipientsCount = campaign.campaign_recipients?.length || 0
+                  const opens = recipientsCount ? Math.round(((campaign.openedCount || 0) / recipientsCount) * 100) : 0
+                  const clicks = recipientsCount ? Math.round((((campaign.clickedCount || 0) || 0) / recipientsCount) * 100) : 0
+                  const subjectPreview = (campaign.subject || campaign.message || "").slice(0, 60)
+                  return (
+                    <TableRow key={campaign.id} className="border-b border-border transition-colors duration-150 ease-linear hover:bg-muted/50">
+                      <TableCell className="px-4 py-4">
+                        <div className="flex items-start gap-2">
+                          {campaign.channel === "email" ? <Mail className="mt-0.5 size-4 text-muted-foreground" /> : <MessageSquare className="mt-0.5 size-4 text-muted-foreground" />}
                           <div>
-                            <span className="text-green-700">{c.sentCount}</span>{" "}/
-                            <span className="text-red-700">{c.errorCount}</span>
-                          </div>
-                          <div>
-                            <span className="text-green-700">Open {c.openedCount}</span>{" "}/
-                            <span className="text-yellow-700">Bounce {c.bouncedCount}</span>{" "}/
-                            <span className="text-muted-foreground">Unsub {c.unsubCount}</span>
+                            <div className="text-sm font-medium text-foreground">{campaign.name}</div>
+                            <div className="max-w-[420px] truncate text-xs text-muted-foreground">{subjectPreview || "—"}</div>
                           </div>
                         </div>
-                        <Progress
-                          value={
-                            c.campaign_recipients.length
-                              ? (c.sentCount / c.campaign_recipients.length) * 100
-                              : 0
-                          }
-                          className="h-2"
-                        />
-                      </div>
-                    </TableCell>
-                    <TableCell className="space-x-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setOpen(open === c.id ? null : c.id)}
-                      >
-                        {open === c.id ? "Hide" : "View"}
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => setDeleteId(c.id)}
-                      >
-                        Delete
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                  {open === c.id && (
-                    <TableRow key={`${c.id}-recipients`}>
-                      <TableCell colSpan={8} className="p-0">
-                        <CampaignDetailsPanel campaign={c} />
+                      </TableCell>
+                      <TableCell className="px-4 py-4"><CampaignStatusBadge status={uiStatus} /></TableCell>
+                      <TableCell className="px-4 py-4 text-sm tabular-nums">{recipientsCount || "—"}</TableCell>
+                      <TableCell className="px-4 py-4 text-sm tabular-nums">
+                        <span className={uiStatus === "error" || uiStatus === "completed_with_errors" ? "text-red-700" : "text-muted-foreground"}>
+                          {formatSentScheduled(campaign)}
+                        </span>
+                      </TableCell>
+                      <TableCell className="px-4 py-4 text-sm tabular-nums text-muted-foreground">
+                        {uiStatus === "sent" || uiStatus === "completed_with_errors" ? `${opens}% opens • ${clicks}% clicks` : "—"}
+                      </TableCell>
+                      <TableCell className="px-4 py-4 text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon"><MoreHorizontal className="size-4" /></Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {(uiStatus === "sent" || uiStatus === "sending" || uiStatus === "completed_with_errors") && (
+                              <DropdownMenuItem onSelect={() => router.push(`/campaigns/${campaign.id}`)}><BarChart3 className="size-4" />View report</DropdownMenuItem>
+                            )}
+                            {(uiStatus === "draft" || uiStatus === "scheduled") && (
+                              <DropdownMenuItem onSelect={() => router.push(`/campaigns/${campaign.id}`)}><Pencil className="size-4" />Edit</DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem onSelect={() => handleDuplicate(campaign.id)}><Copy className="size-4" />Duplicate</DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-destructive" onSelect={() => setDeleteId(campaign.id)}><Trash2 className="size-4" />Delete</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
-                  )}
-                </Fragment>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-        {pageCount > 1 && (
-          <Pagination className="mt-2">
-            <PaginationContent>
-              <PaginationItem>
-                <PaginationPrevious
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    setPage(Math.max(1, page - 1))
-                  }}
-                  className={page === 1 ? "pointer-events-none opacity-50" : ""}
-                />
-              </PaginationItem>
-              {Array.from({ length: pageCount }).map((_, i) => (
-                <PaginationItem key={i}>
-                  <PaginationLink
-                    href="#"
-                    isActive={page === i + 1}
-                    onClick={(e) => {
-                      e.preventDefault()
-                      setPage(i + 1)
-                    }}
-                  >
-                    {i + 1}
-                  </PaginationLink>
-                </PaginationItem>
-              ))}
-              <PaginationItem>
-                <PaginationNext
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    setPage(Math.min(pageCount, page + 1))
-                  }}
-                  className={page === pageCount ? "pointer-events-none opacity-50" : ""}
-                />
-              </PaginationItem>
-            </PaginationContent>
-          </Pagination>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+
+        {data?.campaigns?.length === 100 && !hasAnyFilters && (
+          <div className="mt-4 text-center">
+            <Button variant="outline" onClick={() => queryClient.invalidateQueries({ queryKey: ["campaigns"] })}>Load more</Button>
+          </div>
         )}
       </div>
+
       <SmsCampaignModal
         open={smsOpen}
         prefillAudience={prefillAudience}
@@ -330,17 +362,10 @@ export default function CampaignsPage() {
         actionText="Delete"
         onConfirm={async () => {
           if (!deleteId) return
-          try {
-            await CampaignService.deleteCampaign(deleteId)
-            await queryClient.invalidateQueries({ queryKey: ["campaigns"] })
-            toast.success("Campaign deleted")
-            setDeleteId(null)
-          } catch (err: any) {
-            console.error("Failed to delete campaign", err)
-            toast.error("Failed to delete campaign. Check console for details.")
-            // rethrow so ConfirmInputDialog knows it failed and won't auto-close
-            throw err
-          }
+          await CampaignService.deleteCampaign(deleteId)
+          await queryClient.invalidateQueries({ queryKey: ["campaigns"] })
+          toast.success("Campaign deleted")
+          setDeleteId(null)
         }}
       />
     </MainLayout>
