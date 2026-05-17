@@ -7,28 +7,24 @@ interface SidebarProps {
   folder: string
   onChange: (folder: string) => void
   onCompose: () => void
+  activeEmail?: string | null
 }
 
-const folders = [
-  "inbox",
-  "starred",
-  "snoozed",
-  "important",
-  "sent",
-  "drafts",
-  "trash",
-]
+const folders = ["inbox", "starred", "snoozed", "important", "sent", "drafts", "trash"]
 
 const categories = ["Social", "Updates", "Forums"]
 const labels = ["Personal", "Work"]
 
-export default function Sidebar({ folder, onChange, onCompose }: SidebarProps) {
+export default function Sidebar({ folder, onChange, onCompose, activeEmail }: SidebarProps) {
   return (
-    <div className="hidden w-56 shrink-0 border-r p-4 space-y-2 sm:block">
-      <Button
-        onClick={onCompose}
-        className="w-full rounded-full bg-primary text-primary-foreground"
-      >
+    <div className="hidden w-56 shrink-0 space-y-2 border-r p-4 sm:block">
+      {activeEmail && (
+        <div className="mb-3 border-b px-2 pb-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Account</p>
+          <p className="truncate text-sm font-medium" title={activeEmail}>{activeEmail}</p>
+        </div>
+      )}
+      <Button onClick={onCompose} className="w-full rounded-full bg-primary text-primary-foreground">
         Compose
       </Button>
       <div className="space-y-1">
@@ -49,10 +45,7 @@ export default function Sidebar({ folder, onChange, onCompose }: SidebarProps) {
         </summary>
         <div className="mt-1 space-y-1 pl-4">
           {categories.map((c) => (
-            <button
-              key={c}
-              className="block w-full rounded px-2 py-1 text-left text-sm hover:bg-muted"
-            >
+            <button key={c} className="block w-full rounded px-2 py-1 text-left text-sm hover:bg-muted">
               {c}
             </button>
           ))}
@@ -65,10 +58,7 @@ export default function Sidebar({ folder, onChange, onCompose }: SidebarProps) {
         </summary>
         <div className="mt-1 space-y-1 pl-4">
           {labels.map((l) => (
-            <button
-              key={l}
-              className="block w-full rounded px-2 py-1 text-left text-sm hover:bg-muted"
-            >
+            <button key={l} className="block w-full rounded px-2 py-1 text-left text-sm hover:bg-muted">
               {l}
             </button>
           ))}
