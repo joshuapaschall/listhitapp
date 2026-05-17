@@ -78,6 +78,9 @@ export default function GmailPage() {
     },
     placeholderData: keepPreviousData,
     enabled: hasActiveAccount,
+    refetchOnWindowFocus: true,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   })
 
   if (accountsLoading) {

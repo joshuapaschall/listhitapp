@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { NextRequest } from "next/server"
 import { listThreads, getThread } from "@/services/gmail-api"
 import { cookies } from "next/headers"
@@ -9,85 +8,62 @@ import { assertServer } from "@/utils/assert-server"
 
 assertServer()
 
+interface ThreadRow {
+  id: string
+  starred?: boolean | null
+  unread?: boolean | null
+  email_threads?: unknown[]
+}
+
 export async function GET(request: NextRequest) {
   const cookieStore = cookies()
   const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 })
-  }
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 })
+
   const userId = user.id
   const maxParam = request.nextUrl.searchParams.get("maxResults")
   const max = maxParam ? parseInt(maxParam, 10) : 20
   const labelId = request.nextUrl.searchParams.get("labelId")
   const folder = request.nextUrl.searchParams.get("folder") || "inbox"
-
-  const isTrashOrSpam = (id: string | null, f: string) => {
-    if (id === "TRASH" || id === "SPAM") return true
-    if (f === "trash" || f === "spam") return true
-    return false
-  }
-  const includeSpamTrash = isTrashOrSpam(labelId, folder)
+  const includeSpamTrash = labelId === "TRASH" || labelId === "SPAM" || folder === "trash" || folder === "spam"
 
   try {
-
     if (labelId) {
       const basic = await listThreads(userId, max, labelId, { includeSpamTrash })
-      const threads = await Promise.all(
-        basic.map(async (t) => {
-          const full = await getThread(userId, t.id)
-          return {
-            ...full,
-            starred: t.starred ?? full.starred,
-            unread: t.unread ?? full.unread,
-          }
-        }),
-      )
+      const threads = await Promise.all(basic.map(async (t) => {
+        const full = await getThread(userId, t.id || "")
+        return { ...full, starred: t.starred ?? full.starred, unread: t.unread ?? full.unread }
+      }))
       return new Response(JSON.stringify({ threads }))
     }
 
     await syncGmailThreads(userId, max, folder)
 
-    let { data } = await supabaseAdmin
+    const { data } = await supabaseAdmin
       .from("gmail_threads")
-      .select(
-        "id, starred, unread, email_threads(thread_id,buyer_id,subject,snippet,buyers(full_name))",
-      )
+      .select("id, starred, unread, email_threads(thread_id,buyer_id,subject,snippet,buyers(full_name))")
       .order("updated_at", { ascending: false })
       .limit(max)
 
     if (!data || data.length === 0) {
       const basic = await listThreads(userId, max, folder)
-      const threads = await Promise.all(
-        basic.map(async (t) => {
-          const full = await getThread(userId, t.id)
-          return {
-            ...full,
-            starred: t.starred ?? full.starred,
-            unread: t.unread ?? full.unread,
-          }
-        }),
-      )
+      const threads = await Promise.all(basic.map(async (t) => {
+        const full = await getThread(userId, t.id || "")
+        return { ...full, starred: t.starred ?? full.starred, unread: t.unread ?? full.unread }
+      }))
       return new Response(JSON.stringify({ threads }))
     }
 
-    const threads = await Promise.all(
-      data.map(async (r) => {
-        const thread = await getThread(userId, r.id)
-        return {
-          ...thread,
-          starred: r.starred ?? thread.starred,
-          unread: r.unread ?? thread.unread,
-          email_threads: r.email_threads || [],
-        }
-      }),
-    )
+    const rows = data as ThreadRow[]
+    const threads = await Promise.all(rows.map(async (r) => {
+      const thread = await getThread(userId, r.id)
+      return { ...thread, starred: r.starred ?? thread.starred, unread: r.unread ?? thread.unread, email_threads: r.email_threads || [] }
+    }))
 
     return new Response(JSON.stringify({ threads }))
-  } catch (err: any) {
+  } catch (err) {
     console.error("Failed to list threads", err)
-    return new Response(JSON.stringify({ error: err.message || "error" }), { status: 500 })
+    return new Response(JSON.stringify({ error: err instanceof Error ? err.message : "error" }), { status: 500 })
   }
 }
