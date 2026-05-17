@@ -63,27 +63,46 @@ export async function listThreads(
   userId: string,
   maxResults = 20,
   folder = "inbox",
+  options: { includeSpamTrash?: boolean } = {},
 ): Promise<GmailThread[]> {
   const gmail = await getGmailClient(userId)
+  const folderMap: Record<string, string> = {
+    inbox: "INBOX",
+    starred: "STARRED",
+    important: "IMPORTANT",
+    sent: "SENT",
+    drafts: "DRAFT",
+    trash: "TRASH",
+    spam: "SPAM",
+  }
+  const normalized = folderMap[folder.toLowerCase()] || folder
+  const includeSpamTrash =
+    options.includeSpamTrash ||
+    normalized === "TRASH" ||
+    normalized === "SPAM" ||
+    folder.toLowerCase() === "trash" ||
+    folder.toLowerCase() === "spam"
+
   let threads: GmailThread[] = []
   let res = await safeCall(
     () =>
       gmail.users.threads.list({
         userId: "me",
         maxResults,
-        q: `in:${folder}`,
+        labelIds: [normalized],
+        includeSpamTrash,
         format: "full" as any,
       }),
     null as any,
   )
   if (!res) {
-    // fallback to basic list without format
     res = await safeCall(
       () =>
         gmail.users.threads.list({
           userId: "me",
           maxResults,
-          q: `in:${folder}`,
+          labelIds: [normalized],
+          includeSpamTrash,
         }),
       { data: { threads: [] } } as any,
     )
