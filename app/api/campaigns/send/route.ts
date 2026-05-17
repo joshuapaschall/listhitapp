@@ -100,6 +100,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Campaign not found" }, { status: 404 })
   }
 
+  if (!campaign.message || campaign.message.trim().length === 0) {
+    return NextResponse.json(
+      { error: "Campaign has no content. Add a message before sending." },
+      { status: 400 },
+    )
+  }
+
   const timezone = resolveTimezone(campaign.timezone)
   const zonedNow = getNowInTimezone(timezone)
   if (campaign.weekday_only && (zonedNow.getDay() === 0 || zonedNow.getDay() === 6)) {

@@ -208,7 +208,7 @@ create index if not exists gmail_tokens_last_synced_at_idx on public.gmail_token
 create table if not exists public.sms_templates (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  message text not null,
+  message text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -217,7 +217,7 @@ create table if not exists public.email_templates (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   subject text,
-  message text not null,
+  message text,
   template_kind text not null default 'template',
   created_by uuid references auth.users(id) not null default auth.uid(),
   created_at timestamptz not null default now(),
@@ -227,7 +227,7 @@ create table if not exists public.email_templates (
 create table if not exists public.quick_reply_templates (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  message text not null,
+  message text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -341,7 +341,7 @@ create table if not exists public.campaigns (
   name text not null,
   channel text not null,
   subject text,
-  message text not null,
+  message text,
   media_url text,
   buyer_ids uuid[],
   group_ids uuid[],
@@ -352,7 +352,10 @@ create table if not exists public.campaigns (
   run_from time,
   run_until time,
   timezone text,
-  created_at timestamptz not null default now()
+  from_name text,
+  from_email text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 -- Campaign recipients
@@ -773,3 +776,16 @@ create table if not exists public.sendfox_list_mismatches (
 
 create index if not exists sendfox_list_mismatches_list_idx on public.sendfox_list_mismatches(list_id);
 create index if not exists sendfox_list_mismatches_resolved_idx on public.sendfox_list_mismatches(resolved);
+
+create or replace function public.set_campaigns_updated_at()
+returns trigger language plpgsql as $$
+begin
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_campaigns_updated_at on public.campaigns;
+create trigger trg_campaigns_updated_at
+  before update on public.campaigns
+  for each row execute function public.set_campaigns_updated_at();
