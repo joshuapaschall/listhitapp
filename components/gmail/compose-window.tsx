@@ -51,19 +51,28 @@ export default function ComposeWindow({
   const [minimized, setMinimized] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [sending, setSending] = useState(false)
+  const [attachments, setAttachments] = useState<File[]>([])
 
   if (!open) return null
 
   const canSend = to.trim().length > 0 && subject.trim().length > 0 && body.length > 0 && !sending
 
   const handleSend = async () => {
+    const totalSize = attachments.reduce((sum, file) => sum + file.size, 0) + body.length
+    if (totalSize > 5 * 1024 * 1024) {
+      toast.error("Attachments must be under 5MB total.")
+      return
+    }
     setSending(true)
     try {
       const formData = new FormData()
       if (from) formData.append("from", from)
       formData.append("to", to)
+      if (cc.trim()) formData.append("cc", cc.trim())
+      if (bcc.trim()) formData.append("bcc", bcc.trim())
       formData.append("subject", subject)
       formData.append("html", body)
+      attachments.forEach((file) => formData.append("attachments", file))
 
       const res = await fetch("/api/gmail/send", { method: "POST", body: formData })
       if (!res.ok) {
@@ -74,6 +83,7 @@ export default function ComposeWindow({
       toast.success("Email sent")
       queryClient.invalidateQueries({ queryKey: ["gmail-threads"] })
       if (onSent && json.threadId) onSent(json.threadId)
+      setAttachments([])
       onClose()
     } catch (err: any) {
       toast.error(err.message || "Failed to send")
@@ -92,7 +102,7 @@ export default function ComposeWindow({
           <span className="truncate">{subject || "New Message"}</span>
           <X
             className="h-4 w-4 text-muted-foreground hover:text-foreground"
-            onClick={(e) => { e.stopPropagation(); onClose() }}
+            onClick={(e) => { e.stopPropagation(); setAttachments([]); onClose() }}
           />
         </button>
       </div>
@@ -126,7 +136,7 @@ export default function ComposeWindow({
             {expanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
           </button>
           <button
-            onClick={onClose}
+            onClick={() => { setAttachments([]); onClose() }}
             className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
             title="Close"
           >
@@ -218,6 +228,21 @@ export default function ComposeWindow({
         />
       </div>
 
+      {attachments.length > 0 && (
+        <div className="flex flex-wrap gap-2 border-t px-4 py-2">
+          {attachments.map((file, i) => (
+            <div key={`${file.name}-${i}`} className="flex items-center gap-2 rounded border bg-muted/30 px-2 py-1 text-xs">
+              <Paperclip className="h-3 w-3" />
+              <span className="max-w-[150px] truncate">{file.name}</span>
+              <span className="text-muted-foreground">{(file.size / 1024).toFixed(0)}KB</span>
+              <button onClick={() => setAttachments((prev) => prev.filter((_, idx) => idx !== i))} className="text-muted-foreground hover:text-destructive">
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="flex items-center gap-2 rounded-b-lg border-t bg-card px-4 py-2">
         <button
           onClick={handleSend}
@@ -226,16 +251,18 @@ export default function ComposeWindow({
         >
           {sending ? "Sending..." : "Send"}
         </button>
-        <button
-          className="cursor-not-allowed rounded-full p-2 text-muted-foreground opacity-50"
-          title="Attachments (Phase 2)"
-          disabled
-        >
+        <label className="cursor-pointer rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground" title="Attach files">
           <Paperclip className="h-4 w-4" />
-        </button>
+          <input type="file" multiple className="hidden" onChange={(e) => {
+            const files = e.target.files
+            if (!files) return
+            setAttachments((prev) => [...prev, ...Array.from(files)])
+            e.target.value = ""
+          }} />
+        </label>
         <div className="ml-auto">
           <button
-            onClick={onClose}
+            onClick={() => { setAttachments([]); onClose() }}
             className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
             title="Discard"
           >
