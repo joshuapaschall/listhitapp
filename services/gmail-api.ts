@@ -75,7 +75,7 @@ export async function listThreads(
   userId: string,
   maxResults = 50,
   folder = "inbox",
-  options: { includeSpamTrash?: boolean; pageToken?: string } = {},
+  options: { includeSpamTrash?: boolean; pageToken?: string; q?: string } = {},
 ): Promise<{
   threads: GmailThread[]
   nextPageToken: string | null
@@ -91,6 +91,9 @@ export async function listThreads(
   if (options.pageToken) listParams.pageToken = options.pageToken
   if (options.includeSpamTrash || normalized === "TRASH" || normalized === "SPAM") {
     listParams.includeSpamTrash = true
+  }
+  if (options.q && options.q.trim().length > 0) {
+    listParams.q = options.q.trim()
   }
 
   let res = await safeCall(() => gmail.users.threads.list(listParams), null as any)
@@ -474,6 +477,19 @@ export async function getDraft(userId: string, draftId: string) {
   return res.data
 }
 
+
+export async function createDraft(userId: string, raw: string) {
+  const gmail = await getGmailClient(userId)
+  const res = await safeCall(
+    () => gmail.users.drafts.create({
+      userId: "me",
+      requestBody: { message: { raw } },
+    }),
+    {} as any,
+  )
+  return res.data
+}
+
 export async function sendDraft(userId: string, draftId: string) {
   const gmail = await getGmailClient(userId)
   const res = await safeCall(
@@ -517,5 +533,6 @@ export default {
   getDraft,
   sendDraft,
   updateDraft,
+  createDraft,
 }
 
