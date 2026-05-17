@@ -36,7 +36,6 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import ConfirmInputDialog from "@/components/ui/confirm-input-dialog"
 import SmsCampaignModal from "@/components/campaigns/sms-campaign-modal"
-import NewEmailCampaignModal from "@/components/campaigns/NewEmailCampaignModal"
 import CampaignStatusBadge from "@/components/campaigns/campaign-status-badge"
 import { clearAudienceSnapshot, readAudienceSnapshot } from "@/lib/campaign-audience"
 import { toast } from "sonner"
@@ -51,7 +50,6 @@ export default function CampaignsPage() {
   const [dateFilter, setDateFilter] = useState("all")
   const [sortBy, setSortBy] = useState("last_edited")
   const [smsOpen, setSmsOpen] = useState(false)
-  const [emailOpen, setEmailOpen] = useState(false)
   const [prefillAudience, setPrefillAudience] = useState<any>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
 
@@ -63,17 +61,16 @@ export default function CampaignsPage() {
     const type = searchParams.get("type")
     const prefill = searchParams.get("prefill")
     if (type === "sms") setSmsOpen(true)
-    if (type === "email") setEmailOpen(true)
     if (prefill === "email" || prefill === "sms") {
       const snapshot = readAudienceSnapshot()
       if (snapshot && snapshot.channel === prefill) {
         setPrefillAudience(snapshot)
-        if (prefill === "email") setEmailOpen(true)
+        if (prefill === "email") router.push("/campaigns/new?prefill=email")
+        if (prefill === "sms") setSmsOpen(true)
         if (prefill === "sms") setSmsOpen(true)
       }
-      clearAudienceSnapshot()
     }
-  }, [searchParams])
+  }, [searchParams, router])
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ["campaigns", "wave-a2"],
@@ -157,7 +154,7 @@ export default function CampaignsPage() {
         throw new Error(payload?.error || "Failed to duplicate campaign")
       }
       toast.success("Duplicated to drafts")
-      await queryClient.invalidateQueries({ queryKey: ["campaigns"] })
+      router.push(`/campaigns/${payload.id}/edit`)
     } catch (error: any) {
       toast.error(error.message || "Failed to duplicate campaign")
     }
@@ -178,7 +175,7 @@ export default function CampaignsPage() {
               <Button variant="brand"><Plus className="size-4" />New Campaign</Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => setEmailOpen(true)}>
+              <DropdownMenuItem onSelect={() => router.push("/campaigns/new")}>
                 Email campaign
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => setSmsOpen(true)}>
@@ -245,7 +242,7 @@ export default function CampaignsPage() {
             <Mail className="mx-auto size-12 text-muted-foreground" />
             <h2 className="mt-4 text-xl font-semibold">No campaigns yet</h2>
             <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">Send your first email or SMS campaign to start reaching your buyers.</p>
-            <Button variant="brand" className="mt-6" onClick={() => setEmailOpen(true)}>Create your first campaign</Button>
+            <Button variant="brand" className="mt-6" onClick={() => router.push("/campaigns/new")}>Create your first campaign</Button>
           </div>
         ) : filteredCampaigns.length === 0 ? (
           <div className="rounded-lg border bg-card py-24 text-center">
@@ -309,7 +306,7 @@ export default function CampaignsPage() {
                               <DropdownMenuItem onSelect={() => router.push(`/campaigns/${campaign.id}`)}><BarChart3 className="size-4" />View report</DropdownMenuItem>
                             )}
                             {(uiStatus === "draft" || uiStatus === "scheduled") && (
-                              <DropdownMenuItem onSelect={() => router.push(`/campaigns/${campaign.id}`)}><Pencil className="size-4" />Edit</DropdownMenuItem>
+                              <DropdownMenuItem onSelect={() => router.push(uiStatus === "draft" ? `/campaigns/${campaign.id}/edit` : `/campaigns/${campaign.id}`)}><Pencil className="size-4" />Edit</DropdownMenuItem>
                             )}
                             <DropdownMenuItem onSelect={() => handleDuplicate(campaign.id)}><Copy className="size-4" />Duplicate</DropdownMenuItem>
                             <DropdownMenuSeparator />
@@ -343,17 +340,7 @@ export default function CampaignsPage() {
           queryClient.invalidateQueries({ queryKey: ["campaigns"] })
         }}
       />
-      <NewEmailCampaignModal
-        open={emailOpen}
-        prefillAudience={prefillAudience}
-        onOpenChange={(o) => {
-          setEmailOpen(o)
-          if (!o) router.replace("/campaigns")
-        }}
-        onSuccess={() => {
-          queryClient.invalidateQueries({ queryKey: ["campaigns"] })
-        }}
-      />
+      
       <ConfirmInputDialog
         open={!!deleteId}
         onOpenChange={(o) => setDeleteId(o ? deleteId : null)}
