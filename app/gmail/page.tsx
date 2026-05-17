@@ -31,10 +31,12 @@ export default function GmailPage() {
   const [folder, setFolder] = useState("inbox")
   const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null)
   const [search, setSearch] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [showCompose, setShowCompose] = useState(false)
   const [composeInitial, setComposeInitial] = useState<{ draftId: string; to: string; cc: string; bcc: string; subject: string; body: string } | null>(null)
   const [pageTokenStack, setPageTokenStack] = useState<(string | undefined)[]>([undefined])
   const [pageIndex, setPageIndex] = useState(0)
+  const [keyboardIndex, setKeyboardIndex] = useState<number>(-1)
   const router = useRouter()
   const searchParams = useSearchParams()
   const queryClient = useQueryClient()
@@ -73,18 +75,29 @@ export default function GmailPage() {
   }, [router, searchParams])
 
   useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 300)
+    return () => clearTimeout(t)
+  }, [search])
+
+  useEffect(() => {
     setPageTokenStack([undefined])
     setPageIndex(0)
   }, [folder, selectedLabelId])
 
+  useEffect(() => {
+    setPageTokenStack([undefined])
+    setPageIndex(0)
+  }, [debouncedSearch])
+
   const currentPageToken = pageTokenStack[pageIndex]
   const { data, isLoading, error } = useQuery<ThreadsResponse>({
-    queryKey: ["gmail-threads", folder, selectedLabelId, currentPageToken],
+    queryKey: ["gmail-threads", folder, selectedLabelId, currentPageToken, debouncedSearch],
     queryFn: async () => {
       const params = new URLSearchParams({ maxResults: String(PAGE_SIZE) })
       if (selectedLabelId) params.set("labelId", selectedLabelId)
       else params.set("folder", folder)
       if (currentPageToken) params.set("pageToken", currentPageToken)
+      if (debouncedSearch) params.set("q", debouncedSearch)
       const res = await fetch(`/api/gmail/threads?${params.toString()}`)
       const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json?.error || "Failed to load threads")
@@ -109,6 +122,10 @@ export default function GmailPage() {
   const pageEnd = Math.min((pageIndex + 1) * PAGE_SIZE, folderTotal || (pageIndex * PAGE_SIZE + threads.length))
   const canPrev = pageIndex > 0
   const canNext = Boolean(nextPageToken)
+  const isSearching = debouncedSearch.length > 0
+  const displayTotal = isSearching ? (data?.resultSizeEstimate ?? threads.length) : folderTotal
+
+  useEffect(() => { setKeyboardIndex(-1) }, [folder, selectedLabelId, debouncedSearch, pageIndex])
 
   function handlePrev() {
     if (!canPrev) return
@@ -149,6 +166,33 @@ export default function GmailPage() {
     setSelectedThread(threadId)
   }
 
+
+  useEffect(() => {
+    function isTypingTarget(el: EventTarget | null): boolean {
+      if (!el || !(el instanceof HTMLElement)) return false
+      const tag = el.tagName
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true
+      if (el.isContentEditable) return true
+      if (el.closest("[contenteditable=true]")) return true
+      if (el.closest(".ProseMirror")) return true
+      return false
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") { if (showCompose) { setShowCompose(false); setComposeInitial(null); e.preventDefault(); return } if (selectedThread) { setSelectedThread(null); e.preventDefault(); return } }
+      if (e.key === "/" && !isTypingTarget(e.target)) { const el = document.getElementById("mail-search") as HTMLInputElement | null; if (el) { el.focus(); e.preventDefault() } return }
+      if (isTypingTarget(e.target) || e.metaKey || e.ctrlKey || e.altKey) return
+      switch (e.key.toLowerCase()) {
+        case "c": setComposeInitial(null); setShowCompose(true); e.preventDefault(); break
+        case "j": if (selectedThread) { const idx = threads.findIndex((t) => t.id === selectedThread); if (idx >= 0 && idx < threads.length - 1) setSelectedThread(threads[idx + 1].id) } else { setKeyboardIndex((i) => Math.min(threads.length - 1, (i < 0 ? 0 : i + 1))) } e.preventDefault(); break
+        case "k": if (selectedThread) { const idx = threads.findIndex((t) => t.id === selectedThread); if (idx > 0) setSelectedThread(threads[idx - 1].id) } else { setKeyboardIndex((i) => Math.max(0, i - 1)) } e.preventDefault(); break
+        case "enter": if (!selectedThread && keyboardIndex >= 0 && keyboardIndex < threads.length) { const t = threads[keyboardIndex]; if (t) handleThreadClick(t.id); e.preventDefault() } break
+        case "e": { const archiveTarget = selectedThread || (keyboardIndex >= 0 ? threads[keyboardIndex]?.id : null); if (archiveTarget) { fetch("/api/gmail/archive", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ threadId: archiveTarget }) }).then(() => { queryClient.invalidateQueries({ queryKey: ["gmail-threads"] }); queryClient.invalidateQueries({ queryKey: ["gmail-labels"] }); if (selectedThread === archiveTarget) setSelectedThread(null) }); e.preventDefault() } break }
+      }
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [threads, selectedThread, showCompose, keyboardIndex, queryClient])
+
   if (accountsLoading) return <MainLayout><div className="flex h-full items-center justify-center p-8"><div className="text-sm text-muted-foreground">Loading...</div></div></MainLayout>
 
   if (!hasActiveAccount) {
@@ -157,7 +201,7 @@ export default function GmailPage() {
 
   return (
     <MainLayout>
-      <div className="flex h-full flex-col"><div className="flex min-h-0 flex-1"><Sidebar folder={folder} selectedLabelId={selectedLabelId} onChange={(f, lid) => { setFolder(f); setSelectedLabelId(lid); setSelectedThread(null) }} onCompose={() => { setComposeInitial(null); setShowCompose(true) }} accounts={accounts} /><div className="flex min-w-0 flex-1 flex-col"><TopBar search={search} onSearchChange={setSearch} totalCount={folderTotal} pageStart={pageStart} pageEnd={pageEnd} canPrev={canPrev} canNext={canNext} onPrev={handlePrev} onNext={handleNext} />{!selectedThread ? <ListPane threads={threads} isLoading={Boolean(isLoading)} error={error} search={search} onSelect={handleThreadClick} selectedId={selectedThread || undefined} /> : <ConversationPane threadId={selectedThread} onBack={() => setSelectedThread(null)} onPrev={() => { const idx = threads.findIndex((t) => t.id === selectedThread); if (idx > 0) setSelectedThread(threads[idx - 1].id) }} onNext={() => { const idx = threads.findIndex((t) => t.id === selectedThread); if (idx >= 0 && idx < threads.length - 1) setSelectedThread(threads[idx + 1].id) }} />}</div></div></div>
+      <div className="flex h-full flex-col"><div className="flex min-h-0 flex-1"><Sidebar folder={folder} selectedLabelId={selectedLabelId} onChange={(f, lid) => { setFolder(f); setSelectedLabelId(lid); setSelectedThread(null) }} onCompose={() => { setComposeInitial(null); setShowCompose(true) }} accounts={accounts} /><div className="flex min-w-0 flex-1 flex-col"><TopBar search={search} onSearchChange={setSearch} isSearching={isSearching} totalCount={displayTotal} pageStart={pageStart} pageEnd={pageEnd} canPrev={canPrev} canNext={canNext} onPrev={handlePrev} onNext={handleNext} />{!selectedThread ? <ListPane threads={threads} isLoading={Boolean(isLoading)} error={error} search={search} onSelect={handleThreadClick} selectedId={selectedThread || undefined} keyboardIndex={keyboardIndex} /> : <ConversationPane threadId={selectedThread} onBack={() => setSelectedThread(null)} onPrev={() => { const idx = threads.findIndex((t) => t.id === selectedThread); if (idx > 0) setSelectedThread(threads[idx - 1].id) }} onNext={() => { const idx = threads.findIndex((t) => t.id === selectedThread); if (idx >= 0 && idx < threads.length - 1) setSelectedThread(threads[idx + 1].id) }} />}</div></div></div>
       <ComposeWindow open={showCompose} onClose={() => { setShowCompose(false); setComposeInitial(null) }} accounts={accounts} initial={composeInitial || undefined} onSent={() => { queryClient.invalidateQueries({ queryKey: ["gmail-threads"] }); queryClient.invalidateQueries({ queryKey: ["gmail-labels"] }) }} />
     </MainLayout>
   )

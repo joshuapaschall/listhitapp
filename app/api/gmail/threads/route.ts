@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
   const pageToken = request.nextUrl.searchParams.get("pageToken") || undefined
   const labelId = request.nextUrl.searchParams.get("labelId")
   const folder = request.nextUrl.searchParams.get("folder") || "inbox"
+  const q = request.nextUrl.searchParams.get("q") || undefined
 
   const target = labelId || folder
   const includeSpamTrash =
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const { threads: basic, nextPageToken, resultSizeEstimate } =
-      await listThreads(userId, max, target, { includeSpamTrash, pageToken })
+      await listThreads(userId, max, target, { includeSpamTrash, pageToken, q })
 
     const threads = await Promise.all(basic.map(async (t) => {
       const full = await getThread(userId, t.id || "")

@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -19,7 +19,7 @@ interface GmailMessage {
   labelIds?: string[]
 }
 interface GmailThread { id: string; messages?: GmailMessage[]; snippet?: string; unread?: boolean; starred?: boolean }
-interface ListPaneProps { threads: GmailThread[]; isLoading: boolean; error?: unknown; search: string; onSelect: (id: string) => void; selectedId?: string }
+interface ListPaneProps { threads: GmailThread[]; isLoading: boolean; error?: unknown; search: string; onSelect: (id: string) => void; selectedId?: string; keyboardIndex?: number }
 
 function getHeader(msg: GmailMessage | undefined, name: string): string {
   return msg?.payload?.headers?.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value || ""
@@ -31,30 +31,26 @@ function extractSender(fromRaw: string): string {
   return fromRaw
 }
 
-export default function ListPane({ threads, isLoading, error, search, onSelect, selectedId }: ListPaneProps) {
+export default function ListPane({ threads, isLoading, error, search, onSelect, selectedId, keyboardIndex }: ListPaneProps) {
   const queryClient = useQueryClient()
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [starredMap, setStarredMap] = useState<Record<string, boolean>>({})
   const [showError, setShowError] = useState(true)
+  const focusedRowRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    focusedRowRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" })
+  }, [keyboardIndex])
 
   const filtered = useMemo(() => {
-    const sorted = [...threads].sort((a, b) => {
+    return [...threads].sort((a, b) => {
       const aMsg = a.messages?.[a.messages.length - 1]
       const bMsg = b.messages?.[b.messages.length - 1]
       const aTs = Date.parse(getHeader(aMsg, "date"))
       const bTs = Date.parse(getHeader(bMsg, "date"))
       return (Number.isNaN(bTs) ? 0 : bTs) - (Number.isNaN(aTs) ? 0 : aTs)
     })
-    const term = search.toLowerCase()
-    return sorted.filter((t) => {
-      const msg = t.messages?.[t.messages.length - 1]
-      return (
-        extractSender(getHeader(msg, "from")).toLowerCase().includes(term) ||
-        getHeader(msg, "subject").toLowerCase().includes(term) ||
-        (t.snippet || msg?.snippet || "").toLowerCase().includes(term)
-      )
-    })
-  }, [threads, search])
+  }, [threads])
 
   const allSelected = filtered.length > 0 && filtered.every((t) => selectedIds.includes(t.id))
 
@@ -133,12 +129,12 @@ export default function ListPane({ threads, isLoading, error, search, onSelect, 
         {!isLoading && filtered.length === 0 && (
           <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
             <Inbox className="mb-3 h-12 w-12 text-muted-foreground/40" />
-            <p className="text-sm font-medium">No conversations</p>
-            <p className="mt-1 text-xs text-muted-foreground">Nothing here yet. New mail will show up automatically.</p>
+            <p className="text-sm font-medium">{search.trim().length > 0 ? "No results" : "No conversations"}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{search.trim().length > 0 ? "Try a different search." : "Nothing here yet. New mail will show up automatically."}</p>
           </div>
         )}
 
-        {!isLoading && filtered.map((t) => {
+        {!isLoading && filtered.map((t, idx) => {
           const msg = t.messages?.[t.messages.length - 1]
           const sender = extractSender(getHeader(msg, "from"))
           const subject = getHeader(msg, "subject") || "(No subject)"
@@ -148,9 +144,10 @@ export default function ListPane({ threads, isLoading, error, search, onSelect, 
           const isSelected = selectedIds.includes(t.id)
           const isStarred = starredMap[t.id] ?? Boolean(t.starred)
           const hasAttach = Boolean(t.messages?.some((m) => m.payload?.parts?.some((p) => Boolean(p.filename && p.body?.attachmentId))))
+          const isKeyboardFocused = keyboardIndex === idx
 
           return (
-            <div key={t.id} className={cn("group flex items-center gap-2 border-b px-4 py-2 hover:bg-muted/50", unread && "bg-primary/[0.02]", selectedId === t.id && "bg-muted") }>
+            <div ref={isKeyboardFocused ? focusedRowRef : null} key={t.id} className={cn("group flex items-center gap-2 border-b px-4 py-2 hover:bg-muted/50", unread && "bg-primary/[0.02]", selectedId === t.id && "bg-muted", isKeyboardFocused && "ring-2 ring-primary ring-inset") }>
               <Checkbox checked={isSelected} onCheckedChange={(checked) => setSelectedIds((prev) => checked ? Array.from(new Set([...prev, t.id])) : prev.filter((id) => id !== t.id))} />
               <button
                 onClick={async (e) => {

@@ -53,6 +53,7 @@ export default function ConversationPane({ threadId, onBack, onPrev, onNext }: C
   const [attachments, setAttachments] = useState<File[]>([])
   const [showAllMessages, setShowAllMessages] = useState(false)
   const [expandedMessageDetails, setExpandedMessageDetails] = useState<Set<string>>(new Set())
+  const [pendingArchive, setPendingArchive] = useState(false)
 
   const { data, error, isLoading } = useQuery<GmailThread>({
     queryKey: ["gmail-thread", threadId],
@@ -153,7 +154,18 @@ export default function ConversationPane({ threadId, onBack, onPrev, onNext }: C
       await queryClient.invalidateQueries({ queryKey: ["gmail-threads"] })
       await queryClient.invalidateQueries({ queryKey: ["gmail-thread", threadId] })
       toast.success(isForward ? "Forwarded" : "Reply sent")
+      if (pendingArchive && threadId) {
+        try {
+          await fetch("/api/gmail/archive", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ threadId }) })
+          await queryClient.invalidateQueries({ queryKey: ["gmail-threads"] })
+          if (onBack) onBack()
+        } catch (e) {
+          console.error("Archive after send failed", e)
+        }
+      }
+      setPendingArchive(false)
     } catch (e) {
+      setPendingArchive(false)
       toast.error((e as Error).message)
     }
   }
@@ -227,7 +239,7 @@ export default function ConversationPane({ threadId, onBack, onPrev, onNext }: C
         {replyMode === "forward" && <input value={forwardTo} onChange={(e) => setForwardTo(e.target.value)} placeholder="Recipient email" className="w-full rounded-md border px-3 py-2 text-sm" />}
         <div className="rounded-md border"><RichTextEditor value={reply} onChange={setReply} placeholder={replyMode === "forward" ? "Add a message..." : "Type your reply..."} minHeight={120} autoFocus /></div>
         {attachments.length > 0 && <div className="flex flex-wrap gap-2">{attachments.map((file, i) => <div key={`${file.name}-${i}`} className="flex items-center gap-2 rounded border bg-muted/30 px-2 py-1 text-xs"><Paperclip className="h-3 w-3" /><span className="max-w-[150px] truncate">{file.name}</span><button onClick={() => setAttachments((prev) => prev.filter((_, idx) => idx !== i))} className="text-muted-foreground hover:text-destructive"><X className="h-3 w-3" /></button></div>)}</div>}
-        <div className="flex items-center gap-2"><Button size="sm" onClick={handleSend} disabled={!reply.trim()}>Send</Button><label className="cursor-pointer rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground" title="Attach files"><Paperclip className="h-4 w-4" /><input type="file" multiple className="hidden" onChange={(e) => { const files = e.target.files; if (!files) return; setAttachments((prev) => [...prev, ...Array.from(files)]); e.target.value = "" }} /></label><Button size="sm" variant="ghost" onClick={() => { setReplyMode(null); setReply(""); setAttachments([]) }}>Cancel</Button></div>
+        <div className="flex items-center gap-2"><Button size="sm" onClick={handleSend} disabled={!reply.trim()}>Send</Button><Button size="sm" variant="outline" onClick={() => { setPendingArchive(true); handleSend() }} disabled={!reply.trim()}>Send & archive</Button><label className="cursor-pointer rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground" title="Attach files"><Paperclip className="h-4 w-4" /><input type="file" multiple className="hidden" onChange={(e) => { const files = e.target.files; if (!files) return; setAttachments((prev) => [...prev, ...Array.from(files)]); e.target.value = "" }} /></label><Button size="sm" variant="ghost" onClick={() => { setReplyMode(null); setReply(""); setAttachments([]) }}>Cancel</Button></div>
       </div>
     )}
   </div>

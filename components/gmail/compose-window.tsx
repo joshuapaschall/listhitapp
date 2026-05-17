@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { Minus, X, Maximize2, Minimize2, Paperclip, Trash2, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -54,6 +54,13 @@ export default function ComposeWindow({
   const [expanded, setExpanded] = useState(false)
   const [sending, setSending] = useState(false)
   const [attachments, setAttachments] = useState<File[]>([])
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
+  const [pendingArchive, setPendingArchive] = useState(false)
+  const lastSavedSignatureRef = useRef<string>("")
+  const initialSignatureRef = useRef<string>("")
+
+  const composeSignature = useMemo(() => JSON.stringify({ to, cc, bcc, subject, body, attachmentsCount: attachments.length }), [to, cc, bcc, subject, body, attachments.length])
+  const isWorthSaving = (to.trim().length > 0 || subject.trim().length > 0 || body.trim().length > 0) && composeSignature !== initialSignatureRef.current
 
   useEffect(() => {
     setDraftId(initial?.draftId)
@@ -64,7 +71,41 @@ export default function ComposeWindow({
     setShowBcc(!!initial?.bcc)
     setSubject(initial?.subject || "")
     setBody(initial?.body || "")
+    initialSignatureRef.current = JSON.stringify({ to: initial?.to || "", cc: initial?.cc || "", bcc: initial?.bcc || "", subject: initial?.subject || "", body: initial?.body || "", attachmentsCount: 0 })
+    lastSavedSignatureRef.current = initialSignatureRef.current
+    setSaveStatus("idle")
   }, [initial])
+
+  useEffect(() => {
+    if (!isWorthSaving) return
+    if (composeSignature === lastSavedSignatureRef.current) return
+    const t = setTimeout(async () => {
+      try {
+        setSaveStatus("saving")
+        const formData = new FormData()
+        if (from) formData.append("from", from)
+        formData.append("to", to)
+        if (cc.trim()) formData.append("cc", cc.trim())
+        if (bcc.trim()) formData.append("bcc", bcc.trim())
+        formData.append("subject", subject)
+        formData.append("html", body)
+        attachments.forEach((file) => formData.append("attachments", file))
+        let res: Response
+        if (draftId) res = await fetch(`/api/gmail/drafts/${draftId}`, { method: "PUT", body: formData })
+        else res = await fetch(`/api/gmail/drafts/create`, { method: "POST", body: formData })
+        if (!res.ok) throw new Error("save failed")
+        const json = await res.json()
+        if (!draftId && json.id) setDraftId(json.id)
+        lastSavedSignatureRef.current = composeSignature
+        setSaveStatus("saved")
+        queryClient.invalidateQueries({ queryKey: ["gmail-labels"] })
+      } catch (e) {
+        console.error("Auto-save failed", e)
+        setSaveStatus("error")
+      }
+    }, 2000)
+    return () => clearTimeout(t)
+  }, [composeSignature, isWorthSaving, draftId, from, to, cc, bcc, subject, body, attachments, queryClient])
 
   if (!open) return null
 
@@ -109,6 +150,15 @@ export default function ComposeWindow({
       }
       const json = await sendRes.json()
       toast.success(draftId ? "Draft sent" : "Email sent")
+      if (pendingArchive && initial?.threadId) {
+        try {
+          await fetch("/api/gmail/archive", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ threadId: initial.threadId }) })
+          queryClient.invalidateQueries({ queryKey: ["gmail-threads"] })
+        } catch (e) {
+          console.error("Archive after send failed", e)
+        }
+      }
+      setPendingArchive(false)
       queryClient.invalidateQueries({ queryKey: ["gmail-threads"] })
       queryClient.invalidateQueries({ queryKey: ["gmail-labels"] })
       if (onSent && json.threadId) onSent(json.threadId)
@@ -116,6 +166,7 @@ export default function ComposeWindow({
       setDraftId(undefined)
       onClose()
     } catch (err: any) {
+      setPendingArchive(false)
       toast.error(err.message || "Failed to send")
     } finally {
       setSending(false)
@@ -282,6 +333,19 @@ export default function ComposeWindow({
         >
           {sending ? "Sending..." : "Send"}
         </button>
+        {initial?.threadId && (
+          <button
+            onClick={() => { setPendingArchive(true); handleSend() }}
+            disabled={!canSend || sending}
+            title="Send and archive"
+            className="rounded-full border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50"
+          >
+            Send & archive
+          </button>
+        )}
+        {saveStatus === "saving" && <span className="text-xs text-muted-foreground">Saving…</span>}
+        {saveStatus === "saved" && <span className="text-xs text-muted-foreground">Draft saved</span>}
+        {saveStatus === "error" && <span className="text-xs text-destructive">Save failed</span>}
         <label className="cursor-pointer rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground" title="Attach files">
           <Paperclip className="h-4 w-4" />
           <input type="file" multiple className="hidden" onChange={(e) => {
