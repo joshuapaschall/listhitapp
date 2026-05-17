@@ -8,7 +8,7 @@ import {
   getSendfoxIntegration,
   withSendfoxAuth,
 } from "@/services/sendfox-auth"
-import { fetchLists, getMe, listDomains } from "@/services/sendfox-service"
+import { fetchLists, getContactCount, getMe, listDomains } from "@/services/sendfox-service"
 
 export const dynamic = "force-dynamic"
 
@@ -39,7 +39,7 @@ export default async function IntegrationsPage() {
     )
   }
 
-  const [meResult, domainsResult, listsResult] = await Promise.all([
+  const [meResult, domainsResult, listsResult, contactCountResult] = await Promise.all([
     (async () => {
       try {
         return { data: await withSendfoxAuth(context, async () => getMe()), error: null as string | null }
@@ -73,6 +73,19 @@ export default async function IntegrationsPage() {
         return {
           data: null,
           error: err instanceof Error ? err.message : "Failed to load lists",
+        }
+      }
+    })(),
+    (async () => {
+      try {
+        return {
+          data: await withSendfoxAuth(context, async () => getContactCount()),
+          error: null as string | null,
+        }
+      } catch (err) {
+        return {
+          data: null,
+          error: err instanceof Error ? err.message : "Failed to load contact count",
         }
       }
     })(),
@@ -146,7 +159,7 @@ export default async function IntegrationsPage() {
             <p className="text-sm text-destructive">{listsResult.error}</p>
           ) : (
             <div className="space-y-1 text-sm">
-              <p>Total contacts: {meResult.data?.contact_count ?? "Unknown"}</p>
+              <p>Total contacts: {typeof contactCountResult.data === "number" ? `${contactCountResult.data.toLocaleString()} contacts` : "—"}</p>
               <p>Total lists: {Array.isArray(listsResult.data) ? listsResult.data.length : 0}</p>
             </div>
           )}

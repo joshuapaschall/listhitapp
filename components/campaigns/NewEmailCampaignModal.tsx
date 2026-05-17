@@ -98,6 +98,14 @@ const roundToNearestFive = (date: Date) => {
 const STEPS = ["recipients", "message"] as const
 
 interface EmailCampaignModalProps {
+  prefillAudience?: {
+    buyerIds?: string[]
+    selectedTags?: string[]
+    selectedLocations?: string[]
+    minScore?: string
+    maxScore?: string
+  } | null
+
   open: boolean
   onOpenChange: (open: boolean) => void
   onSuccess?: () => void
@@ -183,7 +191,7 @@ function MultiBuyerSelector({
   )
 }
 
-export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, onAiInsert }: EmailCampaignModalProps) {
+export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, onAiInsert, prefillAudience }: EmailCampaignModalProps) {
   const [step, setStep] = useState<(typeof STEPS)[number]>("recipients")
   const [name, setName] = useState("")
   const [groups, setGroups] = useState<string[]>([])
@@ -376,6 +384,17 @@ export default function NewEmailCampaignModal({ open, onOpenChange, onSuccess, o
       fetchSnippets()
     }
   }, [open, user, fetchTemplates, fetchSnippets])
+
+  useEffect(() => {
+    if (!open || !prefillAudience) return
+    if (prefillAudience.selectedTags) setSelectedTags(prefillAudience.selectedTags)
+    if (prefillAudience.selectedLocations) setLocations(prefillAudience.selectedLocations)
+    if (typeof prefillAudience.minScore === "string") setMinScore(prefillAudience.minScore)
+    if (typeof prefillAudience.maxScore === "string") setMaxScore(prefillAudience.maxScore)
+    if (prefillAudience.buyerIds?.length) {
+      BuyerService.getBuyersByIds(prefillAudience.buyerIds).then(setBuyers).catch(() => setBuyers([]))
+    }
+  }, [open, prefillAudience])
 
   useEffect(() => {
     if (groups.length) {

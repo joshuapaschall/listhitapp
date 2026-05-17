@@ -401,6 +401,22 @@ export class BuyerService {
     return (data || []) as Buyer[]
   }
 
+  static async getBuyersByIds(ids: string[]) {
+    if (ids.length === 0) return [] as Buyer[]
+    const { data, error } = await supabase
+      .from("buyers")
+      .select("id, fname, lname, full_name, email, phone")
+      .in("id", ids)
+      .eq("sendfox_hidden", false)
+
+    if (error) {
+      log("error", "Failed to fetch buyers by ids", { error })
+      throw error
+    }
+
+    return (data || []) as Buyer[]
+  }
+
   // Get unique buyer ids for a list of groups
   static async getBuyerIdsForGroups(groupIds: string[]) {
     if (groupIds.length === 0) return [] as string[]

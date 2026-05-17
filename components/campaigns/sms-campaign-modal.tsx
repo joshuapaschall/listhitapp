@@ -80,6 +80,12 @@ const STEPS = [
 ] as const
 
 interface SmsCampaignModalProps {
+  prefillAudience?: {
+    buyerIds?: string[]
+    selectedTags?: string[]
+    selectedLocations?: string[]
+  } | null
+
   open: boolean
   onOpenChange: (open: boolean) => void
   onSuccess?: () => void
@@ -166,7 +172,7 @@ function MultiBuyerSelector({
 }
 
 
-export default function SmsCampaignModal({ open, onOpenChange, onSuccess, onAiInsert }: SmsCampaignModalProps) {
+export default function SmsCampaignModal({ open, onOpenChange, onSuccess, onAiInsert, prefillAudience }: SmsCampaignModalProps) {
   const [step, setStep] = useState<(typeof STEPS)[number]>("recipients")
   const [name, setName] = useState("")
   const [groups, setGroups] = useState<string[]>([])
@@ -224,6 +230,13 @@ export default function SmsCampaignModal({ open, onOpenChange, onSuccess, onAiIn
       PromptService.listPrompts().then(setPrompts)
     }
   }, [open])
+
+  useEffect(() => {
+    if (!open || !prefillAudience) return
+    if (prefillAudience.buyerIds?.length) {
+      BuyerService.getBuyersByIds(prefillAudience.buyerIds).then(setBuyers).catch(() => setBuyers([]))
+    }
+  }, [open, prefillAudience])
 
   useEffect(() => {
     if (groups.length) {

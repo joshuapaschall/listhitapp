@@ -62,6 +62,7 @@ import LocationFilterSelector from "@/components/buyers/location-filter-selector
 import { exportBuyersToCSV } from "@/lib/export-utils"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { PROPERTY_TYPES } from "@/lib/constant"
+import { saveAudienceSnapshot } from "@/lib/campaign-audience"
 
 const quickFilters = [
   { label: "VIP", key: "vip" },
@@ -999,6 +1000,51 @@ function BuyersPageContent() {
     setSelectedGroupId("")
   }
 
+  const filtersActive = Boolean(
+    filters.search ||
+      filters.selectedTags?.length ||
+      filters.excludeTags?.length ||
+      filters.selectedLocations?.length ||
+      filters.minScore ||
+      filters.maxScore ||
+      filters.vip !== "any" ||
+      filters.vetted !== "any" ||
+      filters.canReceiveEmail !== "any" ||
+      filters.canReceiveSMS !== "any" ||
+      filters.createdAfter ||
+      filters.createdBefore ||
+      (filters.propertyType && filters.propertyType !== "any")
+  )
+
+  const handleCreateCampaignForFilteredBuyers = async (channel: "email" | "sms") => {
+    const ids = await fetchBuyerIds(
+      { ...filters, search: debouncedSearch },
+      activeQuickFilters,
+      selectedGroupId,
+    )
+    saveAudienceSnapshot({
+      createdAt: new Date().toISOString(),
+      source: "buyers-filter",
+      channel,
+      search: filters.search,
+      selectedTags: filters.selectedTags,
+      excludeTags: filters.excludeTags,
+      selectedLocations: filters.selectedLocations,
+      minScore: filters.minScore,
+      maxScore: filters.maxScore,
+      vip: filters.vip,
+      vetted: filters.vetted,
+      canReceiveEmail: filters.canReceiveEmail,
+      canReceiveSMS: filters.canReceiveSMS,
+      createdAfter: filters.createdAfter,
+      createdBefore: filters.createdBefore,
+      propertyType: filters.propertyType,
+      buyerIds: ids,
+      recipientCount: ids.length,
+    })
+    router.push(`/campaigns?prefill=${channel}`)
+  }
+
   const getScoreColor = (score: number) => {
     if (score >= 90) return "text-green-600 bg-green-50"
     if (score >= 70) return "text-blue-600 bg-blue-50"
@@ -1111,6 +1157,32 @@ function BuyersPageContent() {
                 <Badge variant="secondary" className="text-sm">
                   {totalCount} results
                 </Badge>
+                {filtersActive && (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="brand"
+                      size="sm"
+                      className="h-9"
+                      disabled={totalCount === 0}
+                      title={totalCount === 0 ? "No buyers match current filters" : undefined}
+                      onClick={() => handleCreateCampaignForFilteredBuyers("email")}
+                    >
+                      <Mail className="h-4 w-4" />
+                      Email these {totalCount}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-9"
+                      disabled={totalCount === 0}
+                      title={totalCount === 0 ? "No buyers match current filters" : undefined}
+                      onClick={() => handleCreateCampaignForFilteredBuyers("sms")}
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                      Text these {totalCount}
+                    </Button>
+                  </div>
+                )}
                 {totalCount > itemsPerPage && (
                   <Badge variant="outline" className="text-sm hidden sm:inline-flex">
                     Page {currentPage} of {totalPages}
