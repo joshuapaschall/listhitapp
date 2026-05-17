@@ -4,6 +4,19 @@ import { NextRequest } from "next/server"
 jest.mock("next/headers", () => ({
   cookies: () => ({ get: jest.fn(), set: jest.fn(), delete: jest.fn() }),
 }))
+jest.mock("mimetext", () => ({
+  createMimeMessage: () => ({
+    setSender: jest.fn(),
+    setRecipients: jest.fn(),
+    setCc: jest.fn(),
+    setBcc: jest.fn(),
+    setSubject: jest.fn(),
+    setHeader: jest.fn(),
+    addMessage: jest.fn(),
+    addAttachment: jest.fn(),
+    asRaw: jest.fn(() => "raw"),
+  }),
+}), { virtual: true })
 
 jest.mock("@supabase/auth-helpers-nextjs", () => ({
   __esModule: true,
@@ -14,7 +27,9 @@ jest.mock("@supabase/auth-helpers-nextjs", () => ({
 
 let listThreads: any
 let getThread: any
-let syncThreads: any
+let listDrafts: any
+let getDraftFn: any
+let sendDraftFn: any
 let buildMessage: any
 let buildReply: any
 let sendEmail: any
@@ -23,13 +38,23 @@ let setStarred: any
 let setUnread: any
 let supabase: any
 
-jest.mock("../services/gmail-api", () => {
+function gmailApiMockFactory() {
   return {
-    listThreads: jest.fn(async () => [{ id: "t1" }]),
+    listThreads: jest.fn(async () => ({ threads: [{ id: "t1" }], nextPageToken: null, resultSizeEstimate: 1 })),
     getThread: jest.fn(async (_userId: string, id: string) => ({
       id,
       messages: [{ payload: { headers: [{ name: "Message-ID", value: "<m1>" }] } }],
     })),
+    listDrafts: jest.fn(async () => [{ id: "d1", messageId: "m1", threadId: "t1" }]),
+    getDraft: jest.fn(async () => ({
+      id: "d1",
+      message: {
+        id: "m1",
+        threadId: "t1",
+        payload: { headers: [{ name: "To", value: "x@test.com" }, { name: "Subject", value: "Subj" }] },
+      },
+    })),
+    sendDraft: jest.fn(async () => ({ id: "sent", threadId: "t1" })),
     buildMessage: jest.fn(() => "raw"),
     buildReply: jest.fn(() => "rawReply"),
     sendEmail: jest.fn(async () => ({ data: { id: "sent", threadId: "thr" } })),
@@ -38,11 +63,9 @@ jest.mock("../services/gmail-api", () => {
     setThreadStarred: jest.fn(async () => ({})),
     setThreadUnread: jest.fn(async () => ({})),
   }
-})
-
-jest.mock("../scripts/gmail-sync", () => ({
-  syncGmailThreads: jest.fn(async () => 0),
-}))
+}
+jest.mock("../services/gmail-api", gmailApiMockFactory)
+jest.mock("@/services/gmail-api", gmailApiMockFactory)
 
 jest.mock("@supabase/supabase-js", () => ({
   createClient: () => supabase,
@@ -89,9 +112,9 @@ function buildSupabase(rows: any[] = [], buyers: any[] = []) {
 }
 
 describe("gmail routes", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.resetModules()
-    const mod = require("../services/gmail-api")
+    const mod = await import("../services/gmail-api")
     listThreads = mod.listThreads
     getThread = mod.getThread
     buildMessage = mod.buildMessage
@@ -100,8 +123,9 @@ describe("gmail routes", () => {
     deleteThreadFn = mod.deleteThread
     setStarred = mod.setThreadStarred
     setUnread = mod.setThreadUnread
-    const sync = require("../scripts/gmail-sync")
-    syncThreads = sync.syncGmailThreads
+    listDrafts = mod.listDrafts
+    getDraftFn = mod.getDraft
+    sendDraftFn = mod.sendDraft
     process.env.GMAIL_FROM = "me@test.com"
     process.env.SUPABASE_SERVICE_ROLE_KEY = "tok"
     process.env.NEXT_PUBLIC_SUPABASE_URL = "http://local"
@@ -110,23 +134,21 @@ describe("gmail routes", () => {
 
   test("threads route returns threads", async () => {
     supabase = buildSupabase([{ id: "c1", snippet: "s", history_id: "h" }])
-    const { GET } = require("../app/api/gmail/threads/route")
-    const req = new NextRequest("http://test")
+    const { GET } = await import("../app/api/gmail/threads/route")
+    const req = new NextRequest("http://test?folder=inbox")
     const res = await GET(req)
     const data = await res.json()
-    expect(syncThreads).toHaveBeenCalled()
-    expect(listThreads).not.toHaveBeenCalled()
-    expect(getThread).toHaveBeenCalledWith("u1", "c1")
-    expect(data.threads[0].id).toBe("c1")
+    expect(listThreads).toHaveBeenCalled()
+    expect(getThread).toHaveBeenCalledWith("u1", "t1")
+    expect(data.threads[0].id).toBe("t1")
   })
 
   test("threads route falls back to gmail", async () => {
     supabase = buildSupabase([])
-    const { GET } = require("../app/api/gmail/threads/route")
+    const { GET } = await import("../app/api/gmail/threads/route")
     const req = new NextRequest("http://test")
     const res = await GET(req)
     const data = await res.json()
-    expect(syncThreads).toHaveBeenCalled()
     expect(listThreads).toHaveBeenCalled()
     expect(getThread).toHaveBeenCalled()
     expect(data.threads[0].id).toBe("t1")
@@ -135,7 +157,7 @@ describe("gmail routes", () => {
   test("threads route propagates auth message", async () => {
     supabase = buildSupabase([])
     listThreads.mockRejectedValue(new Error("Failed to authenticate with Gmail. Check your credentials."))
-    const { GET } = require("../app/api/gmail/threads/route")
+    const { GET } = await import("../app/api/gmail/threads/route")
     const req = new NextRequest("http://test")
     const res = await GET(req)
     const data = await res.json()
@@ -145,7 +167,7 @@ describe("gmail routes", () => {
 
   test("send route sends message", async () => {
     supabase = buildSupabase([], [{ id: "b1", email_norm: "a@test.com" }])
-    const { POST } = require("../app/api/gmail/send/route")
+    const { POST } = await import("../app/api/gmail/send/route")
     const req = new NextRequest("http://test", {
       method: "POST",
       body: JSON.stringify({ to: "a@test.com", subject: "Hi", text: "hello" }),
@@ -169,7 +191,7 @@ describe("gmail routes", () => {
 
   test("reply route sends reply", async () => {
     supabase = buildSupabase([], [{ id: "b1", email_norm: "a@test.com" }])
-    const { POST } = require("../app/api/gmail/reply/route")
+    const { POST } = await import("../app/api/gmail/reply/route")
     const req = new NextRequest("http://test", {
       method: "POST",
       body: JSON.stringify({ threadId: "t1", to: "a@test.com", subject: "Re", text: "hi" }),
@@ -193,7 +215,7 @@ describe("gmail routes", () => {
   })
 
   test("delete route deletes thread", async () => {
-    const { POST } = require("../app/api/gmail/delete/route")
+    const { POST } = await import("../app/api/gmail/delete/route")
     const req = new NextRequest("http://test", {
       method: "POST",
       body: JSON.stringify({ threadId: "t1" }),
@@ -205,7 +227,7 @@ describe("gmail routes", () => {
   })
 
   test("star route updates star", async () => {
-    const { POST } = require("../app/api/gmail/star/route")
+    const { POST } = await import("../app/api/gmail/star/route")
     const req = new NextRequest("http://test", {
       method: "POST",
       body: JSON.stringify({ threadId: "t1", starred: true }),
@@ -217,7 +239,7 @@ describe("gmail routes", () => {
   })
 
   test("unread route updates flag", async () => {
-    const { POST } = require("../app/api/gmail/unread/route")
+    const { POST } = await import("../app/api/gmail/unread/route")
     const req = new NextRequest("http://test", {
       method: "POST",
       body: JSON.stringify({ threadId: "t1", unread: false }),
@@ -229,11 +251,38 @@ describe("gmail routes", () => {
   })
 
   test("sync route GET returns 405", async () => {
-    const { GET } = require("../app/api/gmail/sync/route")
+    const { GET } = await import("../app/api/gmail/sync/route")
     const req = new NextRequest("http://test")
     const res = await GET(req)
     const body = await res.json()
     expect(res.status).toBe(405)
     expect(body.message).toMatch(/POST/i)
+  })
+
+  test("draft list route returns drafts", async () => {
+    const { GET } = await import("../app/api/gmail/drafts/route")
+    const req = new NextRequest("http://test")
+    const res = await GET(req)
+    const data = await res.json()
+    expect(listDrafts).toHaveBeenCalledWith("u1")
+    expect(data.drafts[0].id).toBe("d1")
+  })
+
+  test("draft get route returns draft payload", async () => {
+    const { GET } = await import("../app/api/gmail/drafts/[id]/route")
+    const req = new NextRequest("http://test")
+    const res = await GET(req, { params: { id: "d1" } })
+    const data = await res.json()
+    expect(getDraftFn).toHaveBeenCalledWith("u1", "d1")
+    expect(data.draft.id).toBe("d1")
+  })
+
+  test("draft send route sends draft", async () => {
+    const { POST } = await import("../app/api/gmail/drafts/[id]/send/route")
+    const req = new NextRequest("http://test", { method: "POST" })
+    const res = await POST(req, { params: { id: "d1" } })
+    const data = await res.json()
+    expect(sendDraftFn).toHaveBeenCalledWith("u1", "d1")
+    expect(data.threadId).toBe("t1")
   })
 })

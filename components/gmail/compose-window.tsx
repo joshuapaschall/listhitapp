@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { Minus, X, Maximize2, Minimize2, Paperclip, Trash2, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -24,6 +24,7 @@ export interface ComposeInitialState {
   body?: string
   threadId?: string
   inReplyTo?: string
+  draftId?: string
 }
 
 interface ComposeWindowProps {
@@ -48,10 +49,22 @@ export default function ComposeWindow({
   const [showBcc, setShowBcc] = useState(!!initial?.bcc)
   const [subject, setSubject] = useState(initial?.subject || "")
   const [body, setBody] = useState(initial?.body || "")
+  const [draftId, setDraftId] = useState<string | undefined>(initial?.draftId)
   const [minimized, setMinimized] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [sending, setSending] = useState(false)
   const [attachments, setAttachments] = useState<File[]>([])
+
+  useEffect(() => {
+    setDraftId(initial?.draftId)
+    setTo(initial?.to || "")
+    setCc(initial?.cc || "")
+    setBcc(initial?.bcc || "")
+    setShowCc(!!initial?.cc)
+    setShowBcc(!!initial?.bcc)
+    setSubject(initial?.subject || "")
+    setBody(initial?.body || "")
+  }, [initial])
 
   if (!open) return null
 
@@ -65,25 +78,31 @@ export default function ComposeWindow({
     }
     setSending(true)
     try {
-      const formData = new FormData()
-      if (from) formData.append("from", from)
-      formData.append("to", to)
-      if (cc.trim()) formData.append("cc", cc.trim())
-      if (bcc.trim()) formData.append("bcc", bcc.trim())
-      formData.append("subject", subject)
-      formData.append("html", body)
-      attachments.forEach((file) => formData.append("attachments", file))
-
-      const res = await fetch("/api/gmail/send", { method: "POST", body: formData })
+      let res: Response
+      if (draftId && attachments.length === 0) {
+        res = await fetch(`/api/gmail/drafts/${draftId}/send`, { method: "POST" })
+      } else {
+        const formData = new FormData()
+        if (from) formData.append("from", from)
+        formData.append("to", to)
+        if (cc.trim()) formData.append("cc", cc.trim())
+        if (bcc.trim()) formData.append("bcc", bcc.trim())
+        formData.append("subject", subject)
+        formData.append("html", body)
+        attachments.forEach((file) => formData.append("attachments", file))
+        res = await fetch("/api/gmail/send", { method: "POST", body: formData })
+      }
       if (!res.ok) {
         const j = await res.json().catch(() => null)
         throw new Error(j?.error || "Failed to send")
       }
       const json = await res.json()
-      toast.success("Email sent")
+      toast.success(draftId ? "Draft sent" : "Email sent")
       queryClient.invalidateQueries({ queryKey: ["gmail-threads"] })
+      queryClient.invalidateQueries({ queryKey: ["gmail-labels"] })
       if (onSent && json.threadId) onSent(json.threadId)
       setAttachments([])
+      setDraftId(undefined)
       onClose()
     } catch (err: any) {
       toast.error(err.message || "Failed to send")
@@ -119,7 +138,7 @@ export default function ComposeWindow({
       )}
     >
       <div className="flex items-center justify-between rounded-t-lg border-b bg-muted/30 px-4 py-2">
-        <h3 className="text-sm font-medium">New Message</h3>
+        <h3 className="text-sm font-medium">{draftId ? "Draft" : "New Message"}</h3>
         <div className="flex items-center gap-1">
           <button
             onClick={() => setMinimized(true)}

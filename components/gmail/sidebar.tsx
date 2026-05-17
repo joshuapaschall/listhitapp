@@ -13,6 +13,7 @@ import {
   Pencil,
   ChevronDown,
   Tag,
+  Mail,
 } from "lucide-react"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { cn } from "@/lib/utils"
@@ -36,6 +37,8 @@ interface LabelDetail {
   type: "system" | "user"
   messagesUnread?: number
   threadsUnread?: number
+  messagesTotal?: number
+  threadsTotal?: number
   color?: { backgroundColor?: string; textColor?: string }
 }
 interface LabelsResponse {
@@ -50,6 +53,7 @@ const SYSTEM_LABEL_META: Record<string, { key: string; icon: typeof Inbox; label
   IMPORTANT: { key: "important", icon: AlertCircle, label: "Important" },
   SENT: { key: "sent", icon: Send, label: "Sent" },
   DRAFT: { key: "drafts", icon: FileText, label: "Drafts" },
+  ALL_MAIL: { key: "allMail", icon: Mail, label: "All Mail" },
   SPAM: { key: "spam", icon: AlertOctagon, label: "Spam" },
   TRASH: { key: "trash", icon: Trash2, label: "Trash" },
 }
@@ -60,8 +64,24 @@ const CATEGORY_META: Record<string, { name: string; color: string }> = {
   CATEGORY_UPDATES: { name: "Updates", color: "bg-amber-500" },
   CATEGORY_FORUMS: { name: "Forums", color: "bg-cyan-500" },
 }
-function unreadOf(label: LabelDetail): number {
-  return label.threadsUnread ?? label.messagesUnread ?? 0
+function badgeFor(label: LabelDetail): { value: number; variant: "unread" | "total" } | null {
+  const unread = label.threadsUnread ?? label.messagesUnread ?? 0
+  const total = label.threadsTotal ?? label.messagesTotal ?? 0
+  switch (label.id) {
+    case "INBOX":
+    case "IMPORTANT":
+    case "SPAM":
+      return unread > 0 ? { value: unread, variant: "unread" } : null
+    case "DRAFT":
+      return total > 0 ? { value: total, variant: "total" } : null
+    case "STARRED":
+    case "SENT":
+    case "TRASH":
+    case "ALL_MAIL":
+      return null
+    default:
+      return unread > 0 ? { value: unread, variant: "unread" } : null
+  }
 }
 
 export default function Sidebar({ folder, selectedLabelId, onChange, onCompose, accounts }: SidebarProps) {
@@ -75,7 +95,8 @@ export default function Sidebar({ folder, selectedLabelId, onChange, onCompose, 
       if (!res.ok) throw new Error("Failed to load labels")
       return res.json()
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 1000,
+    refetchInterval: 60_000,
     refetchOnWindowFocus: true,
   })
 
@@ -96,7 +117,7 @@ export default function Sidebar({ folder, selectedLabelId, onChange, onCompose, 
             const meta = SYSTEM_LABEL_META[label.id]
             const Icon = meta.icon
             const isActive = !selectedLabelId && folder === meta.key
-            const unread = unreadOf(label)
+            const badge = badgeFor(label)
             return (
               <button
                 key={label.id}
@@ -108,10 +129,10 @@ export default function Sidebar({ folder, selectedLabelId, onChange, onCompose, 
               >
                 <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-primary" : "text-muted-foreground")} />
                 <span className="flex-1 truncate text-left">{meta.label}</span>
-                {unread > 0 && (
+                {badge && (
                   <span className="flex items-center gap-1.5 text-xs font-semibold">
-                    <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                    {unread}
+                    {badge.variant === "unread" && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+                    {badge.value.toLocaleString()}
                   </span>
                 )}
               </button>
@@ -130,7 +151,7 @@ export default function Sidebar({ folder, selectedLabelId, onChange, onCompose, 
               const meta = CATEGORY_META[label.id]
               if (!meta) return null
               const isActive = selectedLabelId === label.id
-              const unread = unreadOf(label)
+              const badge = badgeFor(label)
               return (
                 <button
                   key={label.id}
@@ -142,10 +163,10 @@ export default function Sidebar({ folder, selectedLabelId, onChange, onCompose, 
                 >
                   <span className={cn("h-2 w-2 shrink-0 rounded-full", meta.color)} />
                   <span className="flex-1 truncate text-left">{meta.name}</span>
-                  {unread > 0 && (
+                  {badge && (
                     <span className="flex items-center gap-1.5 text-xs font-semibold">
-                      <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                      {unread}
+                      {badge.variant === "unread" && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+                      {badge.value.toLocaleString()}
                     </span>
                   )}
                 </button>
@@ -164,7 +185,7 @@ export default function Sidebar({ folder, selectedLabelId, onChange, onCompose, 
           <CollapsibleContent className="space-y-0.5">
             {labelData.user.map((label) => {
               const isActive = selectedLabelId === label.id
-              const unread = unreadOf(label)
+              const badge = badgeFor(label)
               const tagColor = label.color?.backgroundColor || "#6b7280"
               return (
                 <button
@@ -177,10 +198,10 @@ export default function Sidebar({ folder, selectedLabelId, onChange, onCompose, 
                 >
                   <Tag className="h-3.5 w-3.5 shrink-0" style={{ color: tagColor }} />
                   <span className="flex-1 truncate text-left">{label.name}</span>
-                  {unread > 0 && (
+                  {badge && (
                     <span className="flex items-center gap-1.5 text-xs font-semibold">
-                      <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                      {unread}
+                      {badge.variant === "unread" && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+                      {badge.value.toLocaleString()}
                     </span>
                   )}
                 </button>

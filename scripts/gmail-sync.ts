@@ -5,7 +5,7 @@ export async function syncGmailThreads(
   maxResults = 100,
   folder = "inbox",
 ) {
-  const threads = await listThreads(userId, maxResults, folder)
+  const { threads } = await listThreads(userId, maxResults, folder)
   return threads.length
 }
 
