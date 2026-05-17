@@ -131,10 +131,20 @@ export class BuyerService {
     }
 
     if (data?.email) {
-      const lists: number[] = []
-      if (process.env.SENDFOX_DEFAULT_LIST_ID) {
-        lists.push(Number(process.env.SENDFOX_DEFAULT_LIST_ID))
+      let defaultListId: number | null = process.env.NEXT_PUBLIC_SENDFOX_DEFAULT_LIST_ID
+        ? Number(process.env.NEXT_PUBLIC_SENDFOX_DEFAULT_LIST_ID)
+        : null
+      if (defaultListId === null && typeof window !== "undefined") {
+        try {
+          const res = await fetch("/api/sendfox/default-list")
+          if (res.ok) {
+            const json = await res.json()
+            if (json?.listId) defaultListId = Number(json.listId)
+          }
+        } catch {}
       }
+      const lists: number[] = []
+      if (defaultListId) lists.push(defaultListId)
       try {
         const res = await fetch("/api/sendfox/contact", {
           method: "POST",

@@ -82,7 +82,7 @@ export function logStartupWarnings() {
   }
 
   if (!process.env.SENDFOX_API_TOKEN && !process.env.SENDFOX_API_KEY) {
-    console.warn("[env] Optional: SENDFOX_API_TOKEN/SENDFOX_API_KEY not set")
+    console.warn("[env] Optional: SENDFOX_API_TOKEN not set — SendFox features will be unavailable until configured. Verify at /settings/integrations.")
   }
 }
 
