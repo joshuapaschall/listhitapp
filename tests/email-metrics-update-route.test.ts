@@ -1,4 +1,3 @@
-import { describe, expect, test } from "@jest/globals";
 import { NextRequest } from "next/server";
 import { updateEmailMetricsMock } from "@/services/email-metrics-service";
 import { POST } from "../app/api/email-metrics/update/route";

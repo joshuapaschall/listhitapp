@@ -1,4 +1,3 @@
-import { describe, expect, test } from "@jest/globals";
 import { searchLocations } from "../lib/location-utils";
 
 describe("searchLocations", () => {
