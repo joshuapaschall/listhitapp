@@ -9,9 +9,13 @@ interface TopBarProps {
   totalCount?: number
   pageStart?: number
   pageEnd?: number
+  canPrev?: boolean
+  canNext?: boolean
+  onPrev?: () => void
+  onNext?: () => void
 }
 
-export default function TopBar({ search, onSearchChange, totalCount, pageStart, pageEnd }: TopBarProps) {
+export default function TopBar({ search, onSearchChange, totalCount, pageStart, pageEnd, canPrev, canNext, onPrev, onNext }: TopBarProps) {
   const queryClient = useQueryClient()
 
   const handleRefresh = () => {
@@ -19,7 +23,10 @@ export default function TopBar({ search, onSearchChange, totalCount, pageStart, 
     queryClient.invalidateQueries({ queryKey: ["gmail-labels"] })
   }
 
-  const countLabel = totalCount && pageStart && pageEnd ? `${pageStart}–${pageEnd} of ${totalCount}` : null
+  const countLabel =
+    typeof totalCount === "number" && totalCount > 0
+      ? `${(pageStart ?? 1).toLocaleString()}–${(pageEnd ?? 0).toLocaleString()} of ${totalCount.toLocaleString()}`
+      : null
 
   return (
     <div className="sticky top-0 z-10 flex h-14 items-center gap-2 border-b bg-background px-4">
@@ -45,10 +52,10 @@ export default function TopBar({ search, onSearchChange, totalCount, pageStart, 
 
         {countLabel && <span className="hidden px-2 text-xs text-muted-foreground sm:inline">{countLabel}</span>}
 
-        <button className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30" title="Newer" disabled>
+        <button onClick={onPrev} disabled={!canPrev} className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30" title="Newer">
           <ChevronLeft className="h-4 w-4" />
         </button>
-        <button className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30" title="Older" disabled>
+        <button onClick={onNext} disabled={!canNext} className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30" title="Older">
           <ChevronRight className="h-4 w-4" />
         </button>
 

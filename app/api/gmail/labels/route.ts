@@ -97,8 +97,40 @@ export async function GET(_req: NextRequest) {
       else if (label.type === "user") userLabels.push(label)
     }
 
+    let allMailThreadsTotal = 0
+    let allMailMessagesTotal = 0
+    try {
+      const profileRes = await fetch(
+        "https://gmail.googleapis.com/gmail/v1/users/me/profile",
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      )
+      if (profileRes.ok) {
+        const profile = await profileRes.json()
+        const trash = system.find((l) => l.id === "TRASH")
+        const spam = system.find((l) => l.id === "SPAM")
+        const trashThreads = trash?.threadsTotal ?? 0
+        const trashMsgs = trash?.messagesTotal ?? 0
+        const spamThreads = spam?.threadsTotal ?? 0
+        const spamMsgs = spam?.messagesTotal ?? 0
+        allMailThreadsTotal = Math.max(0, (profile.threadsTotal || 0) - trashThreads - spamThreads)
+        allMailMessagesTotal = Math.max(0, (profile.messagesTotal || 0) - trashMsgs - spamMsgs)
+      }
+    } catch (e) {
+      console.error("Failed to fetch profile for All Mail count:", e)
+    }
+
+    system.push({
+      id: "ALL_MAIL",
+      name: "All Mail",
+      type: "system",
+      threadsTotal: allMailThreadsTotal,
+      messagesTotal: allMailMessagesTotal,
+      threadsUnread: 0,
+      messagesUnread: 0,
+    })
+
     userLabels.sort((a, b) => a.name.localeCompare(b.name))
-    const systemOrder = ["INBOX", "STARRED", "IMPORTANT", "SENT", "DRAFT", "TRASH", "SPAM"]
+    const systemOrder = ["INBOX", "STARRED", "IMPORTANT", "SENT", "DRAFT", "ALL_MAIL", "SPAM", "TRASH"]
     system.sort((a, b) => systemOrder.indexOf(a.id) - systemOrder.indexOf(b.id))
 
     return NextResponse.json({ email, system, categories, user: userLabels } as LabelsResponse)

@@ -7,7 +7,7 @@ assertServer()
 const supabase = supabaseAdmin
 
 export async function getGmailMetrics(userId: string) {
-  const threads = await listThreads(userId, 50, "inbox")
+  const { threads } = await listThreads(userId, 50, "inbox")
   let count = 0
   for (const t of threads) {
     const first = (t as any).messages?.[0]

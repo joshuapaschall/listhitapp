@@ -35,6 +35,7 @@ export async function getGmailClient(userId: string) {
 const supabase = supabaseAdmin
 
 function mapFolderToLabelId(folder: string): string | null {
+  if (folder === "allMail" || folder === "ALL_MAIL") return null
   const upper = folder.toUpperCase()
   const systemIds = ["INBOX", "STARRED", "IMPORTANT", "SENT", "DRAFT", "DRAFTS", "TRASH", "SPAM", "UNREAD", "CHAT"]
   if (systemIds.includes(upper)) return upper === "DRAFTS" ? "DRAFT" : upper
@@ -72,23 +73,25 @@ export interface GmailThread extends gmail_v1.Schema$Thread {
 
 export async function listThreads(
   userId: string,
-  maxResults = 20,
+  maxResults = 50,
   folder = "inbox",
-  options: { includeSpamTrash?: boolean } = {},
-): Promise<GmailThread[]> {
+  options: { includeSpamTrash?: boolean; pageToken?: string } = {},
+): Promise<{
+  threads: GmailThread[]
+  nextPageToken: string | null
+  resultSizeEstimate: number
+}> {
   const gmail = await getGmailClient(userId)
-  const normalized = mapFolderToLabelId(folder) || folder
-  const includeSpamTrash =
-    options.includeSpamTrash ||
-    normalized === "TRASH" ||
-    normalized === "SPAM" ||
-    folder.toLowerCase() === "trash" ||
-    folder.toLowerCase() === "spam"
+  const isAllMail = folder === "allMail" || folder === "ALL_MAIL"
+  const normalized = isAllMail ? null : (mapFolderToLabelId(folder) || null)
 
   let threads: GmailThread[] = []
   const listParams: any = { userId: "me", maxResults, format: "full" as any }
   if (normalized) listParams.labelIds = [normalized]
-  if (includeSpamTrash || options?.includeSpamTrash) listParams.includeSpamTrash = true
+  if (options.pageToken) listParams.pageToken = options.pageToken
+  if (options.includeSpamTrash || normalized === "TRASH" || normalized === "SPAM") {
+    listParams.includeSpamTrash = true
+  }
 
   let res = await safeCall(() => gmail.users.threads.list(listParams), null as any)
   if (!res) {
@@ -114,19 +117,6 @@ export async function listThreads(
       }
     })
     await supabase.from("gmail_threads").upsert(rows)
-
-    const freshIds = threads.map((t) => t.id!).filter(Boolean)
-    if (freshIds.length > 0) {
-      const labelToScopeBy: string | null = mapFolderToLabelId(folder)
-      if (labelToScopeBy) {
-        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
-        await supabase
-          .from("gmail_threads")
-          .delete()
-          .not("id", "in", `(${freshIds.map((id) => `"${id}"`).join(",")})`)
-          .lt("updated_at", fiveMinutesAgo)
-      }
-    }
 
     const addressSet = new Set<string>()
     const threadMeta: Record<string, { subject: string | null; snippet: string | null; starred: boolean; unread: boolean; emails: string[] }> = {}
@@ -189,11 +179,14 @@ export async function listThreads(
       await supabase.from("email_threads").upsert(emailRows)
     }
 
-    // merge computed flags with thread objects
     threads = threads.map((t, i) => ({ ...t, starred: rows[i].starred, unread: rows[i].unread }))
   }
 
-  return threads
+  return {
+    threads,
+    nextPageToken: (res?.data?.nextPageToken as string | undefined) || null,
+    resultSizeEstimate: (res?.data?.resultSizeEstimate as number | undefined) || 0,
+  }
 }
 
 export async function getThread(
@@ -454,6 +447,42 @@ export function buildReplyWithAttachments(opts: ExtendedReplyOptions): string {
   }
   return encodeBase64Url(buildMimeWithMimetext(opts, headers))
 }
+
+export async function listDrafts(userId: string): Promise<Array<{
+  id: string
+  messageId: string | null
+  threadId: string | null
+}>> {
+  const gmail = await getGmailClient(userId)
+  const res = await safeCall(
+    () => gmail.users.drafts.list({ userId: "me", maxResults: 500 }),
+    { data: { drafts: [] } } as any,
+  )
+  return (res.data.drafts || []).map((d: any) => ({
+    id: d.id,
+    messageId: d.message?.id || null,
+    threadId: d.message?.threadId || null,
+  }))
+}
+
+export async function getDraft(userId: string, draftId: string) {
+  const gmail = await getGmailClient(userId)
+  const res = await safeCall(
+    () => gmail.users.drafts.get({ userId: "me", id: draftId, format: "full" as any }),
+    { data: {} } as any,
+  )
+  return res.data
+}
+
+export async function sendDraft(userId: string, draftId: string) {
+  const gmail = await getGmailClient(userId)
+  const res = await safeCall(
+    () => gmail.users.drafts.send({ userId: "me", requestBody: { id: draftId } }),
+    {} as any,
+  )
+  return res.data
+}
+
 export default {
   getGmailClient,
   listThreads,
@@ -467,5 +496,8 @@ export default {
   deleteThread,
   setThreadStarred,
   setThreadUnread,
+  listDrafts,
+  getDraft,
+  sendDraft,
 }
 

@@ -1,19 +1,10 @@
 import { NextRequest } from "next/server"
-import { listThreads, getThread } from "@/services/gmail-api"
+import { listThreads, getThread, listDrafts } from "@/services/gmail-api"
 import { cookies } from "next/headers"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
-import { syncGmailThreads } from "@/scripts/gmail-sync"
-import { supabaseAdmin } from "@/lib/supabase"
 import { assertServer } from "@/utils/assert-server"
 
 assertServer()
-
-interface ThreadRow {
-  id: string
-  starred?: boolean | null
-  unread?: boolean | null
-  email_threads?: unknown[]
-}
 
 export async function GET(request: NextRequest) {
   const cookieStore = cookies()
@@ -23,47 +14,53 @@ export async function GET(request: NextRequest) {
 
   const userId = user.id
   const maxParam = request.nextUrl.searchParams.get("maxResults")
-  const max = maxParam ? parseInt(maxParam, 10) : 20
+  const max = maxParam ? parseInt(maxParam, 10) : 50
+  const pageToken = request.nextUrl.searchParams.get("pageToken") || undefined
   const labelId = request.nextUrl.searchParams.get("labelId")
   const folder = request.nextUrl.searchParams.get("folder") || "inbox"
-  const includeSpamTrash = labelId === "TRASH" || labelId === "SPAM" || folder === "trash" || folder === "spam"
+
+  const target = labelId || folder
+  const includeSpamTrash =
+    target === "TRASH" || target === "SPAM" ||
+    target === "trash" || target === "spam"
 
   try {
-    if (labelId) {
-      const basic = await listThreads(userId, max, labelId, { includeSpamTrash })
-      const threads = await Promise.all(basic.map(async (t) => {
-        const full = await getThread(userId, t.id || "")
-        return { ...full, starred: t.starred ?? full.starred, unread: t.unread ?? full.unread }
-      }))
-      return new Response(JSON.stringify({ threads }))
-    }
+    const { threads: basic, nextPageToken, resultSizeEstimate } =
+      await listThreads(userId, max, target, { includeSpamTrash, pageToken })
 
-    await syncGmailThreads(userId, max, folder)
-
-    const { data } = await supabaseAdmin
-      .from("gmail_threads")
-      .select("id, starred, unread, email_threads(thread_id,buyer_id,subject,snippet,buyers(full_name))")
-      .order("updated_at", { ascending: false })
-      .limit(max)
-
-    if (!data || data.length === 0) {
-      const basic = await listThreads(userId, max, folder)
-      const threads = await Promise.all(basic.map(async (t) => {
-        const full = await getThread(userId, t.id || "")
-        return { ...full, starred: t.starred ?? full.starred, unread: t.unread ?? full.unread }
-      }))
-      return new Response(JSON.stringify({ threads }))
-    }
-
-    const rows = data as ThreadRow[]
-    const threads = await Promise.all(rows.map(async (r) => {
-      const thread = await getThread(userId, r.id)
-      return { ...thread, starred: r.starred ?? thread.starred, unread: r.unread ?? thread.unread, email_threads: r.email_threads || [] }
+    const threads = await Promise.all(basic.map(async (t) => {
+      const full = await getThread(userId, t.id || "")
+      return {
+        ...full,
+        starred: t.starred ?? full.starred,
+        unread: t.unread ?? full.unread,
+      }
     }))
 
-    return new Response(JSON.stringify({ threads }))
+    const isDrafts = target === "drafts" || target === "DRAFT"
+    let threadsWithDrafts = threads
+    if (isDrafts) {
+      const draftIndex = await listDrafts(userId)
+      const threadIdToDraftId = new Map<string, string>()
+      for (const d of draftIndex) {
+        if (d.threadId) threadIdToDraftId.set(d.threadId, d.id)
+      }
+      threadsWithDrafts = threads.map((t: any) => ({
+        ...t,
+        draftId: t.id ? threadIdToDraftId.get(t.id) || null : null,
+      }))
+    }
+
+    return new Response(JSON.stringify({
+      threads: threadsWithDrafts,
+      nextPageToken,
+      resultSizeEstimate,
+    }))
   } catch (err) {
     console.error("Failed to list threads", err)
-    return new Response(JSON.stringify({ error: err instanceof Error ? err.message : "error" }), { status: 500 })
+    return new Response(
+      JSON.stringify({ error: err instanceof Error ? err.message : "error" }),
+      { status: 500 },
+    )
   }
 }
