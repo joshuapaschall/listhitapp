@@ -618,9 +618,56 @@ export async function getEmail(id: string) {
 }
 
 export async function unsubscribe(email: string) {
-  return sendfoxRequest("/contacts/unsubscribe", {
-    method: "POST",
+  return sendfoxRequest("/unsubscribe", {
+    method: "PATCH",
     body: JSON.stringify({ email }),
+  })
+}
+
+export async function createCampaign(payload: {
+  name: string
+  subject?: string
+  body_html?: string
+  body_text?: string
+  list_ids?: number[]
+  scheduled_at?: string
+}) {
+  return sendfoxRequest("/campaigns", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function sendCampaign(campaignId: number | string) {
+  return sendfoxRequest(`/campaigns/${campaignId}/send`, {
+    method: "POST",
+  })
+}
+
+export async function getCampaignStats(campaignId: number | string) {
+  return sendfoxRequest(`/campaigns/${campaignId}/stats`)
+}
+
+export async function getMe() {
+  return sendfoxRequest("/me")
+}
+
+export async function listDomains() {
+  return sendfoxRequest("/domains")
+}
+
+export async function batchUpsertContacts(
+  contacts: Array<{
+    email: string
+    first_name?: string
+    last_name?: string
+    lists?: number[]
+    tags?: string[]
+  }>,
+) {
+  return sendfoxRequest("/contacts", {
+    method: "POST",
+    body: JSON.stringify({ contacts }),
   })
 }
 
@@ -643,6 +690,12 @@ export default {
   sendEmail,
   getEmail,
   unsubscribe,
+  createCampaign,
+  sendCampaign,
+  getCampaignStats,
+  getMe,
+  listDomains,
+  batchUpsertContacts,
   deleteList,
   deleteContact,
   findContactByEmail,
