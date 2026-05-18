@@ -380,10 +380,16 @@ create table if not exists public.campaign_recipients (
   delivered_at timestamptz,
   rejected_at timestamptz,
   rendering_failed_at timestamptz,
-  delivery_delayed_at timestamptz
+  delivery_delayed_at timestamptz,
+  actual_cost_usd numeric(10, 6),
+  actual_segments integer,
+  recipient_carrier text,
+  replied_at timestamptz
 );
 
 create index if not exists campaign_recipients_provider_id_idx on public.campaign_recipients(provider_id);
+create index if not exists campaign_recipients_buyer_from_idx
+  on public.campaign_recipients (buyer_id, from_number, sent_at desc nulls last);
 
 -- Consent logging per SendFox list
 create table if not exists public.buyer_list_consent (

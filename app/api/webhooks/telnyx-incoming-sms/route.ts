@@ -129,16 +129,24 @@ export async function POST(request: NextRequest) {
 
   for (const buyerId of targetIds) {
     let campaignId: string | null = null
+    let lastCampaignRecipient: { id: string; replied_at: string | null; unsubscribed_at: string | null } | null = null
     if (buyerId) {
       const { data: rec } = await supabase
         .from("campaign_recipients")
-        .select("campaign_id")
+        .select("id, campaign_id, replied_at, unsubscribed_at")
         .eq("buyer_id", buyerId)
         .eq("from_number", to)
         .order("sent_at", { ascending: false })
         .limit(1)
         .maybeSingle()
       campaignId = rec?.campaign_id ?? null
+      if (rec?.id) {
+        lastCampaignRecipient = {
+          id: rec.id,
+          replied_at: rec.replied_at,
+          unsubscribed_at: rec.unsubscribed_at,
+        }
+      }
     }
 
     const { data: thread, error: threadErr } = buyerId
@@ -183,6 +191,25 @@ export async function POST(request: NextRequest) {
         detail: msgErr.details,
       })
       return new NextResponse("Supabase error", { status: 500 })
+    }
+    // A.5 — Tag the inbound back to its originating campaign
+    if (lastCampaignRecipient) {
+      const recipientUpdates: Record<string, any> = {}
+      if (!lastCampaignRecipient.replied_at) {
+        recipientUpdates.replied_at = new Date().toISOString()
+      }
+      if (isStop && !lastCampaignRecipient.unsubscribed_at) {
+        recipientUpdates.unsubscribed_at = new Date().toISOString()
+      }
+      if (Object.keys(recipientUpdates).length > 0) {
+        const { error: crUpdateErr } = await supabase
+          .from("campaign_recipients")
+          .update(recipientUpdates)
+          .eq("id", lastCampaignRecipient.id)
+        if (crUpdateErr) {
+          console.error("❌ Failed to update campaign_recipient on inbound", crUpdateErr)
+        }
+      }
     }
   }
 
