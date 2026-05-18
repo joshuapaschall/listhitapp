@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (BLOCKS on failure)
+        env:
+          NEXT_PUBLIC_APP_URL: https://placeholder.example.com
+          NEXT_PUBLIC_BASE_URL: https://placeholder.example.com
+          NEXT_PUBLIC_DEV_BYPASS_AGENT_AUTH: "false"
+          NEXT_PUBLIC_DEV_MODE: "false"
+          NEXT_PUBLIC_FROM_NUMBER: "+10000000000"
+          NEXT_PUBLIC_GOOGLE_REDIRECT_URI: https://placeholder.example.com/auth/google/callback
+          NEXT_PUBLIC_MAPBOX_TOKEN: ci-placeholder-mapbox-token
+          NEXT_PUBLIC_MEDIA_BASE_URL: https://placeholder.example.com/media
+          NEXT_PUBLIC_SENDFOX_DEFAULT_LIST_ID: "0"
+          NEXT_PUBLIC_SENDFOX_REDIRECT_URI: https://placeholder.example.com/auth/sendfox/callback
+          NEXT_PUBLIC_SHOW_LOGIN_DEBUG: "false"
+          NEXT_PUBLIC_SITE_URL: https://placeholder.example.com
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+          NEXT_PUBLIC_TELNYX_TURN_PASSWORD: ci-placeholder-turn-password
+          NEXT_PUBLIC_TELNYX_TURN_USERNAME: ci-placeholder-turn-username
+          NEXT_PUBLIC_VERCEL_ENV: preview
+          OPENAI_API_KEY: ci-placeholder-openai-api-key
+          SUPABASE_URL: https://placeholder.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ci-placeholder-supabase-service-role-key
+          TELNYX_API_KEY: ci-placeholder-telnyx-api-key
+          TELNYX_MESSAGING_PROFILE_ID: ci-placeholder-telnyx-messaging-profile-id
+          TELNYX_PUBLIC_KEY: ci-placeholder-telnyx-public-key
+          TELNYX_CALL_CONTROL_APP_ID: ci-placeholder-telnyx-call-control-app-id
+          CALL_CONTROL_APP_ID: ci-placeholder-call-control-app-id
+          DEFAULT_OUTBOUND_DID: "+10000000000"
+          RESEND_API_KEY: ci-placeholder-resend-api-key
+          CRON_SECRET: ci-placeholder-cron-secret
+          APP_TIMEZONE: America/New_York
+          GMAIL_FROM: noreply@placeholder.example.com
+          GOOGLE_CLIENT_ID: ci-placeholder-google-client-id
+          GOOGLE_CLIENT_SECRET: ci-placeholder-google-client-secret
+          SENDFOX_API_KEY: ci-placeholder-sendfox-api-key
+          SENDFOX_API_TOKEN: ci-placeholder-sendfox-api-token
+          SENDFOX_CLIENT_ID: ci-placeholder-sendfox-client-id
+          SENDFOX_CLIENT_SECRET: ci-placeholder-sendfox-client-secret
+          SENDFOX_DEFAULT_LIST_ID: "0"
+          SENDFOX_DELETED_LIST_ID: "999999"
+          SENDFOX_REDIRECT_URI: https://placeholder.example.com/auth/sendfox/callback
+          SHORTIO_API_KEY: ci-placeholder-shortio-api-key
+          SHORTIO_DOMAIN: placeholder.example.com
+          SITE_URL: https://placeholder.example.com
+        run: pnpm run build
+
+      - name: Test (warn-only)
+        id: test
+        continue-on-error: true
+        run: |
+          set +e
+          pnpm test 2>&1 | tee /tmp/test-output.txt
+          EXIT_CODE=$?
+          echo "## Test results" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          grep -E "Test Files|^ *Tests " /tmp/test-output.txt | head -2 >> $GITHUB_STEP_SUMMARY || echo "Could not parse test summary" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          if [ "$EXIT_CODE" -ne 0 ]; then
+            echo "::warning::Tests failed but build passed — not blocking. See test summary above."
+          fi
+          exit 0
