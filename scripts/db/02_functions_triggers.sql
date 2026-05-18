@@ -297,6 +297,7 @@ language sql as $$
   limit 50;
 $$;
 
+drop function if exists public.campaign_recipient_summary(uuid);
 create or replace function public.campaign_recipient_summary(p_campaign_id uuid)
 returns table(
   total bigint,
@@ -304,10 +305,13 @@ returns table(
   delivered bigint,
   opened bigint,
   clicked bigint,
+  replied bigint,
   bounced bigint,
   complained bigint,
   unsubscribed bigint,
-  errors bigint
+  rejected bigint,
+  errors bigint,
+  total_cost_usd numeric
 )
 stable
 language sql as $$
@@ -317,10 +321,13 @@ language sql as $$
     count(*) filter (where delivered_at is not null) as delivered,
     count(*) filter (where opened_at is not null) as opened,
     count(*) filter (where clicked_at is not null) as clicked,
+    count(*) filter (where replied_at is not null) as replied,
     count(*) filter (where bounced_at is not null) as bounced,
     count(*) filter (where complained_at is not null) as complained,
     count(*) filter (where unsubscribed_at is not null) as unsubscribed,
-    count(*) filter (where status = 'error') as errors
+    count(*) filter (where rejected_at is not null) as rejected,
+    count(*) filter (where status = 'error') as errors,
+    coalesce(sum(actual_cost_usd), 0) as total_cost_usd
   from public.campaign_recipients
   where campaign_id = p_campaign_id;
 $$;
