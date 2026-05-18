@@ -1,26 +1,40 @@
 "use client"
 
+import { Phone, Users, Wand2 } from "lucide-react"
+import { getPoolSize } from "@/lib/sms-throughput"
+
 interface SmsFromCardProps {
   buyerIds: string[]
 }
 
 export default function SmsFromCard({ buyerIds }: SmsFromCardProps) {
-  const defaultFromNumber = process.env.NEXT_PUBLIC_DEFAULT_OUTBOUND_DID ?? null
+  const poolSize = getPoolSize()
+  const defaultDid = process.env.NEXT_PUBLIC_DEFAULT_OUTBOUND_DID ?? null
 
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        ListHit picks the sender phone number per recipient using this priority:
+        ListHit doesn&apos;t use a single sender number — your Telnyx messaging profile has a pool of <span className="font-medium text-foreground">{poolSize} numbers</span> that rotate automatically.
       </p>
-      <ol className="list-decimal space-y-1 pl-5 text-sm">
-        <li>Most recent thread&apos;s preferred number (message_threads.preferred_from_number)</li>
-        <li>Buyer&apos;s sticky sender (buyer_sms_senders.from_number)</li>
-        <li>Default outbound DID (DEFAULT_OUTBOUND_DID env) — {defaultFromNumber ?? "not configured"}</li>
-      </ol>
-      <div className="rounded-md border bg-muted/20 p-3 text-sm text-muted-foreground">
-        Per-buyer breakdown loads at send time. ({buyerIds.length} selected)
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border bg-card p-3">
+          <div className="mb-1.5 flex items-center gap-2"><div className="flex h-7 w-7 items-center justify-center rounded-full bg-brand/10"><Users className="h-3.5 w-3.5 text-brand" /></div><span className="text-xs font-medium">Existing conversation</span></div>
+          <p className="text-xs text-muted-foreground">Buyer keeps replying to the same number they last received from — no surprise area-code switches mid-thread.</p>
+        </div>
+
+        <div className="rounded-lg border bg-card p-3">
+          <div className="mb-1.5 flex items-center gap-2"><div className="flex h-7 w-7 items-center justify-center rounded-full bg-brand/10"><Wand2 className="h-3.5 w-3.5 text-brand" /></div><span className="text-xs font-medium">First contact</span></div>
+          <p className="text-xs text-muted-foreground">Telnyx picks an unused number from the pool, balancing load across all {poolSize} numbers to maximize deliverability.</p>
+        </div>
+
+        <div className="rounded-lg border bg-card p-3">
+          <div className="mb-1.5 flex items-center gap-2"><div className="flex h-7 w-7 items-center justify-center rounded-full bg-brand/10"><Phone className="h-3.5 w-3.5 text-brand" /></div><span className="text-xs font-medium">Fallback</span></div>
+          <p className="text-xs text-muted-foreground">If the pool is unreachable, the system falls back to <span className="font-mono text-foreground">{defaultDid ?? "the configured default"}</span>.</p>
+        </div>
       </div>
-      <p className="text-xs text-muted-foreground">Markets — multi-market sender selection coming soon.</p>
+
+      <p className="text-xs text-muted-foreground">Multi-market routing (separate pools per market) is coming soon. {buyerIds.length > 0 ? `(${buyerIds.length.toLocaleString()} recipients selected)` : ""}</p>
     </div>
   )
 }

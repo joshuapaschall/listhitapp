@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { ArrowLeft, CheckCircle2, Circle, TestTube2 } from "lucide-react"
 import { toast } from "sonner"
@@ -17,6 +17,7 @@ import { calculateSmsSegments } from "@/lib/sms-utils"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { BuyerService } from "@/services/buyer-service"
 
 function parseMediaUrls(value: unknown): string[] {
   if (!value || typeof value !== "string") return []
@@ -39,11 +40,30 @@ export default function SmsCampaignComposeView({ initialCampaign }: { initialCam
   const [previewOpen, setPreviewOpen] = useState(false)
   const [testPhone, setTestPhone] = useState("")
   const [sendingTest, setSendingTest] = useState(false)
+  const [resolvedGroupBuyerIds, setResolvedGroupBuyerIds] = useState<string[]>([])
+
+  useEffect(() => {
+    const groupIds = campaign.group_ids || []
+    if (!groupIds.length) {
+      setResolvedGroupBuyerIds([])
+      return
+    }
+    let alive = true
+    BuyerService.getBuyerIdsForGroups(groupIds)
+      .then((ids) => { if (alive) setResolvedGroupBuyerIds(ids) })
+      .catch(() => { if (alive) setResolvedGroupBuyerIds([]) })
+    return () => { alive = false }
+  }, [JSON.stringify(campaign.group_ids || [])])
+
+  const allRecipientIds = useMemo(() => {
+    const direct = campaign.buyer_ids || []
+    return Array.from(new Set([...direct, ...resolvedGroupBuyerIds]))
+  }, [campaign.buyer_ids, resolvedGroupBuyerIds])
 
   useEffect(() => setTestPhone(localStorage.getItem("listhit:smsTestNumber") ?? ""), [])
   const mediaUrls = parseMediaUrls(campaign.media_url)
   const segmentInfo = calculateSmsSegments(campaign.message ?? "")
-  const recipientCount = hasPrefillSnapshot?.recipientCount ?? (campaign.buyer_ids?.length ?? 0)
+  const recipientCount = hasPrefillSnapshot?.recipientCount ?? allRecipientIds.length
   const toValid = recipientCount > 0 || !!hasPrefillSnapshot
   const fromValid = true
   const contentValid = (!!campaign.message?.trim() || mediaUrls.length > 0) && segmentInfo.segments <= 10
@@ -100,8 +120,8 @@ export default function SmsCampaignComposeView({ initialCampaign }: { initialCam
     <div className="sticky top-0 bg-background/80 backdrop-blur z-10 border-b border-border py-4 px-6"><div className="max-w-4xl mx-auto flex items-center justify-between"><div className="flex items-center gap-2"><Button variant="ghost" size="icon" onClick={() => router.push("/campaigns")}><ArrowLeft className="h-4 w-4" /></Button><Input className="w-auto min-w-[200px] max-w-[400px]" value={campaign.name || "Untitled campaign"} onChange={(e) => update({ name: e.target.value })} /><CampaignStatusBadge status={campaign.status} />{hasEdited && <span className="text-xs text-muted-foreground">{autosaveState === "saving" ? "Saving…" : autosaveState === "failed" ? "Save failed" : "Saved"}</span>}</div><div className="flex gap-2"><Input className="h-9 w-[130px]" value={testPhone} onChange={(e) => setTestPhone(e.target.value)} placeholder="+1 (770) 555-0123" /><Button variant="outline" size="sm" disabled={!testPhone.trim() || sendingTest || !campaign.message?.trim()} onClick={sendTest}><TestTube2 className="h-4 w-4" />Send test</Button><Button variant="outline" disabled={!canSend || !campaign.scheduled_at}>Schedule</Button><Button variant="brand" disabled={!canSend || !!campaign.scheduled_at} onClick={sendNow}>Send</Button></div></div></div>
     <main className="max-w-4xl mx-auto px-6 py-8 space-y-3">
       <CardRow id="to" title="To" valid={toValid} ctaText="Add recipients" summary={toValid ? `${recipientCount} recipients` : "Who are you sending this to?"}>{hasPrefillSnapshot ? <AudienceFilterSummaryCard snapshot={hasPrefillSnapshot} onPreview={() => setPreviewOpen(true)} onAdjust={() => router.push("/buyers")} onClear={() => { setHasPrefillSnapshot(null); update({ buyer_ids: [] }) }} /> : <GroupTreeSelector value={campaign.group_ids || []} onChange={(ids) => update({ group_ids: ids })} />}</CardRow>
-      <CardRow id="from" title="From" valid={fromValid} ctaText="View sender" summary="Per-recipient routing with fallback"><SmsFromCard buyerIds={campaign.buyer_ids || []} /></CardRow>
-      <CardRow id="content" title="Content" valid={contentValid} ctaText="Compose SMS" summary={campaign.message?.trim() ? `Message ready — ${segmentInfo.segments} segments` : "Write your message"}><SmsComposerPanel message={campaign.message || ""} onMessageChange={(value) => update({ message: value })} buyerIds={campaign.buyer_ids || []} /></CardRow>
+      <CardRow id="from" title="From" valid={fromValid} ctaText="View sender" summary="Per-recipient routing with fallback"><SmsFromCard buyerIds={allRecipientIds} /></CardRow>
+      <CardRow id="content" title="Content" valid={contentValid} ctaText="Compose SMS" summary={campaign.message?.trim() ? `Message ready — ${segmentInfo.segments} segments` : "Write your message"}><SmsComposerPanel message={campaign.message || ""} onMessageChange={(value) => update({ message: value })} buyerIds={allRecipientIds} recipientCount={recipientCount} /></CardRow>
       <CardRow id="media" title="Media" valid={true} ctaText="Add media" summary={mediaUrls.length ? `${mediaUrls.length} attachment(s)` : "Optional MMS attachments"}><SmsMediaCard mediaUrls={mediaUrls} onChange={(urls) => update({ media_url: JSON.stringify(urls) })} subject={campaign.subject} onSubjectChange={(value) => update({ subject: value })} /></CardRow>
       <CardRow id="sendTime" title="Send time" valid={sendTimeValid} ctaText="Set send time" summary={campaign.scheduled_at ? `Scheduled for ${new Date(campaign.scheduled_at).toLocaleString()}` : "Send immediately when you click Send"}><SmsSendTimeCard scheduledAt={campaign.scheduled_at} onScheduledAtChange={(value) => update({ scheduled_at: value })} weekdayOnly={campaign.weekday_only} onWeekdayOnlyChange={(value) => update({ weekday_only: value })} runFrom={campaign.run_from} onRunFromChange={(value) => update({ run_from: value })} runUntil={campaign.run_until} onRunUntilChange={(value) => update({ run_until: value })} /></CardRow>
     </main>

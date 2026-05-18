@@ -15,6 +15,7 @@ import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
+import { BuyerService } from "@/services/buyer-service"
 
 export default function CampaignComposeView({ initialCampaign }: { initialCampaign: any }) {
   const router = useRouter()
@@ -27,6 +28,25 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
   const [previewOpen, setPreviewOpen] = useState(false)
   const [contentSheetOpen, setContentSheetOpen] = useState(false)
   const [builderValue, setBuilderValue] = useState<EmailBuilderValue>({ subject: campaign.subject || "", html: campaign.message || "", blocks: [], markdown: "", previewText: campaign.preview_text || "", format: "blocks" })
+  const [resolvedGroupBuyerIds, setResolvedGroupBuyerIds] = useState<string[]>([])
+
+  useEffect(() => {
+    const groupIds = campaign.group_ids || []
+    if (!groupIds.length) {
+      setResolvedGroupBuyerIds([])
+      return
+    }
+    let alive = true
+    BuyerService.getBuyerIdsForGroups(groupIds)
+      .then((ids) => { if (alive) setResolvedGroupBuyerIds(ids) })
+      .catch(() => { if (alive) setResolvedGroupBuyerIds([]) })
+    return () => { alive = false }
+  }, [JSON.stringify(campaign.group_ids || [])])
+
+  const allRecipientIds = useMemo(() => {
+    const direct = campaign.buyer_ids || []
+    return Array.from(new Set([...direct, ...resolvedGroupBuyerIds]))
+  }, [campaign.buyer_ids, resolvedGroupBuyerIds])
 
   const isValidEmail = (v?: string) => !!v && /.+@.+\..+/.test(v)
   const toValid = ((campaign.group_ids?.length || 0) + (campaign.buyer_ids?.length || 0)) > 0 || !!hasPrefillSnapshot
@@ -73,7 +93,7 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
   const itemsMissing = [!toValid && "Recipients", !subjectValid && "Subject", !contentValid && "Content"].filter(Boolean).join(", ")
 
   const sendNow = async () => {
-    if (!confirm(`Send ${(campaign.buyer_ids?.length || 0)} emails now?`)) return
+    if (!confirm(`Send ${hasPrefillSnapshot?.recipientCount ?? allRecipientIds.length} emails now?`)) return
     await fetch(`/api/campaigns/${campaign.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(campaign) })
     const response = await fetch("/api/campaigns/send", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""}` }, body: JSON.stringify({ campaignId: campaign.id }) })
     if (response.ok) { toast.success("Campaign sending — you'll see results shortly."); router.push(`/campaigns/${campaign.id}`) } else { toast.error("Send failed — please try again.") }
@@ -97,7 +117,7 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
       </div>
     </div>
     <main className="max-w-4xl mx-auto px-6 py-8 space-y-3">
-      <CardRow id="to" title="To" valid={toValid} ctaText="Add recipients" summary={toValid ? `${campaign.buyer_ids?.length || 0} recipients` : "Who are you sending this to?"}>{hasPrefillSnapshot ? <AudienceFilterSummaryCard snapshot={hasPrefillSnapshot} onPreview={() => setPreviewOpen(true)} onAdjust={() => router.push("/buyers")} onClear={() => { setHasPrefillSnapshot(null); update({ buyer_ids: [] }) }} /> : <GroupTreeSelector value={campaign.group_ids || []} onChange={(ids) => update({ group_ids: ids })} />}</CardRow>
+      <CardRow id="to" title="To" valid={toValid} ctaText="Add recipients" summary={toValid ? `${hasPrefillSnapshot?.recipientCount ?? allRecipientIds.length} recipients` : "Who are you sending this to?"}>{hasPrefillSnapshot ? <AudienceFilterSummaryCard snapshot={hasPrefillSnapshot} onPreview={() => setPreviewOpen(true)} onAdjust={() => router.push("/buyers")} onClear={() => { setHasPrefillSnapshot(null); update({ buyer_ids: [] }) }} /> : <GroupTreeSelector value={campaign.group_ids || []} onChange={(ids) => update({ group_ids: ids })} />}</CardRow>
       <CardRow id="from" title="From" valid={fromValid} ctaText="Add sender" summary={fromValid ? `${campaign.from_name} <${campaign.from_email}>` : "Who is sending this campaign?"}><div className="space-y-3"><Input placeholder="GA Wholesale Homes" value={campaign.from_name || ""} onChange={(e) => update({ from_name: e.target.value })} /><Input placeholder="homes@example.com" value={campaign.from_email || ""} onChange={(e) => update({ from_email: e.target.value })} /></div></CardRow>
       <CardRow id="subject" title="Subject" valid={subjectValid} ctaText="Add subject" summary={subjectValid ? campaign.subject : "What's the subject line?"}><Input maxLength={150} value={campaign.subject || ""} onChange={(e) => update({ subject: e.target.value })} /></CardRow>
       <CardRow id="sendTime" title="Send time" valid={sendTimeValid} ctaText="Set send time" summary={campaign.scheduled_at ? `Scheduled for ${new Date(campaign.scheduled_at).toLocaleString()}` : "Send immediately when you click Send"}><Input type="datetime-local" onChange={(e) => update({ scheduled_at: e.target.value ? new Date(e.target.value).toISOString() : null })} /></CardRow>

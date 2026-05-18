@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { BatteryMedium, Signal } from "lucide-react"
 import { BuyerService } from "@/services/buyer-service"
 import { renderTemplate } from "@/lib/utils"
 import type { Buyer } from "@/lib/supabase"
@@ -35,34 +34,44 @@ export default function SmsPhonePreview({ message, buyerIds }: SmsPhonePreviewPr
       }
     }
     run()
-    return () => {
-      mounted = false
-    }
+    return () => { mounted = false }
   }, [buyerIds])
 
   const activeBuyer = sampleBuyers[previewIndex] || FALLBACK_BUYERS[0]
   const rendered = useMemo(() => renderTemplate(message || "", activeBuyer), [message, activeBuyer])
-  const initials = `${activeBuyer?.fname?.[0] || "L"}${activeBuyer?.lname?.[0] || "H"}`
 
   return (
     <div className="space-y-2">
-      <div className="text-xs text-muted-foreground">Preview as</div>
-      <Select value={String(previewIndex)} onValueChange={(v) => setPreviewIndex(Number(v))}>
-        <SelectTrigger><SelectValue /></SelectTrigger>
-        <SelectContent>
-          {sampleBuyers.map((buyer, idx) => (
-            <SelectItem key={buyer.id || idx} value={String(idx)}>{buyer.fname} {buyer.lname}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <div className="rounded-lg border bg-muted/30 p-3">
-        <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground"><span>9:41</span><div className="flex items-center gap-1"><Signal className="h-3 w-3" /><BatteryMedium className="h-3 w-3" /></div></div>
-        <div className="mb-3 text-center">
-          <div className="mx-auto mb-1 flex h-8 w-8 items-center justify-center rounded-full bg-brand/10 text-xs font-medium text-brand">{initials}</div>
-          <p className="text-xs text-muted-foreground">+1 (770) 555-0123</p>
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground">Preview as</span>
+        <Select value={String(previewIndex)} onValueChange={(v) => setPreviewIndex(Number(v))}>
+          <SelectTrigger className="h-8 w-[160px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {sampleBuyers.map((buyer, idx) => (
+              <SelectItem key={buyer.id || idx} value={String(idx)}>{buyer.fname} {buyer.lname}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="mx-auto" style={{ maxWidth: 280 }}>
+        <div className="relative rounded-[40px] border-[10px] border-foreground/90 bg-background shadow-sm" style={{ aspectRatio: "9/16" }}>
+          <div className="absolute left-1/2 top-2 h-1.5 w-20 -translate-x-1/2 rounded-full bg-foreground/90" />
+          <div className="absolute inset-2 overflow-hidden rounded-[28px] bg-card">
+            <div className="flex items-center justify-between border-b bg-muted/40 px-4 py-2">
+              <span className="text-xs font-medium">Messages</span>
+              <span className="text-xs text-muted-foreground">Now</span>
+            </div>
+            <div className="flex flex-col gap-1 px-3 py-3">
+              <div className="flex justify-end">
+                <div className="max-w-[80%] rounded-2xl bg-brand px-3 py-2 text-sm text-white" style={{ wordBreak: "break-word" }}>
+                  {rendered || "Your message preview appears here"}
+                </div>
+              </div>
+              <span className="self-end text-[10px] text-muted-foreground">Delivered</span>
+            </div>
+          </div>
         </div>
-        <div className="max-w-[85%] rounded-tl-2xl rounded-tr-2xl rounded-br-2xl rounded-bl-md bg-card p-3 text-sm">{rendered || "Your message preview appears here"}</div>
-        <p className="mt-2 text-xs text-muted-foreground">Delivered</p>
       </div>
     </div>
   )
