@@ -13,11 +13,6 @@ const navItems = [
     description: "Manage SMS, email, and quick-reply templates",
   },
   {
-    href: "/settings/domains",
-    label: "Short Domains",
-    description: "Manage the domains used for link tracking",
-  },
-  {
     href: "/settings/keywords",
     label: "Negative Keywords",
     description: "Filter out spammy or unwanted phrases",

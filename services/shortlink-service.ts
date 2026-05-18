@@ -5,7 +5,7 @@
 // from a custom alphabet that omits visually-confusing characters.
 
 import { customAlphabet } from "nanoid"
-import { supabase } from "@/lib/supabase"
+import { supabaseAdmin as supabase } from "@/lib/supabase"
 
 // Alphabet of 56 chars; omits 0/O/1/l/I to avoid confusion in printed/spoken URLs.
 const SLUG_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
