@@ -10,6 +10,7 @@ import { renderTemplate } from "@/lib/utils"
 import { assertServer } from "@/utils/assert-server"
 import { getCronRequestToken, isJwtLike } from "@/lib/cron-auth"
 import { linkifyHtml } from "@/lib/email/linkify-html"
+import { calculateSmsSegments } from "@/lib/sms-utils"
 
 assertServer()
 
@@ -50,7 +51,8 @@ export async function POST(request: NextRequest) {
   const { supabaseAdmin } = await import("@/lib/supabase")
   const supabase = supabaseAdmin
 
-  const { campaignId } = await request.json()
+  const { campaignId, dryRun: dryRunFromBody } = await request.json()
+  const dryRun = (dryRunFromBody === true) || process.env.LISTHIT_DRY_RUN === "1"
 
   if (!campaignId) {
     return NextResponse.json({ error: "campaignId required" }, { status: 400 })
@@ -84,7 +86,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  console.log("campaigns/send auth ok", { source: authSource, campaignId })
+  console.log("campaigns/send auth ok", { source: authSource, campaignId, dryRun })
 
   let campaignQuery = supabase
     .from("campaigns")
@@ -124,6 +126,15 @@ export async function POST(request: NextRequest) {
     if (nowMin < fromMin || nowMin > toMin) {
       return new Response(
         JSON.stringify({ error: "Outside allowed send window" }),
+        { status: 400 },
+      )
+    }
+  }
+  if (campaign.channel === "sms") {
+    const seg = calculateSmsSegments(campaign.message || "")
+    if (seg.segments > 10) {
+      return new Response(
+        JSON.stringify({ error: `Message is ${seg.segments} segments. Telnyx hard-caps at 10. Shorten and re-send.` }),
         { status: 400 },
       )
     }
@@ -314,13 +325,13 @@ export async function POST(request: NextRequest) {
         } catch (err) {
           console.error("Short.io replacement failed", err)
         }
-        if (smsBody.length > 160) smsBody = smsBody.slice(0, 160)
         const results = await sendCampaignSMS({
           buyerId: row.buyer_id,
           to: numbers,
           body: smsBody,
           mediaUrls,
           campaignId,
+          dryRun,
         })
 
         const { data: senderRow } = await supabase

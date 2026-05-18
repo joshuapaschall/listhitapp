@@ -35,7 +35,6 @@ import {
 } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import ConfirmInputDialog from "@/components/ui/confirm-input-dialog"
-import SmsCampaignModal from "@/components/campaigns/sms-campaign-modal"
 import CampaignStatusBadge from "@/components/campaigns/campaign-status-badge"
 import { clearAudienceSnapshot, readAudienceSnapshot } from "@/lib/campaign-audience"
 import { toast } from "sonner"
@@ -49,8 +48,6 @@ export default function CampaignsPage() {
   const [channelFilter, setChannelFilter] = useState("all")
   const [dateFilter, setDateFilter] = useState("all")
   const [sortBy, setSortBy] = useState("last_edited")
-  const [smsOpen, setSmsOpen] = useState(false)
-  const [prefillAudience, setPrefillAudience] = useState<any>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
 
   const router = useRouter()
@@ -60,14 +57,14 @@ export default function CampaignsPage() {
   useEffect(() => {
     const type = searchParams.get("type")
     const prefill = searchParams.get("prefill")
-    if (type === "sms") setSmsOpen(true)
+    if (type === "sms" && !prefill) {
+      router.replace("/campaigns/new?type=sms")
+      return
+    }
     if (prefill === "email" || prefill === "sms") {
       const snapshot = readAudienceSnapshot()
       if (snapshot && snapshot.channel === prefill) {
-        setPrefillAudience(snapshot)
-        if (prefill === "email") router.push("/campaigns/new?prefill=email")
-        if (prefill === "sms") setSmsOpen(true)
-        if (prefill === "sms") setSmsOpen(true)
+        router.replace(`/campaigns/new?prefill=${prefill}`)
       }
     }
   }, [searchParams, router])
@@ -178,7 +175,7 @@ export default function CampaignsPage() {
               <DropdownMenuItem onSelect={() => router.push("/campaigns/new")}>
                 Email campaign
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => setSmsOpen(true)}>
+              <DropdownMenuItem onSelect={() => router.push("/campaigns/new?type=sms")}>
                 SMS campaign
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -329,17 +326,7 @@ export default function CampaignsPage() {
         )}
       </div>
 
-      <SmsCampaignModal
-        open={smsOpen}
-        prefillAudience={prefillAudience}
-        onOpenChange={(o) => {
-          setSmsOpen(o)
-          if (!o) router.replace("/campaigns")
-        }}
-        onSuccess={() => {
-          queryClient.invalidateQueries({ queryKey: ["campaigns"] })
-        }}
-      />
+      
       
       <ConfirmInputDialog
         open={!!deleteId}
