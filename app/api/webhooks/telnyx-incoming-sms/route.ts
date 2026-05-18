@@ -12,6 +12,7 @@ import { ensurePublicMediaUrls } from "@/utils/mms.server"
 import { normalizePhone, formatPhoneE164 } from "@/lib/dedup-utils"
 import { verifyTelnyxRequest } from "@/lib/telnyx"
 import { upsertAnonThread } from "@/services/thread-utils"
+import { processTelnyxStatusEvent } from "@/lib/telnyx-status-processor"
 
 export const runtime = "nodejs"
 
@@ -43,7 +44,12 @@ export async function POST(request: NextRequest) {
 
   const event = body?.data?.event_type as string | undefined
   if (event !== "message.received") {
-    return new NextResponse(null, { status: 204 })
+    // Outbound message lifecycle event (message.sent, message.delivered,
+    // message.delivery_failed, message.finalized, etc.) — Telnyx delivers
+    // these to the same inbound URL since there's no separate outbound URL
+    // field on the messaging profile. Route to the status processor.
+    console.log("[telnyx-incoming-sms] forwarding outbound event to status processor", { event })
+    return processTelnyxStatusEvent(body)
   }
 
   const payload = body.data.payload
