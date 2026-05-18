@@ -10,6 +10,7 @@ import RecipientsPreviewSheet from "@/components/campaigns/recipients-preview-sh
 import EmailBuilder, { type EmailBuilderValue } from "@/components/email-builder/email-builder"
 import GroupTreeSelector from "@/components/buyers/group-tree-selector"
 import { readAudienceSnapshot, clearAudienceSnapshot, type CampaignAudienceSnapshot } from "@/lib/campaign-audience"
+import { supabaseBrowser } from "@/lib/supabase-browser"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -94,9 +95,37 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
 
   const sendNow = async () => {
     if (!confirm(`Send ${hasPrefillSnapshot?.recipientCount ?? allRecipientIds.length} emails now?`)) return
-    await fetch(`/api/campaigns/${campaign.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(campaign) })
-    const response = await fetch("/api/campaigns/send", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""}` }, body: JSON.stringify({ campaignId: campaign.id }) })
-    if (response.ok) { toast.success("Campaign sending — you'll see results shortly."); router.push(`/campaigns/${campaign.id}`) } else { toast.error("Send failed — please try again.") }
+
+    // Get the logged-in user's access token. This JWT carries the `sub` claim
+    // that the send route requires; the anon key does not.
+    const supabase = supabaseBrowser()
+    const { data: { session } } = await supabase.auth.getSession()
+    const accessToken = session?.access_token
+    if (!accessToken) {
+      toast.error("Not logged in — please refresh and sign in again.")
+      return
+    }
+
+    await fetch(`/api/campaigns/${campaign.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(campaign),
+    })
+    const response = await fetch("/api/campaigns/send", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ campaignId: campaign.id }),
+    })
+    if (response.ok) {
+      toast.success("Campaign sending…")
+      router.push(`/campaigns/${campaign.id}`)
+    } else {
+      const body = await response.json().catch(() => ({}))
+      toast.error(body?.error || "Send failed")
+    }
   }
 
   const CardRow = ({ title, summary, valid, id, ctaText, children }: any) => (

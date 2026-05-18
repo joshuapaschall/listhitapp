@@ -71,17 +71,21 @@ export async function GET(
     return new Response("This link has expired", { status: 410 })
   }
 
-  // Fire-and-forget click tracking. Don't await — the redirect response goes out first.
   const isBot = BOT_UA_REGEX.test(userAgent)
   if (!isBot) {
-    // Fire the RPC without awaiting. Errors are logged but never block the redirect.
-    supabase
-      .rpc("record_short_link_click", { p_link_id: link.id })
-      .then(({ error: rpcErr }: { error: unknown }) => {
-        if (rpcErr) {
-          console.error("[r/slug] click RPC failed:", rpcErr)
-        }
+    // Edge runtime terminates the worker immediately after the response is returned;
+    // un-awaited promises are discarded. Await the RPC to guarantee the click is
+    // recorded. The RPC is a single atomic UPDATE — typical latency 30-80ms.
+    try {
+      const { error: rpcErr } = await supabase.rpc("record_short_link_click", {
+        p_link_id: link.id,
       })
+      if (rpcErr) {
+        console.error("[r/slug] click RPC failed:", rpcErr)
+      }
+    } catch (rpcThrown) {
+      console.error("[r/slug] click RPC threw:", rpcThrown)
+    }
   }
 
   return NextResponse.redirect(link.target_url as string, 302)

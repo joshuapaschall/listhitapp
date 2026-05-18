@@ -14,6 +14,7 @@ import SmsMediaCard from "@/components/campaigns/sms-media-card"
 import SmsSendTimeCard from "@/components/campaigns/sms-send-time-card"
 import { readAudienceSnapshot, clearAudienceSnapshot, type CampaignAudienceSnapshot } from "@/lib/campaign-audience"
 import { calculateSmsSegments } from "@/lib/sms-utils"
+import { supabaseBrowser } from "@/lib/supabase-browser"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -97,9 +98,37 @@ export default function SmsCampaignComposeView({ initialCampaign }: { initialCam
   const update = (patch: any) => { setCampaign((p: any) => ({ ...p, ...patch })); setHasEdited(true) }
   const sendNow = async () => {
     if (!confirm(`Send ${recipientCount} SMS now?`)) return
-    await fetch(`/api/campaigns/${campaign.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(campaign) })
-    const res = await fetch("/api/campaigns/send", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""}` }, body: JSON.stringify({ campaignId: campaign.id }) })
-    if (res.ok) router.push(`/campaigns/${campaign.id}`)
+
+    // Get the logged-in user's access token. This JWT carries the `sub` claim
+    // that the send route requires; the anon key does not.
+    const supabase = supabaseBrowser()
+    const { data: { session } } = await supabase.auth.getSession()
+    const accessToken = session?.access_token
+    if (!accessToken) {
+      toast.error("Not logged in — please refresh and sign in again.")
+      return
+    }
+
+    await fetch(`/api/campaigns/${campaign.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(campaign),
+    })
+    const res = await fetch("/api/campaigns/send", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ campaignId: campaign.id }),
+    })
+    if (res.ok) {
+      toast.success("Campaign sending…")
+      router.push(`/campaigns/${campaign.id}`)
+    } else {
+      const body = await res.json().catch(() => ({}))
+      toast.error(body?.error || "Send failed")
+    }
   }
 
   const sendTest = async () => {
