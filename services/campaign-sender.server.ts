@@ -24,9 +24,10 @@ interface SmsOptions {
   campaignId?: string
   mediaUrls?: string[]
   dryRun?: boolean
+  isTest?: boolean
 }
 
-export async function sendCampaignSMS({ buyerId, to, body, mediaUrls, dryRun, campaignId }: SmsOptions): Promise<SmsSendResult[]> {
+export async function sendCampaignSMS({ buyerId, to, body, mediaUrls, dryRun, campaignId, isTest }: SmsOptions): Promise<SmsSendResult[]> {
   if (!telnyxApiKey || !messagingProfileId) {
     throw new Error("Telnyx environment variables are not properly configured")
   }
@@ -130,32 +131,34 @@ export async function sendCampaignSMS({ buyerId, to, body, mediaUrls, dryRun, ca
       const data = await scheduleSMS(carrier, body, sendRequest)
       results.push({ to: formatted, sid: data.id, from: data.from })
 
-      const { data: thread } = await supabase
-        .from("message_threads")
-        .upsert(
-          {
-            buyer_id: buyerId,
-            phone_number: normalizePhone(formatted),
-            campaign_id: campaignId ?? null,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "buyer_id,phone_number" },
-        )
-        .select("id")
-        .single()
+      if (!isTest) {
+        const { data: thread } = await supabase
+          .from("message_threads")
+          .upsert(
+            {
+              buyer_id: buyerId,
+              phone_number: normalizePhone(formatted),
+              campaign_id: campaignId ?? null,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "buyer_id,phone_number" },
+          )
+          .select("id")
+          .single()
 
-      if (thread) {
-        await supabase.from("messages").insert({
-          thread_id: thread.id,
-          buyer_id: buyerId,
-          direction: "outbound",
-          from_number: formatPhoneE164(data.from) || data.from,
-          to_number: formatted,
-          body,
-          provider_id: data.id,
-          is_bulk: true,
-          media_urls: finalMediaUrls?.length ? finalMediaUrls : null,
-        })
+        if (thread) {
+          await supabase.from("messages").insert({
+            thread_id: thread.id,
+            buyer_id: buyerId,
+            direction: "outbound",
+            from_number: formatPhoneE164(data.from) || data.from,
+            to_number: formatted,
+            body,
+            provider_id: data.id,
+            is_bulk: true,
+            media_urls: finalMediaUrls?.length ? finalMediaUrls : null,
+          })
+        }
       }
     } catch (err: any) {
       console.error("Failed to send SMS", err)

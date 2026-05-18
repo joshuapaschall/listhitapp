@@ -2,6 +2,7 @@ import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
 import { cookies } from "next/headers"
 import { notFound, redirect } from "next/navigation"
 import CampaignComposeView from "@/components/campaigns/campaign-compose-view"
+import SmsCampaignComposeView from "@/components/campaigns/sms-campaign-compose-view"
 
 export const dynamic = "force-dynamic"
 
@@ -19,6 +20,10 @@ export default async function EditCampaignPage({ params }: { params: { id: strin
 
   if (!campaign) notFound()
   if (campaign.status === "sent" || campaign.status === "sending") redirect(`/campaigns/${params.id}`)
+
+  if (campaign.channel === "sms") {
+    return <SmsCampaignComposeView initialCampaign={campaign} />
+  }
 
   return <CampaignComposeView initialCampaign={campaign} />
 }
