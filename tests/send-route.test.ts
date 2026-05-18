@@ -23,8 +23,9 @@ vi.mock("../services/campaign-sender", () => ({
   sendEmailCampaign: (...args: any[]) => emailMock(...args),
 }))
 
-vi.mock("../services/shortio-service", () => ({
+vi.mock("../services/shortlink-service", () => ({
   replaceUrlsWithShortLinks: (...args: any[]) => shortMock(...args),
+  createShortLinksBulk: (...args: any[]) => shortMock(...args),
 }))
 
 vi.mock("@/lib/supabase", () => ({

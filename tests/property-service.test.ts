@@ -131,7 +131,7 @@ vi.mock("../lib/supabase", () => {
   return { supabase: client, supabaseAdmin: client }
 })
 
-vi.mock("../services/shortio-service", () => ({
+vi.mock("../services/shortlink-service", () => ({
   createShortLink: (...args: any[]) => shortMock(...args),
 }))
 

@@ -5,7 +5,7 @@ import {
   queueEmailCampaign,
   type EmailContactPayload,
 } from "@/services/campaign-sender"
-import { replaceUrlsWithShortLinks } from "@/services/shortio-service"
+import { createShortLinksBulk } from "@/services/shortlink-service"
 import { renderTemplate } from "@/lib/utils"
 import { assertServer } from "@/utils/assert-server"
 import { getCronRequestToken, isJwtLike } from "@/lib/cron-auth"
@@ -215,6 +215,97 @@ export async function POST(request: NextRequest) {
     return new Response(JSON.stringify({ error: "Failed to fetch recipients" }), { status: 500 })
   }
 
+  // ============================================================
+  // A.5.1 — Pre-generate per-recipient unique short links for SMS.
+  //
+  // For each (recipient × URL) pair in the campaign message, create one unique
+  // short link via the native short-link service. This enables per-recipient
+  // click attribution: the redirect handler calls record_short_link_click(),
+  // which cascades clicked_at onto the linked campaign_recipients row.
+  //
+  // Multi-URL support is native — multiple URLs per message produce multiple
+  // rows per recipient, all attributed via campaign_recipient_id FK.
+  //
+  // Map shape: campaign_recipient.id → Array<{ originalUrl, shortUrl, slug }>
+  // ============================================================
+  type RecipientLinkEntry = { originalUrl: string; shortUrl: string; slug: string }
+  const shortLinksByRecipient = new Map<string, RecipientLinkEntry[]>()
+
+  if (campaign.channel === "sms" && !dryRun) {
+    const urlRegex = /(https?:\/\/[^\s"'>]+)/g
+    const messageText: string = campaign.message || ""
+    const messageUrls = Array.from(new Set(messageText.match(urlRegex) || []))
+
+    if (messageUrls.length > 0 && (recipients?.length || 0) > 0) {
+      type PairMeta = { recipientRowId: string; buyerId: string; url: string }
+      const pairMetadata: PairMeta[] = []
+      const bulkInputs: Array<{
+        targetUrl: string
+        campaignId: string
+        campaignRecipientId: string
+        createdBy?: string | null
+        tags: string[]
+        expiresAt: string
+      }> = []
+
+      // 90-day TTL on campaign links
+      const expiresAtIso = new Date(
+        Date.now() + 90 * 24 * 60 * 60 * 1000,
+      ).toISOString()
+
+      for (const r of recipients || []) {
+        for (const url of messageUrls) {
+          pairMetadata.push({
+            recipientRowId: r.id,
+            buyerId: r.buyer_id,
+            url,
+          })
+          bulkInputs.push({
+            targetUrl: url,
+            campaignId,
+            campaignRecipientId: r.id,
+            createdBy: campaign.user_id ?? campaign.created_by ?? null,
+            tags: [`campaign:${campaignId}`, `recipient:${r.buyer_id}`],
+            expiresAt: expiresAtIso,
+          })
+        }
+      }
+
+      try {
+        const results = await createShortLinksBulk(bulkInputs)
+        for (let i = 0; i < results.length; i++) {
+          const result = results[i]
+          const meta = pairMetadata[i]
+          if (!result) {
+            console.error(
+              "[send] Short link creation failed for recipient",
+              meta.recipientRowId,
+              "url",
+              meta.url,
+            )
+            continue
+          }
+          if (!shortLinksByRecipient.has(meta.recipientRowId)) {
+            shortLinksByRecipient.set(meta.recipientRowId, [])
+          }
+          shortLinksByRecipient.get(meta.recipientRowId)!.push({
+            originalUrl: meta.url,
+            shortUrl: result.shortUrl,
+            slug: result.slug,
+          })
+        }
+      } catch (err) {
+        // If bulk creation entirely fails, log and continue WITHOUT short links.
+        // The campaign still sends with raw URLs — click tracking is lost for this
+        // blast but message delivery is not blocked.
+        console.error(
+          "[send] Short link bulk creation aborted; falling back to raw URLs:",
+          err,
+        )
+      }
+    }
+  }
+
   if (campaign.channel === "email") {
     const emailContacts: EmailContactPayload[] = (recipients || [])
       .map((row: any) => {
@@ -318,12 +409,17 @@ export async function POST(request: NextRequest) {
         }
         let smsBody = renderTemplate(campaign.message, buyer)
         let shortKey: string | null = null
-        try {
-          const replaced = await replaceUrlsWithShortLinks(smsBody)
-          smsBody = replaced.html
-          shortKey = replaced.key
-        } catch (err) {
-          console.error("Short.io replacement failed", err)
+
+        // Substitute URLs from the pre-computed per-recipient map (A.5.1 native shortener)
+        const recipientLinks = shortLinksByRecipient.get(row.id)
+        if (recipientLinks && recipientLinks.length > 0) {
+          for (const link of recipientLinks) {
+            smsBody = smsBody.split(link.originalUrl).join(link.shortUrl)
+          }
+          // Store the FIRST URL's slug as short_url_key for back-compat. Click attribution
+          // doesn't actually require this column anymore — the FK + RPC handle cascading
+          // — but other code may read short_url_key, so we keep it populated.
+          shortKey = recipientLinks[0].slug
         }
         const results = await sendCampaignSMS({
           buyerId: row.buyer_id,
