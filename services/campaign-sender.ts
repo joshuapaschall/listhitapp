@@ -318,7 +318,7 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
       let html = renderTemplate(payload.html, context)
       if (!emailShortlinksDisabled()) {
         try {
-          const { replaceUrlsWithShortLinks } = await import("./shortio-service")
+          const { replaceUrlsWithShortLinks } = await import("./shortlink-service")
           const replaced = await replaceUrlsWithShortLinks(html, { anchorHrefOnly: true })
           html = replaced.html
         } catch (err) {

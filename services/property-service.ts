@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabase"
 import { supabaseBrowser } from "@/lib/supabase-browser"
 import type { Property, PropertyImage, PropertyBuyer } from "@/lib/supabase"
-import { createShortLink } from "./shortio-service"
+import { createShortLink } from "./shortlink-service"
 
 export interface PropertyFilters {
   status?: string
@@ -217,15 +217,18 @@ export class PropertyService {
     try {
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || window.location.origin
       const targetUrl = property.website_url || `${baseUrl}/properties/${propertyData.id}`
-      const { shortURL, path, idString } = await createShortLink(
+      const result = await createShortLink({
         targetUrl,
-        property.short_slug || undefined,
-      )
+        slug: property.short_slug || undefined,
+        propertyId: propertyData.id,
+        tags: [`property:${propertyData.id}`],
+        // No TTL for property links — properties shouldn't auto-expire.
+      })
       const updated = await this.updateProperty(propertyData.id, {
-        short_url_key: path,
-        short_url: shortURL,
-        short_slug: path,
-        shortio_link_id: idString,
+        short_url_key: result.slug,
+        short_url: result.shortUrl,
+        short_slug: result.slug,
+        shortio_link_id: result.id, // column name is legacy; stores the native link id now
       })
       return updated
     } catch (err) {

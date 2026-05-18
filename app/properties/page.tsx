@@ -102,6 +102,7 @@ export default function PropertiesPage() {
   const generateLink = async (prop: Property) => {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || window.location.origin
     try {
+      // POSTs to /api/short-links → services/shortlink-service.ts (native short-link service)
       const res = await fetch("/api/short-links", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

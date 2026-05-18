@@ -1,53 +1,65 @@
 import { NextRequest } from "next/server"
-import { POST } from "../app/api/short-links/route"
+import { beforeEach, describe, expect, test, vi } from "vitest"
 
-const originalFetch = global.fetch
-let fetchMock: vi.Mock
+const createMock = vi.fn()
 
-beforeAll(() => {
-  process.env.SHORTIO_API_KEY = "test-key"
-  process.env.SHORTIO_DOMAIN = "example.com"
-})
+vi.mock("../services/shortlink-service", () => ({
+  createShortLink: (...args: unknown[]) => createMock(...args),
+}))
 
-afterAll(() => {
-  global.fetch = originalFetch
+let POST: typeof import("../app/api/short-links/route").POST
+
+beforeEach(async () => {
+  vi.resetModules()
+  createMock.mockReset()
+  process.env.SHORT_LINK_DEFAULT_DOMAIN = "go.example.com"
+  vi.doMock("../services/shortlink-service", () => ({
+    createShortLink: (...args: unknown[]) => createMock(...args),
+  }))
+  ;({ POST } = await import("../app/api/short-links/route"))
 })
 
 describe("short links route", () => {
-  beforeEach(() => {
-    fetchMock = vi.fn()
-    global.fetch = fetchMock as any
-  })
-
-  test("creates short link", async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: async () => ({ shortURL: "http://s.io/a", path: "k1", idString: "id1" }),
-    } as any)
+  test("creates short link with native shape preserved", async () => {
+    createMock.mockResolvedValue({
+      id: "row-1",
+      slug: "abc1234",
+      domain: "go.example.com",
+      shortUrl: "https://go.example.com/abc1234",
+      targetUrl: "https://example.com",
+    })
 
     const req = new NextRequest("http://test", {
       method: "POST",
-      body: JSON.stringify({ originalURL: "http://example.com" }),
+      body: JSON.stringify({ originalURL: "https://example.com" }),
     })
     const res = await POST(req)
-    const body = await res.text()
-    expect(body).toBe(
-      JSON.stringify({ shortURL: "http://s.io/a", path: "k1", idString: "id1" })
-    )
-    expect(fetchMock).toHaveBeenCalled()
+    const body = await res.json()
+    expect(body).toEqual({
+      shortURL: "https://go.example.com/abc1234",
+      path: "abc1234",
+      idString: "row-1",
+    })
+    expect(createMock).toHaveBeenCalledWith({
+      targetUrl: "https://example.com",
+      slug: undefined,
+    })
   })
 
-  test("requires url", async () => {
-    const req = new NextRequest("http://test", { method: "POST", body: JSON.stringify({}) })
+  test("requires originalURL", async () => {
+    const req = new NextRequest("http://test", {
+      method: "POST",
+      body: JSON.stringify({}),
+    })
     const res = await POST(req)
     expect(res.status).toBe(400)
   })
 
-  test("handles shortio error", async () => {
-    fetchMock.mockRejectedValue(new Error("bad"))
+  test("handles service errors", async () => {
+    createMock.mockRejectedValue(new Error("bad"))
     const req = new NextRequest("http://test", {
       method: "POST",
-      body: JSON.stringify({ originalURL: "http://ex.com" }),
+      body: JSON.stringify({ originalURL: "https://ex.com" }),
     })
     const res = await POST(req)
     expect(res.status).toBe(500)

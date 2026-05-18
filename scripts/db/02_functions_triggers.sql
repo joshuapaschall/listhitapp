@@ -370,3 +370,32 @@ begin
   end loop;
 end;
 $$;
+
+-- A.5.1 — Native short-link click recording. Called by the /r/[slug] redirect handler.
+create or replace function public.record_short_link_click(p_link_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_recipient_id uuid;
+begin
+  update public.short_links
+  set
+    click_count = click_count + 1,
+    last_clicked_at = now(),
+    first_clicked_at = coalesce(first_clicked_at, now())
+  where id = p_link_id
+  returning campaign_recipient_id into v_recipient_id;
+
+  if v_recipient_id is not null then
+    update public.campaign_recipients
+    set clicked_at = now()
+    where id = v_recipient_id
+      and clicked_at is null;
+  end if;
+end;
+$$;
+
+grant execute on function public.record_short_link_click(uuid) to service_role;

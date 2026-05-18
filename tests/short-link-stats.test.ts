@@ -1,23 +1,30 @@
 import { NextRequest } from "next/server"
-import { GET } from "../app/api/short-links/clicks/route"
+import { beforeEach, describe, expect, test, vi } from "vitest"
 
-let clicksMock = vi.fn()
+const clicksMock = vi.fn()
 
-vi.mock("../services/shortio-service", () => ({
-  getShortLinkClicks: (...args: any[]) => clicksMock(...args),
+vi.mock("../services/shortlink-service", () => ({
+  getShortLinkClicks: (...args: unknown[]) => clicksMock(...args),
 }))
 
-describe("short link stats route", () => {
-  beforeEach(() => {
-    clicksMock.mockReset()
-  })
+let GET: typeof import("../app/api/short-links/clicks/route").GET
 
+beforeEach(async () => {
+  vi.resetModules()
+  clicksMock.mockReset()
+  vi.doMock("../services/shortlink-service", () => ({
+    getShortLinkClicks: (...args: unknown[]) => clicksMock(...args),
+  }))
+  ;({ GET } = await import("../app/api/short-links/clicks/route"))
+})
+
+describe("short link stats route", () => {
   test("returns click count", async () => {
     clicksMock.mockResolvedValue(5)
     const req = new NextRequest("http://test?key=k1")
     const res = await GET(req)
-    const body = await res.text()
-    expect(body).toBe(JSON.stringify({ clicks: 5 }))
+    const body = await res.json()
+    expect(body).toEqual({ clicks: 5 })
   })
 
   test("requires key", async () => {

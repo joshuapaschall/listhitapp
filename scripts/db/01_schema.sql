@@ -391,6 +391,33 @@ create index if not exists campaign_recipients_provider_id_idx on public.campaig
 create index if not exists campaign_recipients_buyer_from_idx
   on public.campaign_recipients (buyer_id, from_number, sent_at desc nulls last);
 
+-- Native short link service (replaces external Short.io integration)
+create table if not exists public.short_links (
+  id uuid primary key default gen_random_uuid(),
+  slug text not null,
+  domain text not null,
+  target_url text not null,
+  campaign_id uuid,
+  campaign_recipient_id uuid,
+  property_id uuid,
+  created_by uuid,
+  tags text[] not null default '{}',
+  expires_at timestamptz,
+  click_count integer not null default 0,
+  first_clicked_at timestamptz,
+  last_clicked_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint short_links_slug_format check (slug ~ '^[A-Za-z0-9_-]{4,12}$'),
+  constraint short_links_unique_domain_slug unique (domain, slug)
+);
+
+create index if not exists short_links_domain_slug_lookup_idx on public.short_links (domain, slug);
+create index if not exists short_links_campaign_id_idx on public.short_links (campaign_id);
+create index if not exists short_links_campaign_recipient_id_idx on public.short_links (campaign_recipient_id);
+create index if not exists short_links_property_id_idx on public.short_links (property_id);
+create index if not exists short_links_tags_idx on public.short_links using gin (tags);
+
 -- Consent logging per SendFox list
 create table if not exists public.buyer_list_consent (
   id uuid primary key default gen_random_uuid(),
