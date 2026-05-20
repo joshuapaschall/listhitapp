@@ -10,292 +10,58 @@ export async function GET(_req: NextRequest, { params }: { params: { campaignId:
   const cookieStore = cookies()
   const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
   const { supabaseAdmin } = await import("@/lib/supabase")
+  if (!supabaseAdmin) return NextResponse.json({ error: "Server not configured" }, { status: 500 })
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  if (!supabaseAdmin) {
-    return NextResponse.json({ error: "Server not configured" }, { status: 500 })
-  }
+  const { data: campaign } = await supabase.from("campaigns").select("id,user_id,channel").eq("id", campaignId).maybeSingle()
+  if (!campaign) return NextResponse.json({ error: "Campaign not found" }, { status: 404 })
+  if (campaign.user_id !== user.id) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const { data: campaign, error: campaignErr } = await supabase
-    .from("campaigns")
-    .select("id, user_id")
-    .eq("id", campaignId)
-    .maybeSingle()
-
-  if (campaignErr || !campaign) {
-    return NextResponse.json({ error: "Campaign not found" }, { status: 404 })
-  }
-
-  if (campaign.user_id !== user.id) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-  }
-
-  const summaryQuery = supabaseAdmin.rpc("campaign_event_summary", { p_campaign_id: campaignId })
-  const recipientSummaryQuery = supabaseAdmin.rpc("campaign_recipient_summary", { p_campaign_id: campaignId })
-  const topLinksQuery = supabaseAdmin.rpc("campaign_top_links", { p_campaign_id: campaignId })
-  const timelineQuery = supabaseAdmin.rpc("campaign_event_timeline", { p_campaign_id: campaignId })
-  const recentQuery = supabaseAdmin.rpc("campaign_recent_events", { p_campaign_id: campaignId })
-  const recipientsBaseSelect =
-    "id,buyer_id,status,sent_at,delivered_at,opened_at,clicked_at,bounced_at,complained_at,unsubscribed_at,error"
+  const recipientsBaseSelect = "id,buyer_id,status,sent_at,delivered_at,opened_at,clicked_at,replied_at,bounced_at,complained_at,unsubscribed_at,error,actual_cost_usd,actual_segments,recipient_carrier"
   const recipientsBuyerSelect = "buyer:buyers(id,email,phone,fname,lname,full_name,company)"
-  const recipientsLegacyBuyerSelect =
-    "buyer:buyers(id,email_address,phone_number,first_name,last_name,full_name,company)"
-  const recipientsQuery = async () => {
-    const preferred = await supabaseAdmin
-      .from("campaign_recipients")
-      .select(`${recipientsBaseSelect},${recipientsBuyerSelect}`)
-      .eq("campaign_id", campaignId)
-      .order("id", { ascending: true })
-    if (!preferred.error) return preferred
-    return supabaseAdmin
-      .from("campaign_recipients")
-      .select(`${recipientsBaseSelect},${recipientsLegacyBuyerSelect}`)
-      .eq("campaign_id", campaignId)
-      .order("id", { ascending: true })
-  }
-  const bounceBreakdownQuery = supabaseAdmin
-    .from("email_events")
-    .select("payload,buyer:buyers(id,email,fname,lname,full_name,company)")
-    .eq("campaign_id", campaignId)
-    .eq("event_type", "bounce")
+  const recipientsLegacyBuyerSelect = "buyer:buyers(id,email_address,phone_number,first_name,last_name,full_name,company)"
+  const recipientsRes = await supabaseAdmin.from("campaign_recipients").select(`${recipientsBaseSelect},${recipientsBuyerSelect}`).eq("campaign_id", campaignId).order("id", { ascending: true })
+  const recipientsFinal = recipientsRes.error ? await supabaseAdmin.from("campaign_recipients").select(`${recipientsBaseSelect},${recipientsLegacyBuyerSelect}`).eq("campaign_id", campaignId).order("id", { ascending: true }) : recipientsRes
 
-  const [
-    summaryRes,
-    recipientSummaryRes,
-    linksRes,
-    timelineRes,
-    recentRes,
-    recipientsRes,
-    bounceBreakdownRes,
-  ] = await Promise.all([
-    summaryQuery,
-    recipientSummaryQuery,
-    topLinksQuery,
-    timelineQuery,
-    recentQuery,
-    recipientsQuery(),
-    bounceBreakdownQuery,
+  const recipients = (recipientsFinal.error ? [] : recipientsFinal.data || []).map((row: any) => ({ ...row, email: row?.buyer?.email ?? row?.buyer?.email_address ?? null }))
+
+  if (campaign.channel === "sms") {
+    const [sumRes, linksRes, timelineRes] = await Promise.all([
+      supabaseAdmin.rpc("campaign_sms_summary", { p_campaign_id: campaignId }),
+      supabaseAdmin.rpc("campaign_sms_top_links", { p_campaign_id: campaignId }),
+      supabaseAdmin.rpc("campaign_sms_timeline", { p_campaign_id: campaignId }),
+    ])
+    ;[sumRes, linksRes, timelineRes].forEach((r: any, i) => r.error && console.error("Analytics RPC failed", { rpc: i, error: r.error }))
+    const summary = (sumRes.data || [])[0] || { total: 0, sent: 0, delivered: 0, clicked: 0, replied: 0, failed: 0, undelivered: 0, opted_out: 0, total_cost_usd: 0, total_segments: 0, avg_segments: 0 }
+    const sent = Number(summary.sent) || 0
+    const delivered = Number(summary.delivered) || 0
+    const denom = delivered || sent || 0
+    const rates = {
+      deliveryRate: sent ? (delivered / sent) * 100 : 0,
+      clickRate: denom ? ((Number(summary.clicked) || 0) / denom) * 100 : 0,
+      replyRate: denom ? ((Number(summary.replied) || 0) / denom) * 100 : 0,
+      failureRate: sent ? ((Number(summary.failed) || 0) / sent) * 100 : 0,
+      optOutRate: denom ? ((Number(summary.opted_out) || 0) / denom) * 100 : 0,
+      costPerMessage: sent ? (Number(summary.total_cost_usd) || 0) / sent : 0,
+    }
+    return NextResponse.json({ channel: "sms", summary, rates, timeline: (timelineRes.data || []).map((r: any) => ({ bucket: r.bucket, delivered: Number(r.delivered) || 0, clicked: Number(r.clicked) || 0, replied: Number(r.replied) || 0 })), topLinks: (linksRes.data || []).map((r: any) => ({ url: r.target_url, totalClicks: Number(r.total_clicks) || 0, uniqueClickers: Number(r.unique_clickers) || 0 })), recipients })
+  }
+
+  const [summaryRes, recipientSummaryRes, linksRes, timelineRes, recentRes, bounceBreakdownRes] = await Promise.all([
+    supabaseAdmin.rpc("campaign_event_summary", { p_campaign_id: campaignId }),
+    supabaseAdmin.rpc("campaign_recipient_summary", { p_campaign_id: campaignId }),
+    supabaseAdmin.rpc("campaign_top_links", { p_campaign_id: campaignId }),
+    supabaseAdmin.rpc("campaign_event_timeline", { p_campaign_id: campaignId }),
+    supabaseAdmin.rpc("campaign_recent_events", { p_campaign_id: campaignId }),
+    supabaseAdmin.from("email_events").select("payload").eq("campaign_id", campaignId).eq("event_type", "bounce"),
   ])
-
-  const rpcErrors = [
-    { name: "campaign_event_summary", error: summaryRes.error },
-    { name: "campaign_recipient_summary", error: recipientSummaryRes.error },
-    { name: "campaign_top_links", error: linksRes.error },
-    { name: "campaign_event_timeline", error: timelineRes.error },
-    { name: "campaign_recent_events", error: recentRes.error },
-  ].filter((item) => item.error)
-
-  rpcErrors.forEach((item) => {
-    console.error("Analytics RPC failed", { rpc: item.name, error: item.error })
-  })
-
-  if (recipientsRes.error || bounceBreakdownRes.error) {
-    console.error("Analytics query failed", {
-      recipients: recipientsRes.error,
-      bounce: bounceBreakdownRes.error,
-    })
-  }
-
-  const summaryRows = summaryRes.error ? [] : summaryRes.data || []
-  const recipientSummary = recipientSummaryRes.error ? {} : (recipientSummaryRes.data || [])[0] || {}
-  const bounceBreakdown = bounceBreakdownRes.error ? { permanent: 0, transient: 0, other: 0 } : buildBounceBreakdown(bounceBreakdownRes.data || [])
-  const summary = buildSummary(summaryRows, recipientSummary, bounceBreakdown)
-  const rates = buildRates(summary)
-
-  const topLinks = (linksRes.error ? [] : linksRes.data || []).map((row: any) => ({
-    url: row.url,
-    totalClicks: Number(row.total_clicks) || 0,
-    uniqueClickers: Number(row.unique_clickers) || 0,
-  }))
-
-  const timeline = (timelineRes.error ? [] : timelineRes.data || []).map((row: any) => ({
-    bucket: row.bucket,
-    opens: Number(row.opens) || 0,
-    clicks: Number(row.clicks) || 0,
-  }))
-
-  const recentEvents = (recentRes.error ? [] : recentRes.data || []).map((row: any) => ({
-    eventTime: row.event_time,
-    type: row.type,
-    recipientId: row.recipient_id,
-    buyerId: row.buyer_id,
-    payload: row.payload || {},
-  }))
-
-  const recipients = (recipientsRes.error ? [] : recipientsRes.data || []).map((row: any) => {
-    const buyer = row.buyer
-      ? {
-          ...row.buyer,
-          email: row.buyer.email ?? row.buyer.email_address ?? null,
-          phone: row.buyer.phone ?? row.buyer.phone_number ?? null,
-          fname: row.buyer.fname ?? row.buyer.first_name ?? null,
-          lname: row.buyer.lname ?? row.buyer.last_name ?? null,
-          full_name: row.buyer.full_name ?? null,
-        }
-      : null
-    return {
-      id: row.id,
-      buyer_id: row.buyer_id,
-      email: buyer?.email ?? null,
-      status: row.status,
-      sent_at: row.sent_at,
-      delivered_at: row.delivered_at,
-      opened_at: row.opened_at,
-      clicked_at: row.clicked_at,
-      bounced_at: row.bounced_at,
-      complained_at: row.complained_at,
-      unsubscribed_at: row.unsubscribed_at,
-      error: row.error,
-      buyer,
-    }
-  })
-
-  return NextResponse.json({
-    summary,
-    rates,
-    timeline,
-    topLinks,
-    recentEvents,
-    recipients,
-  })
+  const summary = buildSummary(summaryRes.data || [], (recipientSummaryRes.data || [])[0] || {}, buildBounceBreakdown(bounceBreakdownRes.data || []))
+  return NextResponse.json({ channel: "email", summary, rates: buildRates(summary), timeline: (timelineRes.data || []).map((row: any) => ({ bucket: row.bucket, opens: Number(row.opens) || 0, clicks: Number(row.clicks) || 0 })), topLinks: (linksRes.data || []).map((row: any) => ({ url: row.url, totalClicks: Number(row.total_clicks) || 0, uniqueClickers: Number(row.unique_clickers) || 0 })), recentEvents: (recentRes.data || []).map((row: any) => ({ eventTime: row.event_time, type: row.type, recipientId: row.recipient_id, buyerId: row.buyer_id, payload: row.payload || {} })), recipients })
 }
 
-type CampaignSummary = {
-  recipients: number
-  sent: number
-  delivered: number
-  uniqueOpens: number
-  totalOpens: number
-  uniqueClicks: number
-  totalClicks: number
-  bounces: number
-  complaints: number
-  unsubscribes: number
-  errors: number
-  permanentBounces: number
-  transientBounces: number
-}
-
-function buildSummary(rows: any[], recipientSummary: any, bounceBreakdown: BounceBreakdown): CampaignSummary {
-  const totals: Record<string, { total: number; unique: number }> = {}
-  rows.forEach((r) => {
-    const key = (r.event_type || "").toLowerCase()
-    totals[key] = {
-      total: Number(r.total) || 0,
-      unique: Number(r.unique_recipients) || 0,
-    }
-  })
-
-  const sent = Number(
-    recipientSummary?.sent ??
-      totals["send"]?.total ??
-      totals["sent"]?.total ??
-      0,
-  )
-  const delivered = Number(
-    recipientSummary?.delivered ??
-      totals["delivery"]?.total ??
-      totals["delivered"]?.total ??
-      0,
-  )
-  const totalOpens = Number(totals["open"]?.total || 0)
-  const uniqueOpens = Number(totals["open"]?.unique || 0)
-  const totalClicks = Number(totals["click"]?.total || 0)
-  const uniqueClicks = Number(totals["click"]?.unique || 0)
-  const bounces = Number(recipientSummary?.bounced ?? totals["bounce"]?.total ?? 0)
-  const complaints = Number(recipientSummary?.complained ?? totals["complaint"]?.total ?? 0)
-  const unsubscribes = Number(
-    recipientSummary?.unsubscribed ??
-      totals["unsubscribe"]?.total ??
-      totals["unsub"]?.total ??
-      0,
-  )
-  const errors = Number(recipientSummary?.errors ?? 0)
-
-  return {
-    recipients: Number(recipientSummary?.total ?? 0),
-    sent,
-    delivered,
-    uniqueOpens,
-    totalOpens,
-    uniqueClicks,
-    totalClicks,
-    bounces,
-    complaints,
-    unsubscribes,
-    errors,
-    permanentBounces: bounceBreakdown.permanent,
-    transientBounces: bounceBreakdown.transient,
-  }
-}
-
-type BounceBreakdown = {
-  permanent: number
-  transient: number
-  other: number
-}
-
-function buildBounceBreakdown(rows: any[]): BounceBreakdown {
-  return rows.reduce(
-    (acc: BounceBreakdown, row: any) => {
-      const payload = row?.payload || {}
-      const bounce = payload?.bounce || payload?.Bounce || payload?.notification?.bounce || {}
-      const typeRaw =
-        bounce?.bounceType ||
-        bounce?.BounceType ||
-        bounce?.type ||
-        bounce?.notificationType ||
-        ""
-      const type = (typeRaw || "").toString().toLowerCase()
-      if (type.includes("permanent")) {
-        acc.permanent += 1
-      } else if (type.includes("transient") || type.includes("temporary")) {
-        acc.transient += 1
-      } else if (type) {
-        acc.other += 1
-      }
-      return acc
-    },
-    { permanent: 0, transient: 0, other: 0 },
-  )
-}
-
-type CampaignRates = {
-  deliveryRate: number
-  openRate: number
-  ctr: number
-  clickToOpen: number
-  bounceRate: number
-  unsubRate: number
-  complaintRate: number
-}
-
-function buildRates(summary: CampaignSummary): CampaignRates {
-  const rateDenominator = summary.delivered || summary.sent || 0
-  const deliveryRate = summary.sent ? (summary.delivered / summary.sent) * 100 : 0
-  const openRate = rateDenominator ? (summary.uniqueOpens / rateDenominator) * 100 : 0
-  const ctr = rateDenominator ? (summary.uniqueClicks / rateDenominator) * 100 : 0
-  const bounceRate = rateDenominator ? (summary.bounces / rateDenominator) * 100 : 0
-  const unsubRate = rateDenominator ? (summary.unsubscribes / rateDenominator) * 100 : 0
-  const complaintRate = rateDenominator ? (summary.complaints / rateDenominator) * 100 : 0
-  const clickToOpen = summary.uniqueOpens
-    ? (summary.uniqueClicks / summary.uniqueOpens) * 100
-    : 0
-
-  return {
-    deliveryRate,
-    openRate,
-    ctr,
-    clickToOpen,
-    bounceRate,
-    unsubRate,
-    complaintRate,
-  }
-}
+type CampaignSummary = { recipients: number; sent: number; delivered: number; uniqueOpens: number; totalOpens: number; uniqueClicks: number; totalClicks: number; bounces: number; complaints: number; unsubscribes: number; errors: number; permanentBounces: number; transientBounces: number }
+type BounceBreakdown = { permanent: number; transient: number; other: number }
+function buildBounceBreakdown(rows: any[]): BounceBreakdown { return rows.reduce((acc: BounceBreakdown, row: any) => { const type = (((row?.payload || {})?.bounce || {}).bounceType || "").toString().toLowerCase(); if (type.includes("permanent")) acc.permanent += 1; else if (type.includes("transient") || type.includes("temporary")) acc.transient += 1; else if (type) acc.other += 1; return acc }, { permanent: 0, transient: 0, other: 0 }) }
+function buildSummary(rows: any[], recipientSummary: any, bounceBreakdown: BounceBreakdown): CampaignSummary { const totals: Record<string, { total: number; unique: number }> = {}; rows.forEach((r) => { const key = (r.event_type || "").toLowerCase(); totals[key] = { total: Number(r.total) || 0, unique: Number(r.unique_recipients) || 0 } }); return { recipients: Number(recipientSummary?.total ?? 0), sent: Number(recipientSummary?.sent ?? totals["send"]?.total ?? totals["sent"]?.total ?? 0), delivered: Number(recipientSummary?.delivered ?? totals["delivery"]?.total ?? 0), uniqueOpens: Number(totals["open"]?.unique || 0), totalOpens: Number(totals["open"]?.total || 0), uniqueClicks: Number(totals["click"]?.unique || 0), totalClicks: Number(totals["click"]?.total || 0), bounces: Number(recipientSummary?.bounced ?? totals["bounce"]?.total ?? 0), complaints: Number(recipientSummary?.complained ?? totals["complaint"]?.total ?? 0), unsubscribes: Number(recipientSummary?.unsubscribed ?? totals["unsubscribe"]?.total ?? 0), errors: Number(recipientSummary?.errors ?? 0), permanentBounces: bounceBreakdown.permanent, transientBounces: bounceBreakdown.transient } }
+function buildRates(summary: CampaignSummary) { const d = summary.delivered || summary.sent || 0; return { deliveryRate: summary.sent ? (summary.delivered / summary.sent) * 100 : 0, openRate: d ? (summary.uniqueOpens / d) * 100 : 0, ctr: d ? (summary.uniqueClicks / d) * 100 : 0, clickToOpen: summary.uniqueOpens ? (summary.uniqueClicks / summary.uniqueOpens) * 100 : 0, bounceRate: d ? (summary.bounces / d) * 100 : 0, unsubRate: d ? (summary.unsubscribes / d) * 100 : 0, complaintRate: d ? (summary.complaints / d) * 100 : 0 } }
