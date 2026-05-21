@@ -3,6 +3,12 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  webpack: (config) => {
+    config.resolve = config.resolve || {}
+    config.resolve.alias = config.resolve.alias || {}
+    config.resolve.alias["@templatical/media-library"] = false
+    return config
+  },
   experimental: {
     outputFileTracingIncludes: {
       // Ensure ffmpeg binary is bundled for any route that uses it

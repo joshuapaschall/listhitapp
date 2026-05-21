@@ -1,22 +1,27 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { ArrowLeft, CheckCircle2, Circle } from "lucide-react"
 import { toast } from "sonner"
 import CampaignStatusBadge from "@/components/campaigns/campaign-status-badge"
 import AudienceFilterSummaryCard from "@/components/campaigns/audience-filter-summary-card"
 import RecipientsPreviewSheet from "@/components/campaigns/recipients-preview-sheet"
-import EmailBuilder, { type EmailBuilderValue } from "@/components/email-builder/email-builder"
+import dynamic from "next/dynamic"
+import type { TemplaticalEmailEditorHandle } from "@/components/campaigns/email/templatical-email-editor"
 import GroupTreeSelector from "@/components/buyers/group-tree-selector"
 import { readAudienceSnapshot, clearAudienceSnapshot, type CampaignAudienceSnapshot } from "@/lib/campaign-audience"
 import { supabaseBrowser } from "@/lib/supabase-browser"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
 import { BuyerService } from "@/services/buyer-service"
+
+
+const TemplaticalEmailEditor = dynamic(() => import("@/components/campaigns/email/templatical-email-editor"), {
+  ssr: false,
+})
 
 export default function CampaignComposeView({ initialCampaign }: { initialCampaign: any }) {
   const router = useRouter()
@@ -28,7 +33,7 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
   const [hasPrefillSnapshot, setHasPrefillSnapshot] = useState<CampaignAudienceSnapshot | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [contentSheetOpen, setContentSheetOpen] = useState(false)
-  const [builderValue, setBuilderValue] = useState<EmailBuilderValue>({ subject: campaign.subject || "", html: campaign.message || "", blocks: [], markdown: "", previewText: campaign.preview_text || "", format: "blocks" })
+  const editorRef = useRef<TemplaticalEmailEditorHandle>(null)
   const [resolvedGroupBuyerIds, setResolvedGroupBuyerIds] = useState<string[]>([])
 
   useEffect(() => {
@@ -128,6 +133,25 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
     }
   }
 
+  const onSaveContent = async () => {
+    const editor = editorRef.current
+    if (!editor) return
+    const design = editor.getContent()
+    const mjml = await editor.toMjml()
+    const res = await fetch("/api/campaigns/email/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mjml }),
+    })
+    if (!res.ok) {
+      toast.error("Failed to render email")
+      return
+    }
+    const { html } = await res.json()
+    update({ message: html, design_json: design, mjml })
+    setContentSheetOpen(false)
+  }
+
   const CardRow = ({ title, summary, valid, id, ctaText, children }: any) => (
     <Card className="overflow-hidden">
       <button onClick={() => setExpandedCard(expandedCard === id ? null : id)} className="w-full flex items-center justify-between p-5 hover:bg-muted/40 transition-colors text-left">
@@ -152,7 +176,7 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
       <CardRow id="sendTime" title="Send time" valid={sendTimeValid} ctaText="Set send time" summary={campaign.scheduled_at ? `Scheduled for ${new Date(campaign.scheduled_at).toLocaleString()}` : "Send immediately when you click Send"}><Input type="datetime-local" onChange={(e) => update({ scheduled_at: e.target.value ? new Date(e.target.value).toISOString() : null })} /></CardRow>
       <CardRow id="content" title="Content" valid={contentValid} ctaText="Design email" summary={contentValid ? `Email designed — ${(campaign.message || "").split(/\s+/).filter(Boolean).length} words` : "Design the email body"}><Button onClick={() => setContentSheetOpen(true)}>Open builder</Button></CardRow>
     </main>
-    <Sheet open={contentSheetOpen} onOpenChange={setContentSheetOpen}><SheetContent className="w-full sm:max-w-full"><div className="flex justify-between mb-4"><Button variant="ghost" onClick={() => setContentSheetOpen(false)}>Cancel</Button><Button onClick={() => { update({ message: builderValue.html, subject: builderValue.subject, preview_text: builderValue.previewText }); setContentSheetOpen(false) }}>Save & Close</Button></div><EmailBuilder value={builderValue} onChange={setBuilderValue} /></SheetContent></Sheet>
+    <Sheet open={contentSheetOpen} onOpenChange={setContentSheetOpen}><SheetContent className="w-full sm:max-w-full"><div className="flex h-full flex-col"><div className="mb-4 flex justify-between"><Button variant="ghost" onClick={() => setContentSheetOpen(false)}>Cancel</Button><Button onClick={onSaveContent}>Save & Close</Button></div><div className="min-h-0 flex-1"><TemplaticalEmailEditor ref={editorRef} initialContent={campaign.design_json ?? null} onChange={(content) => update({ design_json: content })} /></div></div></SheetContent></Sheet>
     <RecipientsPreviewSheet open={previewOpen} onOpenChange={setPreviewOpen} buyerIds={hasPrefillSnapshot?.buyerIds || []} />
   </div>
 }

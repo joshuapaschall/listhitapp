@@ -6,7 +6,7 @@ import { createLogger } from "@/lib/logger"
 const log = createLogger("api:campaigns:patch")
 
 const allowed = new Set([
-  "name", "subject", "message", "group_ids", "buyer_ids", "scheduled_at", "timezone", "run_from", "run_until", "weekday_only", "media_url", "send_to_all_numbers", "from_name", "from_email", "status",
+  "name", "subject", "message", "group_ids", "buyer_ids", "scheduled_at", "timezone", "run_from", "run_until", "weekday_only", "media_url", "send_to_all_numbers", "from_name", "from_email", "status", "design_json", "mjml",
 ])
 
 export async function PATCH(req: Request, { params }: { params: { campaignId: string } }) {

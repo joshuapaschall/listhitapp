@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
   const timestamp = Date.now()
   const rand = Math.random().toString(36).slice(2, 8)
   const sanitized = body.name.replace(/[^a-zA-Z0-9._-]/g, "_")
-  const path = `spike/${timestamp}-${rand}-${sanitized}`
+  const path = `campaigns/email/${timestamp}-${rand}-${sanitized}`
 
   const { data, error } = await supabaseAdmin.storage.from(BUCKET).createSignedUploadUrl(path)
 
