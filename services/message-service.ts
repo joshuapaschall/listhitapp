@@ -111,3 +111,17 @@ export async function countUnreadThreads(): Promise<number> {
   if (error) throw error
   return count || 0
 }
+
+
+export async function getThreadByBuyer(buyerId: string): Promise<ThreadWithBuyer | null> {
+  const { data, error } = await supabase
+    .from("message_threads")
+    .select("*, buyers(id,fname,lname,full_name)")
+    .eq("buyer_id", buyerId)
+    .is("deleted_at", null)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  return (data as ThreadWithBuyer) || null
+}
