@@ -24,6 +24,7 @@ import type { Buyer } from "@/lib/supabase";
 import type { FromNumber } from "@/lib/telnyx/numbers";
 import { isDialableFrom } from "@/lib/telnyx/numbers";
 import { BuyerService } from "@/services/buyer-service";
+import { formatPhoneDisplay } from "@/lib/dedup-utils";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useAgentTelnyx } from "./AgentTelnyxProvider";
 import { Loader2, Phone, PhoneOutgoing, Search, User } from "lucide-react";
@@ -190,13 +191,6 @@ export function OutboundDialer() {
     return buyer.full_name || `${buyer.fname || ""} ${buyer.lname || ""}`.trim() || "Unnamed";
   };
 
-  const formatPhoneDisplay = (phone: string) => {
-    const cleaned = phone.replace(/\D/g, "");
-    if (cleaned.length === 10) {
-      return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
-    }
-    return phone;
-  };
 
   const canMakeCall = status === "idle" && !activeCall;
   // const callButtonDisabled = !canMakeCall || loading || !phoneNumber || !selectedDialable;
