@@ -40,7 +40,6 @@ export async function processTelnyxStatusEvent(body: any): Promise<Response> {
 
   const updates: Record<string, any> = {
     status,
-    updated_at: new Date().toISOString(),
   }
 
   if (errorDetail) {
