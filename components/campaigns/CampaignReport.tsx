@@ -33,9 +33,11 @@ export default function CampaignReport({ campaign }: { campaign: Campaign }) {
   }, [campaign.id, qc])
 
   return <div className="space-y-6 p-6">
-    <div className="sticky top-0 z-20 rounded-xl border bg-background/90 backdrop-blur p-4 flex flex-wrap items-center gap-3 justify-between">
-      <div className="flex items-center gap-3"><Button asChild variant="ghost" size="icon"><Link href="/campaigns"><ArrowLeft className="h-4 w-4" /></Link></Button><div><h1 className="text-2xl font-semibold">{campaign.name}</h1><div className="text-sm text-muted-foreground">Sent date: {campaign.scheduled_at || campaign.created_at || "-"}</div></div><CampaignStatusBadge status={campaign.status} /><Badge variant="secondary" className="gap-2">{campaign.channel === "sms" ? <MessageSquare className="h-3 w-3" /> : <Mail className="h-3 w-3" />}{campaign.channel.toUpperCase()}</Badge></div>
+    <div className="sticky top-0 z-20 rounded-xl border bg-background/90 p-4 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/80 md:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex items-center gap-3"><Button asChild variant="ghost" size="icon"><Link href="/campaigns"><ArrowLeft className="h-4 w-4" /></Link></Button><div><h1 className="text-2xl font-semibold tracking-tight">{campaign.name}</h1><div className="text-sm text-muted-foreground">Sent date: {campaign.scheduled_at || campaign.created_at || "-"}</div></div><CampaignStatusBadge status={campaign.status} /><Badge variant="secondary" className="gap-2">{campaign.channel === "sms" ? <MessageSquare className="h-3 w-3" /> : <Mail className="h-3 w-3" />}{campaign.channel.toUpperCase()}</Badge></div>
       <Button variant="outline" onClick={() => query.refetch()} disabled={query.isFetching}><RefreshCw className={`mr-2 h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />Refresh</Button>
+      </div>
     </div>
     {query.isLoading ? <div className="space-y-3"><Skeleton className="h-40 w-full" /><Skeleton className="h-80 w-full" /></div> : null}
     {query.isError ? <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm">Unable to load analytics. <Button variant="link" onClick={() => query.refetch()} className="px-1">Retry</Button></div> : null}
