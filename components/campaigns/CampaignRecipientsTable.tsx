@@ -10,7 +10,37 @@ import { Button } from "@/components/ui/button"
 
 export type RecipientRow = any
 
+type StatusOption = {
+  value: string
+  label: string
+  predicate: (recipient: RecipientRow) => boolean
+}
+
 const PAGE_SIZE = 50
+
+function getStatusOptions(channel: "sms" | "email"): StatusOption[] {
+  if (channel === "sms") {
+    return [
+      { value: "all", label: "All", predicate: () => true },
+      { value: "sent", label: "Sent", predicate: (r) => !!r?.sent_at },
+      { value: "delivered", label: "Delivered", predicate: (r) => !!r?.delivered_at || /delivered/.test((r?.status || "").toLowerCase()) },
+      { value: "clicked", label: "Clicked", predicate: (r) => !!r?.clicked_at },
+      { value: "replied", label: "Replied", predicate: (r) => !!r?.replied_at },
+      { value: "failed", label: "Failed / Undelivered", predicate: (r) => (/(fail|undeliver|error)/.test((r?.status || "").toLowerCase()) || !!r?.error) && !r?.delivered_at },
+      { value: "optedout", label: "Opted-out", predicate: (r) => !!r?.unsubscribed_at || /(opt|unsub)/.test((r?.status || "").toLowerCase()) },
+    ]
+  }
+
+  return [
+    { value: "all", label: "All", predicate: () => true },
+    { value: "delivered", label: "Delivered", predicate: (r) => !!r?.delivered_at },
+    { value: "opened", label: "Opened", predicate: (r) => !!r?.opened_at },
+    { value: "clicked", label: "Clicked", predicate: (r) => !!r?.clicked_at },
+    { value: "bounced", label: "Bounced", predicate: (r) => !!r?.bounced_at || /bounce/.test((r?.status || "").toLowerCase()) },
+    { value: "complained", label: "Complained", predicate: (r) => !!r?.complained_at || /complaint/.test((r?.status || "").toLowerCase()) },
+    { value: "unsubscribed", label: "Unsubscribed", predicate: (r) => !!r?.unsubscribed_at || /unsub/.test((r?.status || "").toLowerCase()) },
+  ]
+}
 
 export function getRecipientIdentity(recipient: RecipientRow) {
   const buyer = recipient?.buyer || {}
@@ -54,7 +84,8 @@ export default function CampaignRecipientsTable({ channel, recipients, onRowClic
   const [page, setPage] = useState(1)
   const [sort, setSort] = useState<{ key: string; dir: "asc" | "desc" }>({ key: "recipient", dir: "asc" })
 
-  const statuses = useMemo(() => Array.from(new Set((recipients || []).map((r) => r?.status).filter(Boolean))), [recipients])
+  const statusOptions = useMemo(() => getStatusOptions(channel), [channel])
+  const selectedStatusOption = useMemo(() => statusOptions.find((option) => option.value === statusFilter) || statusOptions[0], [statusFilter, statusOptions])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -62,10 +93,17 @@ export default function CampaignRecipientsTable({ channel, recipients, onRowClic
       const id = getRecipientIdentity(r)
       const hay = `${id.name} ${id.email} ${id.phone} ${id.company}`.toLowerCase()
       const matchesQ = !q || hay.includes(q)
-      const matchesStatus = statusFilter === "all" || (r?.status || "") === statusFilter
+      const matchesStatus = selectedStatusOption?.predicate(r) ?? true
       return matchesQ && matchesStatus
     })
-  }, [query, recipients, statusFilter])
+  }, [query, recipients, selectedStatusOption])
+
+  const statusCounts = useMemo(() => {
+    return statusOptions.reduce<Record<string, number>>((acc, option) => {
+      acc[option.value] = (recipients || []).filter((recipient) => option.predicate(recipient)).length
+      return acc
+    }, {})
+  }, [recipients, statusOptions])
 
   const sorted = useMemo(() => {
     const rows = [...filtered]
@@ -98,13 +136,12 @@ export default function CampaignRecipientsTable({ channel, recipients, onRowClic
       <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1) }}>
         <SelectTrigger className="w-full sm:w-[220px]"><SelectValue placeholder="All statuses" /></SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">All statuses</SelectItem>
-          {statuses.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+          {statusOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label} ({statusCounts[option.value] || 0})</SelectItem>)}
         </SelectContent>
       </Select>
     </div>
     <p className="text-sm text-muted-foreground">Showing {filtered.length} of {recipients?.length || 0} recipients</p>
-    {recipients?.length === 0 ? <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">No recipients yet.</div> : <div className="overflow-x-auto rounded-lg border"><Table><TableHeader className="sticky top-0 z-10 bg-card"><TableRow><TableHead>{sortHead("Recipient", "recipient")}</TableHead><TableHead>{sortHead("Status", "status")}</TableHead><TableHead>{sortHead("Delivered", "delivered_at")}</TableHead>{channel === "email" ? <TableHead>{sortHead("Opened", "opened_at")}</TableHead> : null}<TableHead>{sortHead("Clicked", "clicked_at")}</TableHead>{channel === "sms" ? <TableHead>{sortHead("Replied", "replied_at")}</TableHead> : <TableHead>{sortHead("Bounced", "bounced_at")}</TableHead>}{channel === "email" ? <TableHead>{sortHead("Unsubscribed", "unsubscribed_at")}</TableHead> : <><TableHead>{sortHead("Segments", "segments")}</TableHead><TableHead>{sortHead("Cost", "cost")}</TableHead><TableHead>Carrier</TableHead><TableHead>Issue</TableHead></>}</TableRow></TableHeader><TableBody>{pageRows.map((r) => { const id = getRecipientIdentity(r); return <TableRow key={r.id} className="cursor-pointer hover:bg-muted/50" onClick={() => onRowClick(r)}><TableCell><div className="font-medium">{id.name}</div><div className="text-xs text-muted-foreground">{channel === "sms" ? (id.phone || "—") : (id.email || "—")}</div></TableCell><TableCell><Badge className={getStatusBadgeClass(r?.status)}>{r?.status || "unknown"}</Badge></TableCell><TableCell>{eventCell(r?.delivered_at)}</TableCell>{channel === "email" ? <TableCell>{eventCell(r?.opened_at)}</TableCell> : null}<TableCell>{eventCell(r?.clicked_at)}</TableCell>{channel === "sms" ? <TableCell>{eventCell(r?.replied_at)}</TableCell> : <TableCell>{eventCell(r?.bounced_at)}</TableCell>}{channel === "email" ? <TableCell>{eventCell(r?.unsubscribed_at)}</TableCell> : <><TableCell>{r?.actual_segments ?? "—"}</TableCell><TableCell>{formatCost(r?.actual_cost_usd)}</TableCell><TableCell>{r?.recipient_carrier || "—"}</TableCell><TableCell>{hasFailureSignal(r) ? <span title={r?.error || "Delivery issue"}><AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" /></span> : <span className="text-muted-foreground">—</span>}</TableCell></>}</TableRow> })}</TableBody></Table></div>}
+    {recipients?.length === 0 ? <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">No recipients yet.</div> : <div className="overflow-x-auto overflow-hidden rounded-lg border"><Table><TableHeader className="sticky top-0 z-10 bg-card"><TableRow><TableHead className="whitespace-nowrap">{sortHead("Recipient", "recipient")}</TableHead><TableHead className="whitespace-nowrap">{sortHead("Status", "status")}</TableHead><TableHead className="whitespace-nowrap">{sortHead("Delivered", "delivered_at")}</TableHead>{channel === "email" ? <TableHead className="whitespace-nowrap">{sortHead("Opened", "opened_at")}</TableHead> : null}<TableHead className="whitespace-nowrap">{sortHead("Clicked", "clicked_at")}</TableHead>{channel === "sms" ? <TableHead className="whitespace-nowrap">{sortHead("Replied", "replied_at")}</TableHead> : <TableHead className="whitespace-nowrap">{sortHead("Bounced", "bounced_at")}</TableHead>}{channel === "email" ? <TableHead className="whitespace-nowrap">{sortHead("Unsubscribed", "unsubscribed_at")}</TableHead> : <><TableHead className="whitespace-nowrap">{sortHead("Segments", "segments")}</TableHead><TableHead className="whitespace-nowrap">{sortHead("Cost", "cost")}</TableHead><TableHead className="whitespace-nowrap">Carrier</TableHead><TableHead className="whitespace-nowrap">Issue</TableHead></>}</TableRow></TableHeader><TableBody>{pageRows.length === 0 ? <TableRow><TableCell colSpan={channel === "sms" ? 9 : 7} className="text-center text-sm text-muted-foreground">No recipients match this filter.</TableCell></TableRow> : pageRows.map((r) => { const id = getRecipientIdentity(r); return <TableRow key={r.id} className="cursor-pointer hover:bg-muted/50" onClick={() => onRowClick(r)}><TableCell><div className="max-w-[200px] truncate font-medium" title={id.name}>{id.name}</div><div className="truncate text-xs text-muted-foreground" title={channel === "sms" ? (id.phone || "—") : (id.email || "—")}>{channel === "sms" ? (id.phone || "—") : (id.email || "—")}</div></TableCell><TableCell><Badge className={getStatusBadgeClass(r?.status)}>{r?.status || "unknown"}</Badge></TableCell><TableCell>{eventCell(r?.delivered_at)}</TableCell>{channel === "email" ? <TableCell>{eventCell(r?.opened_at)}</TableCell> : null}<TableCell>{eventCell(r?.clicked_at)}</TableCell>{channel === "sms" ? <TableCell>{eventCell(r?.replied_at)}</TableCell> : <TableCell>{eventCell(r?.bounced_at)}</TableCell>}{channel === "email" ? <TableCell>{eventCell(r?.unsubscribed_at)}</TableCell> : <><TableCell>{r?.actual_segments ?? "—"}</TableCell><TableCell>{formatCost(r?.actual_cost_usd)}</TableCell><TableCell className="max-w-[160px]"><span className="block truncate" title={r?.recipient_carrier || ""}>{r?.recipient_carrier || "—"}</span></TableCell><TableCell>{hasFailureSignal(r) ? <span title={r?.error || "Delivery issue"}><AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" /></span> : <span className="text-muted-foreground">—</span>}</TableCell></>}</TableRow> })}</TableBody></Table></div>}
     {filtered.length > PAGE_SIZE ? <div className="flex items-center justify-end gap-3"><Button size="sm" variant="outline" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1}>Prev</Button><span className="text-sm text-muted-foreground">Page {safePage} of {totalPages}</span><Button size="sm" variant="outline" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages}>Next</Button></div> : null}
   </div>
 }

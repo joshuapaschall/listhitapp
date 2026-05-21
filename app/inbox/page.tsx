@@ -1,13 +1,35 @@
 // @ts-nocheck
 "use client";
 
-import { useState } from "react";
-import { ThreadWithBuyer } from "@/services/message-service";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { getThreadByBuyer, ThreadWithBuyer } from "@/services/message-service";
+import { useToast } from "@/components/ui/use-toast";
 import MainLayout from "@/components/layout/main-layout";
 import { ListPane, ConversationPane, QuickActions } from "@/components/inbox";
 
-export default function InboxPage() {
+function InboxPageContent() {
   const [thread, setThread] = useState<ThreadWithBuyer | null>(null);
+  const searchParams = useSearchParams();
+  const buyerId = searchParams.get("buyerId");
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const loadThread = async () => {
+      if (!buyerId) return;
+      const foundThread = await getThreadByBuyer(buyerId);
+      if (foundThread) {
+        setThread(foundThread);
+        return;
+      }
+      toast({
+        title: "No conversation yet",
+        description: "This buyer doesn't have an SMS conversation.",
+      });
+    };
+
+    loadThread();
+  }, [buyerId, toast]);
 
   return (
     <MainLayout>
@@ -21,5 +43,13 @@ export default function InboxPage() {
         <QuickActions>{/* placeholder for quick actions */}</QuickActions>
       </div>
     </MainLayout>
+  );
+}
+
+export default function InboxPage() {
+  return (
+    <Suspense fallback={null}>
+      <InboxPageContent />
+    </Suspense>
   );
 }
