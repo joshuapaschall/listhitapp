@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase"
+import { supabaseAdmin } from "@/lib/supabase"
 
 /**
  * Processes a Telnyx outbound message lifecycle event (message.sent, message.delivered,
@@ -27,7 +27,7 @@ export async function processTelnyxStatusEvent(body: any): Promise<Response> {
     return new Response("Missing params", { status: 400 })
   }
 
-  const { data: existing } = await supabase
+  const { data: existing } = await supabaseAdmin
     .from("campaign_recipients")
     .select("id,delivered_at,rejected_at,delivery_delayed_at,actual_cost_usd")
     .eq("provider_id", messageId)
@@ -92,7 +92,7 @@ export async function processTelnyxStatusEvent(body: any): Promise<Response> {
     }
   }
 
-  const { error } = await supabase
+  const { error } = await supabaseAdmin
     .from("campaign_recipients")
     .update(updates)
     .eq("id", existing.id)

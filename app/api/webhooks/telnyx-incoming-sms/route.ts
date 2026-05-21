@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { supabaseAdmin } from "@/lib/supabase"
 import { assertServer } from "@/utils/assert-server"
 import { ensurePublicMediaUrls } from "@/utils/mms.server"
 import { normalizePhone, formatPhoneE164 } from "@/lib/dedup-utils"
@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
 
   const isStop = /^stop/i.test(text)
 
-  const { data: buyers, error: buyerErr } = await supabase
+  const { data: buyers, error: buyerErr } = await supabaseAdmin
     .from("buyers")
     .select("id, can_receive_sms")
     .or(orClause)
@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
     let campaignId: string | null = null
     let lastCampaignRecipient: { id: string; replied_at: string | null; unsubscribed_at: string | null } | null = null
     if (buyerId) {
-      const { data: rec } = await supabase
+      const { data: rec } = await supabaseAdmin
         .from("campaign_recipients")
         .select("id, campaign_id, replied_at, unsubscribed_at")
         .eq("buyer_id", buyerId)
@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { data: thread, error: threadErr } = buyerId
-      ? await supabase
+      ? await supabaseAdmin
           .from("message_threads")
           .upsert(
             {
@@ -179,7 +179,7 @@ export async function POST(request: NextRequest) {
       return new NextResponse("Supabase error", { status: 500 })
     }
 
-    const { error: msgErr } = await supabase.from("messages").insert({
+    const { error: msgErr } = await supabaseAdmin.from("messages").insert({
       thread_id: thread.id,
       buyer_id: buyerId,
       direction: "inbound",
@@ -208,7 +208,7 @@ export async function POST(request: NextRequest) {
         recipientUpdates.unsubscribed_at = new Date().toISOString()
       }
       if (Object.keys(recipientUpdates).length > 0) {
-        const { error: crUpdateErr } = await supabase
+        const { error: crUpdateErr } = await supabaseAdmin
           .from("campaign_recipients")
           .update(recipientUpdates)
           .eq("id", lastCampaignRecipient.id)
@@ -220,7 +220,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (isStop && buyerIds.length) {
-    const { error: updErr } = await supabase
+    const { error: updErr } = await supabaseAdmin
       .from("buyers")
       .update({ can_receive_sms: false })
       .in("id", buyerIds)
