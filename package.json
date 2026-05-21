@@ -87,6 +87,7 @@
     "fluent-ffmpeg": "^2.1.2",
     "googleapis": "latest",
     "input-otp": "1.4.1",
+    "libphonenumber-js": "^1.13.2",
     "lucide-react": "^0.454.0",
     "mapbox-gl": "^2.15.0",
     "mimetext": "^3.0.28",
