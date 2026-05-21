@@ -46,6 +46,7 @@ export interface EmailContactPayload {
   email: string
   firstName?: string
   lastName?: string
+  phone?: string
   recipientId?: string
   buyerId?: string
 }
@@ -179,6 +180,7 @@ export async function queueEmailCampaign(
         email: contact.email,
         firstName: contact.firstName,
         lastName: contact.lastName,
+        phone: contact.phone,
         recipientId: contact.recipientId,
         buyerId: contact.buyerId,
       },
@@ -308,14 +310,14 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
         throw new Error("Missing contact payload for email job")
       }
       currentContactEmail = contact.email
-      const context: Record<string, any> = {
+      const buyer = {
         fname: contact.firstName,
         lname: contact.lastName,
-        first_name: contact.firstName,
-        last_name: contact.lastName,
+        phone: contact.phone,
+        email: contact.email,
       }
-      const subject = renderTemplate(payload.subject, context)
-      let html = renderTemplate(payload.html, context)
+      const subject = renderTemplate(payload.subject, buyer)
+      let html = renderTemplate(payload.html, buyer)
       if (!emailShortlinksDisabled()) {
         try {
           const { replaceUrlsWithShortLinks } = await import("./shortlink-service")
