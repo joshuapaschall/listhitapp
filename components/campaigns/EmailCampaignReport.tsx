@@ -5,15 +5,20 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { Area, AreaChart, CartesianGrid, Legend, XAxis, YAxis } from "recharts"
 import { AlertTriangle, Eye, Link2, MailCheck, MousePointerClick, ShieldAlert, TrendingUp, Unplug } from "lucide-react"
+import { useState } from "react"
+import CampaignRecipientsTable from "./CampaignRecipientsTable"
+import RecipientDrilldownSheet from "./RecipientDrilldownSheet"
 
 const num = (n: number) => new Intl.NumberFormat().format(n || 0)
 const pct = (n: number) => `${(n || 0).toFixed(1)}%`
 
-export default function EmailCampaignReport({ analytics }: any) {
+export default function EmailCampaignReport({ campaign, analytics }: any) {
   const s = analytics?.summary || {}
   const r = analytics?.rates || {}
   const timeline = analytics?.timeline || []
   const topLinks = analytics?.topLinks || []
+  const [selected, setSelected] = useState<any | null>(null)
+  const [sheetOpen, setSheetOpen] = useState(false)
 
   const funnel = [
     { label: "Recipients", value: s.recipients || 0 },
@@ -47,7 +52,8 @@ export default function EmailCampaignReport({ analytics }: any) {
       <Card className="rounded-xl"><CardHeader><CardTitle>Performance over time</CardTitle></CardHeader><CardContent>{timeline.length ? <ChartContainer config={{ opens: { label: "Opens", color: "hsl(var(--chart-2))" }, clicks: { label: "Clicks", color: "hsl(var(--chart-1))" } }} className="h-[300px] w-full"><AreaChart data={timeline}><defs><linearGradient id="emailOpens" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="var(--color-opens)" stopOpacity={0.3} /><stop offset="95%" stopColor="var(--color-opens)" stopOpacity={0.03} /></linearGradient><linearGradient id="emailClicks" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="var(--color-clicks)" stopOpacity={0.3} /><stop offset="95%" stopColor="var(--color-clicks)" stopOpacity={0.03} /></linearGradient></defs><CartesianGrid vertical={false} /><XAxis dataKey="bucket" hide /><YAxis allowDecimals={false} /><ChartTooltip content={<ChartTooltipContent />} /><Legend /><Area type="monotone" dataKey="opens" stroke="var(--color-opens)" fill="url(#emailOpens)" strokeWidth={2} /><Area type="monotone" dataKey="clicks" stroke="var(--color-clicks)" fill="url(#emailClicks)" strokeWidth={2} /></AreaChart></ChartContainer> : <div className="flex h-[220px] flex-col items-center justify-center rounded-lg border border-dashed text-center"><TrendingUp className="mb-2 h-5 w-5 text-muted-foreground" /><p className="text-sm font-medium">No activity recorded yet</p><p className="text-xs text-muted-foreground">Open and click events will appear once recipients engage.</p></div>}</CardContent></Card>
     </TabsContent>
     <TabsContent value="links"><Card className="rounded-xl"><CardHeader><CardTitle>Top links</CardTitle></CardHeader><CardContent className="space-y-3">{topLinks.length ? topLinks.map((l: any, i: number) => <div key={l.url} className="rounded-lg border p-3"><div className="mb-2 flex items-center justify-between gap-2"><div className="flex items-center gap-2 min-w-0"><span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-muted text-xs font-medium">{i + 1}</span><span className="truncate text-sm" title={l.url}>{l.url}</span></div><span className="text-sm tabular-nums text-muted-foreground">{num(l.totalClicks)} / {num(l.uniqueClickers)}</span></div><div className="h-1.5 rounded-full bg-muted"><div className="h-1.5 rounded-full bg-brand" style={{ width: `${((l.totalClicks || 0) / topClicks) * 100}%` }} /></div></div>) : <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground"><Link2 className="mx-auto mb-2 h-4 w-4" />No links clicked yet.</div>}</CardContent></Card></TabsContent>
-    <TabsContent value="recipients"><Card><CardContent className="pt-6 text-sm text-muted-foreground">Email delivery lifecycle</CardContent></Card></TabsContent>
+    <TabsContent value="recipients"><Card><CardContent className="pt-6"><CampaignRecipientsTable channel="email" recipients={analytics?.recipients || []} onRowClick={(r) => { setSelected(r); setSheetOpen(true) }} /></CardContent></Card></TabsContent>
     <TabsContent value="activity"><Card><CardContent className="pt-6 text-sm text-muted-foreground">{(analytics?.recentEvents || []).length} recent events</CardContent></Card></TabsContent>
+    <RecipientDrilldownSheet open={sheetOpen} onOpenChange={setSheetOpen} campaignId={campaign.id} recipient={selected} />
   </Tabs>
 }
