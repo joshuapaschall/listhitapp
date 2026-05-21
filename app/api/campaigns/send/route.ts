@@ -313,13 +313,14 @@ export async function POST(request: NextRequest) {
         if (!buyer.email || !buyer.can_receive_email || buyer.sendfox_hidden) {
           return null
         }
-        return {
-          email: buyer.email,
-          firstName: buyer.fname,
-          lastName: buyer.lname,
-          recipientId: row.id,
-          buyerId: row.buyer_id,
-        }
+      return {
+        email: buyer.email,
+        firstName: buyer.fname,
+        lastName: buyer.lname,
+        phone: buyer.phone,
+        recipientId: row.id,
+        buyerId: row.buyer_id,
+      }
       })
       .filter(Boolean) as EmailContactPayload[]
 
