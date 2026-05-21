@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase"
+import { supabaseAdmin } from "@/lib/supabase"
 import { createLogger } from "@/lib/logger"
 import { scheduleSMS, lookupCarrier } from "@/lib/sms-rate-limiter"
 import { normalizePhone, formatPhoneE164 } from "@/lib/dedup-utils"
@@ -44,7 +44,7 @@ export async function sendCampaignSMS({ buyerId, to, body, mediaUrls, dryRun, ca
 
   let fromNumber: string | null = null
   try {
-    const { data } = await supabase
+    const { data } = await supabaseAdmin
       .from("buyer_sms_senders")
       .select("from_number")
       .eq("buyer_id", buyerId)
@@ -115,7 +115,7 @@ export async function sendCampaignSMS({ buyerId, to, body, mediaUrls, dryRun, ca
       if (!fromNumber && from) {
         try {
           const normalized = formatPhoneE164(from) || from
-          await supabase
+          await supabaseAdmin
             .from("buyer_sms_senders")
             .insert([{ buyer_id: buyerId, from_number: normalized }])
           fromNumber = normalized
@@ -132,7 +132,7 @@ export async function sendCampaignSMS({ buyerId, to, body, mediaUrls, dryRun, ca
       results.push({ to: formatted, sid: data.id, from: data.from })
 
       if (!isTest) {
-        const { data: thread } = await supabase
+        const { data: thread } = await supabaseAdmin
           .from("message_threads")
           .upsert(
             {
@@ -147,7 +147,7 @@ export async function sendCampaignSMS({ buyerId, to, body, mediaUrls, dryRun, ca
           .single()
 
         if (thread) {
-          await supabase.from("messages").insert({
+          await supabaseAdmin.from("messages").insert({
             thread_id: thread.id,
             buyer_id: buyerId,
             direction: "outbound",
