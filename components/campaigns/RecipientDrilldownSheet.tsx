@@ -63,13 +63,13 @@ type RecipientDrilldownSheetProps = {
 }
 
 const statusBadgeStyles: Record<string, string> = {
-  delivered: "bg-emerald-100 text-emerald-800",
-  open: "bg-blue-100 text-blue-800",
-  click: "bg-indigo-100 text-indigo-800",
-  bounce: "bg-amber-100 text-amber-800",
-  complaint: "bg-rose-100 text-rose-800",
-  unsubscribe: "bg-slate-100 text-slate-800",
-  unsub: "bg-slate-100 text-slate-800",
+  delivered: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
+  open: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300",
+  click: "bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300",
+  bounce: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
+  complaint: "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300",
+  unsubscribe: "bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-300",
+  unsub: "bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-300",
 }
 
 function formatName(buyer?: RecipientBuyer | null) {
@@ -298,21 +298,21 @@ export default function RecipientDrilldownSheet({
             </div>
 
             <div className="grid gap-4 sm:grid-cols-3">
-              <div className="rounded-lg border bg-white p-3">
+              <div className="rounded-lg border bg-card p-3">
                 <div className="text-xs uppercase text-muted-foreground">Total opens</div>
                 <div className="text-2xl font-semibold">{totals.totalOpens}</div>
                 <div className="mt-1 text-xs text-muted-foreground">
                   Last opened: {formatDate(totals.lastOpenedAt)}
                 </div>
               </div>
-              <div className="rounded-lg border bg-white p-3">
+              <div className="rounded-lg border bg-card p-3">
                 <div className="text-xs uppercase text-muted-foreground">Total clicks</div>
                 <div className="text-2xl font-semibold">{totals.totalClicks}</div>
                 <div className="mt-1 text-xs text-muted-foreground">
                   Last clicked: {formatDate(totals.lastClickedAt)}
                 </div>
               </div>
-              <div className="rounded-lg border bg-white p-3">
+              <div className="rounded-lg border bg-card p-3">
                 <div className="text-xs uppercase text-muted-foreground">Unique links</div>
                 <div className="text-2xl font-semibold">{totals.uniqueLinks}</div>
               </div>
@@ -340,7 +340,7 @@ export default function RecipientDrilldownSheet({
               ) : (
                 <div className="space-y-3">
                   {eventTimeline.map((event) => (
-                    <div key={event.id} className="rounded-md border bg-white p-3">
+                    <div key={event.id} className="rounded-md border bg-card p-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge className={statusBadgeStyles[event.event_type] || "bg-muted text-muted-foreground"}>
                           {formatEventType(event.event_type)}
@@ -394,7 +394,7 @@ export default function RecipientDrilldownSheet({
             </div>
 
             {(bounceEvent || complaintEvent) && diagnosticDetails.length > 0 && (
-              <Collapsible className="rounded-lg border bg-white">
+              <Collapsible className="rounded-lg border bg-card">
                 <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 text-sm font-semibold">
                   Details
                   <span className="text-xs text-muted-foreground">Diagnostic info</span>
