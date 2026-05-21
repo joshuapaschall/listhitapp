@@ -141,7 +141,6 @@ export async function POST(request: NextRequest) {
         .from("campaign_recipients")
         .select("id, campaign_id, replied_at, unsubscribed_at")
         .eq("buyer_id", buyerId)
-        .eq("from_number", to)
         .order("sent_at", { ascending: false })
         .limit(1)
         .maybeSingle()

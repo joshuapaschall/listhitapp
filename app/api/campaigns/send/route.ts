@@ -430,12 +430,7 @@ export async function POST(request: NextRequest) {
           dryRun,
         })
 
-        const { data: senderRow } = await supabase
-          .from("buyer_sms_senders")
-          .select("from_number")
-          .eq("buyer_id", row.buyer_id)
-          .maybeSingle()
-        fromNumber = senderRow?.from_number || results[0]?.from || null
+        fromNumber = results[0]?.from || null
 
         providerId = results[0]?.sid || null
 
