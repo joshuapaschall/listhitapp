@@ -47,6 +47,8 @@ export interface TemplateRecord {
   name: string
   message: string
   subject?: string | null
+  design_json?: any | null
+  mjml?: string | null
   created_by?: string | null
   template_kind?: TemplateKind | null
   created_at?: string
