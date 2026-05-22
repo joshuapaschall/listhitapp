@@ -493,7 +493,7 @@ export async function POST(request: NextRequest) {
 
     const { error: statusErr } = await supabase
       .from("campaigns")
-      .update({ status: allSuccess ? "sent" : "error" })
+      .update({ status: allSuccess ? "sent" : "error", sent_at: new Date().toISOString() })
       .eq("id", campaignId)
 
     if (statusErr) {
