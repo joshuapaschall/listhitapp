@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 interface SmsPhonePreviewProps {
   message: string
   buyerIds: string[]
+  mediaUrls?: string[]
 }
 
 const FALLBACK_BUYERS: Buyer[] = [
@@ -16,7 +17,7 @@ const FALLBACK_BUYERS: Buyer[] = [
   { id: "sample2", fname: "Jane", lname: "Smith" } as Buyer,
 ]
 
-export default function SmsPhonePreview({ message, buyerIds }: SmsPhonePreviewProps) {
+export default function SmsPhonePreview({ message, buyerIds, mediaUrls = [] }: SmsPhonePreviewProps) {
   const [sampleBuyers, setSampleBuyers] = useState<Buyer[]>(FALLBACK_BUYERS)
   const [previewIndex, setPreviewIndex] = useState(0)
 
@@ -63,8 +64,13 @@ export default function SmsPhonePreview({ message, buyerIds }: SmsPhonePreviewPr
               <span className="text-xs text-muted-foreground">Now</span>
             </div>
             <div className="flex flex-col gap-1 px-3 py-3">
+              {mediaUrls.length > 0 && (
+                <div className="flex justify-end">
+                  <img src={mediaUrls[0]} alt="Attached media preview" className="max-w-[80%] rounded-2xl object-cover" style={{ maxHeight: 200 }} />
+                </div>
+              )}
               <div className="flex justify-end">
-                <div className="max-w-[80%] rounded-2xl bg-brand px-3 py-2 text-sm text-white" style={{ wordBreak: "break-word" }}>
+                <div className="max-w-[80%] rounded-2xl bg-brand px-3 py-2 text-sm text-white whitespace-pre-wrap" style={{ wordBreak: "break-word" }}>
                   {rendered || "Your message preview appears here"}
                 </div>
               </div>
