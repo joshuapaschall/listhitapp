@@ -63,18 +63,25 @@ export default function SmsPhonePreview({ message, buyerIds, mediaUrls = [] }: S
               <span className="text-xs font-medium">Messages</span>
               <span className="text-xs text-muted-foreground">Now</span>
             </div>
-            <div className="flex flex-col gap-1 px-3 py-3">
-              {mediaUrls.length > 0 && (
-                <div className="flex justify-end">
-                  <img src={mediaUrls[0]} alt="Attached media preview" className="max-w-[80%] rounded-2xl object-cover" style={{ maxHeight: 200 }} />
-                </div>
-              )}
-              <div className="flex justify-end">
-                <div className="max-w-[80%] rounded-2xl bg-brand px-3 py-2 text-sm text-white whitespace-pre-wrap" style={{ wordBreak: "break-word" }}>
-                  {rendered || "Your message preview appears here"}
+            <div className="relative">
+              <div className="max-h-[360px] overflow-y-auto scroll-smooth px-3 py-3">
+                <div className="flex flex-col gap-1">
+                  {mediaUrls.length > 0 && (
+                    <div className="flex justify-end">
+                      <div className="max-w-[80%] rounded-2xl p-1" style={{ backgroundColor: "#0A84FF" }}>
+                        <img src={mediaUrls[0]} alt="Attached media preview" className="rounded-xl object-cover" style={{ maxHeight: 200 }} />
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex justify-end">
+                    <div className="max-w-[80%] rounded-2xl px-3 py-2 text-sm text-white whitespace-pre-wrap" style={{ wordBreak: "break-word", backgroundColor: "#0A84FF" }}>
+                      {rendered || "Your message preview appears here"}
+                    </div>
+                  </div>
+                  <span className="self-end text-[10px] text-muted-foreground">Delivered</span>
                 </div>
               </div>
-              <span className="self-end text-[10px] text-muted-foreground">Delivered</span>
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-b from-transparent to-card" />
             </div>
           </div>
         </div>
