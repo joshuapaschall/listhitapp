@@ -16,12 +16,34 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { BuyerService } from "@/services/buyer-service"
 
 
 const TemplaticalEmailEditor = dynamic(() => import("@/components/campaigns/email/templatical-email-editor"), {
   ssr: false,
 })
+
+function CardRow({ id, title, summary, valid, ctaText, expandedCard, setExpandedCard, children }: {
+  id: string
+  title: string
+  summary: string
+  valid: boolean
+  ctaText: string
+  expandedCard: string | null
+  setExpandedCard: (v: any) => void
+  children: React.ReactNode
+}) {
+  return (
+    <Card className="overflow-hidden">
+      <button onClick={() => setExpandedCard(expandedCard === id ? null : id)} className="w-full flex items-center justify-between p-5 hover:bg-muted/40 transition-colors text-left">
+        <div className="flex items-center gap-3">{valid ? <CheckCircle2 className="h-5 w-5 text-brand"/> : <Circle className="h-5 w-5 text-muted-foreground"/>}<div><p className="font-medium text-base">{title}</p><p className="text-sm text-muted-foreground">{summary}</p></div></div>
+        <span className="text-sm text-brand font-medium">{expandedCard === id ? "Cancel" : valid ? "Edit" : ctaText}</span>
+      </button>
+      {expandedCard === id && <div className="border-t border-border p-5 bg-muted/20">{children}</div>}
+    </Card>
+  )
+}
 
 export default function CampaignComposeView({ initialCampaign }: { initialCampaign: any }) {
   const router = useRouter()
@@ -33,6 +55,7 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
   const [hasPrefillSnapshot, setHasPrefillSnapshot] = useState<CampaignAudienceSnapshot | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [contentSheetOpen, setContentSheetOpen] = useState(false)
+  const [sendConfirmOpen, setSendConfirmOpen] = useState(false)
   const editorRef = useRef<TemplaticalEmailEditorHandle>(null)
   const [resolvedGroupBuyerIds, setResolvedGroupBuyerIds] = useState<string[]>([])
 
@@ -99,8 +122,6 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
   const itemsMissing = [!toValid && "Recipients", !subjectValid && "Subject", !contentValid && "Content"].filter(Boolean).join(", ")
 
   const sendNow = async () => {
-    if (!confirm(`Send ${hasPrefillSnapshot?.recipientCount ?? allRecipientIds.length} emails now?`)) return
-
     // Get the logged-in user's access token. This JWT carries the `sub` claim
     // that the send route requires; the anon key does not.
     const supabase = supabaseBrowser()
@@ -126,6 +147,7 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
     })
     if (response.ok) {
       toast.success("Campaign sending…")
+      setSendConfirmOpen(false)
       router.push(`/campaigns/${campaign.id}`)
     } else {
       const body = await response.json().catch(() => ({}))
@@ -152,30 +174,34 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
     setContentSheetOpen(false)
   }
 
-  const CardRow = ({ title, summary, valid, id, ctaText, children }: any) => (
-    <Card className="overflow-hidden">
-      <button onClick={() => setExpandedCard(expandedCard === id ? null : id)} className="w-full flex items-center justify-between p-5 hover:bg-muted/40 transition-colors text-left">
-        <div className="flex items-center gap-3">{valid ? <CheckCircle2 className="h-5 w-5 text-brand"/> : <Circle className="h-5 w-5 text-muted-foreground"/>}<div><p className="font-medium text-base">{title}</p><p className="text-sm text-muted-foreground">{summary}</p></div></div>
-        <span className="text-sm text-brand font-medium">{expandedCard === id ? "Cancel" : valid ? "Edit" : ctaText}</span>
-      </button>
-      {expandedCard === id && <div className="border-t border-border p-5 bg-muted/20">{children}</div>}
-    </Card>
-  )
-
   return <div className="min-h-screen bg-background">
     <div className="sticky top-0 bg-background/80 backdrop-blur z-10 border-b border-border py-4 px-6">
       <div className="max-w-4xl mx-auto flex items-center justify-between">
         <div className="flex items-center gap-2"><Button variant="ghost" size="icon" onClick={() => router.push("/campaigns")}><ArrowLeft className="h-4 w-4" /></Button><Input className="w-auto min-w-[200px] max-w-[400px]" value={campaign.name || "Untitled campaign"} onChange={(e) => update({ name: e.target.value })} /><CampaignStatusBadge status={campaign.status} />{hasEdited && <span className="text-xs text-muted-foreground ml-2">{autosaveState === "saving" ? "Saving…" : autosaveState === "failed" ? "Save failed" : "Saved"}</span>}</div>
-        <div className="flex gap-2"><Button variant="ghost" onClick={() => router.push("/campaigns")}>Finish later</Button><Button variant="outline" disabled={!canSend || !campaign.scheduled_at} title={!canSend ? `Add: ${itemsMissing}` : ""}>Schedule</Button><Button variant="brand" disabled={!canSend || !!campaign.scheduled_at} title={!canSend ? `Add: ${itemsMissing}` : ""} onClick={sendNow}>Send</Button></div>
+        <div className="flex gap-2"><Button variant="ghost" onClick={() => router.push("/campaigns")}>Finish later</Button><Button variant="brand" disabled={!canSend || !!campaign.scheduled_at} title={!canSend ? `Add: ${itemsMissing}` : ""} onClick={() => setSendConfirmOpen(true)}>Send</Button></div>
       </div>
     </div>
     <main className="max-w-4xl mx-auto px-6 py-8 space-y-3">
-      <CardRow id="to" title="To" valid={toValid} ctaText="Add recipients" summary={toValid ? `${hasPrefillSnapshot?.recipientCount ?? allRecipientIds.length} recipients` : "Who are you sending this to?"}>{hasPrefillSnapshot ? <AudienceFilterSummaryCard snapshot={hasPrefillSnapshot} onPreview={() => setPreviewOpen(true)} onAdjust={() => router.push("/buyers")} onClear={() => { setHasPrefillSnapshot(null); update({ buyer_ids: [] }) }} /> : <GroupTreeSelector value={campaign.group_ids || []} onChange={(ids) => update({ group_ids: ids })} />}</CardRow>
-      <CardRow id="from" title="From" valid={fromValid} ctaText="Add sender" summary={fromValid ? `${campaign.from_name} <${campaign.from_email}>` : "Who is sending this campaign?"}><div className="space-y-3"><Input placeholder="GA Wholesale Homes" value={campaign.from_name || ""} onChange={(e) => update({ from_name: e.target.value })} /><Input placeholder="homes@example.com" value={campaign.from_email || ""} onChange={(e) => update({ from_email: e.target.value })} /></div></CardRow>
-      <CardRow id="subject" title="Subject" valid={subjectValid} ctaText="Add subject" summary={subjectValid ? campaign.subject : "What's the subject line?"}><Input maxLength={150} value={campaign.subject || ""} onChange={(e) => update({ subject: e.target.value })} /></CardRow>
-      <CardRow id="sendTime" title="Send time" valid={sendTimeValid} ctaText="Set send time" summary={campaign.scheduled_at ? `Scheduled for ${new Date(campaign.scheduled_at).toLocaleString()}` : "Send immediately when you click Send"}><Input type="datetime-local" onChange={(e) => update({ scheduled_at: e.target.value ? new Date(e.target.value).toISOString() : null })} /></CardRow>
-      <CardRow id="content" title="Content" valid={contentValid} ctaText="Design email" summary={contentValid ? `Email designed — ${(campaign.message || "").split(/\s+/).filter(Boolean).length} words` : "Design the email body"}><Button onClick={() => setContentSheetOpen(true)}>Open builder</Button></CardRow>
+      <CardRow id="to" title="To" valid={toValid} ctaText="Add recipients" summary={toValid ? `${hasPrefillSnapshot?.recipientCount ?? allRecipientIds.length} recipients` : "Who are you sending this to?"} expandedCard={expandedCard} setExpandedCard={setExpandedCard}>{hasPrefillSnapshot ? <AudienceFilterSummaryCard snapshot={hasPrefillSnapshot} onPreview={() => setPreviewOpen(true)} onAdjust={() => router.push("/buyers")} onClear={() => { setHasPrefillSnapshot(null); update({ buyer_ids: [] }) }} /> : <GroupTreeSelector value={campaign.group_ids || []} onChange={(ids) => update({ group_ids: ids })} />}</CardRow>
+      <CardRow id="from" title="From" valid={fromValid} ctaText="Add sender" summary={fromValid ? `${campaign.from_name} <${campaign.from_email}>` : "Who is sending this campaign?"} expandedCard={expandedCard} setExpandedCard={setExpandedCard}><div className="space-y-3"><Input placeholder="GA Wholesale Homes" value={campaign.from_name || ""} onChange={(e) => update({ from_name: e.target.value })} /><Input placeholder="homes@example.com" value={campaign.from_email || ""} onChange={(e) => update({ from_email: e.target.value })} /></div></CardRow>
+      <CardRow id="subject" title="Subject" valid={subjectValid} ctaText="Add subject" summary={subjectValid ? campaign.subject : "What's the subject line?"} expandedCard={expandedCard} setExpandedCard={setExpandedCard}><Input maxLength={150} value={campaign.subject || ""} onChange={(e) => update({ subject: e.target.value })} /></CardRow>
+      <CardRow id="sendTime" title="Send time" valid={sendTimeValid} ctaText="Set send time" summary={campaign.scheduled_at ? `Scheduled for ${new Date(campaign.scheduled_at).toLocaleString()}` : "Send immediately when you click Send"} expandedCard={expandedCard} setExpandedCard={setExpandedCard}><Input type="datetime-local" onChange={(e) => update({ scheduled_at: e.target.value ? new Date(e.target.value).toISOString() : null })} /></CardRow>
+      <CardRow id="content" title="Content" valid={contentValid} ctaText="Design email" summary={contentValid ? `Email designed — ${(campaign.message || "").split(/\s+/).filter(Boolean).length} words` : "Design the email body"} expandedCard={expandedCard} setExpandedCard={setExpandedCard}><Button onClick={() => setContentSheetOpen(true)}>Open builder</Button></CardRow>
     </main>
+    <AlertDialog open={sendConfirmOpen} onOpenChange={setSendConfirmOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Send campaign?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This will send {hasPrefillSnapshot?.recipientCount ?? allRecipientIds.length} emails now. This can&apos;t be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction className="bg-brand text-white hover:bg-brand/90" onClick={sendNow}>Send now</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     <Sheet open={contentSheetOpen} onOpenChange={setContentSheetOpen}><SheetContent className="w-full sm:max-w-full"><div className="flex h-full flex-col"><div className="mb-4 flex justify-between"><Button variant="ghost" onClick={() => setContentSheetOpen(false)}>Cancel</Button><Button onClick={onSaveContent}>Save & Close</Button></div><div className="min-h-0 flex-1"><TemplaticalEmailEditor ref={editorRef} initialContent={campaign.design_json ?? null} onChange={(content) => update({ design_json: content })} /></div></div></SheetContent></Sheet>
     <RecipientsPreviewSheet open={previewOpen} onOpenChange={setPreviewOpen} buyerIds={hasPrefillSnapshot?.buyerIds || []} />
   </div>
