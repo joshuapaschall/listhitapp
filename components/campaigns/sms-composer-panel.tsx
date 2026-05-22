@@ -1,12 +1,13 @@
 "use client"
 
-import { useMemo, useRef } from "react"
+import { useMemo, useRef, useState } from "react"
 import EmojiPicker from "emoji-picker-react"
-import { User, UserRound, Phone, Mail, Smile } from "lucide-react"
-import ChatAssistantButton from "@/components/chat-assistant-button"
+import { ChevronDown, Mail, Phone, Smile, User, UserRound } from "lucide-react"
+import AssistantButton from "@/components/chat-assistant-button"
 import SmsPhonePreview from "@/components/campaigns/sms-phone-preview"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Progress } from "@/components/ui/progress"
 import { Switch } from "@/components/ui/switch"
@@ -27,6 +28,7 @@ const STOP_SUFFIX_RE = /\s*Reply STOP to opt out\s*$/i
 
 export default function SmsComposerPanel({ message, onMessageChange, buyerIds, recipientCount, mediaUrls = [] }: SmsComposerPanelProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const [emojiOpen, setEmojiOpen] = useState(false)
   const segmentInfo = useMemo(() => calculateSmsSegments(message || ""), [message])
   const capacity = segmentInfo.segments === 1 ? (segmentInfo.encoding === "GSM-7" ? 160 : 70) : segmentInfo.segments * (segmentInfo.encoding === "GSM-7" ? 153 : 67)
   const charCount = capacity - segmentInfo.remaining
@@ -56,20 +58,40 @@ export default function SmsComposerPanel({ message, onMessageChange, buyerIds, r
   return <div className="grid gap-4 md:grid-cols-12">
     <div className="space-y-4 md:col-span-7">
       <Textarea ref={textareaRef} rows={6} value={message || ""} onChange={(e) => onMessageChange(e.target.value)} placeholder="Hey {{first_name}}, just listed a property in your area..." autoFocus />
-      <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant="outline" onClick={() => insertToken("{{first_name}}")}><User className="h-3.5 w-3.5" />First name</Button>
-        <Button size="sm" variant="outline" onClick={() => insertToken("{{last_name}}")}><UserRound className="h-3.5 w-3.5" />Last name</Button>
-        <Button size="sm" variant="outline" onClick={() => insertToken("{{phone}}")}><Phone className="h-3.5 w-3.5" />Phone</Button>
-        <Button size="sm" variant="outline" onClick={() => insertToken("{{email}}")}><Mail className="h-3.5 w-3.5" />Email</Button>
-        <Popover>
+      <div className="flex flex-wrap items-center gap-3">
+        <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
           <PopoverTrigger asChild>
-            <Button size="sm" variant="outline" type="button"><Smile className="h-3.5 w-3.5" />Emoji</Button>
+            <button type="button" className="sr-only" aria-hidden="true">Open emoji picker</button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0" align="start" side="bottom">
             <EmojiPicker onEmojiClick={(e) => insertToken(e.emoji)} lazyLoadEmojis width={320} height={360} />
           </PopoverContent>
         </Popover>
-        <ChatAssistantButton onInsert={(text) => onMessageChange(text.slice(0, 1530))} />
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="sm" variant="outline" type="button" className="gap-2">
+              Insert field
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-48">
+            <DropdownMenuItem onSelect={() => insertToken("{{first_name}}")}> <User className="h-3.5 w-3.5" />First name</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => insertToken("{{last_name}}")}> <UserRound className="h-3.5 w-3.5" />Last name</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => insertToken("{{phone}}")}> <Phone className="h-3.5 w-3.5" />Phone</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => insertToken("{{email}}")}> <Mail className="h-3.5 w-3.5" />Email</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={(event) => {
+              event.preventDefault()
+              setEmojiOpen(true)
+            }}>
+              <Smile className="h-3.5 w-3.5" />Emoji
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* ChatAssistantButton */}
+        <AssistantButton onInsert={(text) => onMessageChange(text.slice(0, 1530))} />
       </div>
       <div className="space-y-2">
         <div className="space-y-1.5">
