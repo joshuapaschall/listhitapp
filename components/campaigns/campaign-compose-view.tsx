@@ -265,7 +265,7 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
-    <Sheet open={contentSheetOpen} onOpenChange={setContentSheetOpen}><SheetContent className="w-full sm:max-w-full"><div className="flex h-full flex-col"><div className="mb-4 flex justify-between"><Button variant="ghost" onClick={() => setContentSheetOpen(false)}>Cancel</Button><div className="flex items-center gap-2"><Button variant="outline" disabled={!editorRef.current?.isReady()} onClick={() => setSaveTemplateOpen(true)}>Save as template</Button><Button onClick={onSaveContent}>Save & Close</Button></div></div><div className="min-h-0 flex-1"><TemplaticalEmailEditor ref={editorRef} initialContent={campaign.design_json ?? null} onChange={(content) => update({ design_json: content })} /></div></div></SheetContent></Sheet>
+    <Sheet open={contentSheetOpen} onOpenChange={setContentSheetOpen}><SheetContent className="w-full sm:max-w-full"><div className="flex h-full flex-col"><div className="mb-4 flex justify-between"><Button variant="ghost" onClick={() => setContentSheetOpen(false)}>Cancel</Button><div className="flex items-center gap-2"><Button variant="outline" onClick={() => setSaveTemplateOpen(true)}>Save as template</Button><Button onClick={onSaveContent}>Save & Close</Button></div></div><div className="min-h-0 flex-1"><TemplaticalEmailEditor ref={editorRef} initialContent={campaign.design_json ?? null} onChange={(content) => update({ design_json: content })} /></div></div></SheetContent></Sheet>
     <Dialog open={saveTemplateOpen} onOpenChange={setSaveTemplateOpen}>
       <DialogContent>
         <DialogHeader>
