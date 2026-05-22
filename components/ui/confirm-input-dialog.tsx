@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { toast } from "sonner"
 import {
   AlertDialog,
   AlertDialogContent,
@@ -34,6 +35,7 @@ export default function ConfirmInputDialog({
   onConfirm,
 }: ConfirmInputDialogProps) {
   const [value, setValue] = useState("")
+  const [submitting, setSubmitting] = useState(false)
   const reset = () => setValue("")
 
   const handleOpenChange = (o: boolean) => {
@@ -41,10 +43,18 @@ export default function ConfirmInputDialog({
     onOpenChange(o)
   }
 
-  const handleConfirm = async () => {
-    await onConfirm()
-    reset()
-    onOpenChange(false)
+  const handleConfirm = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    setSubmitting(true)
+    try {
+      await onConfirm()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Action failed")
+    } finally {
+      setSubmitting(false)
+      reset()
+      onOpenChange(false)
+    }
   }
 
   const normalizedValue = value.trim().toLowerCase()
@@ -80,9 +90,9 @@ export default function ConfirmInputDialog({
             <Button
               variant="destructive"
               onClick={handleConfirm}
-              disabled={!isMatch}
+              disabled={!isMatch || submitting}
             >
-              {actionText}
+              {submitting ? `${actionText}…` : actionText}
             </Button>
           </AlertDialogAction>
         </AlertDialogFooter>

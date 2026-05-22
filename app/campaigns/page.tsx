@@ -339,7 +339,6 @@ export default function CampaignsPage() {
           await CampaignService.deleteCampaign(deleteId)
           await queryClient.invalidateQueries({ queryKey: ["campaigns"] })
           toast.success("Campaign deleted")
-          setDeleteId(null)
         }}
       />
     </MainLayout>
