@@ -9,7 +9,6 @@ import {
   Copy,
   Mail,
   MessageSquare,
-  MoreHorizontal,
   Pencil,
   Plus,
   Search,
@@ -18,14 +17,8 @@ import {
 import MainLayout from "@/components/layout/main-layout"
 import { CampaignService } from "@/services/campaign-service"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import {
   Select,
   SelectContent,
@@ -49,6 +42,7 @@ export default function CampaignsPage() {
   const [dateFilter, setDateFilter] = useState("all")
   const [sortBy, setSortBy] = useState("last_edited")
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -167,19 +161,7 @@ export default function CampaignsPage() {
               {campaigns.length} campaigns • {sentThisMonth} sent this month
             </p>
           </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="brand"><Plus className="size-4" />New Campaign</Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => router.push("/campaigns/new")}>
-                Email campaign
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => router.push("/campaigns/new?type=sms")}>
-                SMS campaign
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Button variant="brand" onClick={() => !pickerOpen && setPickerOpen(true)}><Plus className="size-4" />New Campaign</Button>
         </div>
 
         <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -239,7 +221,7 @@ export default function CampaignsPage() {
             <Mail className="mx-auto size-12 text-muted-foreground" />
             <h2 className="mt-4 text-xl font-semibold">No campaigns yet</h2>
             <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">Send your first email or SMS campaign to start reaching your buyers.</p>
-            <Button variant="brand" className="mt-6" onClick={() => router.push("/campaigns/new")}>Create your first campaign</Button>
+            <Button variant="brand" className="mt-6" onClick={() => !pickerOpen && setPickerOpen(true)}>Create your first campaign</Button>
           </div>
         ) : filteredCampaigns.length === 0 ? (
           <div className="rounded-lg border bg-card py-24 text-center">
@@ -294,22 +276,24 @@ export default function CampaignsPage() {
                         {uiStatus === "sent" || uiStatus === "completed_with_errors" ? `${opens}% opens • ${clicks}% clicks` : "—"}
                       </TableCell>
                       <TableCell className="px-4 py-4 text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon"><MoreHorizontal className="size-4" /></Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            {(uiStatus === "sent" || uiStatus === "sending" || uiStatus === "completed_with_errors") && (
-                              <DropdownMenuItem onSelect={() => router.push(`/campaigns/${campaign.id}`)}><BarChart3 className="size-4" />View report</DropdownMenuItem>
-                            )}
-                            {(uiStatus === "draft" || uiStatus === "scheduled") && (
-                              <DropdownMenuItem onSelect={() => router.push(uiStatus === "draft" ? `/campaigns/${campaign.id}/edit` : `/campaigns/${campaign.id}`)}><Pencil className="size-4" />Edit</DropdownMenuItem>
-                            )}
-                            <DropdownMenuItem onSelect={() => handleDuplicate(campaign.id)}><Copy className="size-4" />Duplicate</DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive" onSelect={() => setDeleteId(campaign.id)}><Trash2 className="size-4" />Delete</DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        <div className="flex items-center justify-end gap-1">
+                          {(uiStatus === "sent" || uiStatus === "sending" || uiStatus === "completed_with_errors") && (
+                            <Button variant="ghost" size="icon" onClick={() => router.push(`/campaigns/${campaign.id}`)}>
+                              <BarChart3 className="size-4" />
+                            </Button>
+                          )}
+                          {(uiStatus === "draft" || uiStatus === "scheduled") && (
+                            <Button variant="ghost" size="icon" onClick={() => router.push(uiStatus === "draft" ? `/campaigns/${campaign.id}/edit` : `/campaigns/${campaign.id}`)}>
+                              <Pencil className="size-4" />
+                            </Button>
+                          )}
+                          <Button variant="ghost" size="icon" onClick={() => handleDuplicate(campaign.id)}>
+                            <Copy className="size-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => setDeleteId(campaign.id)}>
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   )
@@ -326,8 +310,45 @@ export default function CampaignsPage() {
         )}
       </div>
 
-      
-      
+      <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Create a campaign</DialogTitle>
+            <DialogDescription>Choose how you want to reach your buyers.</DialogDescription>
+          </DialogHeader>
+          <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <button
+              type="button"
+              className="group flex h-full cursor-pointer flex-col rounded-lg border border-border bg-background p-6 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-[#10B981] hover:bg-[#ECFDF5] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10B981] focus-visible:ring-offset-2"
+              onClick={() => {
+                router.push("/campaigns/new?type=email")
+                setPickerOpen(false)
+              }}
+            >
+              <div className="mb-4 flex size-11 items-center justify-center rounded-full bg-[#ECFDF5] text-[#059669]">
+                <Mail className="size-5" />
+              </div>
+              <h3 className="text-base font-semibold text-foreground">Email campaign</h3>
+              <p className="mt-2 text-sm text-muted-foreground">Rich, designed emails with images and templates.</p>
+            </button>
+            <button
+              type="button"
+              className="group flex h-full cursor-pointer flex-col rounded-lg border border-border bg-background p-6 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-[#10B981] hover:bg-[#ECFDF5] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10B981] focus-visible:ring-offset-2"
+              onClick={() => {
+                router.push("/campaigns/new?type=sms")
+                setPickerOpen(false)
+              }}
+            >
+              <div className="mb-4 flex size-11 items-center justify-center rounded-full bg-[#ECFDF5] text-[#059669]">
+                <MessageSquare className="size-5" />
+              </div>
+              <h3 className="text-base font-semibold text-foreground">SMS campaign</h3>
+              <p className="mt-2 text-sm text-muted-foreground">Short text messages that land directly on their phone.</p>
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <ConfirmInputDialog
         open={!!deleteId}
         onOpenChange={(o) => setDeleteId(o ? deleteId : null)}
