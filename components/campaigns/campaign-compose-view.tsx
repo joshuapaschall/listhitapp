@@ -3,14 +3,18 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { ArrowLeft, CheckCircle2, Circle } from "lucide-react"
+import type { TemplateContent } from "@templatical/editor"
+import { createDefaultTemplateContent, createHtmlBlock } from "@templatical/types"
 import { toast } from "sonner"
 import CampaignStatusBadge from "@/components/campaigns/campaign-status-badge"
 import AudienceFilterSummaryCard from "@/components/campaigns/audience-filter-summary-card"
 import RecipientsPreviewSheet from "@/components/campaigns/recipients-preview-sheet"
 import dynamic from "next/dynamic"
 import type { TemplaticalEmailEditorHandle } from "@/components/campaigns/email/templatical-email-editor"
+import EmailTemplatePicker, { type EmailPickResult } from "@/components/campaigns/email/email-template-picker"
 import GroupTreeSelector from "@/components/buyers/group-tree-selector"
 import { readAudienceSnapshot, clearAudienceSnapshot, type CampaignAudienceSnapshot } from "@/lib/campaign-audience"
+import { emptyEmailTemplate } from "@/lib/email-templates"
 import { supabaseBrowser } from "@/lib/supabase-browser"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -58,8 +62,18 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
   const [hasPrefillSnapshot, setHasPrefillSnapshot] = useState<CampaignAudienceSnapshot | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [contentSheetOpen, setContentSheetOpen] = useState(false)
+  const [builderStep, setBuilderStep] = useState<"picker" | "editor">("picker")
+  const [pickerBucket, setPickerBucket] = useState<"basic" | "fully-designed" | undefined>(undefined)
+  const [editorSeed, setEditorSeed] = useState<TemplateContent | null>(null)
+  const [editorKey, setEditorKey] = useState(0)
   const [sendConfirmOpen, setSendConfirmOpen] = useState(false)
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false)
+  const [changeTemplateOpen, setChangeTemplateOpen] = useState(false)
+  const isPickerStep = builderStep === "picker"
+  const isEditorStep = builderStep === "editor"
+  const pickerVisible = builderStep === "picker"
+  const editorVisible = builderStep === "editor"
+  const currentBuilderStep = builderStep
   const [templateName, setTemplateName] = useState("")
   const [savingTemplate, setSavingTemplate] = useState(false)
   const editorRef = useRef<TemplaticalEmailEditorHandle>(null)
@@ -126,6 +140,41 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
   const update = (patch: any) => { setCampaign((p: any) => ({ ...p, ...patch })); setHasEdited(true) }
 
   const itemsMissing = [!toValid && "Recipients", !subjectValid && "Subject", !contentValid && "Content"].filter(Boolean).join(", ")
+
+  const hasExistingDesign = () =>
+    !!campaign.design_json &&
+    Array.isArray(campaign.design_json.blocks) &&
+    campaign.design_json.blocks.length > 0
+
+  const openBuilder = () => {
+    if (hasExistingDesign()) {
+      setEditorSeed(campaign.design_json as TemplateContent)
+      setEditorKey((k) => k + 1)
+      setBuilderStep("editor")
+    } else {
+      setPickerBucket(undefined)
+      setBuilderStep("picker")
+    }
+    setContentSheetOpen(true)
+  }
+
+  const handlePick = (r: EmailPickResult) => {
+    let content: TemplateContent
+    if (r.kind === "scratch") {
+      content = emptyEmailTemplate()
+    } else if (r.kind === "html") {
+      const c = createDefaultTemplateContent("Inter, Helvetica, Arial, sans-serif")
+      c.blocks = [createHtmlBlock({ content: "<!-- Paste or write your HTML here -->" })]
+      content = c
+    } else {
+      content = r.def.build()
+      if (r.def.defaultSubject && !campaign.subject?.trim()) update({ subject: r.def.defaultSubject })
+    }
+    setEditorSeed(content)
+    setEditorKey((k) => k + 1)
+    update({ design_json: content })
+    setBuilderStep("editor")
+  }
 
   const sendNow = async () => {
     // Get the logged-in user's access token. This JWT carries the `sub` claim
@@ -249,7 +298,7 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
       <CardRow id="to" title="To" valid={toValid} ctaText="Add recipients" summary={toValid ? `${hasPrefillSnapshot?.recipientCount ?? allRecipientIds.length} recipients` : "Who are you sending this to?"} expandedCard={expandedCard} setExpandedCard={setExpandedCard}>{hasPrefillSnapshot ? <AudienceFilterSummaryCard snapshot={hasPrefillSnapshot} onPreview={() => setPreviewOpen(true)} onAdjust={() => router.push("/buyers")} onClear={() => { setHasPrefillSnapshot(null); update({ buyer_ids: [] }) }} /> : <GroupTreeSelector value={campaign.group_ids || []} onChange={(ids) => update({ group_ids: ids })} />}</CardRow>
       <CardRow id="from" title="From" valid={fromValid} ctaText="Add sender" summary={fromValid ? `${campaign.from_name} <${campaign.from_email}>` : "Who is sending this campaign?"} expandedCard={expandedCard} setExpandedCard={setExpandedCard}><div className="space-y-4"><p className="text-sm text-muted-foreground">Who is sending this campaign?</p><div className="grid gap-4 md:grid-cols-2"><div className="space-y-2"><div className="flex items-center justify-between"><label className="text-sm font-medium">Name</label><span className="text-xs text-muted-foreground">{100 - (campaign.from_name?.length || 0)} left</span></div><Input maxLength={100} placeholder="GA Wholesale Homes" value={campaign.from_name || ""} onChange={(e) => update({ from_name: e.target.value })} /><p className="text-xs text-muted-foreground">Use something subscribers will instantly recognize, like your company name.</p></div><div className="space-y-2"><label className="text-sm font-medium">Email address</label><Input type="email" placeholder="homes@example.com" value={campaign.from_email || ""} onChange={(e) => update({ from_email: e.target.value })} /></div></div></div></CardRow>
       <CardRow id="subject" title="Subject" valid={subjectValid} ctaText="Add subject" summary={subjectValid ? campaign.subject : "What's the subject line?"} expandedCard={expandedCard} setExpandedCard={setExpandedCard}><div className="space-y-4"><p className="text-sm text-muted-foreground">What&apos;s the subject line for this campaign?</p><div className="space-y-2"><div className="flex items-center justify-between"><label className="text-sm font-medium">Subject <span className="font-normal text-muted-foreground">(Required)</span></label><span className="text-xs text-muted-foreground">{150 - (campaign.subject?.length || 0)} left</span></div><Input maxLength={150} value={campaign.subject || ""} onChange={(e) => update({ subject: e.target.value })} /><p className="text-xs text-muted-foreground">This is the first thing people see in their inbox.</p></div><div className="space-y-2"><div className="flex items-center justify-between"><label className="text-sm font-medium">Preview Text</label><span className="text-xs text-muted-foreground">{150 - ((campaign as any).preview_text?.length || 0)} left</span></div><Input maxLength={150} value={(campaign as any).preview_text || ""} onChange={(e) => update({ preview_text: e.target.value })} /><p className="text-xs text-muted-foreground">Preview text appears in the inbox after the subject line.</p></div></div></CardRow>
-      <CardRow id="content" title="Content" valid={contentValid} ctaText="Design email" summary={contentValid ? `Email designed — ${(campaign.message || "").split(/\s+/).filter(Boolean).length} words` : "Design the email body"} expandedCard={expandedCard} setExpandedCard={setExpandedCard}><Button onClick={() => setContentSheetOpen(true)}>Open builder</Button></CardRow>
+      <CardRow id="content" title="Content" valid={contentValid} ctaText="Design email" summary={contentValid ? `Email designed — ${(campaign.message || "").split(/\s+/).filter(Boolean).length} words` : "Design the email body"} expandedCard={expandedCard} setExpandedCard={setExpandedCard}><Button onClick={openBuilder}>Open builder</Button></CardRow>
       <CardRow id="sendTime" title="Send time" valid={sendTimeValid} ctaText="Set send time" summary={campaign.scheduled_at ? `Scheduled for ${new Date(campaign.scheduled_at).toLocaleString()}` : "Send immediately when you click Send"} expandedCard={expandedCard} setExpandedCard={setExpandedCard}><SmsSendTimeCard scheduledAt={campaign.scheduled_at ?? null} onScheduledAtChange={(v) => update({ scheduled_at: v })} weekdayOnly={campaign.weekday_only ?? false} onWeekdayOnlyChange={(v) => update({ weekday_only: v })} runFrom={campaign.run_from ?? null} onRunFromChange={(v) => update({ run_from: v })} runUntil={campaign.run_until ?? null} onRunUntilChange={(v) => update({ run_until: v })} /></CardRow>
     </main>
     <AlertDialog open={sendConfirmOpen} onOpenChange={setSendConfirmOpen}>
@@ -266,7 +315,50 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
-    <Sheet open={contentSheetOpen} onOpenChange={setContentSheetOpen}><SheetContent className="w-full sm:max-w-full [&>button.absolute]:hidden"><div className="flex h-full flex-col"><div className="mb-4 flex justify-between"><Button variant="ghost" onClick={() => setContentSheetOpen(false)}>Cancel</Button><div className="flex items-center gap-2"><Button variant="outline" onClick={() => setSaveTemplateOpen(true)}>Save as template</Button><Button onClick={onSaveContent}>Save & Close</Button></div></div><div className="min-h-0 flex-1"><TemplaticalEmailEditor ref={editorRef} initialContent={campaign.design_json ?? null} onChange={(content) => update({ design_json: content })} /></div></div></SheetContent></Sheet>
+    <AlertDialog open={changeTemplateOpen} onOpenChange={setChangeTemplateOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Change template?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This replaces your current design with a different starting point. Unsaved changes in the current design will be lost.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Keep editing</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-brand text-brand-fg hover:bg-brand-hover"
+            onClick={() => { setChangeTemplateOpen(false); setPickerBucket(undefined); setBuilderStep("picker") }}
+          >
+            Choose new template
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    <Sheet open={contentSheetOpen} onOpenChange={setContentSheetOpen}>
+      <SheetContent className="w-full p-0 sm:max-w-full [&>button.absolute]:hidden" data-builder-step={currentBuilderStep}>
+        {isPickerStep ? (
+          <div className="h-full overflow-auto px-6 py-8" data-step={pickerVisible ? "picker" : "hidden"}>
+            <EmailTemplatePicker initialBucket={pickerBucket} onPick={handlePick} onClose={() => setContentSheetOpen(false)} />
+          </div>
+        ) : (
+          <div className="flex h-full flex-col p-6" data-step={editorVisible ? "editor" : "hidden"}>
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" onClick={() => setContentSheetOpen(false)}>Cancel</Button>
+                <Button variant="ghost" onClick={() => setChangeTemplateOpen(true)}>Change template</Button>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={() => setSaveTemplateOpen(true)}>Save as template</Button>
+                <Button onClick={onSaveContent} disabled={!isEditorStep}>Save & Close</Button>
+              </div>
+            </div>
+            <div className="min-h-0 flex-1">
+              <TemplaticalEmailEditor key={editorKey} ref={editorRef} initialContent={editorSeed} onChange={(content) => update({ design_json: content })} />
+            </div>
+          </div>
+        )}
+      </SheetContent>
+    </Sheet>
     <Dialog open={saveTemplateOpen} onOpenChange={setSaveTemplateOpen}>
       <DialogContent>
         <DialogHeader>
