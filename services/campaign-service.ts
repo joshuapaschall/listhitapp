@@ -281,11 +281,13 @@ export class CampaignService {
     const campaignsWithCounts = (data || []).map((c: any) => {
       const recs = c.campaign_recipients || []
       const sentCount = recs.filter((r: any) => r.sent_at).length
+      const deliveredCount = recs.filter((r: any) => r.delivered_at).length
+      const clickedCount = recs.filter((r: any) => r.clicked_at).length
       const errorCount = recs.filter((r: any) => r.status === "error" || r.error).length
       const openedCount = recs.filter((r: any) => r.opened_at).length
       const bouncedCount = recs.filter((r: any) => r.bounced_at).length
       const unsubCount = recs.filter((r: any) => r.unsubscribed_at).length
-      return { ...c, sentCount, errorCount, openedCount, bouncedCount, unsubCount }
+      return { ...c, sentCount, deliveredCount, clickedCount, errorCount, openedCount, bouncedCount, unsubCount }
     })
 
     return { campaigns: campaignsWithCounts, totalCount: count || 0 }
