@@ -14,6 +14,7 @@ import SmsMediaCard from "@/components/campaigns/sms-media-card"
 import SmsSendTimeCard from "@/components/campaigns/sms-send-time-card"
 import { readAudienceSnapshot, clearAudienceSnapshot, type CampaignAudienceSnapshot } from "@/lib/campaign-audience"
 import { calculateSmsSegments } from "@/lib/sms-utils"
+import { formatPhoneE164 } from "@/lib/dedup-utils"
 import { supabaseBrowser } from "@/lib/supabase-browser"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -59,6 +60,11 @@ export default function SmsCampaignComposeView({ initialCampaign }: { initialCam
   const [sendingTest, setSendingTest] = useState(false)
   const [resolvedGroupBuyerIds, setResolvedGroupBuyerIds] = useState<string[]>([])
   const [sendConfirmOpen, setSendConfirmOpen] = useState(false)
+  const parsedTestPhone = useMemo(() => {
+    if (!testPhone.trim()) return null
+    return formatPhoneE164(testPhone)
+  }, [testPhone])
+  const isTestPhoneInvalid = testPhone.trim().length > 0 && !parsedTestPhone
 
   useEffect(() => {
     const groupIds = campaign.group_ids || []
@@ -150,8 +156,13 @@ export default function SmsCampaignComposeView({ initialCampaign }: { initialCam
     setSendingTest(true)
     const res = await fetch("/api/campaigns/test-send-sms", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ campaignId: campaign.id, testPhone }) })
     if (res.ok) {
+      const data = await res.json().catch(() => ({}))
       localStorage.setItem("listhit:smsTestNumber", testPhone)
-      toast.success(`Test sent to ${testPhone}`)
+      toast.success(`Test sent to ${data.formattedTo}${data.fromNumber ? ` from ${data.fromNumber}` : ""}`)
+      if (data.dryRun) toast.info("Dry-run: no real SMS sent")
+    } else {
+      const body = await res.json().catch(() => ({}))
+      toast.error(body?.error || "Test send failed")
     }
     setSendingTest(false)
   }
@@ -159,7 +170,7 @@ export default function SmsCampaignComposeView({ initialCampaign }: { initialCam
 
 
   return <div className="min-h-screen bg-background">
-    <div className="sticky top-0 bg-background/80 backdrop-blur z-10 border-b border-border py-4 px-6"><div className="max-w-4xl mx-auto flex items-center justify-between"><div className="flex items-center gap-2"><Button variant="ghost" size="icon" onClick={() => router.push("/campaigns")}><ArrowLeft className="h-4 w-4" /></Button><Input className="w-auto min-w-[200px] max-w-[400px]" value={campaign.name || "Untitled campaign"} onChange={(e) => update({ name: e.target.value })} /><CampaignStatusBadge status={campaign.status} />{hasEdited && <span className="text-xs text-muted-foreground">{autosaveState === "saving" ? "Saving…" : autosaveState === "failed" ? "Save failed" : "Saved"}</span>}</div><div className="flex gap-2"><Input className="h-9 w-[130px]" value={testPhone} onChange={(e) => setTestPhone(e.target.value)} placeholder="+1 (770) 555-0123" /><Button variant="outline" size="sm" disabled={!testPhone.trim() || sendingTest || !campaign.message?.trim()} onClick={sendTest}><TestTube2 className="h-4 w-4" />Send test</Button><Button variant="brand" disabled={!canSend || !!campaign.scheduled_at} onClick={() => setSendConfirmOpen(true)}>Send</Button></div></div></div>
+    <div className="sticky top-0 bg-background/80 backdrop-blur z-10 border-b border-border py-4 px-6"><div className="max-w-4xl mx-auto flex items-center justify-between"><div className="flex items-center gap-2"><Button variant="ghost" size="icon" onClick={() => router.push("/campaigns")}><ArrowLeft className="h-4 w-4" /></Button><Input className="w-auto min-w-[200px] max-w-[400px]" value={campaign.name || "Untitled campaign"} onChange={(e) => update({ name: e.target.value })} /><CampaignStatusBadge status={campaign.status} />{hasEdited && <span className="text-xs text-muted-foreground">{autosaveState === "saving" ? "Saving…" : autosaveState === "failed" ? "Save failed" : "Saved"}</span>}</div><div className="flex items-start gap-2"><div><Input className="h-9 w-[130px]" value={testPhone} onChange={(e) => setTestPhone(e.target.value)} placeholder="+1 (770) 555-0123" />{isTestPhoneInvalid && <p className="mt-1 text-xs text-red-500">Enter a valid US phone number</p>}</div><Button variant="outline" size="sm" disabled={!testPhone.trim() || isTestPhoneInvalid || sendingTest || !campaign.message?.trim()} onClick={sendTest}><TestTube2 className="h-4 w-4" />Send test</Button><Button variant="brand" disabled={!canSend || !!campaign.scheduled_at} onClick={() => setSendConfirmOpen(true)}>Send</Button></div></div></div>
     <main className="max-w-4xl mx-auto px-6 py-8 space-y-3">
       <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="to" title="To" valid={toValid} ctaText="Add recipients" summary={toValid ? `${recipientCount} recipients` : "Who are you sending this to?"}>{hasPrefillSnapshot ? <AudienceFilterSummaryCard snapshot={hasPrefillSnapshot} onPreview={() => setPreviewOpen(true)} onAdjust={() => router.push("/buyers")} onClear={() => { setHasPrefillSnapshot(null); update({ buyer_ids: [] }) }} /> : <GroupTreeSelector value={campaign.group_ids || []} onChange={(ids) => update({ group_ids: ids })} />}</CardRow>
       <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="from" title="From" valid={fromValid} ctaText="View sender" summary="Per-recipient routing with fallback"><SmsFromCard buyerIds={allRecipientIds} /></CardRow>
