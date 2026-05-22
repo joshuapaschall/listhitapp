@@ -2,7 +2,7 @@
 
 import { useMemo, useRef } from "react"
 import EmojiPicker from "emoji-picker-react"
-import { User, UserRound, Phone, Smile } from "lucide-react"
+import { User, UserRound, Phone, Mail, Smile } from "lucide-react"
 import ChatAssistantButton from "@/components/chat-assistant-button"
 import SmsPhonePreview from "@/components/campaigns/sms-phone-preview"
 import { Badge } from "@/components/ui/badge"
@@ -20,11 +20,12 @@ interface SmsComposerPanelProps {
   onMessageChange: (value: string) => void
   buyerIds: string[]
   recipientCount: number
+  mediaUrls?: string[]
 }
 
 const STOP_SUFFIX_RE = /\s*Reply STOP to opt out\s*$/i
 
-export default function SmsComposerPanel({ message, onMessageChange, buyerIds, recipientCount }: SmsComposerPanelProps) {
+export default function SmsComposerPanel({ message, onMessageChange, buyerIds, recipientCount, mediaUrls = [] }: SmsComposerPanelProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const segmentInfo = useMemo(() => calculateSmsSegments(message || ""), [message])
   const capacity = segmentInfo.segments === 1 ? (segmentInfo.encoding === "GSM-7" ? 160 : 70) : segmentInfo.segments * (segmentInfo.encoding === "GSM-7" ? 153 : 67)
@@ -59,6 +60,7 @@ export default function SmsComposerPanel({ message, onMessageChange, buyerIds, r
         <Button size="sm" variant="outline" onClick={() => insertToken("{{first_name}}")}><User className="h-3.5 w-3.5" />First name</Button>
         <Button size="sm" variant="outline" onClick={() => insertToken("{{last_name}}")}><UserRound className="h-3.5 w-3.5" />Last name</Button>
         <Button size="sm" variant="outline" onClick={() => insertToken("{{phone}}")}><Phone className="h-3.5 w-3.5" />Phone</Button>
+        <Button size="sm" variant="outline" onClick={() => insertToken("{{email}}")}><Mail className="h-3.5 w-3.5" />Email</Button>
         <Popover>
           <PopoverTrigger asChild>
             <Button size="sm" variant="outline" type="button"><Smile className="h-3.5 w-3.5" />Emoji</Button>
@@ -94,6 +96,6 @@ export default function SmsComposerPanel({ message, onMessageChange, buyerIds, r
         <span className="text-sm">Append &apos;Reply STOP to opt out&apos; (10DLC compliance)</span>
       </div>
     </div>
-    <div className="md:col-span-5"><SmsPhonePreview message={message} buyerIds={buyerIds} /></div>
+    <div className="md:col-span-5"><SmsPhonePreview message={message} buyerIds={buyerIds} mediaUrls={mediaUrls} /></div>
   </div>
 }
