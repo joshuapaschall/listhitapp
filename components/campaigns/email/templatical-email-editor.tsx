@@ -12,6 +12,7 @@ interface TemplaticalEmailEditorProps {
 export interface TemplaticalEmailEditorHandle {
   getContent: () => TemplateContent | null
   toMjml: () => Promise<string>
+  isReady: () => boolean
 }
 
 type UploadMediaResponse = { url: string; alt?: string }
@@ -129,6 +130,7 @@ const TemplaticalEmailEditor = forwardRef<TemplaticalEmailEditorHandle, Templati
     }, [])
 
     useImperativeHandle(ref, () => ({
+      isReady: () => editorRef.current !== null,
       getContent: () => editorRef.current?.getContent() ?? null,
       toMjml: async () => {
         if (!editorRef.current) return ""
