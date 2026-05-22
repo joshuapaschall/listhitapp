@@ -101,6 +101,7 @@ const TemplaticalEmailEditor = forwardRef<TemplaticalEmailEditorHandle, Templati
           ],
         },
         lint: { accessibility: {}, structure: {}, links: {} },
+        branding: false,
         onChange: (content) => onChangeRef.current?.(content),
         async onRequestMedia() {
           return await openImageUploadRef.current()
