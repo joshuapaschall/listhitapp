@@ -13,7 +13,7 @@ export default async function CampaignReportPage({ params }: { params: { id: str
 
   const { data: campaign } = await supabase
     .from("campaigns")
-    .select("id,name,channel,subject,message,status,scheduled_at,created_at,user_id")
+    .select("id,name,channel,subject,message,status,scheduled_at,created_at,user_id,media_url")
     .eq("id", params.id)
     .eq("user_id", user.id)
     .maybeSingle()

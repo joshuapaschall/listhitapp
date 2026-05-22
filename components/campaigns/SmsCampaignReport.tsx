@@ -8,6 +8,8 @@ import { AlertTriangle, CheckCircle2, Link2, MessageCircle, MousePointerClick, S
 import { useState } from "react"
 import CampaignRecipientsTable from "./CampaignRecipientsTable"
 import SmsRecipientDrilldownSheet from "./SmsRecipientDrilldownSheet"
+import SmsPhonePreview from "@/components/campaigns/sms-phone-preview"
+import { Badge } from "@/components/ui/badge"
 
 const num = (n: number) => new Intl.NumberFormat().format(n || 0)
 const pct = (n: number) => `${(n || 0).toFixed(1)}%`
@@ -20,6 +22,16 @@ export default function SmsCampaignReport({ campaign, analytics }: any) {
   const topLinks = analytics?.topLinks || []
   const [selected, setSelected] = useState<any | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
+  const mediaUrls = (() => {
+    const value = campaign?.media_url
+    if (!value || typeof value !== "string") return []
+    try {
+      const parsed = JSON.parse(value)
+      return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : []
+    } catch {
+      return [value]
+    }
+  })()
 
   const funnel = [
     { label: "Recipients", value: s.total || 0 },
@@ -59,6 +71,23 @@ export default function SmsCampaignReport({ campaign, analytics }: any) {
           { label: "Opt-outs", value: num(s.opted_out), badge: pct(r.optOutRate), icon: ShieldAlert, tone: "text-amber-600 dark:text-amber-400" },
         ].map((item) => <Card key={item.label} className="rounded-xl"><CardContent className="space-y-2 p-4"><div className="flex items-center justify-between"><p className="text-xs uppercase tracking-wide text-muted-foreground">{item.label}</p><item.icon className={`h-4 w-4 ${item.tone}`} /></div><p className={`text-3xl font-semibold tabular-nums ${item.tone}`}>{item.value}</p>{item.badge ? <span className="inline-flex rounded-full bg-muted px-2 py-1 text-xs tabular-nums text-muted-foreground">{item.badge}</span> : null}</CardContent></Card>)}
       </div>
+
+      <Card className="rounded-xl">
+        <CardHeader><CardTitle>Message sent</CardTitle></CardHeader>
+        <CardContent className="grid gap-5 md:grid-cols-[minmax(0,320px)_1fr] md:items-start">
+          <div className="w-full max-w-[320px]">
+            <SmsPhonePreview message={campaign.message || ""} buyerIds={[]} mediaUrls={mediaUrls} />
+          </div>
+          <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
+            <Badge className="w-fit" variant="secondary">Sent</Badge>
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">Sent date</span><span className="font-medium tabular-nums">{campaign.scheduled_at ? new Date(campaign.scheduled_at).toLocaleString() : campaign.created_at ? new Date(campaign.created_at).toLocaleString() : "N/A"}</span></div>
+              <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">Total segments</span><span className="font-medium tabular-nums">{num(s.total_segments || Math.round((Number(s.avg_segments || 0) || 0) * Number(s.total || 0)))}</span></div>
+              <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">Recipients</span><span className="font-medium tabular-nums">{num(s.total)}</span></div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="rounded-xl"><CardHeader><CardTitle>Funnel</CardTitle></CardHeader><CardContent className="space-y-3">{funnel.map((f: any, i: number) => { const step = i === 0 ? 100 : (f.value / Math.max(funnel[i - 1].value, 1)) * 100; return <div key={f.label} className="space-y-1.5"><div className="flex items-center justify-between text-sm"><span className="font-medium">{f.label}</span><span className="tabular-nums text-muted-foreground">{num(f.value)}{i === 0 ? "" : ` • ${pct(step)} from previous`}</span></div><div className="h-3 rounded-full bg-muted/70"><div className="h-3 rounded-full bg-gradient-to-r from-brand via-emerald-400 to-emerald-300 dark:from-brand dark:via-emerald-500 dark:to-emerald-400" style={{ width: `${(f.value / max) * 100}%` }} /></div></div> })}</CardContent></Card>
 
