@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { ChevronLeft, BatteryFull, Signal, Wifi } from "lucide-react"
 import { BuyerService } from "@/services/buyer-service"
 import { renderTemplate } from "@/lib/utils"
 import type { Buyer } from "@/lib/supabase"
@@ -56,12 +57,22 @@ export default function SmsPhonePreview({ message, buyerIds, mediaUrls = [] }: S
       </div>
 
       <div className="mx-auto" style={{ maxWidth: 280 }}>
-        <div className="relative rounded-[40px] border-[10px] border-foreground/90 bg-background shadow-sm" style={{ aspectRatio: "9/16" }}>
-          <div className="absolute left-1/2 top-2 h-1.5 w-20 -translate-x-1/2 rounded-full bg-foreground/90" />
-          <div className="absolute inset-2 overflow-hidden rounded-[28px] bg-card">
-            <div className="flex items-center justify-between border-b bg-muted/40 px-4 py-2">
-              <span className="text-xs font-medium">Messages</span>
-              <span className="text-xs text-muted-foreground">Now</span>
+        <div className="relative rounded-[44px] border-[10px] border-foreground/90 bg-background shadow-sm" style={{ aspectRatio: "9/16" }}>
+          <div className="absolute left-1/2 top-2 h-[22px] w-[90px] -translate-x-1/2 rounded-full bg-foreground/90" />
+          <div className="absolute inset-2 overflow-hidden rounded-[32px] bg-card">
+            <div className="flex items-center justify-between px-4 pt-3 pb-1 text-muted-foreground">
+              <span className="text-[12px] font-semibold tracking-tight">9:41</span>
+              <div className="flex items-center gap-1.5">
+                <Signal className="h-3.5 w-3.5" />
+                <Wifi className="h-3.5 w-3.5" />
+                <BatteryFull className="h-3.5 w-3.5" />
+              </div>
+            </div>
+            <div className="flex items-center justify-center border-b bg-muted/30 px-4 py-2">
+              <button type="button" className="absolute left-4 inline-flex items-center text-muted-foreground" aria-label="Back">
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="text-xs font-semibold text-muted-foreground">Text message</span>
             </div>
             <div className="relative">
               <div className="max-h-[360px] overflow-y-auto scroll-smooth px-3 py-3">
@@ -84,6 +95,7 @@ export default function SmsPhonePreview({ message, buyerIds, mediaUrls = [] }: S
               <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-b from-transparent to-card" />
             </div>
           </div>
+          <div className="absolute bottom-1.5 left-1/2 h-1.5 w-24 -translate-x-1/2 rounded-full bg-foreground/70" />
         </div>
       </div>
     </div>
