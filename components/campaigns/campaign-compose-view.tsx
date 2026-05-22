@@ -16,8 +16,10 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { BuyerService } from "@/services/buyer-service"
+import { TemplateService } from "@/services/template-service"
 
 
 const TemplaticalEmailEditor = dynamic(() => import("@/components/campaigns/email/templatical-email-editor"), {
@@ -56,6 +58,9 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
   const [previewOpen, setPreviewOpen] = useState(false)
   const [contentSheetOpen, setContentSheetOpen] = useState(false)
   const [sendConfirmOpen, setSendConfirmOpen] = useState(false)
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false)
+  const [templateName, setTemplateName] = useState("")
+  const [savingTemplate, setSavingTemplate] = useState(false)
   const editorRef = useRef<TemplaticalEmailEditorHandle>(null)
   const [resolvedGroupBuyerIds, setResolvedGroupBuyerIds] = useState<string[]>([])
 
@@ -191,6 +196,47 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
     }
   }
 
+  const saveAsTemplate = async () => {
+    const editor = editorRef.current
+    if (!editor?.isReady()) {
+      toast.error("Editor not ready — try again")
+      return
+    }
+    setSavingTemplate(true)
+    try {
+      const design = editor.getContent()
+      const mjml = await editor.toMjml()
+      if (!design || !mjml.trim()) {
+        toast.error("Nothing to save yet — add content first")
+        return
+      }
+      const res = await fetch("/api/campaigns/email/render", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mjml }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.error || "Failed to render email")
+      }
+      const { html } = await res.json()
+      await TemplateService.addTemplate({
+        name: templateName.trim(),
+        subject: campaign.subject ?? null,
+        message: html,
+        design_json: design,
+        mjml,
+      }, "email")
+      toast.success("Template saved")
+      setSaveTemplateOpen(false)
+      setTemplateName("")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save template")
+    } finally {
+      setSavingTemplate(false)
+    }
+  }
+
   return <div className="min-h-screen bg-background">
     <div className="sticky top-0 bg-background/80 backdrop-blur z-10 border-b border-border py-4 px-6">
       <div className="max-w-4xl mx-auto flex items-center justify-between">
@@ -219,7 +265,19 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
-    <Sheet open={contentSheetOpen} onOpenChange={setContentSheetOpen}><SheetContent className="w-full sm:max-w-full"><div className="flex h-full flex-col"><div className="mb-4 flex justify-between"><Button variant="ghost" onClick={() => setContentSheetOpen(false)}>Cancel</Button><Button onClick={onSaveContent}>Save & Close</Button></div><div className="min-h-0 flex-1"><TemplaticalEmailEditor ref={editorRef} initialContent={campaign.design_json ?? null} onChange={(content) => update({ design_json: content })} /></div></div></SheetContent></Sheet>
+    <Sheet open={contentSheetOpen} onOpenChange={setContentSheetOpen}><SheetContent className="w-full sm:max-w-full"><div className="flex h-full flex-col"><div className="mb-4 flex justify-between"><Button variant="ghost" onClick={() => setContentSheetOpen(false)}>Cancel</Button><div className="flex items-center gap-2"><Button variant="outline" disabled={!editorRef.current?.isReady()} onClick={() => setSaveTemplateOpen(true)}>Save as template</Button><Button onClick={onSaveContent}>Save & Close</Button></div></div><div className="min-h-0 flex-1"><TemplaticalEmailEditor ref={editorRef} initialContent={campaign.design_json ?? null} onChange={(content) => update({ design_json: content })} /></div></div></SheetContent></Sheet>
+    <Dialog open={saveTemplateOpen} onOpenChange={setSaveTemplateOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Save as template</DialogTitle>
+        </DialogHeader>
+        <Input placeholder="Template name" value={templateName} onChange={(e) => setTemplateName(e.target.value)} />
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setSaveTemplateOpen(false)}>Cancel</Button>
+          <Button onClick={saveAsTemplate} disabled={!templateName.trim() || savingTemplate}>{savingTemplate ? "Saving..." : "Save"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     <RecipientsPreviewSheet open={previewOpen} onOpenChange={setPreviewOpen} buyerIds={hasPrefillSnapshot?.buyerIds || []} />
   </div>
 }
