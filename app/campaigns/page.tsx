@@ -235,15 +235,15 @@ export default function CampaignsPage() {
             }}>Clear filters</Button>
           </div>
         ) : (
-          <div className="overflow-hidden rounded-lg border bg-card">
+          <div className="overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Campaign</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Recipients</TableHead>
-                  <TableHead>Sent / Scheduled</TableHead>
-                  <TableHead>Engagement</TableHead>
+                <TableRow className="border-b border-border/70 bg-muted/30 hover:bg-muted/30">
+                  <TableHead className="px-5 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground/90">Campaign</TableHead>
+                  <TableHead className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground/90">Status</TableHead>
+                  <TableHead className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground/90">Recipients</TableHead>
+                  <TableHead className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground/90">Sent / Scheduled</TableHead>
+                  <TableHead className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground/90">Engagement</TableHead>
                   <TableHead className="w-12" />
                 </TableRow>
               </TableHeader>
@@ -252,28 +252,40 @@ export default function CampaignsPage() {
                   const uiStatus = normalizedStatus(campaign.status)
                   const recipientsCount = campaign.campaign_recipients?.length || 0
                   const opens = recipientsCount ? Math.round(((campaign.openedCount || 0) / recipientsCount) * 100) : 0
-                  const clicks = recipientsCount ? Math.round((((campaign.clickedCount || 0) || 0) / recipientsCount) * 100) : 0
+                  const delivered = recipientsCount ? Math.round(((campaign.deliveredCount || 0) / recipientsCount) * 100) : 0
+                  const clicks = recipientsCount ? Math.round(((campaign.clickedCount || 0) / recipientsCount) * 100) : 0
                   const subjectPreview = (campaign.subject || campaign.message || "").slice(0, 60)
+                  const isSms = campaign.channel === "sms"
+                  const isEmail = campaign.channel === "email"
                   return (
-                    <TableRow key={campaign.id} className="border-b border-border transition-colors duration-150 ease-linear hover:bg-muted/50">
-                      <TableCell className="px-4 py-4">
-                        <div className="flex items-start gap-2">
-                          {campaign.channel === "email" ? <Mail className="mt-0.5 size-4 text-muted-foreground" /> : <MessageSquare className="mt-0.5 size-4 text-muted-foreground" />}
+                    <TableRow key={campaign.id} className="border-b border-border/70 transition-colors duration-150 ease-linear hover:bg-muted/35">
+                      <TableCell className="px-5 py-4">
+                        <div className="flex items-start gap-3">
+                          {isEmail ? <Mail className="mt-0.5 size-4 text-muted-foreground" /> : <MessageSquare className="mt-0.5 size-4 text-muted-foreground" />}
                           <div>
-                            <div className="text-sm font-medium text-foreground">{campaign.name}</div>
-                            <div className="max-w-[420px] truncate text-xs text-muted-foreground">{subjectPreview || "—"}</div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium leading-5 text-foreground">{campaign.name}</span>
+                              <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{campaign.channel}</span>
+                            </div>
+                            <div className="max-w-[440px] truncate pt-0.5 text-xs leading-5 text-muted-foreground">{subjectPreview || "—"}</div>
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="px-4 py-4"><CampaignStatusBadge status={uiStatus} /></TableCell>
-                      <TableCell className="px-4 py-4 text-sm tabular-nums">{recipientsCount || "—"}</TableCell>
-                      <TableCell className="px-4 py-4 text-sm tabular-nums">
+                      <TableCell className="px-4 py-4 align-middle"><CampaignStatusBadge status={uiStatus} /></TableCell>
+                      <TableCell className="px-4 py-4 text-right text-sm tabular-nums">{recipientsCount || "—"}</TableCell>
+                      <TableCell className="px-4 py-4 text-right text-sm tabular-nums">
                         <span className={uiStatus === "error" || uiStatus === "completed_with_errors" ? "text-red-700" : "text-muted-foreground"}>
                           {formatSentScheduled(campaign)}
                         </span>
                       </TableCell>
-                      <TableCell className="px-4 py-4 text-sm tabular-nums text-muted-foreground">
-                        {uiStatus === "sent" || uiStatus === "completed_with_errors" ? `${opens}% opens • ${clicks}% clicks` : "—"}
+                      <TableCell className="px-4 py-4 text-right text-sm tabular-nums text-muted-foreground">
+                        {uiStatus === "sent" || uiStatus === "completed_with_errors"
+                          ? isSms
+                            ? `${delivered}% delivered • ${clicks}% clicks`
+                            : isEmail
+                              ? `${opens}% opens • ${clicks}% clicks`
+                              : "—"
+                          : "—"}
                       </TableCell>
                       <TableCell className="px-4 py-4 text-right">
                         <div className="flex items-center justify-end gap-1">
