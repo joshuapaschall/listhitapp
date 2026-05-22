@@ -18,7 +18,7 @@ interface SmsSendResult {
 }
 
 interface SmsOptions {
-  buyerId: string
+  buyerId?: string
   to: string[]
   body: string
   campaignId?: string
@@ -43,17 +43,19 @@ export async function sendCampaignSMS({ buyerId, to, body, mediaUrls, dryRun, ca
   const url = `${TELNYX_API_URL}/messages`
 
   let fromNumber: string | null = null
-  try {
-    const { data } = await supabaseAdmin
-      .from("buyer_sms_senders")
-      .select("from_number")
-      .eq("buyer_id", buyerId)
-      .maybeSingle()
-    if (data?.from_number) {
-      fromNumber = formatPhoneE164(data.from_number) || data.from_number
+  if (!isTest && buyerId) {
+    try {
+      const { data } = await supabaseAdmin
+        .from("buyer_sms_senders")
+        .select("from_number")
+        .eq("buyer_id", buyerId)
+        .maybeSingle()
+      if (data?.from_number) {
+        fromNumber = formatPhoneE164(data.from_number) || data.from_number
+      }
+    } catch (err) {
+      console.error("Failed to fetch sticky sender", err)
     }
-  } catch (err) {
-    console.error("Failed to fetch sticky sender", err)
   }
 
   const results: SmsSendResult[] = []
@@ -112,7 +114,7 @@ export async function sendCampaignSMS({ buyerId, to, body, mediaUrls, dryRun, ca
       const from = typeof data.from === "string" ? data.from : data.from?.phone_number || ""
       log("sms", "Sent", { to: formatted, sid: data.id })
 
-      if (!fromNumber && from) {
+      if (!fromNumber && from && !isTest && buyerId) {
         try {
           const normalized = formatPhoneE164(from) || from
           await supabaseAdmin
