@@ -91,6 +91,14 @@ const TemplaticalEmailEditor = forwardRef<TemplaticalEmailEditorHandle, Templati
         content: initialContent ?? undefined,
         uiTheme: "light",
         theme,
+        fonts: {
+          defaultFont: "Inter",
+          defaultFallback: "Helvetica, Arial, sans-serif",
+          customFonts: [
+            { name: "Inter", url: "https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap", fallback: "Helvetica, Arial, sans-serif" },
+            { name: "Playfair Display", url: "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&display=swap", fallback: "Georgia, serif" },
+          ],
+        },
         mergeTags: {
           syntax: "handlebars",
           tags: [
