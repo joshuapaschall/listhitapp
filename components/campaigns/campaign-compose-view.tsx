@@ -135,21 +135,38 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
 
   const onSaveContent = async () => {
     const editor = editorRef.current
-    if (!editor) return
-    const design = editor.getContent()
-    const mjml = await editor.toMjml()
-    const res = await fetch("/api/campaigns/email/render", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mjml }),
-    })
-    if (!res.ok) {
-      toast.error("Failed to render email")
+    if (!editor?.isReady()) {
+      toast.error("Editor not ready — try again in a moment")
       return
     }
-    const { html } = await res.json()
-    update({ message: html, design_json: design, mjml })
-    setContentSheetOpen(false)
+
+    try {
+      const design = editor.getContent()
+      const mjml = await editor.toMjml()
+
+      if (!design || !mjml.trim()) {
+        toast.error("Nothing to save yet — add content first")
+        return
+      }
+
+      const res = await fetch("/api/campaigns/email/render", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mjml }),
+      })
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.error || "Failed to render email")
+      }
+
+      const { html } = await res.json()
+      update({ message: html, design_json: design, mjml })
+      setContentSheetOpen(false)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to save content"
+      toast.error(message)
+    }
   }
 
   const CardRow = ({ title, summary, valid, id, ctaText, children }: any) => (
