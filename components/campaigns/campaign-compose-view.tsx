@@ -320,7 +320,7 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
       </AlertDialogContent>
     </AlertDialog>
     <Sheet open={contentSheetOpen} onOpenChange={setContentSheetOpen}>
-      <SheetContent className="relative w-full p-0 sm:max-w-full [&>button.absolute]:hidden" data-builder-step={currentBuilderStep}>
+      <SheetContent className="w-full p-0 sm:max-w-full [&>button.absolute]:hidden" data-builder-step={currentBuilderStep}>
         {isPickerStep ? (
           <div className="h-full overflow-auto px-6 py-8" data-step={pickerVisible ? "picker" : "hidden"}>
             <EmailTemplatePicker key={pickerKey} initialBucket={pickerBucket} onPick={handlePick} onClose={() => setContentSheetOpen(false)} />
