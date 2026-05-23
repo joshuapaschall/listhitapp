@@ -1,17 +1,21 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { ArrowLeft, Code2, Plus, X } from "lucide-react"
+import { useQuery } from "@tanstack/react-query"
+import { ArrowLeft, Code2, FileText, Plus, X } from "lucide-react"
 import { BASIC_TEMPLATES, FULLY_DESIGNED_TEMPLATES, type EmailTemplateDef } from "@/lib/email-templates"
+import type { TemplateRecord } from "@/lib/supabase"
 import WireframePreview, { type WireframeVariant } from "./wireframe-preview"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { TemplateService } from "@/services/template-service"
 
 export type EmailPickResult =
   | { kind: "template"; def: EmailTemplateDef }
+  | { kind: "saved"; record: TemplateRecord }
   | { kind: "scratch" }
   | { kind: "html" }
 
@@ -22,8 +26,16 @@ interface Props {
 }
 
 export default function EmailTemplatePicker({ onPick, onClose, initialBucket }: Props) {
+  const { data: savedTemplates = [] } = useQuery({
+    queryKey: ["templates", "email"],
+    queryFn: () => TemplateService.listTemplates("email"),
+  })
+  const usableSaved = savedTemplates.filter(
+    (t) => t.design_json && Array.isArray(t.design_json.blocks) && t.design_json.blocks.length > 0
+  )
   const [view, setView] = useState<"chooser" | "gallery">(initialBucket ? "gallery" : "chooser")
-  const [bucket, setBucket] = useState<"basic" | "fully-designed">(initialBucket ?? "basic")
+  type GalleryBucket = "basic" | "fully-designed" | "saved"
+  const [bucket, setBucket] = useState<GalleryBucket>(initialBucket ?? "basic")
 
   useEffect(() => {
     if (initialBucket) {
@@ -39,7 +51,7 @@ export default function EmailTemplatePicker({ onPick, onClose, initialBucket }: 
       </Button>
       <h2 className="mb-8 mt-8 text-center text-3xl font-bold">How do you want to design your email?</h2>
 
-      <div className="mx-auto grid max-w-5xl gap-5 md:grid-cols-3">
+      <div className="mx-auto grid max-w-5xl gap-5 md:grid-cols-2 lg:grid-cols-4">
         <button
           type="button"
           onClick={() => onPick({ kind: "scratch" })}
@@ -99,6 +111,38 @@ export default function EmailTemplatePicker({ onPick, onClose, initialBucket }: 
             <p className="text-sm text-muted-foreground">Choose a professionally designed template and adjust it to your needs with ease.</p>
           </Card>
         </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setBucket("saved")
+            setView("gallery")
+          }}
+          className="cursor-pointer rounded-xl border p-4 text-left transition hover:border-brand hover:shadow-md"
+        >
+          <Card className="border-0 p-0 shadow-none">
+            <div className="pointer-events-none mb-4 rounded-lg bg-muted p-2">
+              {usableSaved.length > 0 ? (
+                <div className="grid grid-cols-2 gap-2">
+                  {usableSaved.slice(0, 4).map((t) => (
+                    <div key={t.id} className="rounded border bg-background px-2 py-3 text-xs font-medium text-center line-clamp-2">
+                      {t.name}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid aspect-[3/2] place-items-center rounded border border-dashed text-xs text-muted-foreground">
+                  No saved templates yet
+                </div>
+              )}
+            </div>
+            <p className="mb-2 flex items-center gap-2 text-lg font-semibold">
+              <FileText className="h-4 w-4" />
+              My templates
+            </p>
+            <p className="text-sm text-muted-foreground">Start from one of your saved templates.</p>
+          </Card>
+        </button>
       </div>
 
       <div className="mt-6 text-center">
@@ -120,10 +164,11 @@ export default function EmailTemplatePicker({ onPick, onClose, initialBucket }: 
         </Button>
       </div>
 
-      <Tabs value={bucket} onValueChange={(v) => setBucket(v as "basic" | "fully-designed")}>
+      <Tabs value={bucket} onValueChange={(v) => setBucket(v as GalleryBucket)}>
         <TabsList>
           <TabsTrigger value="basic">Basic layouts</TabsTrigger>
           <TabsTrigger value="fully-designed">Fully designed</TabsTrigger>
+          <TabsTrigger value="saved">My templates</TabsTrigger>
         </TabsList>
 
         <TabsContent value="basic" className="mt-4">
@@ -168,6 +213,35 @@ export default function EmailTemplatePicker({ onPick, onClose, initialBucket }: 
                 </button>
               ))}
             </div>
+          </ScrollArea>
+        </TabsContent>
+        <TabsContent value="saved" className="mt-4">
+          <ScrollArea className="h-[calc(100vh-220px)]">
+            {usableSaved.length === 0 ? (
+              <div className="grid h-[50vh] place-items-center px-4 text-center text-sm text-muted-foreground">
+                You haven&apos;t saved any templates yet. Save one from the builder with &quot;Save as template&quot;.
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-5 pb-4 md:grid-cols-3 lg:grid-cols-4">
+                {usableSaved.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => onPick({ kind: "saved", record: t })}
+                    className="cursor-pointer rounded-xl border p-3 text-left transition hover:border-brand hover:shadow-md hover:ring-1 hover:ring-brand/40"
+                  >
+                    <Card className="border-0 p-0 shadow-none">
+                      <div className="grid aspect-[3/4] place-items-center rounded-md border bg-muted/40 p-3 text-center">
+                        <FileText className="mb-2 h-6 w-6 text-muted-foreground" />
+                        <p className="text-sm font-medium">{t.name}</p>
+                      </div>
+                      <p className="mt-3 font-medium">{t.name}</p>
+                      <p className="text-sm text-muted-foreground">{t.subject?.trim() ? t.subject : "Saved template"}</p>
+                    </Card>
+                  </button>
+                ))}
+              </div>
+            )}
           </ScrollArea>
         </TabsContent>
       </Tabs>
