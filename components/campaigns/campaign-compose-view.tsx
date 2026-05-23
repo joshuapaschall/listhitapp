@@ -319,32 +319,8 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
-    <AlertDialog open={changeTemplateOpen} onOpenChange={setChangeTemplateOpen}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Change template?</AlertDialogTitle>
-          <AlertDialogDescription>
-            This replaces your current design with a different starting point. Unsaved changes in the current design will be lost.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Keep editing</AlertDialogCancel>
-          <AlertDialogAction
-            className="bg-brand text-brand-fg hover:bg-brand-hover"
-            onClick={() => {
-              setChangeTemplateOpen(false)
-              setPickerBucket("fully-designed")
-              setPickerKey((k) => k + 1)
-              setBuilderStep("picker")
-            }}
-          >
-            Choose new template
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
     <Sheet open={contentSheetOpen} onOpenChange={setContentSheetOpen}>
-      <SheetContent className="w-full p-0 sm:max-w-full [&>button.absolute]:hidden" data-builder-step={currentBuilderStep}>
+      <SheetContent className="relative w-full p-0 sm:max-w-full [&>button.absolute]:hidden" data-builder-step={currentBuilderStep}>
         {isPickerStep ? (
           <div className="h-full overflow-auto px-6 py-8" data-step={pickerVisible ? "picker" : "hidden"}>
             <EmailTemplatePicker key={pickerKey} initialBucket={pickerBucket} onPick={handlePick} onClose={() => setContentSheetOpen(false)} />
@@ -363,6 +339,30 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
             </div>
             <div className="min-h-0 flex-1">
               <TemplaticalEmailEditor key={editorKey} ref={editorRef} initialContent={editorSeed} onChange={(content) => update({ design_json: content })} />
+            </div>
+          </div>
+        )}
+        {changeTemplateOpen && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="w-full max-w-md rounded-xl bg-background p-6 shadow-xl">
+              <h3 className="text-lg font-semibold">Change template?</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                This replaces your current design with a different starting point. Unsaved changes in the current design will be lost.
+              </p>
+              <div className="mt-6 flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setChangeTemplateOpen(false)}>Keep editing</Button>
+                <Button
+                  className="bg-brand text-brand-fg hover:bg-brand-hover"
+                  onClick={() => {
+                    setChangeTemplateOpen(false)
+                    setPickerBucket("fully-designed")
+                    setPickerKey((k) => k + 1)
+                    setBuilderStep("picker")
+                  }}
+                >
+                  Choose new template
+                </Button>
+              </div>
             </div>
           </div>
         )}
