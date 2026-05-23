@@ -48,6 +48,7 @@ export default function EmailTemplateBuilder({ slug, mode, id, initialName = "",
   const [name, setName] = useState(initialName)
   const [builderStep, setBuilderStep] = useState<"picker" | "editor">(hasInitialDesign ? "editor" : "picker")
   const [pickerBucket, setPickerBucket] = useState<"basic" | "fully-designed" | undefined>(undefined)
+  const [pickerKey, setPickerKey] = useState(0)
   const [editorSeed, setEditorSeed] = useState<TemplateContent | null>(hasInitialDesign ? initialDesign : null)
   const [editorKey, setEditorKey] = useState(0)
   const [saving, setSaving] = useState(false)
@@ -63,6 +64,8 @@ export default function EmailTemplateBuilder({ slug, mode, id, initialName = "",
       const c = createDefaultTemplateContent("Inter, Helvetica, Arial, sans-serif")
       c.blocks = [createHtmlBlock({ content: "<!-- Paste or write your HTML here -->" })]
       content = c
+    } else if (r.kind === "saved") {
+      content = r.record.design_json as TemplateContent
     } else {
       content = r.def.build()
     }
@@ -120,7 +123,7 @@ export default function EmailTemplateBuilder({ slug, mode, id, initialName = "",
     <div className="fixed inset-0 z-50 flex flex-col bg-background">
       {builderStep === "picker" ? (
         <div className="flex-1 overflow-auto px-6 py-8">
-          <EmailTemplatePicker initialBucket={pickerBucket} onPick={handlePick} onClose={back} />
+          <EmailTemplatePicker key={pickerKey} initialBucket={pickerBucket} onPick={handlePick} onClose={back} />
         </div>
       ) : (
         <>
@@ -162,7 +165,8 @@ export default function EmailTemplateBuilder({ slug, mode, id, initialName = "",
               className="bg-brand text-brand-fg hover:bg-brand-hover"
               onClick={() => {
                 setChangeTemplateOpen(false)
-                setPickerBucket(undefined)
+                setPickerBucket("fully-designed")
+                setPickerKey((k) => k + 1)
                 setBuilderStep("picker")
               }}
             >

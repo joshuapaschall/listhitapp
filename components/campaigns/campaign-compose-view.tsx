@@ -64,6 +64,7 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
   const [contentSheetOpen, setContentSheetOpen] = useState(false)
   const [builderStep, setBuilderStep] = useState<"picker" | "editor">("picker")
   const [pickerBucket, setPickerBucket] = useState<"basic" | "fully-designed" | undefined>(undefined)
+  const [pickerKey, setPickerKey] = useState(0)
   const [editorSeed, setEditorSeed] = useState<TemplateContent | null>(null)
   const [editorKey, setEditorKey] = useState(0)
   const [sendConfirmOpen, setSendConfirmOpen] = useState(false)
@@ -166,6 +167,9 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
       const c = createDefaultTemplateContent("Inter, Helvetica, Arial, sans-serif")
       c.blocks = [createHtmlBlock({ content: "<!-- Paste or write your HTML here -->" })]
       content = c
+    } else if (r.kind === "saved") {
+      content = r.record.design_json as TemplateContent
+      if (r.record.subject && !campaign.subject?.trim()) update({ subject: r.record.subject })
     } else {
       content = r.def.build()
       if (r.def.defaultSubject && !campaign.subject?.trim()) update({ subject: r.def.defaultSubject })
@@ -327,7 +331,12 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
           <AlertDialogCancel>Keep editing</AlertDialogCancel>
           <AlertDialogAction
             className="bg-brand text-brand-fg hover:bg-brand-hover"
-            onClick={() => { setChangeTemplateOpen(false); setPickerBucket(undefined); setBuilderStep("picker") }}
+            onClick={() => {
+              setChangeTemplateOpen(false)
+              setPickerBucket("fully-designed")
+              setPickerKey((k) => k + 1)
+              setBuilderStep("picker")
+            }}
           >
             Choose new template
           </AlertDialogAction>
@@ -338,7 +347,7 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
       <SheetContent className="w-full p-0 sm:max-w-full [&>button.absolute]:hidden" data-builder-step={currentBuilderStep}>
         {isPickerStep ? (
           <div className="h-full overflow-auto px-6 py-8" data-step={pickerVisible ? "picker" : "hidden"}>
-            <EmailTemplatePicker initialBucket={pickerBucket} onPick={handlePick} onClose={() => setContentSheetOpen(false)} />
+            <EmailTemplatePicker key={pickerKey} initialBucket={pickerBucket} onPick={handlePick} onClose={() => setContentSheetOpen(false)} />
           </div>
         ) : (
           <div className="flex h-full flex-col p-6" data-step={editorVisible ? "editor" : "hidden"}>
