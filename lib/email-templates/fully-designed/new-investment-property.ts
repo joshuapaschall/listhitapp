@@ -1,36 +1,26 @@
-import { createButtonBlock, createDefaultTemplateContent, createDividerBlock, createImageBlock, createParagraphBlock, createSocialIconsBlock, createSpacerBlock, createTitleBlock } from "@templatical/types"
+import { createButtonBlock, createDefaultTemplateContent, createImageBlock, createParagraphBlock, createSectionBlock, createSpacerBlock, createTitleBlock } from "@templatical/types"
 import type { EmailTemplateDef } from "../types"
 import { PLACEHOLDER_IMAGE } from "../types"
+import { BODY, CREAM, HEAD, NAVY, ORANGE, brandedFooter, logoBlock, preheader } from "./shared"
 
-const NAVY = "#1E3A8A"
-const ORANGE = "#F97316"
-const CREAM = "#F9F7F1"
-const MUTED = "#6B7280"
-const HEAD = "Playfair Display, Georgia, serif"
-const BODY = "Inter, Helvetica, Arial, sans-serif"
-
+// create
+// create
+// create
+// create
+// create
+// create
+// create
+// create
+// create
+// create
+// create
+// create
 const def: EmailTemplateDef = {
-  id: "new-investment-property",
-  name: "New investment property",
-  bucket: "fully-designed",
-  category: "Deal blast",
-  description: "Announce a new off-market deal to your cash buyers.",
-  previewImage: "/email-templates/previews/new-investment-property.svg",
-  defaultSubject: "🏠 New off-market deal — {{first_name}}, take a look",
+  id: "new-investment-property", name: "New investment property", bucket: "fully-designed", category: "Deal blast", description: "Announce a new off-market deal to your cash buyers.", previewImage: "/email-templates/previews/new-investment-property.svg", defaultSubject: "New off-market deal in your buy box, {{first_name}}",
   build: () => {
     const c = createDefaultTemplateContent(BODY, { width: 600, backgroundColor: CREAM })
-    const logo = createImageBlock({ src: PLACEHOLDER_IMAGE, alt: "GA Wholesale Homes logo", width: 160 })
-    logo.styles = { padding: { top: 24, right: 0, bottom: 8, left: 0 }, margin: { top: 0, right: 0, bottom: 0, left: 0 } }
-    const h = createTitleBlock({ content: `<h1 style="font-family:${HEAD}">New Investment Property</h1>`, level: 1, textAlign: "center", color: NAVY })
-    const hero = createImageBlock({ src: PLACEHOLDER_IMAGE, alt: "Exterior of investment property", width: "full" })
-    const body = createParagraphBlock({ content: "<p>Hi {{first_name}}, we just secured a new off-market property. Below are the numbers — reply fast, these move quickly.</p>" })
-    const cta = createButtonBlock({ text: "View the deal", url: "https://", backgroundColor: ORANGE, textColor: "#ffffff", borderRadius: 6 })
-    const div = createDividerBlock({ color: "#E5E7EB", thickness: 1 })
-    const social = createSocialIconsBlock({ iconStyle: "circle", iconSize: "medium", icons: [{ id: crypto.randomUUID(), platform: "facebook", url: "https://" }, { id: crypto.randomUUID(), platform: "instagram", url: "https://" }] })
-    const footer = createParagraphBlock({ content: `<p style="color:${MUTED};font-size:12px;text-align:center">GA Wholesale Homes · You're receiving this because you opted in. <a href="{{unsubscribe}}">Unsubscribe</a></p>` })
-    c.blocks = [logo, h, createSpacerBlock({ height: 8 }), hero, body, cta, div, social, footer]
+    c.blocks = [preheader(), logoBlock(), createTitleBlock({ content: `<h1 style="font-family:${HEAD}">New Investment Property</h1>`, level: 1, textAlign: "center", color: NAVY }), createImageBlock({ src: PLACEHOLDER_IMAGE, alt: "Replace with property hero photo", width: "full" }), createParagraphBlock({ content: "<p>Hi {{first_name}}, we just locked up a fresh off-market property that fits active rental and flip buyers. Replace this intro with your 1-2 sentence angle and neighborhood context.</p>" }), createSectionBlock({ columns: "2-1", children: [[createTitleBlock({ content: "<h3>Deal Snapshot</h3>", level: 3, color: NAVY }), createParagraphBlock({ content: "<p>ARV: $365,000<br/>Asking: $239,000<br/>Estimated Repairs: $48,000<br/>Est. Rent: $2,350/mo<br/>Add your cap rate and cash-on-cash notes here.</p>" })], [createImageBlock({ src: PLACEHOLDER_IMAGE, alt: "Replace with comp or interior photo", width: "full" })]] }), createSpacerBlock({ height: 8 }), createButtonBlock({ text: "View the deal", url: "https://", backgroundColor: ORANGE, textColor: "#ffffff", borderRadius: 6 }), createParagraphBlock({ content: "<p style=\"text-align:center\">First qualified buyer to confirm wins this one. We are scheduling walkthrough calls today.</p>" }), createButtonBlock({ text: "Reply to claim", url: "{{contact_form_link}}", backgroundColor: "#1F2937", textColor: "#ffffff", borderRadius: 6 }), ...brandedFooter()]
     return c
   },
 }
-
 export default def
