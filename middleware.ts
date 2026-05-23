@@ -19,9 +19,18 @@ export async function middleware(req: NextRequest) {
     const pathname = req.nextUrl.pathname
 
     // The bare root of a branded short-link domain must NOT serve the app.
-    // Permanently redirect to the main marketing site so search engines deindex it.
+    // Redirect to the parent marketing site by stripping a leading "go." label,
+    // using a permanent redirect so search engines deindex the short-link host. This is
+    // multi-tenant-safe: each branded domain bounces to its OWN parent site
+    // (go.georgiawholesalehomes.com -> georgiawholesalehomes.com, go.acmehomes.com -> acmehomes.com).
     if (pathname === "/") {
-      return NextResponse.redirect("https://georgiawholesalehomes.com/", 308)
+      const rootDomain = host.replace(/^go\./, "")
+      // If no "go." prefix could be stripped, refuse to serve the app and avoid a
+      // redirect loop by returning 404 rather than redirecting the host to itself.
+      if (rootDomain === host) {
+        return new NextResponse("Not found", { status: 404 })
+      }
+      return NextResponse.redirect(`https://${rootDomain}/`, 308)
     }
 
     // Don't intercept Next.js internals, the rewritten /r/* target, etc.
