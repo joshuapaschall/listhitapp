@@ -18,9 +18,14 @@ export async function middleware(req: NextRequest) {
   if (SHORT_LINK_DOMAINS.length > 0 && SHORT_LINK_DOMAINS.includes(host)) {
     const pathname = req.nextUrl.pathname
 
-    // Don't intercept Next.js internals, the rewritten /r/* target, or root.
+    // The bare root of a branded short-link domain must NOT serve the app.
+    // Permanently redirect to the main marketing site so search engines deindex it.
+    if (pathname === "/") {
+      return NextResponse.redirect("https://georgiawholesalehomes.com/", 308)
+    }
+
+    // Don't intercept Next.js internals, the rewritten /r/* target, etc.
     if (
-      pathname === "/" ||
       pathname.startsWith("/_next") ||
       pathname.startsWith("/api") ||
       pathname.startsWith("/r/") ||
