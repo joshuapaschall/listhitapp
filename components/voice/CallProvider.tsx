@@ -33,6 +33,9 @@ export interface CallContextValue {
   joinConference: (conferenceId?: string) => Promise<void>;
   leaveConference: () => Promise<void>;
   addToConference: (phoneNumber: string) => Promise<void>;
+  dialerOpen: boolean;
+  setDialerOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  openDialer: () => void;
 }
 
 const CallContext = createContext<CallContextValue | undefined>(undefined);
@@ -52,6 +55,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const [isMuted, setIsMuted] = useState(false);
   const [isOnHold, setIsOnHold] = useState(false);
   const [customerLegId, setCustomerLegId] = useState<string | null>(null);
+  const [dialerOpen, setDialerOpen] = useState(false);
   const [currentContact, setCurrentContact] = useState<{ name?: string; number?: string } | null>(null);
   const activeCallRef = useRef<Call | null>(null);
   const conferenceIdRef = useRef<string | null>(null);
@@ -300,7 +304,11 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     });
   }, [device]);
 
-  const value: CallContextValue = { device, status, activeCall, incomingCall, isMuted, isOnHold, customerLegId, currentContact, setCurrentContact, connectCall, makeCall, answerCall, disconnectCall, toggleMute, unmute, toggleHold, unhold, startRecording, stopRecording, transfer, sendDTMF, joinConference, leaveConference, addToConference };
+  const openDialer = useCallback(() => {
+    setDialerOpen(true);
+  }, []);
+
+  const value: CallContextValue = { device, status, activeCall, incomingCall, isMuted, isOnHold, customerLegId, currentContact, setCurrentContact, connectCall, makeCall, answerCall, disconnectCall, toggleMute, unmute, toggleHold, unhold, startRecording, stopRecording, transfer, sendDTMF, joinConference, leaveConference, addToConference, dialerOpen, setDialerOpen, openDialer };
   return <CallContext.Provider value={value}>{children}<CallWidget /><IncomingRingtone /><audio id="telnyx-remote-audio" autoPlay style={{ display: "none" }} /></CallContext.Provider>;
 }
 
