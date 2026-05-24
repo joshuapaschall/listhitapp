@@ -23,41 +23,9 @@ export async function GET() {
     FROM_NUMBER: flags.fromNumber,
   }
 
-  let agent: { id: string; sip_username: string | null } | null = null
-  let supabaseError: Error | null = null
-
-  if (supabaseAdmin) {
-    const { data, error } = await supabaseAdmin
-      .from("agents")
-      .select("id, sip_username")
-      .limit(1)
-      .maybeSingle()
-
-    agent = data ?? null
-    supabaseError = error
-  } else {
-    supabaseError = new Error("SUPABASE_SERVICE_ROLE_KEY missing")
-  }
-
-  let lastPresencePing: string | null = null
-
-  if (agent?.id && supabaseAdmin) {
-    try {
-      const { data: presence } = await supabaseAdmin
-        .from("agents_sessions")
-        .select("last_seen")
-        .eq("agent_id", agent.id)
-        .order("last_seen", { ascending: false })
-        .limit(1)
-        .maybeSingle()
-
-      if (presence?.last_seen) {
-        lastPresencePing = presence.last_seen
-      }
-    } catch (presenceError) {
-      console.error("[health] failed to load last presence", presenceError)
-    }
-  }
+  const supabaseError: Error | null = supabaseAdmin
+    ? null
+    : new Error("SUPABASE_SERVICE_ROLE_KEY missing")
 
   return NextResponse.json({
     ok: true,
@@ -72,10 +40,10 @@ export async function GET() {
     supabase_ok: !supabaseError,
     supabase_error: supabaseError?.message,
     agent: {
-      id: agent?.id ?? null,
-      has_sip_username: !!agent?.sip_username,
-      sip_username: agent?.sip_username ?? null,
+      id: null,
+      has_sip_username: false,
+      sip_username: null,
     },
-    last_presence_ping: lastPresencePing,
+    last_presence_ping: null,
   })
 }

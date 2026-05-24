@@ -160,43 +160,11 @@ async function resolveOrgFromDid(e164?: string | null) {
 }
 
 async function pickAvailableAgent(): Promise<{ id: string, sip_username: string } | null> {
-  const { data: agent, error } = await supabaseAdmin
-    .from("agents")
-    .select("id,sip_username")
-    .eq("status", "available")
-    .limit(1)
-    .single()
-
-  if (error) {
-    console.error("Failed to fetch available agent", error);
-    return null;
-  }
-
-  if (!agent) {
-    return null;
-  }
-
-  return agent;
+  return null;
 }
 
-async function getAgentBySipUsername(sip_username: string): Promise<{ id: string, sip_username: string } | null> {
-  const { data: agent, error } = await supabaseAdmin
-    .from("agents")
-    .select("id,sip_username")
-    .eq("sip_username", sip_username)
-    .limit(1)
-    .single()
-
-  if (error) {
-    console.error("Failed to fetch available agent", error);
-    return null;
-  }
-
-  if (!agent) {
-    return null;
-  }
-
-  return agent;
+async function getAgentBySipUsername(_sip_username: string): Promise<{ id: string, sip_username: string } | null> {
+  return null;
 }
 
 async function pickOrgFallback(orgId?: string | null): Promise<string | null> {
