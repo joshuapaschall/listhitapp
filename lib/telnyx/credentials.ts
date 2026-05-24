@@ -303,6 +303,60 @@ export async function createAgentTelephonyCredential({
   throw lastError || new Error("Unable to create unique Telnyx credential")
 }
 
+
+interface UserCredentialProfile {
+  telnyx_credential_id: string | null
+  sip_username: string | null
+  sip_password: string | null
+}
+
+export async function ensureUserTelephonyCredential(
+  userId: string,
+): Promise<AgentTelephonyCredential> {
+  const { data: profile, error: profileError } = await supabaseAdmin
+    .from("profiles")
+    .select("telnyx_credential_id, sip_username, sip_password")
+    .eq("id", userId)
+    .maybeSingle<UserCredentialProfile>()
+
+  if (profileError) {
+    throw new Error(`Failed to load profile: ${profileError.message}`)
+  }
+
+  if (!profile) {
+    throw new Error("Profile not found")
+  }
+
+  if (profile.telnyx_credential_id) {
+    if (!profile.sip_username || !profile.sip_password) {
+      throw new Error("Profile missing SIP credentials")
+    }
+
+    return {
+      id: profile.telnyx_credential_id,
+      username: profile.sip_username,
+      password: profile.sip_password,
+    }
+  }
+
+  const credential = await createAgentTelephonyCredential()
+
+  const { error: updateError } = await supabaseAdmin
+    .from("profiles")
+    .update({
+      telnyx_credential_id: credential.id,
+      sip_username: credential.username,
+      sip_password: credential.password,
+    })
+    .eq("id", userId)
+
+  if (updateError) {
+    throw new Error(`Failed to update profile credential: ${updateError.message}`)
+  }
+
+  return credential
+}
+
 export async function deleteTelnyxCredential(id: string) {
   try {
     await fetch(`${TELNYX_API_URL}/telephony_credentials/${id}`, {
