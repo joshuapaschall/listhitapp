@@ -1,37 +1,22 @@
-import { supabaseAdmin } from "@/lib/supabase";
-
 /**
  * Resolve the SIP URI to transfer inbound PSTN calls to.
  *
- * The browser registers under the per-user telephony-credential username stored
- * in profiles.sip_username (e.g. "sip_4821_a3f2"), minted by
- * /api/telnyx/webrtc-token. Inbound calls MUST be transferred to that EXACT
- * username, otherwise Telnyx routes them to a different/stale identity and the
- * callee returns SIP 480. Do NOT introduce a static or env-based username here —
- * that was the previous bug (TELNYX_WEBRTC_SIP_USERNAME pointed at the
- * connection-level username "listhitapp", not the registered telephony cred).
+ * The browser registers with the CREDENTIAL CONNECTION's connection-level
+ * username/password (see /api/telnyx/webrtc-credentials + CallProvider). Telnyx
+ * supports inbound SIP URI calling to credential-connection usernames (gated by
+ * the connection's sip_uri_calling_preference) — NOT to per-user telephony
+ * credentials, transferring to which returns 10010/D11 "Destination Number is
+ * invalid". So we transfer to the connection username from
+ * TELNYX_WEBRTC_SIP_USERNAME, which is exactly what the browser registers as.
  */
 export async function getWebRTCSipUri(): Promise<string | null> {
   try {
-    const { data, error } = await supabaseAdmin
-      .from("profiles")
-      .select("sip_username")
-      .not("sip_username", "is", null)
-      .order("updated_at", { ascending: false, nullsFirst: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (error) {
-      throw error;
-    }
-
-    const sipUsername = data?.sip_username?.trim();
-    if (!sipUsername) {
-      console.warn("[webrtc-sip] no profiles.sip_username found — cannot route inbound");
+    const username = (process.env.TELNYX_WEBRTC_SIP_USERNAME ?? "").trim();
+    if (!username) {
+      console.warn("[webrtc-sip] TELNYX_WEBRTC_SIP_USERNAME not set — cannot route inbound");
       return null;
     }
-
-    const sipUri = `sip:${sipUsername}@sip.telnyx.com`;
+    const sipUri = `sip:${username}@sip.telnyx.com`;
     console.log("[webrtc-sip] resolved inbound transfer target", { sipUri });
     return sipUri;
   } catch (error) {
