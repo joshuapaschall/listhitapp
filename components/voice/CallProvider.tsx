@@ -58,12 +58,14 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const [dialerOpen, setDialerOpen] = useState(false);
   const [currentContact, setCurrentContact] = useState<{ name?: string; number?: string } | null>(null);
   const activeCallRef = useRef<Call | null>(null);
+  const incomingCallRef = useRef<Call | null>(null);
   const conferenceIdRef = useRef<string | null>(null);
   const sipUsernameRef = useRef<string | null>(null);
   const clientIdRef = useRef<string>(crypto.randomUUID());
   const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => { activeCallRef.current = activeCall; }, [activeCall]);
+  useEffect(() => { incomingCallRef.current = incomingCall; }, [incomingCall]);
 
 
   const reportPresence = useCallback((presenceStatus: "online" | "offline", useBeacon = false) => {
@@ -145,7 +147,6 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
           const state = String((call as any).state || "").toLowerCase();
           if (n.type === "call.received" || (n.type === "callUpdate" && state === "ringing" && call.direction !== "outbound")) {
             setIncomingCall(call);
-            setActiveCall(call);
             setStatus("connecting");
             return;
           }
@@ -217,7 +218,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   }, [incomingCall]);
 
   const disconnectCall = useCallback(() => {
-    const call = activeCallRef.current;
+    const call = activeCallRef.current || incomingCallRef.current;
     (call as any)?.hangup?.();
     setActiveCall(null);
     setIncomingCall(null);
