@@ -3,6 +3,7 @@ import { cookies } from "next/headers"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getUserRole } from "@/lib/get-user-role"
+import { ensureUserTelephonyCredential } from "@/lib/telnyx/credentials"
 
 export async function POST(request: NextRequest) {
   const cookieStore = cookies()
@@ -21,6 +22,12 @@ export async function POST(request: NextRequest) {
   if (id) {
     const { error: pErr } = await supabaseAdmin.from("profiles").insert({ id, role: userRole })
     if (pErr) return NextResponse.json({ error: "Profile insert failed" }, { status: 500 })
+
+    try {
+      await ensureUserTelephonyCredential(id)
+    } catch (telephonyError) {
+      console.error("[create-user] Failed to provision Telnyx credential", telephonyError)
+    }
   }
   return NextResponse.json({ success: true })
 }
