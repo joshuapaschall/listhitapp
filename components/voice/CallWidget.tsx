@@ -9,8 +9,7 @@ import { formatPhoneDisplay } from "@/lib/dedup-utils";
 import { Dialer } from "@/components/voice/Dialer";
 
 export function CallWidget() {
-  const { status, activeCall, incomingCall, currentContact, answerCall, disconnectCall, toggleMute, isMuted, toggleHold, isOnHold, sendDTMF, transfer } = useCall();
-  const [dialerOpen, setDialerOpen] = useState(false);
+  const { status, activeCall, incomingCall, currentContact, answerCall, disconnectCall, toggleMute, isMuted, toggleHold, isOnHold, sendDTMF, transfer, dialerOpen, setDialerOpen } = useCall();
   const [keypadOpen, setKeypadOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
   const [destination, setDestination] = useState("");

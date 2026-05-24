@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useNotifications } from "@/hooks/use-notifications"
+import { useCall } from "@/components/voice/CallProvider"
 
 interface HeaderProps {
   toggleSidebar: () => void
@@ -31,6 +32,7 @@ export function Header({ toggleSidebar }: HeaderProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [mounted, setMounted] = useState(false)
   const { notifications, unreadCount, markAsRead } = useNotifications()
+  const { openDialer } = useCall()
 
   useEffect(() => {
     setMounted(true)
@@ -61,7 +63,7 @@ export function Header({ toggleSidebar }: HeaderProps) {
           <Button variant="ghost" size="sm">
             <MessageSquare className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" onClick={openDialer}>
             <Phone className="h-4 w-4" />
           </Button>
           <Button variant="ghost" size="sm">
