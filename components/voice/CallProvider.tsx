@@ -130,7 +130,8 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         created.on("telnyx.notification", (n: any) => {
           if (!mounted || !n?.call) return;
           const call = n.call as Call;
-          if (n.type === "call.received" || (n.type === "callUpdate" && call.state === "ringing" && call.direction !== "outbound")) {
+          const state = String((call as any).state || "").toLowerCase();
+          if (n.type === "call.received" || (n.type === "callUpdate" && state === "ringing" && call.direction !== "outbound")) {
             setIncomingCall(call);
             setActiveCall(call);
             setStatus("connecting");
@@ -139,12 +140,12 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
           if (n.type === "callUpdate") {
             const controlId = (call as any)?.telnyxIDs?.telnyxCallControlId || null;
             if (controlId) setCustomerLegId(controlId);
-            if (call.state === "active") {
+            if (state === "active") {
               setActiveCall(call);
               setIncomingCall(null);
               setStatus("on-call");
               window.dispatchEvent(new CustomEvent("telnyxCallConnected", { detail: { call } }));
-            } else if (["hangup", "destroy"].includes(call.state)) {
+            } else if (["hangup", "destroy", "purge"].includes(state)) {
               setActiveCall(null);
               setIncomingCall(null);
               setIsMuted(false);
