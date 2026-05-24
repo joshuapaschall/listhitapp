@@ -97,13 +97,13 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
     const init = async () => {
       try {
-        const res = await fetch("/api/telnyx/webrtc-token", { method: "POST", cache: "no-store" });
+        const res = await fetch("/api/telnyx/webrtc-credentials", { method: "GET", cache: "no-store" });
         const json = await res.json();
-        if (!res.ok || !json?.login_token) throw new Error(json?.error || "Failed to fetch WebRTC token");
+        if (!res.ok || !json?.login || !json?.password) throw new Error(json?.error || "Failed to fetch WebRTC credentials");
 
-        sipUsernameRef.current = typeof json?.sip_username === "string" ? json.sip_username : null;
+        sipUsernameRef.current = typeof json?.login === "string" ? json.login : null;
 
-        created = new TelnyxRTC({ login_token: json.login_token } as any);
+        created = new TelnyxRTC({ login: json.login, password: json.password } as any);
         // Use a non-React audio element. A React-rendered element carries a
         // __reactFiber$ circular reference that crashes the SDK's JSON.stringify
         // when it sends the SDP/ICE, preventing the INVITE from ever being sent.
