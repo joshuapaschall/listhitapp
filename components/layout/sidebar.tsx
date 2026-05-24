@@ -21,7 +21,6 @@ import {
   ChevronRight,
   Phone,
   Target,
-  UserCheck,
   Shield,
 } from "lucide-react"
 import {
@@ -58,12 +57,6 @@ const navigation = [
     title: "Calls",
     icon: Phone,
     href: "/calls",
-    badge: null,
-  },
-  {
-    title: "Agents",
-    icon: UserCheck,
-    href: "/agents",
     badge: null,
   },
   {
