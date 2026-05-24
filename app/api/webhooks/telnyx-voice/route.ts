@@ -3,6 +3,7 @@ import { Buffer } from "node:buffer";
 import { NextResponse } from "next/server";
 import { formatPhoneE164 } from "@/lib/call-validation";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getWebRTCSipUri } from "@/lib/voice/webrtc-sip";
 import {
   TELNYX_API_URL,
   getCallControlAppId,
@@ -243,8 +244,25 @@ export async function POST(req: Request) {
       const direction =
         typeof directionRaw === "string" ? directionRaw.toLowerCase() : null;
 
+      const toRaw = String(payload?.to ?? payload?.to_number ?? "");
+      if (toRaw.startsWith("sip:")) {
+        console.log("[telnyx-voice] skipping sip B-leg");
+        return NextResponse.json({ ok: true });
+      }
+
       if (direction === "incoming") {
         await answer(callControlId);
+        const sipUri = await getWebRTCSipUri();
+
+        if (sipUri) {
+          await transfer(callControlId, sipUri);
+        } else {
+          await sayAndHangup(
+            callControlId,
+            "Sorry, no agent is available right now. Please try again later."
+          );
+        }
+
         return NextResponse.json({ ok: true });
       }
 
@@ -254,19 +272,6 @@ export async function POST(req: Request) {
     }
 
     if (event === "call.answered") {
-      if (await resolveOrgFromDid(payload?.to)) {
-        const agent = await pickAvailableAgent();
-        if (agent) {
-          await transfer(
-            callControlId,
-            buildSipUri(agent?.sip_username)!,
-            ""
-          );
-          console.log("Call Transfer Successfully.");
-        } else {
-          await speak(callControlId, "Sorry, we couldn’t reach an agent right now. We’ll call you back shortly.");
-        }
-      }
       return NextResponse.json({ ok: true });
     }
 
