@@ -102,7 +102,19 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         sipUsernameRef.current = typeof json?.sip_username === "string" ? json.sip_username : null;
 
         created = new TelnyxRTC({ login_token: json.login_token } as any);
-        (created as any).remoteElement = "telnyx-remote-audio";
+        // Use a non-React audio element. A React-rendered element carries a
+        // __reactFiber$ circular reference that crashes the SDK's JSON.stringify
+        // when it sends the SDP/ICE, preventing the INVITE from ever being sent.
+        let remoteAudioEl = document.getElementById("telnyx-remote-audio") as HTMLAudioElement | null;
+        if (!remoteAudioEl) {
+          remoteAudioEl = document.createElement("audio");
+          remoteAudioEl.id = "telnyx-remote-audio";
+          remoteAudioEl.autoplay = true;
+          (remoteAudioEl as any).playsInline = true;
+          remoteAudioEl.style.display = "none";
+          document.body.appendChild(remoteAudioEl);
+        }
+        (created as any).remoteElement = remoteAudioEl;
 
         created.on("telnyx.ready", () => {
           if (!mounted) return;
@@ -308,7 +320,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value: CallContextValue = { device, status, activeCall, incomingCall, isMuted, isOnHold, customerLegId, currentContact, setCurrentContact, connectCall, makeCall, answerCall, disconnectCall, toggleMute, unmute, toggleHold, unhold, startRecording, stopRecording, transfer, sendDTMF, joinConference, leaveConference, addToConference, dialerOpen, setDialerOpen, openDialer };
-  return <CallContext.Provider value={value}>{children}<CallWidget /><IncomingRingtone /><audio id="telnyx-remote-audio" autoPlay style={{ display: "none" }} /></CallContext.Provider>;
+  return <CallContext.Provider value={value}>{children}<CallWidget /><IncomingRingtone /></CallContext.Provider>;
 }
 
 export function useCall() { const ctx = useContext(CallContext); if (!ctx) throw new Error("useCall must be used inside CallProvider"); return ctx; }
