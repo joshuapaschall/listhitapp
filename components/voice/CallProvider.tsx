@@ -174,7 +174,12 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
   const dialInternal = useCallback(async (destination: string, callerIdNumber?: string) => {
     if (!device) throw new Error("Phone not ready");
-    const call = device.newCall({ destinationNumber: destination, callerNumber: callerIdNumber, audio: true } as any);
+    const fallbackFrom =
+      process.env.NEXT_PUBLIC_DEFAULT_OUTBOUND_DID ||
+      process.env.NEXT_PUBLIC_FROM_NUMBER ||
+      undefined;
+    const callerNumber = callerIdNumber || fallbackFrom;
+    const call = device.newCall({ destinationNumber: destination, callerNumber, audio: true } as any);
     setActiveCall(call);
     setStatus("connecting");
     call.invite();
