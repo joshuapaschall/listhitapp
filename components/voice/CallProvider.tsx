@@ -1,0 +1,212 @@
+"use client";
+
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { Call, TelnyxRTC } from "@telnyx/webrtc";
+import { supabaseBrowser } from "@/lib/supabase-browser";
+
+type CallStatus = "idle" | "connecting" | "on-call" | "error";
+
+export interface CallContextValue {
+  device: TelnyxRTC | null;
+  status: CallStatus;
+  activeCall: Call | null;
+  incomingCall: Call | null;
+  isMuted: boolean;
+  isOnHold: boolean;
+  customerLegId: string | null;
+  connectCall: (number: string, callerIdNumber?: string) => Promise<void>;
+  makeCall: (destination: string, buyerId?: string, fromNumber?: string) => Promise<any>;
+  answerCall: () => void;
+  disconnectCall: () => void;
+  toggleMute: () => void;
+  unmute: () => void;
+  toggleHold: () => Promise<void>;
+  unhold: () => Promise<void>;
+  startRecording: () => Promise<void>;
+  stopRecording: () => Promise<void>;
+  transfer: (number: string) => Promise<void>;
+  sendDTMF: (digits: string) => void;
+  joinConference: (conferenceId?: string) => Promise<void>;
+  leaveConference: () => Promise<void>;
+  addToConference: (phoneNumber: string) => Promise<void>;
+}
+
+const CallContext = createContext<CallContextValue | undefined>(undefined);
+
+export async function getAccessToken() {
+  const supabase = supabaseBrowser();
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error("Sign in required");
+  return session.access_token;
+}
+
+export function CallProvider({ children }: { children: React.ReactNode }) {
+  const [device, setDevice] = useState<TelnyxRTC | null>(null);
+  const [status, setStatus] = useState<CallStatus>("connecting");
+  const [activeCall, setActiveCall] = useState<Call | null>(null);
+  const [incomingCall, setIncomingCall] = useState<Call | null>(null);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isOnHold, setIsOnHold] = useState(false);
+  const [customerLegId, setCustomerLegId] = useState<string | null>(null);
+  const activeCallRef = useRef<Call | null>(null);
+
+  useEffect(() => { activeCallRef.current = activeCall; }, [activeCall]);
+
+  useEffect(() => {
+    let created: TelnyxRTC | null = null;
+    let mounted = true;
+
+    const init = async () => {
+      try {
+        const res = await fetch("/api/telnyx/webrtc-token", { method: "POST", cache: "no-store" });
+        const json = await res.json();
+        if (!res.ok || !json?.login_token) throw new Error(json?.error || "Failed to fetch WebRTC token");
+
+        created = new TelnyxRTC({ login_token: json.login_token } as any);
+
+        created.on("telnyx.ready", () => {
+          if (!mounted) return;
+          setStatus("idle");
+          created?.enableMicrophone?.();
+        });
+
+        created.on("telnyx.error", () => {
+          if (!mounted) return;
+          setStatus("error");
+        });
+
+        created.on("telnyx.notification", (n: any) => {
+          if (!mounted || !n?.call) return;
+          const call = n.call as Call;
+          if (n.type === "call.received" || (n.type === "callUpdate" && call.state === "ringing" && call.direction !== "outbound")) {
+            setIncomingCall(call);
+            setActiveCall(call);
+            setStatus("connecting");
+            return;
+          }
+          if (n.type === "callUpdate") {
+            const controlId = (call as any)?.telnyxIDs?.telnyxCallControlId || null;
+            if (controlId) setCustomerLegId(controlId);
+            if (call.state === "active") {
+              setActiveCall(call);
+              setIncomingCall(null);
+              setStatus("on-call");
+              window.dispatchEvent(new CustomEvent("telnyxCallConnected", { detail: { call } }));
+            } else if (["hangup", "destroy"].includes(call.state)) {
+              setActiveCall(null);
+              setIncomingCall(null);
+              setIsMuted(false);
+              setIsOnHold(false);
+              setCustomerLegId(null);
+              setStatus("idle");
+            }
+          }
+        });
+
+        created.connect();
+        setDevice(created);
+      } catch {
+        if (mounted) setStatus("error");
+      }
+    };
+    init();
+
+    return () => {
+      mounted = false;
+      try { created?.disconnect(); } catch {}
+      setDevice(null);
+    };
+  }, []);
+
+  const dialInternal = useCallback(async (destination: string, callerIdNumber?: string) => {
+    if (!device) throw new Error("Phone not ready");
+    const call = device.newCall({ destinationNumber: destination, callerNumber: callerIdNumber, audio: true } as any);
+    setActiveCall(call);
+    setStatus("connecting");
+    call.invite();
+  }, [device]);
+
+  const connectCall = useCallback(async (number: string, callerIdNumber?: string) => {
+    await dialInternal(number, callerIdNumber);
+  }, [dialInternal]);
+
+  const makeCall = useCallback(async (destination: string, buyerId?: string, fromNumber?: string) => {
+    await dialInternal(destination, fromNumber);
+    return { ok: true, buyerId: buyerId || null };
+  }, [dialInternal]);
+
+  const answerCall = useCallback(() => {
+    const call = incomingCall || activeCallRef.current;
+    (call as any)?.answer?.();
+    if (call) setActiveCall(call);
+  }, [incomingCall]);
+
+  const disconnectCall = useCallback(() => {
+    const call = activeCallRef.current;
+    (call as any)?.hangup?.();
+    setActiveCall(null);
+    setIncomingCall(null);
+    setStatus("idle");
+  }, []);
+
+  const toggleMute = useCallback(() => {
+    const call = activeCallRef.current as any;
+    if (!call) return;
+    if (call.isAudioMuted) { call.unmuteAudio?.(); setIsMuted(false); } else { call.muteAudio?.(); setIsMuted(true); }
+  }, []);
+  const unmute = useCallback(() => { (activeCallRef.current as any)?.unmuteAudio?.(); setIsMuted(false); }, []);
+
+  const callControlId = () => (activeCallRef.current as any)?.telnyxIDs?.telnyxCallControlId;
+
+  const toggleHold = useCallback(async () => {
+    const id = callControlId();
+    if (!id) throw new Error("No call control id");
+    const action = isOnHold ? "unhold" : "hold";
+    await fetch(`/api/calls/${id}/hold`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
+    setIsOnHold(!isOnHold);
+  }, [isOnHold]);
+
+  const unhold = useCallback(async () => {
+    const id = callControlId();
+    if (!id) return;
+    await fetch(`/api/calls/${id}/hold`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "unhold" }) });
+    setIsOnHold(false);
+  }, []);
+
+  const startRecording = useCallback(async () => {}, []);
+  const stopRecording = useCallback(async () => {}, []);
+
+  const transfer = useCallback(async (number: string) => {
+    const call = activeCallRef.current as any;
+    try { await call?.transfer?.(number); return; } catch {}
+    const id = call?.telnyxIDs?.telnyxCallControlId;
+    if (!id) throw new Error("No call control id");
+    await fetch(`/api/calls/${id}/transfer`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to: number }) });
+  }, []);
+
+  const sendDTMF = useCallback((digits: string) => { (activeCallRef.current as any)?.dtmf?.(digits); }, []);
+
+  const joinConference = useCallback(async (conferenceId?: string) => {
+    const id = callControlId();
+    if (!id) throw new Error("No call control id");
+    await fetch("/api/calls/conference/join", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callControlId: id, conferenceId }) });
+  }, []);
+  const leaveConference = useCallback(async () => {
+    const id = callControlId();
+    if (!id) throw new Error("No call control id");
+    await fetch("/api/calls/conference/leave", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callControlId: id }) });
+  }, []);
+  const addToConference = useCallback(async (phoneNumber: string) => {
+    const id = callControlId();
+    if (!id) throw new Error("No call control id");
+    await fetch("/api/calls/conference/add", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callControlId: id, phoneNumber }) });
+  }, []);
+
+  const value: CallContextValue = { device, status, activeCall, incomingCall, isMuted, isOnHold, customerLegId, connectCall, makeCall, answerCall, disconnectCall, toggleMute, unmute, toggleHold, unhold, startRecording, stopRecording, transfer, sendDTMF, joinConference, leaveConference, addToConference };
+  return <CallContext.Provider value={value}>{children}</CallContext.Provider>;
+}
+
+export function useCall() { const ctx = useContext(CallContext); if (!ctx) throw new Error("useCall must be used inside CallProvider"); return ctx; }
+export const useTelnyx = useCall;
+export const useTelnyxDevice = useCall;
+export const useAgentTelnyx = useCall;

@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { useTelnyxDevice } from "./TelnyxDeviceProvider"
+import { useTelnyxDevice } from "@/components/voice/CallProvider"
 
 export default function ActiveCallPanel() {
   const { activeCall, disconnectCall } = useTelnyxDevice()

@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase";
 import { requireAgent } from "@/lib/agent-auth";
-import { AgentTelnyxProvider } from "@/components/agents/AgentTelnyxProvider";
 import AgentPortalContent from "./AgentPortalContent";
 import { missing } from "@/lib/env-check";
 import { devBypassAgentAuth } from "@/lib/dev";
@@ -36,9 +35,7 @@ export default async function AgentPortalPage() {
       sip_username: null,
     };
     return (
-      <AgentTelnyxProvider agent={agent}>
-        <AgentPortalContent initialAgent={agent} missingVoice={missingVoice} />
-      </AgentTelnyxProvider>
+      <AgentPortalContent initialAgent={agent} missingVoice={missingVoice} />
     );
   }
 
@@ -68,8 +65,6 @@ export default async function AgentPortalPage() {
   };
 
   return (
-    <AgentTelnyxProvider agent={agent}>
-      <AgentPortalContent initialAgent={agent} missingVoice={missingVoice} />
-    </AgentTelnyxProvider>
+    <AgentPortalContent initialAgent={agent} missingVoice={missingVoice} />
   );
 }

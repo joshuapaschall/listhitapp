@@ -7,7 +7,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { TransferService } from '@/lib/transfer-service';
 import { PhoneCall, PhoneOff, Check, X, Loader2 } from 'lucide-react';
 import { safeJson } from '@/app/agents/portal/AgentPortalContent';
-import { getAccessToken } from './AgentTelnyxProvider';
+import { getAccessToken } from '@/components/voice/CallProvider';
 
 interface AttendedTransferControlProps {
   customerLegId: string;
