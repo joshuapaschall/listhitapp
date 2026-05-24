@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { useTelnyxDevice } from "./TelnyxDeviceProvider";
+import { useTelnyxDevice } from "@/components/voice/CallProvider";
 import CallModal from "./CallModal";
 import { formatPhoneE164 } from "@/lib/dedup-utils";
 import { CallValidationService } from "@/lib/call-validation";

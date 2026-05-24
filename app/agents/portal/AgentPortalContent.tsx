@@ -22,7 +22,7 @@ import {
   Circle,
   PhoneForwarded
 } from 'lucide-react';
-import { getAccessToken, useAgentTelnyx } from '@/components/agents/AgentTelnyxProvider';
+import { getAccessToken, useAgentTelnyx } from '@/components/voice/CallProvider';
 import { TransferDialog } from '@/components/agents/TransferDialog';
 import { AttendedTransferControl } from '@/components/agents/AttendedTransferControl';
 import { OutboundDialer } from '@/components/agents/OutboundDialer';

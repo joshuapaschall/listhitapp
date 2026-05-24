@@ -16,7 +16,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { TransferService } from '@/lib/transfer-service';
 import { Phone, PhoneForwarded, Loader2 } from 'lucide-react';
 import { safeJson } from '@/app/agents/portal/AgentPortalContent';
-import { getAccessToken } from './AgentTelnyxProvider';
+import { getAccessToken } from '@/components/voice/CallProvider';
 
 interface TransferDialogProps {
   open: boolean;

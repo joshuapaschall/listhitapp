@@ -26,7 +26,7 @@ import { isDialableFrom } from "@/lib/telnyx/numbers";
 import { BuyerService } from "@/services/buyer-service";
 import { formatPhoneDisplay } from "@/lib/dedup-utils";
 import { useDebounce } from "@/hooks/use-debounce";
-import { useAgentTelnyx } from "./AgentTelnyxProvider";
+import { useAgentTelnyx } from "@/components/voice/CallProvider";
 import { Loader2, Phone, PhoneOutgoing, Search, User } from "lucide-react";
 
 const fetcher = (url: string) => fetch(url, { cache: "no-store" }).then((response) => response.json());

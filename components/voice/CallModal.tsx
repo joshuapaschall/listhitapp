@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useTelnyxDevice } from "./TelnyxDeviceProvider";
+import { useTelnyxDevice } from "@/components/voice/CallProvider";
 
 interface Props {
   open: boolean;
