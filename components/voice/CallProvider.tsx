@@ -1,6 +1,8 @@
 "use client";
 
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { CallWidget } from "@/components/voice/CallWidget";
+import { IncomingRingtone } from "@/components/voice/IncomingRingtone";
 import { Call, TelnyxRTC } from "@telnyx/webrtc";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 
@@ -14,6 +16,8 @@ export interface CallContextValue {
   isMuted: boolean;
   isOnHold: boolean;
   customerLegId: string | null;
+  currentContact: { name?: string; number?: string } | null;
+  setCurrentContact: React.Dispatch<React.SetStateAction<{ name?: string; number?: string } | null>>;
   connectCall: (number: string, callerIdNumber?: string) => Promise<void>;
   makeCall: (destination: string, buyerId?: string, fromNumber?: string) => Promise<any>;
   answerCall: () => void;
@@ -48,6 +52,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const [isMuted, setIsMuted] = useState(false);
   const [isOnHold, setIsOnHold] = useState(false);
   const [customerLegId, setCustomerLegId] = useState<string | null>(null);
+  const [currentContact, setCurrentContact] = useState<{ name?: string; number?: string } | null>(null);
   const activeCallRef = useRef<Call | null>(null);
   const conferenceIdRef = useRef<string | null>(null);
 
@@ -68,6 +73,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         created.on("telnyx.ready", () => {
           if (!mounted) return;
           setStatus("idle");
+    setCurrentContact(null);
           created?.enableMicrophone?.();
         });
 
@@ -100,6 +106,8 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
               setIsOnHold(false);
               setCustomerLegId(null);
               setStatus("idle");
+              setCurrentContact(null);
+    setCurrentContact(null);
             }
           }
         });
@@ -148,6 +156,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     setActiveCall(null);
     setIncomingCall(null);
     setStatus("idle");
+    setCurrentContact(null);
   }, []);
 
   const toggleMute = useCallback(() => {
@@ -241,8 +250,8 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     });
   }, [device]);
 
-  const value: CallContextValue = { device, status, activeCall, incomingCall, isMuted, isOnHold, customerLegId, connectCall, makeCall, answerCall, disconnectCall, toggleMute, unmute, toggleHold, unhold, startRecording, stopRecording, transfer, sendDTMF, joinConference, leaveConference, addToConference };
-  return <CallContext.Provider value={value}>{children}</CallContext.Provider>;
+  const value: CallContextValue = { device, status, activeCall, incomingCall, isMuted, isOnHold, customerLegId, currentContact, setCurrentContact, connectCall, makeCall, answerCall, disconnectCall, toggleMute, unmute, toggleHold, unhold, startRecording, stopRecording, transfer, sendDTMF, joinConference, leaveConference, addToConference };
+  return <CallContext.Provider value={value}>{children}<CallWidget /><IncomingRingtone /></CallContext.Provider>;
 }
 
 export function useCall() { const ctx = useContext(CallContext); if (!ctx) throw new Error("useCall must be used inside CallProvider"); return ctx; }

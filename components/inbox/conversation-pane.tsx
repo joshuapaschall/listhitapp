@@ -64,6 +64,7 @@ import {
 import VoiceRecorder from "@/components/voice/VoiceRecorder";
 import UploadModal from "./upload-modal";
 import QuickReplyModal from "./quick-reply-modal";
+import { CallButton } from "@/components/voice/CallButton";
 
 const mergeTags = [
   { label: "Contact's First Name", value: "{{first_name}}" },
@@ -1238,6 +1239,11 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
       <div className="border-b p-2 flex items-center justify-between sticky top-0 bg-background z-10">
         <span className="font-medium">{name}</span>
         <div className="flex items-center gap-2">
+          <CallButton
+            phone={buyer?.phone || buyer?.phone2 || buyer?.phone3 || thread.phone_number}
+            name={buyer?.full_name || name}
+            buyerId={thread.buyer_id || undefined}
+          />
           {buyer ? (
             <Button variant="outline" size="sm" onClick={() => setShowEdit(true)}>
               Info

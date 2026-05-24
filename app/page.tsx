@@ -37,7 +37,6 @@ import {
   Star,
   Mail,
   MessageSquare,
-  Phone,
   MoreHorizontal,
   CheckCircle,
   X,
@@ -58,6 +57,7 @@ import {
 } from "lucide-react"
 
 import TagFilterSelector from "@/components/buyers/tag-filter-selector"
+import { CallButton } from "@/components/voice/CallButton"
 import LocationFilterSelector from "@/components/buyers/location-filter-selector"
 import { exportBuyersToCSV } from "@/lib/export-utils"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -1742,14 +1742,13 @@ function BuyersPageContent() {
                         >
                           <MessageSquare className="h-4 w-4 text-gray-500 group-hover:text-sky-600 transition" />
                         </Button>
-                        <Button
+                        <CallButton
+                          phone={buyer.phone}
+                          name={formatName(buyer)}
+                          buyerId={buyer.id}
+                          size="icon"
                           variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 group"
-                          aria-label={`Call ${formatName(buyer)}`}
-                        >
-                          <Phone className="h-4 w-4 text-gray-500 group-hover:text-sky-600 transition" />
-                        </Button>
+                        />
                         <Button
                           variant="ghost"
                           size="sm"
