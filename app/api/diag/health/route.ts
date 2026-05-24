@@ -7,7 +7,7 @@ import {
   getTelnyxApiKey,
 } from "@/lib/voice-env"
 
-export async function GET(request: Request) {
+export async function GET() {
   const callControlAppId = getCallControlAppId()
   const sipCredentialConnectionId = getSipCredentialConnectionId()
   const flags = {
@@ -39,25 +39,9 @@ export async function GET(request: Request) {
     supabaseError = new Error("SUPABASE_SERVICE_ROLE_KEY missing")
   }
 
-  let token_probe_error: string | null = null
   let lastPresencePing: string | null = null
 
   if (agent?.id && supabaseAdmin) {
-    try {
-      const origin = new URL(request.url).origin
-      const res = await fetch(`${origin}/api/agents/${agent.id}/token`, {
-        method: "GET",
-      })
-      if (!res.ok) {
-        const body = await res
-          .json()
-          .catch(() => ({} as any))
-        token_probe_error = body.error || `HTTP ${res.status}`
-      }
-    } catch (e: any) {
-      token_probe_error = e.message
-    }
-
     try {
       const { data: presence } = await supabaseAdmin
         .from("agents_sessions")
@@ -73,8 +57,6 @@ export async function GET(request: Request) {
     } catch (presenceError) {
       console.error("[health] failed to load last presence", presenceError)
     }
-  } else if (!agent?.id) {
-    token_probe_error = "no agents"
   }
 
   return NextResponse.json({
@@ -89,7 +71,6 @@ export async function GET(request: Request) {
       : null,
     supabase_ok: !supabaseError,
     supabase_error: supabaseError?.message,
-    token_probe_error,
     agent: {
       id: agent?.id ?? null,
       has_sip_username: !!agent?.sip_username,
