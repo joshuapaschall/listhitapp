@@ -146,7 +146,7 @@ export function Dialer({ open, onOpenChange }: { open: boolean; onOpenChange: (o
               <Button key={d} variant="outline" type="button" className="h-11 font-mono" onClick={() => pressKey(d)}>{d}</Button>
             ))}
           </div>
-          <Button type="button" className="w-full bg-[var(--brand)] hover:bg-[var(--brand-hover)]" onClick={call} disabled={dialing || busy || !number.trim()}>
+          <Button type="button" className="w-full bg-[hsl(var(--brand))] hover:bg-[hsl(var(--brand-hover))] text-white" onClick={call} disabled={dialing || busy || !number.trim()}>
             {dialing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PhoneCall className="mr-2 h-4 w-4" />}Call
           </Button>
         </div>
