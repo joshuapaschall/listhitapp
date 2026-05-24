@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1');
     const pageSize = parseInt(searchParams.get('pageSize') || '50');
     const search = searchParams.get('search') || '';
-    const agentId = searchParams.get('agentId') || '';
+    const userId = searchParams.get('userId') || searchParams.get('agentId') || '';
     const buyerId = searchParams.get('buyerId') || '';
     const direction = searchParams.get('direction') || '';
     const hasRecording = searchParams.get('hasRecording') || '';
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
         *,
         telnyx_recording_id,
         recording_confidence,
-        from_agent:agents!calls_from_agent_id_fkey(
+        user:profiles!calls_user_id_fkey(
           id,
           email,
           display_name
@@ -47,8 +47,8 @@ export async function GET(request: NextRequest) {
       query = query.or(`from_number.ilike.%${search}%,to_number.ilike.%${search}%`);
     }
 
-    if (agentId) {
-      query = query.eq('from_agent_id', agentId);
+    if (userId) {
+      query = query.eq('user_id', userId);
     }
 
     if (buyerId) {
@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Apply sorting
-    const orderColumn = sortBy === 'agent' ? 'from_agent_id' : sortBy;
+    const orderColumn = sortBy === 'agent' ? 'user_id' : sortBy;
     query = query.order(orderColumn, { ascending: sortOrder === 'asc' });
 
     // Apply pagination

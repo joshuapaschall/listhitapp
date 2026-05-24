@@ -367,7 +367,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
   useEffect(() => {
     const loadAgent = async () => {
       try {
-        const res = await fetch("/api/agents/me");
+        const res = await fetch("/api/me");
         if (!res.ok) return;
         const data = await res.json().catch(() => ({}));
         const display = typeof data.display_name === "string" ? data.display_name : "";

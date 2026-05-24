@@ -15,7 +15,7 @@ export interface CallLike {
   to_number?: string | null;
   started_at?: string | null;
   buyer?: CallParty | null;
-  from_agent?: CallAgent | null;
+  user?: CallAgent | null;
 }
 
 export function formatPhone(e164OrRaw?: string | null): string {
@@ -63,5 +63,5 @@ export function contactName(call: CallLike): string {
 }
 
 export function handledBy(call: CallLike): string {
-  return call.from_agent?.display_name ?? "—";
+  return call.user?.display_name ?? "—";
 }
