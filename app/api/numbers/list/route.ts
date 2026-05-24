@@ -14,6 +14,11 @@ function chooseDefault(items: any[]) {
 }
 
 export async function GET() {
-  const items = await listPurchasedNumbersForOrigin();
+  const all = await listPurchasedNumbersForOrigin();
+  // Only numbers assigned to the Voice API App can be used as caller ID for
+  // outbound calls, so show just those in the dialer. Fall back to the full list
+  // if none are app-assigned (avoids regressing to an empty dropdown).
+  const appAssigned = all.filter((i) => i.assignedToApp);
+  const items = appAssigned.length > 0 ? appAssigned : all;
   return NextResponse.json({ ok: true, items, defaultFrom: chooseDefault(items) });
 }
