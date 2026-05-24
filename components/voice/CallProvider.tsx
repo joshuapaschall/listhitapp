@@ -186,7 +186,6 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     const call = device.newCall({ destinationNumber: destination, callerNumber, audio: true } as any);
     setActiveCall(call);
     setStatus("connecting");
-    call.invite();
   }, [device]);
 
   const connectCall = useCallback(async (number: string, callerIdNumber?: string) => {
@@ -284,7 +283,6 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     if (!device) throw new Error("Phone not ready");
 
     const participantCall = device.newCall({ destinationNumber: phoneNumber, audio: true } as any);
-    participantCall.invite();
 
     let participantControlId = (participantCall as any)?.telnyxIDs?.telnyxCallControlId as string | undefined;
     for (let i = 0; !participantControlId && i < 20; i += 1) {

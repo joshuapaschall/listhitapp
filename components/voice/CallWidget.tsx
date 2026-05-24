@@ -59,7 +59,7 @@ export function CallWidget() {
     return <div className="fixed bottom-6 right-6 w-80 rounded-2xl border bg-white dark:bg-slate-900 p-4">
       <div className="flex items-center gap-2 text-sm text-muted-foreground"><PhoneIncoming className="h-4 w-4" />Incoming call</div>
       <div className="mt-2 text-lg font-semibold">{callName || formatPhoneDisplay(callNumber) || "Unknown"}</div>
-      <div className="mt-4 flex gap-2"><Button className="flex-1 bg-[var(--brand)] hover:bg-[var(--brand-hover)]" onClick={answerCall}>Answer</Button><Button className="flex-1" variant="destructive" onClick={disconnectCall}>Decline</Button></div>
+      <div className="mt-4 flex gap-2"><Button className="flex-1 bg-[hsl(var(--brand))] hover:bg-[hsl(var(--brand-hover))] text-white" onClick={answerCall}>Answer</Button><Button className="flex-1" variant="destructive" onClick={disconnectCall}>Decline</Button></div>
     </div>;
   }
 
@@ -86,7 +86,7 @@ export function CallWidget() {
   }
 
   return <>
-    <Button className="fixed bottom-6 right-6 z-50 h-12 w-12 rounded-full bg-[var(--brand)] hover:bg-[var(--brand-hover)]" size="icon" aria-label="Open dialer" onClick={() => setDialerOpen(true)}><Phone className="h-5 w-5" /></Button>
+    <Button className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full shadow-lg bg-[hsl(var(--brand))] hover:bg-[hsl(var(--brand-hover))] text-white" size="icon" aria-label="Open dialer" onClick={() => setDialerOpen(true)}><Phone className="h-6 w-6" /></Button>
     <Dialer open={dialerOpen} onOpenChange={setDialerOpen} />
   </>;
 }
