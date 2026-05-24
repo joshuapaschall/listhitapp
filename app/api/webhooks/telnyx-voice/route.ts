@@ -163,9 +163,6 @@ async function pickAvailableAgent(): Promise<{ id: string, sip_username: string 
   return null;
 }
 
-async function getAgentBySipUsername(_sip_username: string): Promise<{ id: string, sip_username: string } | null> {
-  return null;
-}
 
 async function pickOrgFallback(orgId?: string | null): Promise<string | null> {
   if (!orgId) {
@@ -257,7 +254,6 @@ export async function POST(req: Request) {
     }
 
     if (event === "call.answered") {
-
       if (await resolveOrgFromDid(payload?.to)) {
         const agent = await pickAvailableAgent();
         if (agent) {
@@ -266,66 +262,9 @@ export async function POST(req: Request) {
             buildSipUri(agent?.sip_username)!,
             ""
           );
-          const recordId = crypto.randomUUID()
-          const { data, error } = await supabaseAdmin
-            .from("agent_active_calls")
-            .upsert(
-              {
-                id: recordId,
-                agent_id: agent?.id,
-                customer_leg_id: callControlId,
-                hold_state: "active",
-                playback_state: "idle",
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              },
-              {
-                onConflict: 'agent_id',
-                ignoreDuplicates: false,
-              },
-            )
-            .select()
-            .single()
-
-          if (error) throw error
-
-          console.log("✅ Active call record created:", data)
-          console.log("Call Transfer Successfully.")
+          console.log("Call Transfer Successfully.");
         } else {
-          await speak(callControlId, "Sorry, we couldn’t reach an agent right now. We’ll call you back shortly.")
-        }
-
-      } else {
-        const client_state = decodeClientState(payload?.client_state);
-        console.log(">>>>>>>>>>>>>>>>>>>>>>>>", client_state)
-        if (client_state?.to) {
-          const agent = await getAgentBySipUsername(client_state?.to);
-          if (agent) {
-            const recordId = crypto.randomUUID()
-            const { data, error } = await supabaseAdmin
-              .from("agent_active_calls")
-              .upsert(
-                {
-                  id: recordId,
-                  agent_id: agent?.id,
-                  customer_leg_id: callControlId,
-                  hold_state: "active",
-                  playback_state: "idle",
-                  created_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString(),
-                },
-                {
-                  onConflict: 'agent_id',
-                  ignoreDuplicates: false,
-                },
-              )
-              .select()
-              .single()
-
-            if (error) throw error
-
-            console.log("✅ Active call record created:", data)
-          }
+          await speak(callControlId, "Sorry, we couldn’t reach an agent right now. We’ll call you back shortly.");
         }
       }
       return NextResponse.json({ ok: true });
