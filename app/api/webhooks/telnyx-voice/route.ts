@@ -245,8 +245,15 @@ export async function POST(req: Request) {
         typeof directionRaw === "string" ? directionRaw.toLowerCase() : null;
 
       const toRaw = String(payload?.to ?? payload?.to_number ?? "");
-      if (toRaw.startsWith("sip:")) {
-        console.log("[telnyx-voice] skipping sip B-leg");
+      // Skip the WebRTC transfer B-leg. When we transfer an inbound PSTN call to
+      // sip:listhitapp@sip.telnyx.com, the Credential Connection fires its OWN
+      // call.initiated with `to` set to the bare SIP username ("listhitapp") or a
+      // sip: URI. Those legs are routed to the registered browser by Telnyx and must
+      // NOT be answered/controlled here — issuing answer() on them returns 422 and
+      // tears the call down before the browser can pick up.
+      const isPhoneDid = /^\+?\d{7,}$/.test(toRaw.trim());
+      if (toRaw.startsWith("sip:") || !isPhoneDid) {
+        console.log("[telnyx-voice] skipping non-PSTN leg (transfer B-leg)", { to: toRaw });
         return NextResponse.json({ ok: true });
       }
 
