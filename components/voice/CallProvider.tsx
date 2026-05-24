@@ -49,6 +49,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const [isOnHold, setIsOnHold] = useState(false);
   const [customerLegId, setCustomerLegId] = useState<string | null>(null);
   const activeCallRef = useRef<Call | null>(null);
+  const conferenceIdRef = useRef<string | null>(null);
 
   useEffect(() => { activeCallRef.current = activeCall; }, [activeCall]);
 
@@ -173,8 +174,17 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     setIsOnHold(false);
   }, []);
 
-  const startRecording = useCallback(async () => {}, []);
-  const stopRecording = useCallback(async () => {}, []);
+  const startRecording = useCallback(async () => {
+    const id = callControlId();
+    if (!id) return;
+    await fetch(`/api/calls/${id}/record_start`, { method: "POST" });
+  }, []);
+
+  const stopRecording = useCallback(async () => {
+    const id = callControlId();
+    if (!id) return;
+    await fetch(`/api/calls/${id}/record_stop`, { method: "POST" });
+  }, []);
 
   const transfer = useCallback(async (number: string) => {
     const call = activeCallRef.current as any;
@@ -189,18 +199,47 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const joinConference = useCallback(async (conferenceId?: string) => {
     const id = callControlId();
     if (!id) throw new Error("No call control id");
-    await fetch("/api/calls/conference/join", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callControlId: id, conferenceId }) });
+    conferenceIdRef.current = conferenceId || conferenceIdRef.current;
+    await fetch("/api/calls/conference", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ callControlId: id, command: "join", conferenceId })
+    });
   }, []);
   const leaveConference = useCallback(async () => {
     const id = callControlId();
     if (!id) throw new Error("No call control id");
-    await fetch("/api/calls/conference/leave", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callControlId: id }) });
+    await fetch("/api/calls/conference", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ callControlId: id, command: "leave" })
+    });
   }, []);
   const addToConference = useCallback(async (phoneNumber: string) => {
     const id = callControlId();
     if (!id) throw new Error("No call control id");
-    await fetch("/api/calls/conference/add", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callControlId: id, phoneNumber }) });
-  }, []);
+    if (!device) throw new Error("Phone not ready");
+
+    const participantCall = device.newCall({ destinationNumber: phoneNumber, audio: true } as any);
+    participantCall.invite();
+
+    let participantControlId = (participantCall as any)?.telnyxIDs?.telnyxCallControlId as string | undefined;
+    for (let i = 0; !participantControlId && i < 20; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      participantControlId = (participantCall as any)?.telnyxIDs?.telnyxCallControlId as string | undefined;
+    }
+    if (!participantControlId) return;
+
+    await fetch("/api/calls/conference", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        callControlId: participantControlId,
+        command: "join",
+        conferenceId: conferenceIdRef.current || undefined
+      })
+    });
+  }, [device]);
 
   const value: CallContextValue = { device, status, activeCall, incomingCall, isMuted, isOnHold, customerLegId, connectCall, makeCall, answerCall, disconnectCall, toggleMute, unmute, toggleHold, unhold, startRecording, stopRecording, transfer, sendDTMF, joinConference, leaveConference, addToConference };
   return <CallContext.Provider value={value}>{children}</CallContext.Provider>;
