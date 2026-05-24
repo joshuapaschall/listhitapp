@@ -16,20 +16,15 @@ export type FromNumber = {
 };
 
 type VoiceNumber = {
-  id: string;
-  type: string;
-  attributes: {
-    phone_number: string;
-    connection_id?: string;
-    call_control_application_id?: string;
-    application_id?: string;
-    application_ids?: string[];
-  };
+  id?: string;
+  phone_number?: string;
+  connection_id?: string;
+  status?: string;
 };
 
 type TelnyxResponse<T> = {
   data?: T[];
-  meta?: { page?: { next_page_url?: string | null } };
+  meta?: { next_page_url?: string | null; page?: { next_page_url?: string | null } };
   links?: { next?: string | null };
 };
 
@@ -57,7 +52,7 @@ export async function listPurchasedNumbersForOrigin(): Promise<FromNumber[]> {
   const sipId = getSipCredentialConnectionId();
   const headers = { Authorization: `Bearer ${apiKey}` };
 
-  let url: string | null = `${TELNYX_API_URL}/phone_numbers/voice?page[size]=100`;
+  let url: string | null = `${TELNYX_API_URL}/phone_numbers?page[number]=1&page[size]=100`;
   const out: FromNumber[] = [];
 
   while (url) {
@@ -67,23 +62,15 @@ export async function listPurchasedNumbersForOrigin(): Promise<FromNumber[]> {
       const data = Array.isArray(json?.data) ? json.data : [];
 
       for (const row of data) {
-        const attrs: VoiceNumber["attributes"] = row?.attributes || ({} as VoiceNumber["attributes"]);
-        const pn = normalizeNumber(attrs.phone_number);
+        // Telnyx /phone_numbers returns FLAT objects (phone_number + connection_id
+        // at the TOP LEVEL, no  nested wrapper). Reading nested fields was the
+        // bug that skipped every number and returned an empty list.
+        const pn = normalizeNumber(row?.phone_number);
         if (!pn) continue;
 
-        const cc =
-          attrs.call_control_application_id ||
-          attrs.application_id ||
-          (Array.isArray(attrs.application_ids) &&
-            attrs.application_ids.find((candidate) => candidate === appId)) ||
-          null;
-
-        const assignedToApp = Boolean(
-          appId &&
-            (cc === appId ||
-              (Array.isArray(attrs.application_ids) && attrs.application_ids.includes(appId))),
-        );
-        const assignedToSip = Boolean(sipId && attrs.connection_id === sipId);
+        const connectionId = row?.connection_id || null;
+        const assignedToApp = Boolean(appId && connectionId && connectionId === appId);
+        const assignedToSip = Boolean(sipId && connectionId && connectionId === sipId);
         const assignedToOrigin = assignedToApp || assignedToSip;
 
         out.push({
@@ -96,7 +83,7 @@ export async function listPurchasedNumbersForOrigin(): Promise<FromNumber[]> {
         });
       }
 
-      url = json?.meta?.page?.next_page_url || json?.links?.next || "";
+      url = json?.meta?.next_page_url || json?.meta?.page?.next_page_url || json?.links?.next || "";
     } catch (error) {
       console.warn("[numbers.voice] failed to fetch purchased numbers", { url, error });
       break;
