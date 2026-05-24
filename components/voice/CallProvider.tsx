@@ -55,8 +55,35 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const [currentContact, setCurrentContact] = useState<{ name?: string; number?: string } | null>(null);
   const activeCallRef = useRef<Call | null>(null);
   const conferenceIdRef = useRef<string | null>(null);
+  const sipUsernameRef = useRef<string | null>(null);
+  const clientIdRef = useRef<string>(crypto.randomUUID());
+  const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => { activeCallRef.current = activeCall; }, [activeCall]);
+
+
+  const reportPresence = useCallback((presenceStatus: "online" | "offline", useBeacon = false) => {
+    const payload = {
+      status: presenceStatus,
+      sip_username: sipUsernameRef.current,
+      client_id: clientIdRef.current,
+    };
+
+    if (useBeacon && typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+      try {
+        const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
+        navigator.sendBeacon("/api/voice/presence", blob);
+        return;
+      } catch {}
+    }
+
+    fetch("/api/voice/presence", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      keepalive: useBeacon,
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     let created: TelnyxRTC | null = null;
@@ -68,19 +95,32 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         const json = await res.json();
         if (!res.ok || !json?.login_token) throw new Error(json?.error || "Failed to fetch WebRTC token");
 
+        sipUsernameRef.current = typeof json?.sip_username === "string" ? json.sip_username : null;
+
         created = new TelnyxRTC({ login_token: json.login_token } as any);
         (created as any).remoteElement = "telnyx-remote-audio";
 
         created.on("telnyx.ready", () => {
           if (!mounted) return;
           setStatus("idle");
-    setCurrentContact(null);
+          setCurrentContact(null);
+          reportPresence("online");
+          if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
+          heartbeatIntervalRef.current = setInterval(() => reportPresence("online"), 30000);
           created?.enableMicrophone?.();
         });
 
         created.on("telnyx.error", () => {
           if (!mounted) return;
           setStatus("error");
+        });
+
+        created.on("telnyx.socket.close", () => {
+          reportPresence("offline");
+          if (heartbeatIntervalRef.current) {
+            clearInterval(heartbeatIntervalRef.current);
+            heartbeatIntervalRef.current = null;
+          }
         });
 
         created.on("telnyx.notification", (n: any) => {
@@ -108,7 +148,6 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
               setCustomerLegId(null);
               setStatus("idle");
               setCurrentContact(null);
-    setCurrentContact(null);
             }
           }
         });
@@ -123,10 +162,15 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       mounted = false;
+      if (heartbeatIntervalRef.current) {
+        clearInterval(heartbeatIntervalRef.current);
+        heartbeatIntervalRef.current = null;
+      }
+      reportPresence("offline", true);
       try { created?.disconnect(); } catch {}
       setDevice(null);
     };
-  }, []);
+  }, [reportPresence]);
 
   const dialInternal = useCallback(async (destination: string, callerIdNumber?: string) => {
     if (!device) throw new Error("Phone not ready");
