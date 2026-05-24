@@ -69,6 +69,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         if (!res.ok || !json?.login_token) throw new Error(json?.error || "Failed to fetch WebRTC token");
 
         created = new TelnyxRTC({ login_token: json.login_token } as any);
+        (created as any).remoteElement = "telnyx-remote-audio";
 
         created.on("telnyx.ready", () => {
           if (!mounted) return;
@@ -251,7 +252,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   }, [device]);
 
   const value: CallContextValue = { device, status, activeCall, incomingCall, isMuted, isOnHold, customerLegId, currentContact, setCurrentContact, connectCall, makeCall, answerCall, disconnectCall, toggleMute, unmute, toggleHold, unhold, startRecording, stopRecording, transfer, sendDTMF, joinConference, leaveConference, addToConference };
-  return <CallContext.Provider value={value}>{children}<CallWidget /><IncomingRingtone /></CallContext.Provider>;
+  return <CallContext.Provider value={value}>{children}<CallWidget /><IncomingRingtone /><audio id="telnyx-remote-audio" autoPlay style={{ display: "none" }} /></CallContext.Provider>;
 }
 
 export function useCall() { const ctx = useContext(CallContext); if (!ctx) throw new Error("useCall must be used inside CallProvider"); return ctx; }
