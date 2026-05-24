@@ -76,8 +76,8 @@ async function transfer(
   to: string,
   fromE164?: string | null
 ) {
-  const body: any = { to };
-  // if (fromE164) body.from = fromE164;
+  const body: any = { to, timeout_secs: 30 };
+  if (fromE164) body.from = fromE164;
   return await cc(`${callControlId}/actions/transfer`, body);
 }
 async function speak(callControlId: string, text: string) {
@@ -262,7 +262,12 @@ export async function POST(req: Request) {
         const sipUri = await getWebRTCSipUri();
 
         if (sipUri) {
-          await transfer(callControlId, sipUri);
+          // A SIP-URI transfer spins up a new outbound leg that REQUIRES a `from`
+          // caller ID. For an in-Telnyx SIP transfer the `from` is metadata for the
+          // WebRTC client's caller-ID display and need NOT be a number on the
+          // account — but omitting it makes Telnyx reject with 10010/D11
+          // "Destination Number is invalid". Pass the original caller's number.
+          await transfer(callControlId, sipUri, payload.from);
         } else {
           await sayAndHangup(
             callControlId,
