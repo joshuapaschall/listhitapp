@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { formatPhoneE164 } from "@/lib/call-validation";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getWebRTCSipUri } from "@/lib/voice/webrtc-sip";
+import { bridgeCall } from "@/lib/voice/call-control";
 import {
   TELNYX_API_URL,
   getCallControlAppId,
@@ -284,6 +285,21 @@ export async function POST(req: Request) {
     }
 
     if (event === "call.answered") {
+      // If this is the browser B-leg of a server-originated outbound call, bridge
+      // it to the prospect A-leg carried in client_state. Leaves all other
+      // call.answered events (including the prospect leg) untouched.
+      const cs = decodeClientState(payload?.client_state ?? body?.client_state);
+      if (cs?.action === "bridge_outbound" && cs?.prospectCallControlId && callControlId) {
+        const bridged = await bridgeCall(callControlId, cs.prospectCallControlId);
+        if (!bridged.ok) {
+          console.error("[telnyx-voice] outbound bridge failed", bridged.error);
+        } else {
+          console.log("[telnyx-voice] bridged browser leg to prospect", {
+            browser: callControlId,
+            prospect: cs.prospectCallControlId,
+          });
+        }
+      }
       return NextResponse.json({ ok: true });
     }
 
