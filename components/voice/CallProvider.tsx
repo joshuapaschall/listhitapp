@@ -186,6 +186,25 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
           if (!isOurOutbound && (n.type === "call.received" || (n.type === "callUpdate" && state === "ringing" && call.direction !== "outbound"))) {
             setIncomingCall(call);
             setStatus("connecting");
+            // Resolve caller number from the SDK, then enrich with the CRM name
+            // and the inbound far-leg call_control_id (used later for controls).
+            const opts = (call as any)?.options || {};
+            const remoteNumber: string =
+              opts.callerNumber || opts.remoteCallerNumber || (call as any)?.options?.remoteCallerName || "";
+            setCurrentContact({ number: remoteNumber || undefined });
+            if (remoteNumber) {
+              fetch(`/api/calls/lookup?phone=${encodeURIComponent(remoteNumber)}`, { cache: "no-store" })
+                .then((r) => r.json())
+                .then((d) => {
+                  if (!mounted) return;
+                  setCurrentContact({ name: d?.name || undefined, number: d?.number || remoteNumber });
+                  if (d?.pendingCallControlId && !prospectCallControlIdRef.current) {
+                    prospectCallControlIdRef.current = d.pendingCallControlId;
+                    setCustomerLegId(d.pendingCallControlId);
+                  }
+                })
+                .catch(() => {});
+            }
             return;
           }
           if (n.type === "callUpdate") {
