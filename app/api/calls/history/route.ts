@@ -96,32 +96,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Trigger background sync for recent calls without recordings
-    // This is non-blocking to keep the response fast
-    if (calls && calls.length > 0) {
-      const callsWithoutRecordings = calls.filter(call => 
-        !call.telnyx_recording_id && 
-        call.call_sid && 
-        call.status === 'completed' &&
-        call.duration && call.duration > 0 &&
-        // Only check calls from last 48 hours
-        new Date(call.started_at) > new Date(Date.now() - 48 * 60 * 60 * 1000)
-      );
-      
-      if (callsWithoutRecordings.length > 0) {
-        console.log(`🔍 ${callsWithoutRecordings.length} calls need recording sync`);
-        
-        // Trigger async sync for each call (non-blocking)
-        // We'll fetch recordings on next page load
-        callsWithoutRecordings.forEach(call => {
-          fetch(`${request.nextUrl.origin}/api/recordings/sync`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ callSid: call.call_sid })
-          }).catch(() => console.log(`⚠️ Sync trigger failed for ${call.call_sid}`));
-        });
-      }
-    }
+    // Recordings are stored precisely by the voice webhook on call.recording.saved.
+    // The legacy time-based auto-sync was removed (it wrote nonexistent columns and
+    // could mis-match recordings). Backfill, if ever needed, should be a deliberate tool.
 
     // Format response with pagination metadata
     const totalPages = count ? Math.ceil(count / pageSize) : 0;
