@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { formatPhoneE164 } from "@/lib/call-validation";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getWebRTCSipUri } from "@/lib/voice/webrtc-sip";
-import { bridgeCall } from "@/lib/voice/call-control";
+import { bridgeCall, startRecording } from "@/lib/voice/call-control";
 import {
   TELNYX_API_URL,
   getCallControlAppId,
@@ -328,6 +328,32 @@ export async function POST(req: Request) {
       } catch (e) {
         console.error("[telnyx-voice] call log answered update failed", e);
       }
+      // Auto-start recording on the PSTN leg (the leg whose call_sid we logged).
+      // channels:"dual" captures both sides of the bridge. Only fire on the leg
+      // that matches a live calls row, so we don't double-record the browser leg.
+      try {
+        if (callControlId) {
+          const { data: row } = await supabaseAdmin
+            .from("calls")
+            .select("call_sid, recording_state")
+            .eq("call_sid", callControlId)
+            .maybeSingle();
+          if (row?.call_sid && row.recording_state !== "recording") {
+            const rec = await startRecording(callControlId);
+            if (rec.ok) {
+              await supabaseAdmin
+                .from("calls")
+                .update({ recording_state: "recording" })
+                .eq("call_sid", callControlId);
+              console.log("[telnyx-voice] recording started", { callControlId });
+            } else {
+              console.error("[telnyx-voice] record_start failed", rec.error);
+            }
+          }
+        }
+      } catch (e) {
+        console.error("[telnyx-voice] auto-record start failed", e);
+      }
       // If this is the browser B-leg of a server-originated outbound call, bridge
       // it to the prospect A-leg carried in client_state. Leaves all other
       // call.answered events (including the prospect leg) untouched.
@@ -342,6 +368,72 @@ export async function POST(req: Request) {
             prospect: cs.prospectCallControlId,
           });
         }
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    if (event === "call.recording.saved") {
+      try {
+        const recId: string | null =
+          (typeof payload?.recording_id === "string" ? payload.recording_id : null);
+        const mp3: string | null =
+          (typeof payload?.recording_urls?.mp3 === "string" ? payload.recording_urls.mp3 : null) ??
+          (typeof payload?.recording_urls?.wav === "string" ? payload.recording_urls.wav : null);
+        const startedAt = payload?.recording_started_at ? new Date(payload.recording_started_at).getTime() : null;
+        const endedAt = payload?.recording_ended_at ? new Date(payload.recording_ended_at).getTime() : null;
+        const recDur = startedAt && endedAt ? Math.max(0, Math.round((endedAt - startedAt) / 1000)) : null;
+
+        if (!callControlId || !mp3) {
+          console.log("[telnyx-voice] recording.saved missing id/url", { callControlId, hasMp3: !!mp3 });
+          return NextResponse.json({ ok: true });
+        }
+
+        // Download from Telnyx with retries.
+        let buf: ArrayBuffer | null = null;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            const resp = await fetch(mp3);
+            if (resp.ok) { buf = await resp.arrayBuffer(); break; }
+            console.warn(`[telnyx-voice] recording fetch attempt ${attempt} status ${resp.status}`);
+          } catch (err) {
+            console.warn(`[telnyx-voice] recording fetch attempt ${attempt} error`, err);
+          }
+          if (attempt < 3) await new Promise((r) => setTimeout(r, 2000));
+        }
+        if (!buf) {
+          console.error("[telnyx-voice] recording download failed; leaving state for retry");
+          await supabaseAdmin.from("calls").update({ recording_state: "failed", telnyx_recording_id: recId }).eq("call_sid", callControlId);
+          return NextResponse.json({ ok: true });
+        }
+
+        const now = new Date();
+        const year = now.getUTCFullYear();
+        const month = String(now.getUTCMonth() + 1).padStart(2, "0");
+        const safeId = callControlId.replace(/[^a-zA-Z0-9_-]/g, "_");
+        const path = `${year}/${month}/${safeId}.mp3`;
+
+        const { error: upErr } = await supabaseAdmin.storage
+          .from("call-recordings")
+          .upload(path, buf, { contentType: "audio/mpeg", upsert: true });
+        if (upErr) {
+          console.error("[telnyx-voice] recording upload failed", upErr.message);
+          await supabaseAdmin.from("calls").update({ recording_state: "failed", telnyx_recording_id: recId }).eq("call_sid", callControlId);
+          return NextResponse.json({ ok: true });
+        }
+
+        // Private bucket: store the storage PATH (not a public URL).
+        await supabaseAdmin
+          .from("calls")
+          .update({
+            recording_url: path,
+            recording_state: "ready",
+            telnyx_recording_id: recId,
+            recording_duration_seconds: recDur,
+          })
+          .eq("call_sid", callControlId);
+        console.log("[telnyx-voice] recording stored", { callControlId, path });
+      } catch (e) {
+        console.error("[telnyx-voice] recording.saved handler failed", e);
       }
       return NextResponse.json({ ok: true });
     }
