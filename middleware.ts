@@ -67,6 +67,7 @@ export async function middleware(req: NextRequest) {
     "/api/",
     "/unsubscribe",
     "/r/", // public short-link redirects (defense-in-depth even on main domain)
+    "/sounds/", // public static audio (hold music) — must be fetchable by Telnyx
   ]
 
   const isAllowedPath = allowedPrefixes.some((prefix) =>
