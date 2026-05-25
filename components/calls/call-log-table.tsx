@@ -15,6 +15,7 @@ export interface CallRow extends CallLike {
   duration_seconds?: number | null;
   telnyx_recording_id?: string | null;
   recording_url?: string | null;
+  call_sid?: string | null;
 }
 
 interface PaginationMeta { page: number; totalPages: number; hasPrev: boolean; hasNext: boolean; total: number }
@@ -35,7 +36,7 @@ export default function CallLogTable({ calls, loading, pagination, setPage, play
             {!loading && calls.map((call) => {
               const name = contactName(call);
               const initials = name.split(" ").map((x) => x[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
-              return <TableRow key={call.id} className="hover:bg-muted/30"><TableCell>{call.direction === "inbound" ? <span className="inline-flex items-center gap-2 text-emerald-600"><PhoneIncoming className="h-4 w-4" />Inbound</span> : <span className="inline-flex items-center gap-2 text-blue-600"><PhoneOutgoing className="h-4 w-4" />Outbound</span>}</TableCell><TableCell><div className="flex items-center gap-3"><Avatar className="h-8 w-8"><AvatarFallback>{initials || "UC"}</AvatarFallback></Avatar><div><p className="font-medium">{name}</p><p className="text-xs text-muted-foreground">{formatPhone(externalNumber(call))}</p></div></div></TableCell><TableCell className="hidden lg:table-cell">{handledBy(call)}</TableCell><TableCell><CallStatusBadge status={call.status} /></TableCell><TableCell><RecordingPlayer telnyxRecordingId={call.telnyx_recording_id} recordingUrl={call.recording_url} status={call.status} playingId={playingId} setPlayingId={setPlayingId} audioRef={audioRef} /></TableCell><TableCell className="text-right font-mono">{formatDuration(call.duration_seconds)}</TableCell><TableCell className="hidden md:table-cell text-right text-muted-foreground">{relativeCallTime(call.started_at)}</TableCell></TableRow>;
+              return <TableRow key={call.id} className="hover:bg-muted/30"><TableCell>{call.direction === "inbound" ? <span className="inline-flex items-center gap-2 text-emerald-600"><PhoneIncoming className="h-4 w-4" />Inbound</span> : <span className="inline-flex items-center gap-2 text-blue-600"><PhoneOutgoing className="h-4 w-4" />Outbound</span>}</TableCell><TableCell><div className="flex items-center gap-3"><Avatar className="h-8 w-8"><AvatarFallback>{initials || "UC"}</AvatarFallback></Avatar><div><p className="font-medium">{name}</p><p className="text-xs text-muted-foreground">{formatPhone(externalNumber(call))}</p></div></div></TableCell><TableCell className="hidden lg:table-cell">{handledBy(call)}</TableCell><TableCell><CallStatusBadge status={call.status} /></TableCell><TableCell><RecordingPlayer telnyxRecordingId={call.telnyx_recording_id} recordingUrl={call.recording_url} callSid={call.call_sid} status={call.status} playingId={playingId} setPlayingId={setPlayingId} audioRef={audioRef} /></TableCell><TableCell className="text-right font-mono">{formatDuration(call.duration_seconds)}</TableCell><TableCell className="hidden md:table-cell text-right text-muted-foreground">{relativeCallTime(call.started_at)}</TableCell></TableRow>;
             })}
           </TableBody>
         </Table>

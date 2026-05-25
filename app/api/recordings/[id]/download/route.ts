@@ -12,7 +12,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
 
     const { data: call, error } = await supabaseAdmin
       .from("calls")
-      .select("recording_url, status")
+      .select("recording_url, status, from_number, to_number, started_at")
       .eq("call_sid", id)
       .single();
 
@@ -22,9 +22,13 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
 
     const bucket = call.status === "voicemail" ? "voicemails" : "call-recordings";
 
+    const stamp = call.started_at ? new Date(call.started_at).toISOString().slice(0, 10) : "recording";
+    const who = (call.from_number || call.to_number || "call").replace(/[^0-9+]/g, "");
+    const downloadName = `${call.status === "voicemail" ? "voicemail" : "call"}-${who}-${stamp}.mp3`;
+
     const { data: signed, error: signErr } = await supabaseAdmin.storage
       .from(bucket)
-      .createSignedUrl(call.recording_url, 3600);
+      .createSignedUrl(call.recording_url, 300, { download: downloadName });
 
     if (signErr || !signed?.signedUrl) {
       return NextResponse.json({ error: "Could not sign recording url" }, { status: 500 });
@@ -32,7 +36,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
 
     return NextResponse.redirect(signed.signedUrl);
   } catch (e) {
-    console.error("[recordings/stream] error", e);
+    console.error("[recordings/download] error", e);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
