@@ -344,6 +344,22 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   }, [incomingCall]);
 
   const disconnectCall = useCallback(() => {
+    // Decline of a ringing inbound call → route caller to voicemail BEFORE we
+    // tear down the browser leg. Distinguish from "end active call": a ringing
+    // inbound has no active call yet (activeCallRef null) but an incoming call,
+    // and the caller's PSTN leg id is in prospectCallControlIdRef.
+    const isInboundDecline = !activeCallRef.current && !!incomingCallRef.current;
+    const inboundPstnId = prospectCallControlIdRef.current;
+    if (isInboundDecline && inboundPstnId) {
+      // Fire-and-forget: server plays greeting + records. Don't block teardown.
+      fetch("/api/calls/voicemail-fallback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ call_control_id: inboundPstnId, action: "voicemail" }),
+        keepalive: true,
+      }).catch((e) => console.error("[voicemail] fallback POST failed", e));
+    }
+
     const call = activeCallRef.current || incomingCallRef.current;
     (call as any)?.hangup?.();
     setActiveCall(null);
