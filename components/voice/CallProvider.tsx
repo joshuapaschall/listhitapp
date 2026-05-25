@@ -63,6 +63,14 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const sipUsernameRef = useRef<string | null>(null);
   const clientIdRef = useRef<string>(crypto.randomUUID());
   const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Receptionist (server-originated) outbound state. When we POST /api/calls the
+  // server dials the prospect AND dials this browser; the browser's own SIP leg
+  // must be auto-answered (not shown as "incoming"). These refs track that.
+  const outboundPendingRef = useRef(false);
+  const outboundCallIdRef = useRef<string | null>(null);
+  const prospectCallControlIdRef = useRef<string | null>(null);
+  const suppressUntilRef = useRef<number>(0);
+  const bridgeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => { activeCallRef.current = activeCall; }, [activeCall]);
   useEffect(() => { incomingCallRef.current = incomingCall; }, [incomingCall]);
@@ -145,14 +153,46 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
           if (!mounted || !n?.call) return;
           const call = n.call as Call;
           const state = String((call as any).state || "").toLowerCase();
-          if (n.type === "call.received" || (n.type === "callUpdate" && state === "ringing" && call.direction !== "outbound")) {
+          const callId = (call as any)?.id as string | undefined;
+
+          // Ignore spurious SIP notifications briefly after we auto-answer our own
+          // outbound leg (the bridge can emit a second INVITE we must not act on).
+          if (suppressUntilRef.current > Date.now() && callId && callId !== outboundCallIdRef.current) {
+            return;
+          }
+
+          // Auto-answer OUR OWN outbound leg. After POST /api/calls, the server
+          // dials this browser; that leg arrives looking like an inbound call.
+          // Because an outbound is pending and we haven't claimed a leg yet, this
+          // is ours — answer it silently instead of showing the incoming UI.
+          if (
+            outboundPendingRef.current &&
+            !outboundCallIdRef.current &&
+            callId &&
+            (n.type === "call.received" || state === "ringing" || state === "active")
+          ) {
+            outboundCallIdRef.current = callId;
+            outboundPendingRef.current = false;
+            if (bridgeTimeoutRef.current) { clearTimeout(bridgeTimeoutRef.current); bridgeTimeoutRef.current = null; }
+            suppressUntilRef.current = Date.now() + 5000;
+            try { (call as any)?.answer?.(); } catch {}
+            setActiveCall(call);
+            setIncomingCall(null);
+            setStatus("on-call");
+            return;
+          }
+
+          const isOurOutbound = !!callId && callId === outboundCallIdRef.current;
+          if (!isOurOutbound && (n.type === "call.received" || (n.type === "callUpdate" && state === "ringing" && call.direction !== "outbound"))) {
             setIncomingCall(call);
             setStatus("connecting");
             return;
           }
           if (n.type === "callUpdate") {
             const controlId = (call as any)?.telnyxIDs?.telnyxCallControlId || null;
-            if (controlId) setCustomerLegId(controlId);
+            // For our outbound, controls must act on the prospect A-leg (set in
+            // dialInternal), so don't overwrite it with this browser leg's id.
+            if (!prospectCallControlIdRef.current && controlId) setCustomerLegId(controlId);
             if (state === "active") {
               setActiveCall(call);
               setIncomingCall(null);
@@ -164,6 +204,11 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
               setIsMuted(false);
               setIsOnHold(false);
               setCustomerLegId(null);
+              outboundCallIdRef.current = null;
+              outboundPendingRef.current = false;
+              prospectCallControlIdRef.current = null;
+              suppressUntilRef.current = 0;
+              if (bridgeTimeoutRef.current) { clearTimeout(bridgeTimeoutRef.current); bridgeTimeoutRef.current = null; }
               setStatus("idle");
               setCurrentContact(null);
             }
@@ -195,11 +240,53 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     const fallbackFrom =
       process.env.NEXT_PUBLIC_DEFAULT_OUTBOUND_DID ||
       process.env.NEXT_PUBLIC_FROM_NUMBER ||
-      undefined;
-    const callerNumber = callerIdNumber || fallbackFrom;
-    const call = device.newCall({ destinationNumber: destination, callerNumber, audio: true } as any);
-    setActiveCall(call);
+      "";
+    const from = (callerIdNumber || fallbackFrom).trim();
+    if (!from) throw new Error("No caller ID number configured");
+
+    // Receptionist model: the SERVER places the outbound call. It dials the
+    // prospect (A-leg) and this browser (B-leg), then bridges them. The browser
+    // B-leg is auto-answered in the telnyx.notification handler above.
+    outboundPendingRef.current = true;
+    outboundCallIdRef.current = null;
+    prospectCallControlIdRef.current = null;
     setStatus("connecting");
+
+    let res: Response;
+    try {
+      res = await fetch("/api/calls", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: destination, from }),
+        cache: "no-store",
+      });
+    } catch (e) {
+      outboundPendingRef.current = false;
+      setStatus("error");
+      throw e;
+    }
+
+    const json = await res.json().catch(() => ({} as any));
+    if (!res.ok || !json?.ok || !json?.callControlId) {
+      outboundPendingRef.current = false;
+      setStatus("error");
+      throw new Error(json?.error || "Failed to place call");
+    }
+
+    // The prospect (A-leg) control id is what call controls (hold/transfer/record)
+    // must act on. Remember it for this call.
+    prospectCallControlIdRef.current = json.callControlId as string;
+    setCustomerLegId(json.callControlId as string);
+
+    // Safety net: if the browser leg never arrives, stop "connecting" after 20s.
+    if (bridgeTimeoutRef.current) clearTimeout(bridgeTimeoutRef.current);
+    bridgeTimeoutRef.current = setTimeout(() => {
+      if (outboundPendingRef.current) {
+        outboundPendingRef.current = false;
+        setActiveCall(null);
+        setStatus("idle");
+      }
+    }, 20000);
   }, [device]);
 
   const connectCall = useCallback(async (number: string, callerIdNumber?: string) => {
