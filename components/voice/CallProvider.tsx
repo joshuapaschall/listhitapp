@@ -355,22 +355,30 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const toggleMute = useCallback(() => {
     const call = activeCallRef.current as any;
     if (!call) return;
-    if (call.isAudioMuted) { call.unmuteAudio?.(); setIsMuted(false); } else { call.muteAudio?.(); setIsMuted(true); }
+    // Drive the toggle from OUR tracked state, not the SDK's isAudioMuted
+    // (which is not reliably exposed and can leave the button stuck).
+    setIsMuted((prev) => {
+      if (prev) { call.unmuteAudio?.(); } else { call.muteAudio?.(); }
+      return !prev;
+    });
   }, []);
   const unmute = useCallback(() => { (activeCallRef.current as any)?.unmuteAudio?.(); setIsMuted(false); }, []);
 
   const callControlId = () => (activeCallRef.current as any)?.telnyxIDs?.telnyxCallControlId;
+  // Far party's PSTN leg — prospect (outbound) or caller (inbound). Hold/transfer
+  // act on THIS leg so the CALLER hears hold music / gets transferred.
+  const farLegId = () => prospectCallControlIdRef.current || callControlId();
 
   const toggleHold = useCallback(async () => {
-    const id = callControlId();
+    const id = farLegId();
     if (!id) throw new Error("No call control id");
     const action = isOnHold ? "unhold" : "hold";
-    await fetch(`/api/calls/${id}/hold`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
-    setIsOnHold(!isOnHold);
+    const res = await fetch(`/api/calls/${id}/hold`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
+    if (res.ok) setIsOnHold(!isOnHold);
   }, [isOnHold]);
 
   const unhold = useCallback(async () => {
-    const id = callControlId();
+    const id = farLegId();
     if (!id) return;
     await fetch(`/api/calls/${id}/hold`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "unhold" }) });
     setIsOnHold(false);
@@ -389,11 +397,13 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const transfer = useCallback(async (number: string) => {
-    const call = activeCallRef.current as any;
-    try { await call?.transfer?.(number); return; } catch {}
-    const id = call?.telnyxIDs?.telnyxCallControlId;
+    const id = farLegId();
     if (!id) throw new Error("No call control id");
-    await fetch(`/api/calls/${id}/transfer`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to: number }) });
+    const res = await fetch(`/api/calls/${id}/transfer`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to: number }) });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      throw new Error(d?.error || "Transfer failed");
+    }
   }, []);
 
   const sendDTMF = useCallback((digits: string) => { (activeCallRef.current as any)?.dtmf?.(digits); }, []);
