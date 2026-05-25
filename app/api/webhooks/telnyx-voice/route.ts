@@ -4,7 +4,8 @@ import { NextResponse } from "next/server";
 import { formatPhoneE164 } from "@/lib/call-validation";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getWebRTCSipUri } from "@/lib/voice/webrtc-sip";
-import { bridgeCall, startRecording } from "@/lib/voice/call-control";
+import { bridgeCall, startRecording, playAudioUrl } from "@/lib/voice/call-control";
+import { getVoicemailGreetingUrl } from "@/lib/voice/routing";
 import {
   TELNYX_API_URL,
   getCallControlAppId,
@@ -374,6 +375,81 @@ export async function POST(req: Request) {
 
     if (event === "call.recording.saved") {
       try {
+        // Voicemail branch: if this call was flagged as voicemail, store the
+        // caller's message in the `voicemails` bucket and mark status accordingly.
+        // Discard empty (0s) recordings — caller hung up without leaving a message.
+        {
+          const { data: vmCheck } = await supabaseAdmin
+            .from("calls")
+            .select("voicemail")
+            .eq("call_sid", callControlId)
+            .maybeSingle();
+          if (vmCheck?.voicemail) {
+            const vmMp3: string | null =
+              (typeof payload?.recording_urls?.mp3 === "string" ? payload.recording_urls.mp3 : null) ??
+              (typeof payload?.recording_urls?.wav === "string" ? payload.recording_urls.wav : null);
+            const vmStarted = payload?.recording_started_at ? new Date(payload.recording_started_at).getTime() : null;
+            const vmEnded = payload?.recording_ended_at ? new Date(payload.recording_ended_at).getTime() : null;
+            const vmDur = vmStarted && vmEnded ? Math.max(0, Math.round((vmEnded - vmStarted) / 1000)) : null;
+
+            if (!callControlId || !vmMp3) {
+              return NextResponse.json({ ok: true });
+            }
+            // Discard empty voicemails.
+            if (vmDur !== null && vmDur < 1) {
+              console.log("[telnyx-voice] empty voicemail (0s), discarding", { callControlId });
+              await supabaseAdmin
+                .from("calls")
+                .update({ recording_state: "ready" })
+                .eq("call_sid", callControlId);
+              return NextResponse.json({ ok: true });
+            }
+
+            let vmBuf: ArrayBuffer | null = null;
+            for (let attempt = 1; attempt <= 3; attempt++) {
+              try {
+                const resp = await fetch(vmMp3);
+                if (resp.ok) { vmBuf = await resp.arrayBuffer(); break; }
+              } catch (err) {
+                console.warn(`[telnyx-voice] voicemail fetch attempt ${attempt} error`, err);
+              }
+              if (attempt < 3) await new Promise((r) => setTimeout(r, 2000));
+            }
+            if (!vmBuf) {
+              console.error("[telnyx-voice] voicemail download failed");
+              await supabaseAdmin.from("calls").update({ recording_state: "failed" }).eq("call_sid", callControlId);
+              return NextResponse.json({ ok: true });
+            }
+
+            const vmNow = new Date();
+            const vmYear = vmNow.getUTCFullYear();
+            const vmMonth = String(vmNow.getUTCMonth() + 1).padStart(2, "0");
+            const vmSafeId = callControlId.replace(/[^a-zA-Z0-9_-]/g, "_");
+            const vmPath = `${vmYear}/${vmMonth}/${vmSafeId}.mp3`;
+
+            const { error: vmUpErr } = await supabaseAdmin.storage
+              .from("voicemails")
+              .upload(vmPath, vmBuf, { contentType: "audio/mpeg", upsert: true });
+            if (vmUpErr) {
+              console.error("[telnyx-voice] voicemail upload failed", vmUpErr.message);
+              await supabaseAdmin.from("calls").update({ recording_state: "failed" }).eq("call_sid", callControlId);
+              return NextResponse.json({ ok: true });
+            }
+
+            await supabaseAdmin
+              .from("calls")
+              .update({
+                voicemail_storage_path: vmPath,
+                voicemail_duration_seconds: vmDur,
+                status: "voicemail",
+                recording_state: "ready",
+              })
+              .eq("call_sid", callControlId);
+            console.log("[telnyx-voice] voicemail stored", { callControlId, vmPath });
+            return NextResponse.json({ ok: true });
+          }
+        }
+
         const recId: string | null =
           (typeof payload?.recording_id === "string" ? payload.recording_id : null);
         const mp3: string | null =
@@ -460,6 +536,34 @@ export async function POST(req: Request) {
       } catch (e) {
         console.error("[telnyx-voice] call log hangup update failed", e);
       }
+    }
+
+    if (event === "call.playback.ended") {
+      try {
+        if (callControlId) {
+          const { data: vmRow } = await supabaseAdmin
+            .from("calls")
+            .select("call_sid, voicemail, voicemail_storage_path, recording_state")
+            .eq("call_sid", callControlId)
+            .maybeSingle();
+          // Only react for voicemail calls that haven't started recording yet.
+          if (vmRow?.voicemail && !vmRow.voicemail_storage_path && vmRow.recording_state !== "recording") {
+            const rec = await startRecording(callControlId, { play_beep: true });
+            if (rec.ok) {
+              await supabaseAdmin
+                .from("calls")
+                .update({ recording_state: "recording" })
+                .eq("call_sid", callControlId);
+              console.log("[telnyx-voice] voicemail recording started after greeting", { callControlId });
+            } else {
+              console.error("[telnyx-voice] voicemail record_start failed", rec.error);
+            }
+          }
+        }
+      } catch (e) {
+        console.error("[telnyx-voice] playback.ended handler failed", e);
+      }
+      return NextResponse.json({ ok: true });
     }
 
     if (event === "call.speak.ended") {
