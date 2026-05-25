@@ -258,6 +258,39 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true });
       }
 
+      // Persist the PSTN leg to the calls table (idempotent on call_sid).
+      try {
+        const remote = direction === "incoming" ? String(payload?.from ?? "") : toRaw;
+        const digits = remote.replace(/\D/g, "");
+        const noCc = digits.startsWith("1") ? digits.slice(1) : digits;
+        const cands = Array.from(new Set([digits, noCc].filter((d) => d.length >= 10)));
+        let buyerId: string | null = null;
+        if (cands.length) {
+          const orFilter = cands
+            .flatMap((d) => [`phone_norm.eq.${d}`, `phone2_norm.eq.${d}`, `phone3_norm.eq.${d}`])
+            .join(",");
+          const { data: b } = await supabaseAdmin
+            .from("buyers").select("id").or(orFilter).limit(1).maybeSingle();
+          buyerId = b?.id ?? null;
+        }
+        if (callControlId) {
+          await supabaseAdmin.from("calls").upsert(
+            {
+              call_sid: callControlId,
+              direction: direction === "incoming" ? "inbound" : "outbound",
+              from_number: String(payload?.from ?? ""),
+              to_number: toRaw,
+              status: "initiated",
+              webrtc: true,
+              buyer_id: buyerId,
+            },
+            { onConflict: "call_sid" }
+          );
+        }
+      } catch (e) {
+        console.error("[telnyx-voice] call log insert failed", e);
+      }
+
       if (direction === "incoming") {
         await answer(callControlId);
         const sipUri = await getWebRTCSipUri();
@@ -285,6 +318,16 @@ export async function POST(req: Request) {
     }
 
     if (event === "call.answered") {
+      try {
+        if (callControlId) {
+          await supabaseAdmin
+            .from("calls")
+            .update({ status: "answered", answered_at: new Date().toISOString() })
+            .eq("call_sid", callControlId);
+        }
+      } catch (e) {
+        console.error("[telnyx-voice] call log answered update failed", e);
+      }
       // If this is the browser B-leg of a server-originated outbound call, bridge
       // it to the prospect A-leg carried in client_state. Leaves all other
       // call.answered events (including the prospect leg) untouched.
@@ -305,6 +348,26 @@ export async function POST(req: Request) {
 
     if (event === "call.hangup") {
       callMap.delete(payload.call_session_id);
+      try {
+        if (callControlId) {
+          const start = payload?.start_time ? new Date(payload.start_time).getTime() : null;
+          const end = payload?.end_time ? new Date(payload.end_time).getTime() : Date.now();
+          const dur = start ? Math.max(0, Math.round((end - start) / 1000)) : null;
+          await supabaseAdmin
+            .from("calls")
+            .update({
+              status: "completed",
+              ended_at: new Date().toISOString(),
+              duration: dur,
+              duration_seconds: dur,
+              hangup_cause: payload?.hangup_cause ?? null,
+              hangup_source: payload?.hangup_source ?? null,
+            })
+            .eq("call_sid", callControlId);
+        }
+      } catch (e) {
+        console.error("[telnyx-voice] call log hangup update failed", e);
+      }
     }
 
     if (event === "call.speak.ended") {
