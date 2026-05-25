@@ -186,25 +186,45 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
           if (!isOurOutbound && (n.type === "call.received" || (n.type === "callUpdate" && state === "ringing" && call.direction !== "outbound"))) {
             setIncomingCall(call);
             setStatus("connecting");
-            // Resolve caller number from the SDK, then enrich with the CRM name
-            // and the inbound far-leg call_control_id (used later for controls).
+            // Resolve caller identity. On SIP-transferred inbound legs the SDK's
+            // callerNumber is the SIP username (e.g. "listhitapp"), NOT the caller's
+            // phone. Detect a non-phone value and instead resolve from the live
+            // inbound `calls` row the webhook wrote on ring (real number + buyer +
+            // PSTN far-leg call_control_id). Retry once for the write/ring race.
             const opts = (call as any)?.options || {};
-            const remoteNumber: string =
-              opts.callerNumber || opts.remoteCallerNumber || (call as any)?.options?.remoteCallerName || "";
-            setCurrentContact({ number: remoteNumber || undefined });
-            if (remoteNumber) {
-              fetch(`/api/calls/lookup?phone=${encodeURIComponent(remoteNumber)}`, { cache: "no-store" })
-                .then((r) => r.json())
-                .then((d) => {
-                  if (!mounted) return;
-                  setCurrentContact({ name: d?.name || undefined, number: d?.number || remoteNumber });
-                  if (d?.pendingCallControlId && !prospectCallControlIdRef.current) {
-                    prospectCallControlIdRef.current = d.pendingCallControlId;
-                    setCustomerLegId(d.pendingCallControlId);
-                  }
-                })
-                .catch(() => {});
-            }
+            const sdkNumber: string = opts.callerNumber || opts.remoteCallerNumber || "";
+            const sdkNumberIsReal = sdkNumber.replace(/\D/g, "").length >= 10;
+            const lookupUrl = sdkNumberIsReal
+              ? `/api/calls/lookup?phone=${encodeURIComponent(sdkNumber)}`
+              : `/api/calls/lookup?recent=inbound`;
+            setCurrentContact({ number: sdkNumberIsReal ? sdkNumber : undefined });
+            const applyEnrichment = (d: any): boolean => {
+              if (!mounted || !d) return false;
+              if (d.number || d.name) {
+                setCurrentContact({ name: d.name || undefined, number: d.number || (sdkNumberIsReal ? sdkNumber : undefined) });
+              }
+              if (d.pendingCallControlId && !prospectCallControlIdRef.current) {
+                prospectCallControlIdRef.current = d.pendingCallControlId;
+                setCustomerLegId(d.pendingCallControlId);
+              }
+              return !!(d.number || d.name || d.pendingCallControlId);
+            };
+            fetch(lookupUrl, { cache: "no-store" })
+              .then((r) => r.json())
+              .then((d) => {
+                const got = applyEnrichment(d);
+                if (!got && !sdkNumberIsReal) {
+                  // Race: webhook row may not be written yet. Retry once.
+                  setTimeout(() => {
+                    if (!mounted) return;
+                    fetch(`/api/calls/lookup?recent=inbound`, { cache: "no-store" })
+                      .then((r) => r.json())
+                      .then(applyEnrichment)
+                      .catch(() => {});
+                  }, 700);
+                }
+              })
+              .catch(() => {});
             return;
           }
           if (n.type === "callUpdate") {
