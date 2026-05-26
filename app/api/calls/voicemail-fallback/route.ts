@@ -28,12 +28,31 @@ export async function POST(request: Request) {
       .eq("call_sid", callControlId)
       .maybeSingle();
 
+    console.log("[voicemail-fallback] invoked", {
+      callControlId,
+      action,
+      foundRow: Boolean(callRow),
+      status: callRow?.status,
+      answered_at: callRow?.answered_at,
+      ended_at: callRow?.ended_at,
+      voicemail: callRow?.voicemail,
+      to_number: callRow?.to_number,
+    });
+
     if (!callRow) {
       return NextResponse.json({ ok: false, error: "Call not found" }, { status: 404 });
     }
 
-    // Only proceed if the call hasn't been answered/ended/already-voicemail.
-    if (callRow.answered_at || callRow.ended_at || callRow.status === "completed" || callRow.voicemail) {
+    // NOTE: do NOT bail on answered_at or status==="completed". In this app the
+    // webhook auto-answers the inbound PSTN leg to enable the SIP transfer to the
+    // browser, so answered_at is ALWAYS set on inbound calls and "answered"/
+    // "completed" do NOT mean a human handled the call. Only bail if the call leg
+    // has fully ended (caller hung up) or voicemail was already triggered.
+    if (callRow.ended_at || callRow.voicemail) {
+      console.log("[voicemail-fallback] skipping — already ended or voicemail", {
+        ended_at: callRow.ended_at,
+        voicemail: callRow.voicemail,
+      });
       return NextResponse.json({ ok: true, action: "already_handled", status: callRow.status });
     }
 
@@ -44,10 +63,12 @@ export async function POST(request: Request) {
     const greetingUrl = await getVoicemailGreetingUrl(callRow.to_number ?? "");
 
     if (greetingUrl) {
+      console.log("[voicemail-fallback] playing greeting to PSTN leg", { callControlId, greetingUrl });
       const play = await playAudioUrl(callControlId, greetingUrl, false, "self");
+      console.log("[voicemail-fallback] playback_start result", { ok: play.ok, detail: play.ok ? "ok" : play.error });
       if (!play.ok) {
         console.error("[voicemail-fallback] greeting playback failed", play.error, { callControlId });
-        return NextResponse.json({ ok: false, error: "Greeting playback failed" }, { status: 500 });
+        return NextResponse.json({ ok: false, error: "Greeting playback failed", detail: play.error }, { status: 500 });
       }
     } else {
       console.warn("[voicemail-fallback] no greeting configured for DID", { to: callRow.to_number, callControlId });
