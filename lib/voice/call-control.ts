@@ -73,12 +73,13 @@ export async function transferToSip(
 
 export async function startRecording(
   callControlId: string,
-  options?: { play_beep?: boolean },
+  options?: { play_beep?: boolean; commandId?: string },
 ) {
   return callControlRequest(callControlId, "record_start", {
     channels: "dual",
     format: "mp3",
     ...(options?.play_beep ? { play_beep: true } : {}),
+    ...(options?.commandId ? { command_id: options.commandId } : {}),
   });
 }
 
@@ -98,11 +99,13 @@ export async function playAudioUrl(
   audioUrl: string,
   loop: boolean = false,
   targetLegs: string = "self",
+  commandId?: string,
 ) {
   return callControlRequest(callControlId, "playback_start", {
     audio_url: audioUrl,
     ...(loop ? { loop: "infinity" } : {}),
     target_legs: targetLegs,
+    ...(commandId ? { command_id: commandId } : {}),
   });
 }
 
