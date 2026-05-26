@@ -5,7 +5,8 @@ import { formatPhoneE164 } from "@/lib/call-validation";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getWebRTCSipUri } from "@/lib/voice/webrtc-sip";
 import { bridgeCall, startRecording, playAudioUrl } from "@/lib/voice/call-control";
-import { getVoicemailGreetingUrl } from "@/lib/voice/routing";
+import { getRoutingConfig } from "@/lib/voice/routing";
+import { startVoicemail } from "@/lib/voice/voicemail";
 import {
   TELNYX_API_URL,
   getCallControlAppId,
@@ -76,10 +77,13 @@ async function answer(callControlId: string) {
 async function transfer(
   callControlId: string,
   to: string,
-  fromE164?: string | null
+  fromE164?: string | null,
+  timeoutSecs = 30,
+  targetLegClientState?: string,
 ) {
-  const body: any = { to, timeout_secs: 30 };
+  const body: any = { to, timeout_secs: timeoutSecs };
   if (fromE164) body.from = fromE164;
+  if (targetLegClientState) body.target_leg_client_state = targetLegClientState;
   return await cc(`${callControlId}/actions/transfer`, body);
 }
 async function speak(callControlId: string, text: string) {
@@ -284,6 +288,7 @@ export async function POST(req: Request) {
               status: "initiated",
               webrtc: true,
               buyer_id: buyerId,
+              call_session_id: payload.call_session_id ?? null,
             },
             { onConflict: "call_sid" }
           );
@@ -297,12 +302,9 @@ export async function POST(req: Request) {
         const sipUri = await getWebRTCSipUri();
 
         if (sipUri) {
-          // A SIP-URI transfer spins up a new outbound leg that REQUIRES a `from`
-          // caller ID. For an in-Telnyx SIP transfer the `from` is metadata for the
-          // WebRTC client's caller-ID display and need NOT be a number on the
-          // account — but omitting it makes Telnyx reject with 10010/D11
-          // "Destination Number is invalid". Pass the original caller's number.
-          await transfer(callControlId, sipUri, payload.from);
+          const routing = await getRoutingConfig(toRaw);
+          const bLegState = Buffer.from(JSON.stringify({ role: "browser_transfer" })).toString("base64");
+          await transfer(callControlId, sipUri, payload.from, routing.browserRingTimeoutSeconds, bLegState);
         } else {
           await sayAndHangup(
             callControlId,
@@ -316,6 +318,25 @@ export async function POST(req: Request) {
       if (direction === "outgoing") {
         return NextResponse.json({ ok: true });
       }
+    }
+
+
+    if (event === "call.bridged") {
+      try {
+        if (callControlId && payload?.call_session_id) {
+          await supabaseAdmin
+            .from("calls")
+            .update({ browser_answered_at: new Date().toISOString() })
+            .eq("call_session_id", payload.call_session_id)
+            .is("browser_answered_at", null);
+          console.log("[telnyx-voice] call.bridged → browser_answered_at set", {
+            session: payload.call_session_id, leg: callControlId,
+          });
+        }
+      } catch (e) {
+        console.error("[telnyx-voice] call.bridged handler failed", e);
+      }
+      return NextResponse.json({ ok: true });
     }
 
     if (event === "call.answered") {
@@ -537,6 +558,56 @@ export async function POST(req: Request) {
         console.error("[telnyx-voice] call log hangup update failed", e);
       }
     }
+
+      if (callControlId && payload?.call_session_id) {
+        const hangupCause = payload?.hangup_cause ?? null;
+        const hangupSource = payload?.hangup_source ?? null;
+
+        const { data: selfRow } = await supabaseAdmin
+          .from("calls")
+          .select("call_sid")
+          .eq("call_sid", callControlId)
+          .maybeSingle();
+
+        if (!selfRow) {
+          const decoded = decodeClientState(payload?.client_state ?? body?.client_state);
+          const isBrowserTransferLeg = decoded?.role === "browser_transfer";
+          const isDecline = hangupCause === "call_rejected" && hangupSource === "callee";
+          const isTimeout = hangupCause === "timeout";
+          const isUnansweredTransfer = isBrowserTransferLeg && (isDecline || isTimeout);
+
+          const { data: aRow } = await supabaseAdmin
+            .from("calls")
+            .select("call_sid, to_number, voicemail, ended_at, browser_answered_at, direction")
+            .eq("call_session_id", payload.call_session_id)
+            .neq("call_sid", callControlId)
+            .maybeSingle();
+
+          console.log("[telnyx-voice] B-leg hangup eval", {
+            bLeg: callControlId,
+            aLeg: aRow?.call_sid ?? null,
+            isBrowserTransferLeg, hangupCause, hangupSource, isDecline, isTimeout,
+            browser_answered_at: aRow?.browser_answered_at ?? null,
+            voicemail: aRow?.voicemail ?? null,
+            ended_at: aRow?.ended_at ?? null,
+          });
+
+          if (
+            isUnansweredTransfer &&
+            aRow?.call_sid &&
+            aRow.direction === "inbound" &&
+            !aRow.browser_answered_at &&
+            !aRow.voicemail &&
+            !aRow.ended_at
+          ) {
+            console.log("[telnyx-voice] unanswered transfer → voicemail on A-leg", {
+              aLeg: aRow.call_sid, did: aRow.to_number, reason: isTimeout ? "timeout" : "decline",
+            });
+            const vm = await startVoicemail(aRow.call_sid, aRow.to_number ?? null);
+            console.log("[telnyx-voice] startVoicemail result", vm);
+          }
+        }
+      }
 
     if (event === "call.playback.ended") {
       try {
