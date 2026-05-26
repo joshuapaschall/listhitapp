@@ -344,22 +344,33 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   }, [incomingCall]);
 
   const disconnectCall = useCallback(() => {
-    // Decline of a ringing inbound call → route caller to voicemail BEFORE we
-    // tear down the browser leg. Distinguish from "end active call": a ringing
-    // inbound has no active call yet (activeCallRef null) but an incoming call,
-    // and the caller's PSTN leg id is in prospectCallControlIdRef.
+    // Decline of a ringing inbound call → route caller to voicemail.
+    // CRITICAL: this app rings the browser via a Telnyx transfer that BRIDGES the
+    // caller's PSTN leg to the browser leg. Calling .hangup() on the browser leg
+    // tears down that bridge and ends the caller's PSTN leg — which would kill the
+    // call before the greeting can play. So on an inbound decline we must NOT hang
+    // up the browser leg; instead we tell the server to take the PSTN leg and play
+    // the greeting (the pending transfer to the browser is cancelled server-side),
+    // and we only dismiss our local incoming UI.
     const isInboundDecline = !activeCallRef.current && !!incomingCallRef.current;
     const inboundPstnId = prospectCallControlIdRef.current;
     if (isInboundDecline && inboundPstnId) {
-      // Fire-and-forget: server plays greeting + records. Don't block teardown.
+      console.log("[voicemail] inbound decline → fallback (NOT hanging up browser leg)", { inboundPstnId });
       fetch("/api/calls/voicemail-fallback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ call_control_id: inboundPstnId, action: "voicemail" }),
         keepalive: true,
       }).catch((e) => console.error("[voicemail] fallback POST failed", e));
+      // Dismiss local incoming UI only — do NOT hangup (would kill the caller leg).
+      setActiveCall(null);
+      setIncomingCall(null);
+      setStatus("idle");
+      setCurrentContact(null);
+      return;
     }
 
+    // Normal path: ending an active call, or declining an outbound/unknown — hang up.
     const call = activeCallRef.current || incomingCallRef.current;
     (call as any)?.hangup?.();
     setActiveCall(null);
