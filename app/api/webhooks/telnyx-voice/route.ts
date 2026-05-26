@@ -561,27 +561,27 @@ export async function POST(req: Request) {
         if (callControlId && payload?.call_session_id) {
           const hangupCause = payload?.hangup_cause ?? null;
           const hangupSource = payload?.hangup_source ?? null;
-  
+
           const { data: selfRow } = await supabaseAdmin
             .from("calls")
             .select("call_sid")
             .eq("call_sid", callControlId)
             .maybeSingle();
-  
+
           if (!selfRow) {
             const decoded = decodeClientState(payload?.client_state ?? body?.client_state);
             const isBrowserTransferLeg = decoded?.role === "browser_transfer";
             const isDecline = hangupCause === "call_rejected" && hangupSource === "callee";
             const isTimeout = hangupCause === "timeout";
             const isUnansweredTransfer = isBrowserTransferLeg && (isDecline || isTimeout);
-  
+
             const { data: aRow } = await supabaseAdmin
               .from("calls")
               .select("call_sid, to_number, voicemail, ended_at, browser_answered_at, direction")
               .eq("call_session_id", payload.call_session_id)
               .neq("call_sid", callControlId)
               .maybeSingle();
-  
+
             console.log("[telnyx-voice] B-leg hangup eval", {
               bLeg: callControlId,
               aLeg: aRow?.call_sid ?? null,
@@ -590,7 +590,7 @@ export async function POST(req: Request) {
               voicemail: aRow?.voicemail ?? null,
               ended_at: aRow?.ended_at ?? null,
             });
-  
+
             if (
               isUnansweredTransfer &&
               aRow?.call_sid &&
