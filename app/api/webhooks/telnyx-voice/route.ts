@@ -557,57 +557,57 @@ export async function POST(req: Request) {
       } catch (e) {
         console.error("[telnyx-voice] call log hangup update failed", e);
       }
-    }
 
-      if (callControlId && payload?.call_session_id) {
-        const hangupCause = payload?.hangup_cause ?? null;
-        const hangupSource = payload?.hangup_source ?? null;
-
-        const { data: selfRow } = await supabaseAdmin
-          .from("calls")
-          .select("call_sid")
-          .eq("call_sid", callControlId)
-          .maybeSingle();
-
-        if (!selfRow) {
-          const decoded = decodeClientState(payload?.client_state ?? body?.client_state);
-          const isBrowserTransferLeg = decoded?.role === "browser_transfer";
-          const isDecline = hangupCause === "call_rejected" && hangupSource === "callee";
-          const isTimeout = hangupCause === "timeout";
-          const isUnansweredTransfer = isBrowserTransferLeg && (isDecline || isTimeout);
-
-          const { data: aRow } = await supabaseAdmin
+        if (callControlId && payload?.call_session_id) {
+          const hangupCause = payload?.hangup_cause ?? null;
+          const hangupSource = payload?.hangup_source ?? null;
+  
+          const { data: selfRow } = await supabaseAdmin
             .from("calls")
-            .select("call_sid, to_number, voicemail, ended_at, browser_answered_at, direction")
-            .eq("call_session_id", payload.call_session_id)
-            .neq("call_sid", callControlId)
+            .select("call_sid")
+            .eq("call_sid", callControlId)
             .maybeSingle();
-
-          console.log("[telnyx-voice] B-leg hangup eval", {
-            bLeg: callControlId,
-            aLeg: aRow?.call_sid ?? null,
-            isBrowserTransferLeg, hangupCause, hangupSource, isDecline, isTimeout,
-            browser_answered_at: aRow?.browser_answered_at ?? null,
-            voicemail: aRow?.voicemail ?? null,
-            ended_at: aRow?.ended_at ?? null,
-          });
-
-          if (
-            isUnansweredTransfer &&
-            aRow?.call_sid &&
-            aRow.direction === "inbound" &&
-            !aRow.browser_answered_at &&
-            !aRow.voicemail &&
-            !aRow.ended_at
-          ) {
-            console.log("[telnyx-voice] unanswered transfer → voicemail on A-leg", {
-              aLeg: aRow.call_sid, did: aRow.to_number, reason: isTimeout ? "timeout" : "decline",
+  
+          if (!selfRow) {
+            const decoded = decodeClientState(payload?.client_state ?? body?.client_state);
+            const isBrowserTransferLeg = decoded?.role === "browser_transfer";
+            const isDecline = hangupCause === "call_rejected" && hangupSource === "callee";
+            const isTimeout = hangupCause === "timeout";
+            const isUnansweredTransfer = isBrowserTransferLeg && (isDecline || isTimeout);
+  
+            const { data: aRow } = await supabaseAdmin
+              .from("calls")
+              .select("call_sid, to_number, voicemail, ended_at, browser_answered_at, direction")
+              .eq("call_session_id", payload.call_session_id)
+              .neq("call_sid", callControlId)
+              .maybeSingle();
+  
+            console.log("[telnyx-voice] B-leg hangup eval", {
+              bLeg: callControlId,
+              aLeg: aRow?.call_sid ?? null,
+              isBrowserTransferLeg, hangupCause, hangupSource, isDecline, isTimeout,
+              browser_answered_at: aRow?.browser_answered_at ?? null,
+              voicemail: aRow?.voicemail ?? null,
+              ended_at: aRow?.ended_at ?? null,
             });
-            const vm = await startVoicemail(aRow.call_sid, aRow.to_number ?? null);
-            console.log("[telnyx-voice] startVoicemail result", vm);
+  
+            if (
+              isUnansweredTransfer &&
+              aRow?.call_sid &&
+              aRow.direction === "inbound" &&
+              !aRow.browser_answered_at &&
+              !aRow.voicemail &&
+              !aRow.ended_at
+            ) {
+              console.log("[telnyx-voice] unanswered transfer → voicemail on A-leg", {
+                aLeg: aRow.call_sid, did: aRow.to_number, reason: isTimeout ? "timeout" : "decline",
+              });
+              const vm = await startVoicemail(aRow.call_sid, aRow.to_number ?? null);
+              console.log("[telnyx-voice] startVoicemail result", vm);
+            }
           }
         }
-      }
+    }
 
     if (event === "call.playback.ended") {
       try {
