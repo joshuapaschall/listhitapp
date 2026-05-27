@@ -66,15 +66,10 @@ export default function VoicemailGreetingEditor({
   }, [recordingUrl]);
 
   async function save(payload: Record<string, unknown>) {
-    const body: Record<string, unknown> = { ...payload };
-    if (patchEndpoint === "/api/settings/phone-system") {
-      body.e164 = scopeId;
-    }
-
     const response = await fetch(patchEndpoint, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify(payload),
     });
 
     return response.json().then((data) => ({ data, ok: response.ok }));
@@ -86,12 +81,8 @@ export default function VoicemailGreetingEditor({
       voice_id: voiceId,
     };
 
-    if (generateEndpoint === "/api/settings/phone-system/generate") {
-      payload.e164 = scopeId;
-    } else {
-      payload.scopeKey = scopeId;
-      payload.scopeType = scopeType;
-    }
+    payload.scopeKey = scopeId;
+    payload.scopeType = scopeType;
 
     const response = await fetch(generateEndpoint, {
       method: "POST",
@@ -108,12 +99,8 @@ export default function VoicemailGreetingEditor({
     const formData = new FormData();
     formData.append("audio", new File([recordingBlob], "preview.webm", { type: "audio/webm" }));
 
-    if (generateEndpoint === "/api/settings/phone-system/generate") {
-      formData.append("e164", scopeId);
-    } else {
-      formData.append("scopeKey", scopeId);
-      formData.append("scopeType", scopeType);
-    }
+    formData.append("scopeKey", scopeId);
+    formData.append("scopeType", scopeType);
 
     const response = await fetch(generateEndpoint, {
       method: "POST",

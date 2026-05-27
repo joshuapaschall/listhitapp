@@ -44,9 +44,6 @@ export default function CallRoutingEditor(props: Props) {
       call_forwarding_number: needsForwarding ? trimmedForwarding || null : null,
     };
 
-    if (props.patchEndpoint === "/api/settings/phone-system") {
-      payload.e164 = props.scopeId;
-    }
 
     const response = await fetch(props.patchEndpoint, {
       method: "PATCH",
