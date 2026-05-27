@@ -7,6 +7,7 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
   if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   const { data: market, error } = await supabaseAdmin.from("markets").select("*").eq("org_id", orgId).eq("id", params.id).maybeSingle();
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  if (!market) return NextResponse.json({ ok: false, error: "Market not found" }, { status: 404 });
   const { count } = await supabaseAdmin.from("inbound_numbers").select("*", { count: "exact", head: true }).eq("org_id", orgId).eq("market_id", params.id);
   return NextResponse.json({ ok: true, market: { ...market, numberCount: count ?? 0 } });
 }

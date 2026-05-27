@@ -2,12 +2,8 @@ import { PollyClient, SynthesizeSpeechCommand, type VoiceId } from "@aws-sdk/cli
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireOrgContext } from "../../_shared";
+import { DEFAULT_VOICE_ID, POLLY_VOICES } from "@/lib/voice/polly-voices";
 
-const POLLY_VOICES = [
-  { id: "Danielle", label: "Danielle (Female)", engine: "long-form" },
-  { id: "Joanna", label: "Joanna (Female)", engine: "neural" },
-] as const;
-const DEFAULT_VOICE_ID = "Danielle";
 const GREETING_BUCKET = "voicemail-greetings";
 
 export async function GET() { return NextResponse.json({ ok: true, voices: POLLY_VOICES, defaultVoiceId: DEFAULT_VOICE_ID }); }
@@ -37,13 +33,14 @@ export async function POST(request: Request) {
   const scopeType = body.scopeType === "number" ? "number" : "market";
   const text = typeof body.text === "string" ? body.text.trim() : "";
   const voiceId = typeof body.voice_id === "string" ? body.voice_id : DEFAULT_VOICE_ID;
+  const voiceConfig = POLLY_VOICES.find((voice) => voice.id === voiceId) ?? POLLY_VOICES[0];
   if (!scopeKey || !text) return NextResponse.json({ ok: false, error: "Missing scopeKey or text" }, { status: 400 });
   const polly = new PollyClient({ region: process.env.AWS_REGION ?? "us-east-1", credentials: { accessKeyId: process.env.AWS_ACCESS_KEY_ID ?? "", secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? "" } });
-  const result = await polly.send(new SynthesizeSpeechCommand({ Text: text, OutputFormat: "mp3", VoiceId: voiceId as VoiceId, Engine: "neural", SampleRate: "24000" }));
+  const result = await polly.send(new SynthesizeSpeechCommand({ Text: text, OutputFormat: "mp3", VoiceId: voiceConfig.id as VoiceId, Engine: voiceConfig.engine, SampleRate: "24000" }));
   const chunks: Uint8Array[] = []; for await (const c of result.AudioStream as AsyncIterable<Uint8Array>) chunks.push(c);
   const path = `${scopeType === "market" ? "markets" : "numbers"}/${scopeKey}/preview-${ts}.mp3`;
   const { error } = await supabaseAdmin.storage.from(GREETING_BUCKET).upload(path, Buffer.concat(chunks), { contentType: "audio/mpeg", upsert: true });
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   const url = `${supabaseAdmin.storage.from(GREETING_BUCKET).getPublicUrl(path).data.publicUrl}?v=${ts}`;
-  return NextResponse.json({ ok: true, url, source: "polly", voice_id: voiceId });
+  return NextResponse.json({ ok: true, url, source: "polly", voice_id: voiceConfig.id });
 }
