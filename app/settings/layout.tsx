@@ -8,9 +8,9 @@ import { cn } from "@/lib/utils"
 
 const navItems = [
   {
-    href: "/settings/phone-numbers",
-    label: "Phone Numbers",
-    description: "Call routing and voicemail greetings per number",
+    href: "/settings/markets",
+    label: "Markets",
+    description: "Group your numbers and configure routing & voicemail",
   },
   {
     href: "/settings/templates/sms",

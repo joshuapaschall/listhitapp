@@ -4,22 +4,10 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { DEFAULT_VOICE_ID, POLLY_VOICES } from "@/lib/voice/polly-voices";
 
 export const dynamic = "force-dynamic";
 
-// Polly voices offered for voicemail greetings. Danielle is the default.
-const POLLY_VOICES = [
-  { id: "Danielle", label: "Danielle (Female)", engine: "long-form" },
-  { id: "Joanna", label: "Joanna (Female)", engine: "neural" },
-  { id: "Kendra", label: "Kendra (Female)", engine: "neural" },
-  { id: "Ruth", label: "Ruth (Female)", engine: "neural" },
-  { id: "Matthew", label: "Matthew (Male)", engine: "neural" },
-  { id: "Joey", label: "Joey (Male)", engine: "neural" },
-  { id: "Stephen", label: "Stephen (Male)", engine: "neural" },
-  { id: "Gregory", label: "Gregory (Male)", engine: "long-form" },
-] as const;
-
-const DEFAULT_VOICE_ID = "Danielle";
 const GREETING_BUCKET = "voicemail-greetings";
 
 async function requireAuth() {
