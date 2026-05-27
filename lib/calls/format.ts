@@ -1,8 +1,10 @@
 export type CallDirection = "inbound" | "outbound";
 
 export interface CallParty {
+  id?: string | null;
   fname?: string | null;
   lname?: string | null;
+  phone?: string | null;
 }
 
 export interface CallAgent {

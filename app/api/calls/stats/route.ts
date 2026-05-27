@@ -38,7 +38,7 @@ export async function GET() {
 
     const { data, error } = await supabaseAdmin
       .from("calls")
-      .select("started_at,status,duration_seconds")
+      .select("started_at,status,duration_seconds,voicemail,voicemail_storage_path")
       .gte("started_at", startIso)
       .lt("started_at", endIso);
 
@@ -50,6 +50,7 @@ export async function GET() {
     let connectedCount = 0;
     let talkTimeTodaySeconds = 0;
     let missedToday = 0;
+    let newVoicemails = 0;
 
     for (const call of data ?? []) {
       const status = call.status ?? "";
@@ -60,13 +61,17 @@ export async function GET() {
       if (MISSED_STATUSES.has(status)) {
         missedToday += 1;
       }
+      // TODO: If/when unread voicemail tracking exists on calls, only count unheard here.
+      if (call.voicemail === true && call.voicemail_storage_path) {
+        newVoicemails += 1;
+      }
     }
 
     const connectedRateToday = callsToday > 0 ? connectedCount / callsToday : 0;
 
     return NextResponse.json({
       ok: true,
-      stats: { callsToday, talkTimeTodaySeconds, connectedRateToday, missedToday },
+      stats: { callsToday, talkTimeTodaySeconds, connectedRateToday, missedToday, newVoicemails },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
