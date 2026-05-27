@@ -29,6 +29,13 @@ cp .env.example .env.local
 
 ### Environment variables
 
+Public buyer signup validation also uses:
+
+- `DEBOUNCE_API_KEY`
+- `DEBOUNCE_PUBLIC_KEY` (reference only; not used server-side)
+- `ALLOW_VOIP_SIGNUPS` (`false` by default to reject VoIP signups)
+
+
 Backend scripts and API routes require `SUPABASE_SERVICE_ROLE_KEY` for authentication. This key is for **server code only** and must never be exposed to the browser. Make sure it is set in `.env.local` after copying `.env.example`.
 
 DispoTool verifies all required variables at startup. The check lives in
