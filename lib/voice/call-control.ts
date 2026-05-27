@@ -73,13 +73,14 @@ export async function transferToSip(
 
 export async function startRecording(
   callControlId: string,
-  options?: { play_beep?: boolean; commandId?: string },
+  options?: { play_beep?: boolean; commandId?: string; clientState?: string },
 ) {
   return callControlRequest(callControlId, "record_start", {
     channels: "dual",
     format: "mp3",
     ...(options?.play_beep ? { play_beep: true } : {}),
     ...(options?.commandId ? { command_id: options.commandId } : {}),
+    ...(options?.clientState ? { client_state: options.clientState } : {}),
   });
 }
 

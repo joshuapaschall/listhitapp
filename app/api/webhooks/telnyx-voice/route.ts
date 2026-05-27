@@ -405,16 +405,17 @@ export async function POST(req: Request) {
 
     if (event === "call.recording.saved") {
       try {
-        // Voicemail branch: if this call was flagged as voicemail, store the
-        // caller's message in the `voicemails` bucket and mark status accordingly.
-        // Discard empty (0s) recordings — caller hung up without leaving a message.
+        // Voicemail branch: only the explicitly tagged voicemail recording counts.
+        // This avoids misclassifying auto-record stop events as voicemails.
         {
+          const recordingClientState = decodeClientState(payload?.client_state ?? body?.client_state);
+          const isTaggedVoicemailRecording = recordingClientState === "voicemail_recording";
           const { data: vmCheck } = await supabaseAdmin
             .from("calls")
             .select("voicemail")
             .eq("call_sid", callControlId)
             .maybeSingle();
-          if (vmCheck?.voicemail) {
+          if (isTaggedVoicemailRecording && vmCheck?.voicemail) {
             const vmMp3: string | null =
               (typeof payload?.recording_urls?.mp3 === "string" ? payload.recording_urls.mp3 : null) ??
               (typeof payload?.recording_urls?.wav === "string" ? payload.recording_urls.wav : null);
@@ -631,7 +632,10 @@ export async function POST(req: Request) {
             .maybeSingle();
           // Only react for voicemail calls that haven't started recording yet.
           if (vmRow?.voicemail && !vmRow.voicemail_storage_path && vmRow.recording_state !== "recording") {
-            const rec = await startRecording(callControlId, { play_beep: true });
+            const rec = await startRecording(callControlId, {
+              play_beep: true,
+              clientState: Buffer.from("voicemail_recording").toString("base64"),
+            });
             if (rec.ok) {
               await supabaseAdmin
                 .from("calls")
