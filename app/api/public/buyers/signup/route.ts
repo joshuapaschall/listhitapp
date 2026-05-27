@@ -80,7 +80,6 @@ export async function POST(request: NextRequest, event: NextFetchEvent) {
     }
 
     const derived = deriveProfile(buyerTypes as BuyerTypeKey[], (payload.payment_methods || []) as PaymentKey[])
-    const nextTags = WRITE_DIAGNOSTIC_TAGS ? derived.tags : derived.tags
     const common: Record<string, any> = {
       fname: payload.fname,
       lname: payload.lname || null,
@@ -93,7 +92,7 @@ export async function POST(request: NextRequest, event: NextFetchEvent) {
       is_unsubscribed: false,
       asking_price_min: payload.asking_price_min ?? null,
       asking_price_max: payload.asking_price_max ?? null,
-      tags: nextTags,
+      tags: derived.tags,
       locations: sanitizeLocations(payload.locations),
       property_type: sanitizePropertyTypes(payload.property_types),
       investor: derived.investor,
@@ -107,9 +106,9 @@ export async function POST(request: NextRequest, event: NextFetchEvent) {
     if (existing?.id) {
       const updates: Record<string, any> = {
         ...common,
-        tags: mergeUnique(existing.tags || [], common.tags || []),
-        locations: mergeUnique(existing.locations || [], common.locations || []),
-        property_type: mergeUnique(existing.property_type || [], common.property_type || []),
+        tags: mergeUnique(existing.tags || [], common.tags || []) ?? [],
+        locations: mergeUnique(existing.locations || [], common.locations || []) ?? [],
+        property_type: mergeUnique(existing.property_type || [], common.property_type || []) ?? [],
         investor: Boolean(existing.investor) || common.investor,
         cash_buyer: Boolean(existing.cash_buyer) || common.cash_buyer,
         owner_financing: Boolean(existing.owner_financing) || common.owner_financing,

@@ -33,7 +33,7 @@ export function deriveProfile(buyerTypes: BuyerTypeKey[], payments: PaymentKey[]
   for (const key of buyerTypes) {
     const d = BUYER_TYPE_MAP[key]
     if (!d) continue
-    tags = mergeUnique(tags, d.tags)
+    tags = mergeUnique(tags, d.tags) ?? []
     investor = investor || d.investor === true
     cash_buyer = cash_buyer || d.cash_buyer === true
     owner_financing = owner_financing || d.owner_financing === true
@@ -43,7 +43,7 @@ export function deriveProfile(buyerTypes: BuyerTypeKey[], payments: PaymentKey[]
   for (const key of payments) {
     const d = PAYMENT_MAP[key]
     if (!d) continue
-    tags = mergeUnique(tags, d.tags)
+    tags = mergeUnique(tags, d.tags) ?? []
     investor = investor || d.investor === true
     cash_buyer = cash_buyer || d.cash_buyer === true
     owner_financing = owner_financing || d.owner_financing === true
