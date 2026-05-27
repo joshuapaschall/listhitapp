@@ -444,7 +444,7 @@ export async function POST(req: Request) {
               console.log("[telnyx-voice] empty voicemail (0s), discarding", { callControlId });
               await supabaseAdmin
                 .from("calls")
-                .update({ recording_state: "ready" })
+                .update({ recording_state: "ready", status: "missed" })
                 .eq("call_sid", callControlId);
               return NextResponse.json({ ok: true });
             }
@@ -564,53 +564,64 @@ export async function POST(req: Request) {
         if (callControlId) {
           const { data: callRow } = await supabaseAdmin
             .from("calls")
-            .select("direction, answered_at, browser_answered_at, voicemail, status")
+            .select("direction, answered_at, browser_answered_at, voicemail, voicemail_storage_path, status")
             .eq("call_sid", callControlId)
             .maybeSingle();
           const hangupCause = payload?.hangup_cause ?? null;
 
-          let finalStatus: string;
-          if (callRow?.status === "voicemail") {
-            finalStatus = "voicemail";
-          } else if (callRow?.voicemail) {
-            finalStatus = "missed";
-          } else if (callRow?.browser_answered_at) {
-            finalStatus = "completed";
-          } else if (callRow?.direction === "outbound" && callRow?.answered_at) {
-            finalStatus = "completed";
-          } else if (hangupCause === "user_busy" || hangupCause === "busy") {
-            finalStatus = "busy";
-          } else if (callRow?.direction === "inbound") {
-            finalStatus = "missed";
+          if (callRow) {
+            let finalStatus: string;
+            if (callRow?.status === "voicemail" && callRow?.voicemail_storage_path) {
+              // Real voicemail already stored — keep it.
+              finalStatus = "voicemail";
+            } else if (callRow?.voicemail && callRow?.voicemail_storage_path) {
+              // Voicemail flow triggered AND a message was stored.
+              finalStatus = "voicemail";
+            } else if (callRow?.browser_answered_at) {
+              finalStatus = "completed";
+            } else if (callRow?.direction === "outbound" && callRow?.answered_at) {
+              finalStatus = "completed";
+            } else if (callRow?.voicemail && !callRow?.voicemail_storage_path) {
+              // Voicemail flow started but NO message stored (silent decline / caller hung up
+              // during greeting). This is a missed call, not a voicemail.
+              finalStatus = "missed";
+            } else if (hangupCause === "user_busy" || hangupCause === "busy") {
+              finalStatus = "busy";
+            } else if (callRow?.direction === "inbound") {
+              finalStatus = "missed";
+            } else {
+              finalStatus = "no_answer";
+            }
+
+            console.log("[telnyx-voice] call.hangup status determination", {
+              callControlId,
+              direction: callRow?.direction ?? null,
+              answered_at: callRow?.answered_at ?? null,
+              browser_answered_at: callRow?.browser_answered_at ?? null,
+              voicemail: callRow?.voicemail ?? null,
+              voicemail_storage_path: callRow?.voicemail_storage_path ?? null,
+              prevStatus: callRow?.status ?? null,
+              hangupCause,
+              finalStatus,
+            });
+
+            const start = payload?.start_time ? new Date(payload.start_time).getTime() : null;
+            const end = payload?.end_time ? new Date(payload.end_time).getTime() : Date.now();
+            const dur = start ? Math.max(0, Math.round((end - start) / 1000)) : null;
+            await supabaseAdmin
+              .from("calls")
+              .update({
+                status: finalStatus,
+                ended_at: new Date().toISOString(),
+                duration: dur,
+                duration_seconds: dur,
+                hangup_cause: hangupCause,
+                hangup_source: payload?.hangup_source ?? null,
+              })
+              .eq("call_sid", callControlId);
           } else {
-            finalStatus = "no_answer";
+            console.log("[telnyx-voice] call.hangup: no logged row for leg, skipping status update", { callControlId });
           }
-
-          console.log("[telnyx-voice] call.hangup status determination", {
-            callControlId,
-            direction: callRow?.direction ?? null,
-            answered_at: callRow?.answered_at ?? null,
-            browser_answered_at: callRow?.browser_answered_at ?? null,
-            voicemail: callRow?.voicemail ?? null,
-            prevStatus: callRow?.status ?? null,
-            hangupCause,
-            finalStatus,
-          });
-
-          const start = payload?.start_time ? new Date(payload.start_time).getTime() : null;
-          const end = payload?.end_time ? new Date(payload.end_time).getTime() : Date.now();
-          const dur = start ? Math.max(0, Math.round((end - start) / 1000)) : null;
-          await supabaseAdmin
-            .from("calls")
-            .update({
-              status: finalStatus,
-              ended_at: new Date().toISOString(),
-              duration: dur,
-              duration_seconds: dur,
-              hangup_cause: hangupCause,
-              hangup_source: payload?.hangup_source ?? null,
-            })
-            .eq("call_sid", callControlId);
         }
       } catch (e) {
         console.error("[telnyx-voice] call log hangup update failed", e);
