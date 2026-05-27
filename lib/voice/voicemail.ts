@@ -55,10 +55,15 @@ export async function startVoicemail(
   const rec = await startRecording(pstnCallControlId, {
     play_beep: true,
     commandId: `vm-rec-${pstnCallControlId}`.slice(0, 127),
-    clientState: Buffer.from("voicemail_recording").toString("base64"),
+    clientState: Buffer.from(JSON.stringify({ role: "voicemail_recording" })).toString("base64"),
   });
   if (rec.ok) {
-    await supabaseAdmin.from("calls").update({ recording_state: "recording" }).eq("call_sid", pstnCallControlId);
+    const vmRecId = rec.data?.data?.recording_id ?? null;
+    await supabaseAdmin
+      .from("calls")
+      .update({ recording_state: "recording", voicemail_recording_id: vmRecId })
+      .eq("call_sid", pstnCallControlId);
+    console.log("[startVoicemail] voicemail beep-record started", { pstnCallControlId, vmRecId });
   } else {
     const is422 = typeof rec.error === "string" && rec.error.startsWith("422");
     if (is422) return { ok: false, hadGreeting: false, callerGone: true };
