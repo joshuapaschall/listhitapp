@@ -95,7 +95,7 @@ async function handlePollyGenerate(request: Request) {
     }
     const buffer = Buffer.concat(chunks);
 
-    const path = `${e164}/greeting.mp3`;
+    const path = `${e164}/preview-${Date.now()}.mp3`;
     const { error: uploadError } = await supabaseAdmin.storage
       .from(GREETING_BUCKET)
       .upload(path, buffer, { contentType: "audio/mpeg", upsert: true });
@@ -106,15 +106,6 @@ async function handlePollyGenerate(request: Request) {
 
     const publicUrl = supabaseAdmin.storage.from(GREETING_BUCKET).getPublicUrl(path).data.publicUrl;
     const cacheBustedUrl = `${publicUrl}?v=${Date.now()}`;
-
-    const { error: updateError } = await supabaseAdmin
-      .from("inbound_numbers")
-      .update({ voicemail_greeting_url: cacheBustedUrl })
-      .eq("e164", e164);
-
-    if (updateError) {
-      return NextResponse.json({ ok: false, error: updateError.message }, { status: 500 });
-    }
 
     return NextResponse.json({ ok: true, url: cacheBustedUrl, source: "polly", voice_id: voiceId });
   } catch (error) {
@@ -145,7 +136,7 @@ async function handleRecordingUpload(request: Request) {
         : "webm";
     const contentType = ext === "wav" ? "audio/wav" : ext === "mp3" ? "audio/mpeg" : "audio/webm";
 
-    const path = `${e164}/greeting.${ext}`;
+    const path = `${e164}/preview-${Date.now()}.${ext}`;
     const { error: uploadError } = await supabaseAdmin.storage
       .from(GREETING_BUCKET)
       .upload(path, buffer, { contentType, upsert: true });
@@ -156,15 +147,6 @@ async function handleRecordingUpload(request: Request) {
 
     const publicUrl = supabaseAdmin.storage.from(GREETING_BUCKET).getPublicUrl(path).data.publicUrl;
     const cacheBustedUrl = `${publicUrl}?v=${Date.now()}`;
-
-    const { error: updateError } = await supabaseAdmin
-      .from("inbound_numbers")
-      .update({ voicemail_greeting_url: cacheBustedUrl })
-      .eq("e164", e164);
-
-    if (updateError) {
-      return NextResponse.json({ ok: false, error: updateError.message }, { status: 500 });
-    }
 
     return NextResponse.json({ ok: true, url: cacheBustedUrl, source: "recorded" });
   } catch (error) {
