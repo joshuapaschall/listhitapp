@@ -322,20 +322,9 @@ export async function POST(req: Request) {
 
 
     if (event === "call.bridged") {
-      try {
-        if (callControlId && payload?.call_session_id) {
-          await supabaseAdmin
-            .from("calls")
-            .update({ browser_answered_at: new Date().toISOString() })
-            .eq("call_session_id", payload.call_session_id)
-            .is("browser_answered_at", null);
-          console.log("[telnyx-voice] call.bridged → browser_answered_at set", {
-            session: payload.call_session_id, leg: callControlId,
-          });
-        }
-      } catch (e) {
-        console.error("[telnyx-voice] call.bridged handler failed", e);
-      }
+      console.log("[telnyx-voice] call.bridged (no-op for answered tracking)", {
+        session: payload?.call_session_id ?? null, leg: callControlId,
+      });
       return NextResponse.json({ ok: true });
     }
 
@@ -388,6 +377,26 @@ export async function POST(req: Request) {
           console.log("[telnyx-voice] bridged browser leg to prospect", {
             browser: callControlId,
             prospect: cs.prospectCallControlId,
+          });
+        }
+      }
+      if (callControlId && payload?.call_session_id) {
+        // Is this the logged leg itself? Then it's the A-leg/prospect leg, not the browser.
+        const { data: selfRow } = await supabaseAdmin
+          .from("calls")
+          .select("call_sid")
+          .eq("call_sid", callControlId)
+          .maybeSingle();
+        if (!selfRow) {
+          // A non-logged leg answering within this session = the browser transfer B-leg.
+          // Mark the logged A-leg as browser-answered so a later B-leg hangup won't voicemail.
+          const { error: updErr } = await supabaseAdmin
+            .from("calls")
+            .update({ browser_answered_at: new Date().toISOString() })
+            .eq("call_session_id", payload.call_session_id)
+            .is("browser_answered_at", null);
+          console.log("[telnyx-voice] browser transfer leg answered → browser_answered_at set", {
+            session: payload.call_session_id, bLeg: callControlId, updErr: updErr?.message ?? null,
           });
         }
       }
@@ -571,8 +580,11 @@ export async function POST(req: Request) {
           if (!selfRow) {
             const decoded = decodeClientState(payload?.client_state ?? body?.client_state);
             const isBrowserTransferLeg = decoded?.role === "browser_transfer";
-            const isDecline = hangupCause === "call_rejected" && hangupSource === "callee";
-            const isTimeout = hangupCause === "timeout";
+            // A declined or unavailable browser leg shows up as one of these causes. hangupSource is
+            // unreliable for WebRTC declines (observed "unknown"), so do not gate on it.
+            const declineCauses = new Set(["call_rejected", "user_busy", "busy", "decline", "rejected"]);
+            const isDecline = hangupCause != null && declineCauses.has(hangupCause);
+            const isTimeout = hangupCause === "timeout" || hangupCause === "no_answer";
             const isUnansweredTransfer = isBrowserTransferLeg && (isDecline || isTimeout);
 
             const { data: aRow } = await supabaseAdmin
