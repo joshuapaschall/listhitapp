@@ -405,16 +405,30 @@ export async function POST(req: Request) {
 
     if (event === "call.recording.saved") {
       try {
-        // Voicemail branch: if this call was flagged as voicemail, store the
-        // caller's message in the `voicemails` bucket and mark status accordingly.
-        // Discard empty (0s) recordings — caller hung up without leaving a message.
+        // Voicemail branch: only the explicitly tagged voicemail recording counts.
+        // This avoids misclassifying auto-record stop events as voicemails.
         {
           const { data: vmCheck } = await supabaseAdmin
             .from("calls")
-            .select("voicemail")
+            .select("voicemail, voicemail_recording_id")
             .eq("call_sid", callControlId)
             .maybeSingle();
-          if (vmCheck?.voicemail) {
+          const decoded = decodeClientState(payload?.client_state ?? body?.client_state);
+          const taggedByState = decoded?.role === "voicemail_recording";
+          const taggedById =
+            typeof payload?.recording_id === "string" &&
+            vmCheck?.voicemail_recording_id != null &&
+            payload.recording_id === vmCheck.voicemail_recording_id;
+          const isVoicemailRecording = (taggedById || taggedByState) && Boolean(vmCheck?.voicemail);
+          console.log("[telnyx-voice] recording.saved classify", {
+            callControlId,
+            recording_id: payload?.recording_id ?? null,
+            stored_vm_rec_id: vmCheck?.voicemail_recording_id ?? null,
+            taggedById,
+            taggedByState,
+            isVoicemailRecording,
+          });
+          if (isVoicemailRecording) {
             const vmMp3: string | null =
               (typeof payload?.recording_urls?.mp3 === "string" ? payload.recording_urls.mp3 : null) ??
               (typeof payload?.recording_urls?.wav === "string" ? payload.recording_urls.wav : null);
@@ -626,18 +640,22 @@ export async function POST(req: Request) {
         if (callControlId) {
           const { data: vmRow } = await supabaseAdmin
             .from("calls")
-            .select("call_sid, voicemail, voicemail_storage_path, recording_state")
+            .select("call_sid, voicemail, voicemail_storage_path, recording_state, voicemail_recording_id")
             .eq("call_sid", callControlId)
             .maybeSingle();
           // Only react for voicemail calls that haven't started recording yet.
           if (vmRow?.voicemail && !vmRow.voicemail_storage_path && vmRow.recording_state !== "recording") {
-            const rec = await startRecording(callControlId, { play_beep: true });
+            const rec = await startRecording(callControlId, {
+              play_beep: true,
+              clientState: Buffer.from(JSON.stringify({ role: "voicemail_recording" })).toString("base64"),
+            });
             if (rec.ok) {
+              const vmRecId = rec.data?.data?.recording_id ?? null;
               await supabaseAdmin
                 .from("calls")
-                .update({ recording_state: "recording" })
+                .update({ recording_state: "recording", voicemail_recording_id: vmRecId })
                 .eq("call_sid", callControlId);
-              console.log("[telnyx-voice] voicemail recording started after greeting", { callControlId });
+              console.log("[telnyx-voice] voicemail beep-record started", { callControlId, vmRecId });
             } else {
               console.error("[telnyx-voice] voicemail record_start failed", rec.error);
             }

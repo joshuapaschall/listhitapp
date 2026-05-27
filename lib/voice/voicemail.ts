@@ -45,19 +45,25 @@ export async function startVoicemail(
         console.log("[startVoicemail] 422 on greeting => caller gone, aborting", { pstnCallControlId });
         return { ok: false, hadGreeting: true, callerGone: true };
       }
-      console.error("[startVoicemail] greeting playback failed", play.error, { pstnCallControlId });
-      return { ok: false, hadGreeting: true, error: play.error };
+      console.error("[startVoicemail] greeting playback failed; falling back to beep-record", play.error, { pstnCallControlId });
+    } else {
+      return { ok: true, hadGreeting: true };
     }
-    return { ok: true, hadGreeting: true };
   }
 
-  console.warn("[startVoicemail] no greeting configured; starting beep-record", { did, pstnCallControlId });
+  console.warn("[startVoicemail] no greeting configured or playback failed; starting beep-record", { did, pstnCallControlId });
   const rec = await startRecording(pstnCallControlId, {
     play_beep: true,
     commandId: `vm-rec-${pstnCallControlId}`.slice(0, 127),
+    clientState: Buffer.from(JSON.stringify({ role: "voicemail_recording" })).toString("base64"),
   });
   if (rec.ok) {
-    await supabaseAdmin.from("calls").update({ recording_state: "recording" }).eq("call_sid", pstnCallControlId);
+    const vmRecId = rec.data?.data?.recording_id ?? null;
+    await supabaseAdmin
+      .from("calls")
+      .update({ recording_state: "recording", voicemail_recording_id: vmRecId })
+      .eq("call_sid", pstnCallControlId);
+    console.log("[startVoicemail] voicemail beep-record started", { pstnCallControlId, vmRecId });
   } else {
     const is422 = typeof rec.error === "string" && rec.error.startsWith("422");
     if (is422) return { ok: false, hadGreeting: false, callerGone: true };
