@@ -20,6 +20,7 @@ export async function GET(request: NextRequest) {
     const dateTo = searchParams.get('dateTo') || '';
     const sortBy = searchParams.get('sortBy') || 'started_at';
     const sortOrder = searchParams.get('sortOrder') || 'desc';
+    const status = searchParams.get('status') || '';
 
     // Build query
     let query = supabaseAdmin
@@ -57,6 +58,10 @@ export async function GET(request: NextRequest) {
 
     if (direction) {
       query = query.eq('direction', direction);
+    }
+
+    if (status) {
+      query = query.eq('status', status);
     }
 
     if (hasRecording === 'true') {

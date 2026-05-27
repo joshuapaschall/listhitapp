@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -22,10 +22,16 @@ export default function CallLogFilters({ value, onChange }: { value: CallLogFilt
     setSearch(value.search);
   }, [value.search]);
 
+  const valueRef = useRef(value);
+
   useEffect(() => {
-    const timer = setTimeout(() => onChange({ ...value, search }), 300);
+    valueRef.current = value;
+  }, [value]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => onChange({ ...valueRef.current, search }), 300);
     return () => clearTimeout(timer);
-  }, [search]);
+  }, [onChange, search]);
 
   return (
     <div className="flex flex-col gap-3 md:flex-row md:items-center">

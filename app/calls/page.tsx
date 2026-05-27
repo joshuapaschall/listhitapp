@@ -47,22 +47,30 @@ export default function CallsPage() {
   const rangeParams = useMemo(() => {
     if (filters.range === "all") return {};
     if (filters.range === "custom") {
+      let customDateFrom = filters.customDateFrom;
+      let customDateTo = filters.customDateTo;
+
+      if (customDateFrom && customDateTo && customDateFrom > customDateTo) {
+        [customDateFrom, customDateTo] = [customDateTo, customDateFrom];
+      }
+
       return {
-        dateFrom: filters.customDateFrom ? new Date(`${filters.customDateFrom}T00:00:00`).toISOString() : undefined,
-        dateTo: filters.customDateTo ? new Date(`${filters.customDateTo}T23:59:59`).toISOString() : undefined,
+        dateFrom: customDateFrom ? new Date(`${customDateFrom}T00:00:00`).toISOString() : undefined,
+        dateTo: customDateTo ? new Date(`${customDateTo}T23:59:59`).toISOString() : undefined,
       };
     }
     return zonedIso(filters.range);
   }, [filters]);
 
   const { data, isLoading, isFetching, error } = useQuery({
-    queryKey: ["calls-history", filters, page],
+    queryKey: ["calls-history", filters, statusFilter, page],
     queryFn: async () => {
       const params = new URLSearchParams({ page: String(page), pageSize: "25", sortBy: "started_at", sortOrder: "desc" });
       if (rangeParams.dateFrom) params.set("dateFrom", rangeParams.dateFrom);
       if (rangeParams.dateTo) params.set("dateTo", rangeParams.dateTo);
       if (filters.search) params.set("search", filters.search);
       if (filters.direction !== "all") params.set("direction", filters.direction);
+      if (statusFilter !== "all") params.set("status", statusFilter);
       const response = await fetch(`/api/calls/history?${params.toString()}`);
       if (!response.ok) throw new Error("Failed to fetch calls");
       return response.json() as Promise<{ calls: CallRow[]; pagination: { page: number; totalPages: number; hasPrev: boolean; hasNext: boolean; total: number } }>;
@@ -73,13 +81,13 @@ export default function CallsPage() {
 
   const filteredCalls = useMemo(() => {
     const needle = filters.search.toLowerCase().trim();
+    // TODO: Name search is only applied to currently loaded results until server-side buyer-name search is added.
     return (data?.calls ?? []).filter((call) => {
       const name = `${call.buyer?.fname ?? ""} ${call.buyer?.lname ?? ""}`.toLowerCase();
       const nameMatch = !needle || name.includes(needle);
-      const statusMatch = statusFilter === "all" ? true : (call.status ?? "").toLowerCase() === statusFilter;
-      return nameMatch && statusMatch;
+      return nameMatch;
     });
-  }, [data?.calls, filters.search, statusFilter]);
+  }, [data?.calls, filters.search]);
 
   useEffect(() => {
     if (error) toast({ title: "Error", description: "Could not load calls.", variant: "destructive" });
@@ -96,15 +104,50 @@ export default function CallsPage() {
         <div className="flex items-start justify-between"><div><h1 className="text-3xl font-semibold tracking-tight">Calls</h1><p className="text-sm text-muted-foreground">Every call, recording, and voicemail.</p></div><Button variant="outline" onClick={() => { queryClient.invalidateQueries({ queryKey: ["calls-history"] }); queryClient.invalidateQueries({ queryKey: ["calls-stats"] }); }}><RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />Refresh</Button></div>
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {[
-            { key: "all", label: "Calls today", value: statsData?.stats?.callsToday ?? 0, tone: "emerald" },
-            { key: "all", label: "Talk time", value: `${Math.floor((statsData?.stats?.talkTimeTodaySeconds ?? 0) / 60)}m`, tone: "emerald" },
-            { key: "voicemail", label: "New voicemails", value: statsData?.stats?.newVoicemails ?? 0, tone: "purple" },
-            { key: "missed", label: "Missed", value: statsData?.stats?.missedToday ?? 0, tone: "red" },
-          ].map((card) => {
-            const active = (card.key === "all" && statusFilter === "all") || statusFilter === card.key;
-            return <button key={card.label} onClick={() => setStatusFilter(active ? "all" : (card.key as "all" | "voicemail" | "missed"))}><Card className={`text-left ${active ? "ring-2 ring-emerald-500 bg-emerald-50" : ""} ${card.tone === "purple" ? "data-[active=true]:ring-purple-500" : ""}`}><CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">{card.label}</CardTitle></CardHeader><CardContent><p className={`font-mono text-2xl font-semibold ${card.tone === "purple" ? "text-purple-700" : card.tone === "red" ? "text-red-600" : "text-emerald-700"}`}>{card.value}</p></CardContent></Card></button>;
-          })}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-muted-foreground">Calls today</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="font-mono text-2xl font-semibold text-emerald-700">{statsData?.stats?.callsToday ?? 0}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-muted-foreground">Talk time</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="font-mono text-2xl font-semibold text-emerald-700">{`${Math.floor((statsData?.stats?.talkTimeTodaySeconds ?? 0) / 60)}m`}</p>
+            </CardContent>
+          </Card>
+          <button
+            type="button"
+            className="cursor-pointer text-left"
+            onClick={() => setStatusFilter((current) => (current === "voicemail" ? "all" : "voicemail"))}
+          >
+            <Card className={`transition-colors hover:bg-muted/30 ${statusFilter === "voicemail" ? "ring-2 ring-purple-500 bg-purple-50" : ""}`}>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-muted-foreground">Voicemails</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="font-mono text-2xl font-semibold text-purple-700">{statsData?.stats?.newVoicemails ?? 0}</p>
+              </CardContent>
+            </Card>
+          </button>
+          <button
+            type="button"
+            className="cursor-pointer text-left"
+            onClick={() => setStatusFilter((current) => (current === "missed" ? "all" : "missed"))}
+          >
+            <Card className={`transition-colors hover:bg-muted/30 ${statusFilter === "missed" ? "ring-2 ring-red-500 bg-red-50" : ""}`}>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-muted-foreground">Missed</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="font-mono text-2xl font-semibold text-red-600">{statsData?.stats?.missedToday ?? 0}</p>
+              </CardContent>
+            </Card>
+          </button>
         </div>
 
         <CallLogFilters value={filters} onChange={setFilters} />
@@ -121,7 +164,7 @@ export default function CallsPage() {
                   {selectedCall.buyer?.id ? <Link href={`/buyers/${selectedCall.buyer.id}`} className="mt-1 inline-flex items-center gap-1 text-sm text-emerald-700">View buyer <ArrowUpRight className="h-3.5 w-3.5" /></Link> : null}
                 </div>
                 <Button className="w-full bg-[#059669] hover:bg-[#047857]" onClick={() => makeCall(selectedCall.direction === "inbound" ? selectedCall.from_number ?? "" : selectedCall.to_number ?? "", selectedCall.buyer?.id ?? undefined)}>Call back</Button>
-                {selectedCall.telnyx_recording_id || selectedCall.recording_url || selectedCall.voicemail_storage_path ? <audio controls className="w-full" src={selectedCall.call_sid ? `/api/recordings/${selectedCall.call_sid}/stream` : selectedCall.recording_url ?? selectedCall.voicemail_storage_path ?? undefined} /> : null}
+                {selectedCall.telnyx_recording_id || selectedCall.recording_url || selectedCall.voicemail_storage_path ? <div className="rounded-lg border bg-card p-3"><audio controls className="w-full" src={selectedCall.call_sid ? `/api/recordings/${selectedCall.call_sid}/stream` : selectedCall.recording_url ?? selectedCall.voicemail_storage_path ?? undefined} /></div> : null}
                 <div>
                   <p className="mb-2 text-sm font-medium">Recent with this contact</p>
                   <div className="space-y-2">
