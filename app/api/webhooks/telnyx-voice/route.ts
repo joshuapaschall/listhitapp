@@ -562,17 +562,52 @@ export async function POST(req: Request) {
       callMap.delete(payload.call_session_id);
       try {
         if (callControlId) {
+          const { data: callRow } = await supabaseAdmin
+            .from("calls")
+            .select("direction, answered_at, browser_answered_at, voicemail, status")
+            .eq("call_sid", callControlId)
+            .maybeSingle();
+          const hangupCause = payload?.hangup_cause ?? null;
+
+          let finalStatus: string;
+          if (callRow?.status === "voicemail") {
+            finalStatus = "voicemail";
+          } else if (callRow?.voicemail) {
+            finalStatus = "missed";
+          } else if (callRow?.browser_answered_at) {
+            finalStatus = "completed";
+          } else if (callRow?.direction === "outbound" && callRow?.answered_at) {
+            finalStatus = "completed";
+          } else if (hangupCause === "user_busy" || hangupCause === "busy") {
+            finalStatus = "busy";
+          } else if (callRow?.direction === "inbound") {
+            finalStatus = "missed";
+          } else {
+            finalStatus = "no_answer";
+          }
+
+          console.log("[telnyx-voice] call.hangup status determination", {
+            callControlId,
+            direction: callRow?.direction ?? null,
+            answered_at: callRow?.answered_at ?? null,
+            browser_answered_at: callRow?.browser_answered_at ?? null,
+            voicemail: callRow?.voicemail ?? null,
+            prevStatus: callRow?.status ?? null,
+            hangupCause,
+            finalStatus,
+          });
+
           const start = payload?.start_time ? new Date(payload.start_time).getTime() : null;
           const end = payload?.end_time ? new Date(payload.end_time).getTime() : Date.now();
           const dur = start ? Math.max(0, Math.round((end - start) / 1000)) : null;
           await supabaseAdmin
             .from("calls")
             .update({
-              status: "completed",
+              status: finalStatus,
               ended_at: new Date().toISOString(),
               duration: dur,
               duration_seconds: dur,
-              hangup_cause: payload?.hangup_cause ?? null,
+              hangup_cause: hangupCause,
               hangup_source: payload?.hangup_source ?? null,
             })
             .eq("call_sid", callControlId);
