@@ -40,32 +40,56 @@ function toRoutingMode(value: unknown): CallRoutingMode {
 export async function getRoutingConfig(e164: string): Promise<RoutingConfig> {
   if (!e164) return { ...DEFAULT_ROUTING };
 
-  const { data, error } = await supabaseAdmin
+  type RoutingSourceRow = {
+    call_routing_mode: unknown;
+    call_forwarding_number: unknown;
+    browser_ring_timeout_seconds: unknown;
+    voicemail_greeting_url: unknown;
+  };
+
+  type InboundNumberWithMarket = RoutingSourceRow & {
+    config_override: boolean | null;
+    market_id: string | null;
+    market: RoutingSourceRow | RoutingSourceRow[] | null;
+  };
+
+  const { data: num, error } = await supabaseAdmin
     .from("inbound_numbers")
     .select(
-      "call_routing_mode, call_forwarding_number, browser_ring_timeout_seconds, voicemail_greeting_url",
+      `
+        call_routing_mode, call_forwarding_number, browser_ring_timeout_seconds,
+        voicemail_greeting_url, config_override, market_id,
+        market:markets!inbound_numbers_market_id_fkey(
+          call_routing_mode, call_forwarding_number, browser_ring_timeout_seconds,
+          voicemail_greeting_url
+        )
+      `,
     )
     .eq("e164", e164)
     .maybeSingle();
 
-  if (error || !data) {
+  if (error || !num) {
     return { ...DEFAULT_ROUTING };
   }
 
+  const typedNum = num as unknown as InboundNumberWithMarket;
+  const marketSource = Array.isArray(typedNum.market) ? typedNum.market[0] : typedNum.market;
+  const source: RoutingSourceRow = typedNum.config_override ? typedNum : (marketSource ?? typedNum);
+
   return {
-    routingMode: toRoutingMode(data.call_routing_mode),
+    routingMode: toRoutingMode(source.call_routing_mode),
     forwardingNumber:
-      typeof data.call_forwarding_number === "string" && data.call_forwarding_number.trim()
-        ? data.call_forwarding_number.trim()
+      typeof source.call_forwarding_number === "string" && source.call_forwarding_number.trim()
+        ? source.call_forwarding_number.trim()
         : null,
     browserRingTimeoutSeconds:
-      typeof data.browser_ring_timeout_seconds === "number" &&
-      data.browser_ring_timeout_seconds > 0
-        ? data.browser_ring_timeout_seconds
+      typeof source.browser_ring_timeout_seconds === "number" &&
+      source.browser_ring_timeout_seconds > 0
+        ? source.browser_ring_timeout_seconds
         : DEFAULT_ROUTING.browserRingTimeoutSeconds,
     voicemailGreetingUrl:
-      typeof data.voicemail_greeting_url === "string" && data.voicemail_greeting_url.trim()
-        ? data.voicemail_greeting_url.trim()
+      typeof source.voicemail_greeting_url === "string" && source.voicemail_greeting_url.trim()
+        ? source.voicemail_greeting_url.trim()
         : null,
   };
 }
