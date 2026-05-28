@@ -1,7 +1,7 @@
 "use client"
 
 import { type MouseEvent, useState } from "react"
-import toast from "sonner"
+import { toast } from "sonner"
 import {
   AlertDialog,
   AlertDialogContent,
@@ -49,9 +49,7 @@ export default function ConfirmInputDialog({
     try {
       await onConfirm()
     } catch (err) {
-      ;(toast as unknown as { error: (message: string) => void }).error(
-        err instanceof Error ? err.message : "Action failed"
-      )
+      toast.error(err instanceof Error ? err.message : "Action failed")
     } finally {
       setSubmitting(false)
       reset()

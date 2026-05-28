@@ -370,8 +370,14 @@ export default function CampaignsPage() {
         onConfirm={async () => {
           if (!deleteId) return
           await CampaignService.deleteCampaign(deleteId)
-          await queryClient.invalidateQueries({ queryKey: ["campaigns"] })
+          // Close the dialog FIRST. Awaiting invalidateQueries here would block
+          // the close until the list refetches, which unmounts the trigger row
+          // mid-close and can leave Radix's pointer-events:none stuck on <body>
+          // (the delete-freeze). Clearing deleteId closes the dialog; the refetch
+          // is fire-and-forget so it can't block the close.
+          setDeleteId(null)
           toast.success("Campaign deleted")
+          void queryClient.invalidateQueries({ queryKey: ["campaigns"] })
         }}
       />
     </MainLayout>
