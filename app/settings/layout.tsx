@@ -23,6 +23,11 @@ const navItems = [
     description: "Filter out spammy or unwanted phrases",
   },
   {
+    href: "/settings/email-domains",
+    label: "Email Domains",
+    description: "Verify sender domains and manage from-addresses",
+  },
+  {
     href: "/settings/integrations",
     label: "Integrations",
     description: "SendFox, Telnyx, Gmail, and other connected services",

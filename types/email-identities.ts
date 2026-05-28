@@ -22,6 +22,7 @@ export type EmailSender = {
   domain_id: string;
   from_email: string;
   from_name: string | null;
+  reply_to: string | null;
   is_default: boolean;
   created_at: string;
 };

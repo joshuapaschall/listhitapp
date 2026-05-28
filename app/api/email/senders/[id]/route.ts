@@ -4,6 +4,15 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MAX_FROM_NAME_LENGTH = 100;
+
+function normalizeOptionalEmail(value: unknown) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
   const { user, orgId } = await requireOrgContext();
   if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
@@ -15,7 +24,16 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
   const body = await request.json();
   const update: Record<string, unknown> = {};
-  if (body?.from_name !== undefined) update.from_name = typeof body.from_name === "string" ? body.from_name.trim() : null;
+  if (body?.from_name !== undefined) {
+    const fromName = typeof body.from_name === "string" ? body.from_name.trim() : null;
+    if (fromName && fromName.length > MAX_FROM_NAME_LENGTH) return NextResponse.json({ ok: false, error: "Display name must be 100 characters or fewer." }, { status: 422 });
+    update.from_name = fromName;
+  }
+  if (body?.reply_to !== undefined) {
+    const replyTo = normalizeOptionalEmail(body.reply_to);
+    if (replyTo && !EMAIL_RE.test(replyTo)) return NextResponse.json({ ok: false, error: "Enter a valid Reply-to email address." }, { status: 422 });
+    update.reply_to = replyTo;
+  }
   if (body?.is_default !== undefined) update.is_default = Boolean(body.is_default);
 
   if (update.is_default === true) {
