@@ -11,6 +11,8 @@ import { assertServer } from "@/utils/assert-server"
 import { getCronRequestToken, isJwtLike } from "@/lib/cron-auth"
 import { linkifyHtml } from "@/lib/email/linkify-html"
 import { calculateSmsSegments } from "@/lib/sms-utils"
+import { requireOrgContext } from "@/lib/auth/org-context"
+import { resolveCampaignSender, SenderNotVerifiedError } from "@/lib/email-sender-resolver"
 
 assertServer()
 
@@ -331,6 +333,27 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    let sender
+    try {
+      const { orgId } = await requireOrgContext()
+      sender = await resolveCampaignSender(orgId, {
+        fromEmail: campaign.from_email,
+        fromName: campaign.from_name,
+      })
+    } catch (err: any) {
+      if (err instanceof SenderNotVerifiedError) {
+        return new Response(
+          JSON.stringify({ error: err.message }),
+          { status: 422 },
+        )
+      }
+      console.error("Sender resolution failed", err)
+      return new Response(
+        JSON.stringify({ error: "Failed to resolve email sender" }),
+        { status: 500 },
+      )
+    }
+
     await supabase
       .from("campaign_recipients")
       .update({ status: "pending", error: null })
@@ -349,6 +372,9 @@ export async function POST(request: NextRequest) {
           subject: campaign.subject || "",
           html,
           contacts: emailContacts,
+          fromEmail: sender.fromEmail,
+          fromName: sender.fromName,
+          replyTo: sender.replyTo,
         },
         {
           scheduledFor: campaign.scheduled_at || undefined,

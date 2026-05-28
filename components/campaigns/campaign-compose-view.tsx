@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
+import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { ArrowLeft, CheckCircle2, Circle } from "lucide-react"
 import type { TemplateContent } from "@templatical/editor"
@@ -20,6 +21,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { BuyerService } from "@/services/buyer-service"
@@ -30,6 +32,15 @@ import SmsSendTimeCard from "@/components/campaigns/sms-send-time-card"
 const TemplaticalEmailEditor = dynamic(() => import("@/components/campaigns/email/templatical-email-editor"), {
   ssr: false,
 })
+
+type EmailSenderOption = {
+  id: string
+  from_email: string
+  from_name: string | null
+  reply_to: string | null
+  is_default: boolean | null
+  domain_id: string
+}
 
 function CardRow({ id, title, summary, valid, ctaText, expandedCard, setExpandedCard, children }: {
   id: string
@@ -79,6 +90,9 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
   const [savingTemplate, setSavingTemplate] = useState(false)
   const editorRef = useRef<TemplaticalEmailEditorHandle>(null)
   const [resolvedGroupBuyerIds, setResolvedGroupBuyerIds] = useState<string[]>([])
+  const [emailSenders, setEmailSenders] = useState<EmailSenderOption[]>([])
+  const [sendersLoaded, setSendersLoaded] = useState(false)
+  const initialFromEmailRef = useRef<string | null>(campaign.from_email ?? null)
 
   useEffect(() => {
     const groupIds = campaign.group_ids || []
@@ -98,9 +112,13 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
     return Array.from(new Set([...direct, ...resolvedGroupBuyerIds]))
   }, [campaign.buyer_ids, resolvedGroupBuyerIds])
 
-  const isValidEmail = (v?: string) => !!v && /.+@.+\..+/.test(v)
+  const selectedSender = useMemo(
+    () => emailSenders.find((sender) => sender.from_email === campaign.from_email),
+    [campaign.from_email, emailSenders],
+  )
+  const hasLegacySender = sendersLoaded && !!campaign.from_email && !selectedSender
   const toValid = ((campaign.group_ids?.length || 0) + (campaign.buyer_ids?.length || 0)) > 0 || !!hasPrefillSnapshot
-  const fromValid = !!campaign.from_name && isValidEmail(campaign.from_email)
+  const fromValid = !!selectedSender
   const subjectValid = !!campaign.subject?.trim()
   const sendTimeValid = !campaign.scheduled_at || new Date(campaign.scheduled_at).getTime() > Date.now()
   const contentValid = !!campaign.message?.trim() && campaign.message.trim().length > 50
@@ -140,7 +158,51 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
 
   const update = (patch: any) => { setCampaign((p: any) => ({ ...p, ...patch })); setHasEdited(true) }
 
-  const itemsMissing = [!toValid && "Recipients", !subjectValid && "Subject", !contentValid && "Content"].filter(Boolean).join(", ")
+  useEffect(() => {
+    if (campaign.channel !== "email") return
+
+    let alive = true
+    fetch("/api/email/senders")
+      .then(async (response) => {
+        const body = await response.json().catch(() => ({}))
+        if (!response.ok || !body?.ok) {
+          throw new Error(body?.error || "Failed to load verified senders")
+        }
+        return (body.senders || []) as EmailSenderOption[]
+      })
+      .then((senders) => {
+        if (!alive) return
+        setEmailSenders(senders)
+        setSendersLoaded(true)
+
+        const initialFromEmail = initialFromEmailRef.current
+        const currentFromEmail = initialFromEmail?.trim().toLowerCase()
+        if (currentFromEmail) {
+          const matchingSender = senders.find((sender) => sender.from_email === currentFromEmail)
+          if (matchingSender && matchingSender.from_email !== initialFromEmail) {
+            update({ from_email: matchingSender.from_email })
+          }
+          return
+        }
+
+        const defaultSender = senders.find((sender) => sender.is_default) || senders[0]
+        if (defaultSender) {
+          update({
+            from_name: defaultSender.from_name || "",
+            from_email: defaultSender.from_email,
+          })
+        }
+      })
+      .catch((error) => {
+        if (!alive) return
+        setSendersLoaded(true)
+        toast.error(error?.message || "Failed to load verified senders")
+      })
+
+    return () => { alive = false }
+  }, [campaign.channel])
+
+  const itemsMissing = [!toValid && "Recipients", !fromValid && "Sender", !subjectValid && "Subject", !contentValid && "Content"].filter(Boolean).join(", ")
 
   const hasExistingDesign = () =>
     !!campaign.design_json &&
@@ -300,7 +362,54 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
     </div>
     <main className="max-w-4xl mx-auto px-6 py-8 space-y-3">
       <CardRow id="to" title="To" valid={toValid} ctaText="Add recipients" summary={toValid ? `${hasPrefillSnapshot?.recipientCount ?? allRecipientIds.length} recipients` : "Who are you sending this to?"} expandedCard={expandedCard} setExpandedCard={setExpandedCard}>{hasPrefillSnapshot ? <AudienceFilterSummaryCard snapshot={hasPrefillSnapshot} onPreview={() => setPreviewOpen(true)} onAdjust={() => router.push("/buyers")} onClear={() => { setHasPrefillSnapshot(null); update({ buyer_ids: [] }) }} /> : <GroupTreeSelector value={campaign.group_ids || []} onChange={(ids) => update({ group_ids: ids })} />}</CardRow>
-      <CardRow id="from" title="From" valid={fromValid} ctaText="Add sender" summary={fromValid ? `${campaign.from_name} <${campaign.from_email}>` : "Who is sending this campaign?"} expandedCard={expandedCard} setExpandedCard={setExpandedCard}><div className="space-y-4"><p className="text-sm text-muted-foreground">Who is sending this campaign?</p><div className="grid gap-4 md:grid-cols-2"><div className="space-y-2"><div className="flex items-center justify-between"><label className="text-sm font-medium">Name</label><span className="text-xs text-muted-foreground">{100 - (campaign.from_name?.length || 0)} left</span></div><Input maxLength={100} placeholder="GA Wholesale Homes" value={campaign.from_name || ""} onChange={(e) => update({ from_name: e.target.value })} /><p className="text-xs text-muted-foreground">Use something subscribers will instantly recognize, like your company name.</p></div><div className="space-y-2"><label className="text-sm font-medium">Email address</label><Input type="email" placeholder="homes@example.com" value={campaign.from_email || ""} onChange={(e) => update({ from_email: e.target.value })} /></div></div></div></CardRow>
+      <CardRow id="from" title="From" valid={fromValid} ctaText="Add sender" summary={fromValid && selectedSender ? `${selectedSender.from_name || selectedSender.from_email} <${selectedSender.from_email}>` : "Who is sending this campaign?"} expandedCard={expandedCard} setExpandedCard={setExpandedCard}>
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">Choose a verified sender for this campaign.</p>
+          {hasLegacySender && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              This sender isn&apos;t verified and won&apos;t send. Pick a verified sender below.
+            </div>
+          )}
+          {emailSenders.length > 0 ? (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Verified sender</label>
+              <Select
+                value={selectedSender?.id || ""}
+                onValueChange={(senderId) => {
+                  const sender = emailSenders.find((option) => option.id === senderId)
+                  if (!sender) return
+                  update({ from_name: sender.from_name || "", from_email: sender.from_email })
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a verified sender" />
+                </SelectTrigger>
+                <SelectContent>
+                  {emailSenders.map((sender) => (
+                    <SelectItem key={sender.id} value={sender.id}>
+                      {sender.from_name || sender.from_email} — {sender.from_email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedSender && (
+                <p className="text-xs text-muted-foreground">
+                  Replies go to {selectedSender.reply_to || selectedSender.from_email}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Reply-to is configured per from-address in Settings → Sending Domains.
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
+              <Link href="/settings/email-domains" className="font-medium text-brand hover:underline">
+                Add and verify a sending domain to choose a from-address.
+              </Link>
+            </div>
+          )}
+        </div>
+      </CardRow>
       <CardRow id="subject" title="Subject" valid={subjectValid} ctaText="Add subject" summary={subjectValid ? campaign.subject : "What's the subject line?"} expandedCard={expandedCard} setExpandedCard={setExpandedCard}><div className="space-y-4"><p className="text-sm text-muted-foreground">What&apos;s the subject line for this campaign?</p><div className="space-y-2"><div className="flex items-center justify-between"><label className="text-sm font-medium">Subject <span className="font-normal text-muted-foreground">(Required)</span></label><span className="text-xs text-muted-foreground">{150 - (campaign.subject?.length || 0)} left</span></div><Input maxLength={150} value={campaign.subject || ""} onChange={(e) => update({ subject: e.target.value })} /><p className="text-xs text-muted-foreground">This is the first thing people see in their inbox.</p></div><div className="space-y-2"><div className="flex items-center justify-between"><label className="text-sm font-medium">Preview Text</label><span className="text-xs text-muted-foreground">{150 - ((campaign as any).preview_text?.length || 0)} left</span></div><Input maxLength={150} value={(campaign as any).preview_text || ""} onChange={(e) => update({ preview_text: e.target.value })} /><p className="text-xs text-muted-foreground">Preview text appears in the inbox after the subject line.</p></div></div></CardRow>
       <CardRow id="content" title="Content" valid={contentValid} ctaText="Design email" summary={contentValid ? `Email designed — ${(campaign.message || "").split(/\s+/).filter(Boolean).length} words` : "Design the email body"} expandedCard={expandedCard} setExpandedCard={setExpandedCard}><Button onClick={openBuilder}>Open builder</Button></CardRow>
       <CardRow id="sendTime" title="Send time" valid={sendTimeValid} ctaText="Set send time" summary={campaign.scheduled_at ? `Scheduled for ${new Date(campaign.scheduled_at).toLocaleString()}` : "Send immediately when you click Send"} expandedCard={expandedCard} setExpandedCard={setExpandedCard}><SmsSendTimeCard scheduledAt={campaign.scheduled_at ?? null} onScheduledAtChange={(v) => update({ scheduled_at: v })} weekdayOnly={campaign.weekday_only ?? false} onWeekdayOnlyChange={(v) => update({ weekday_only: v })} runFrom={campaign.run_from ?? null} onRunFromChange={(v) => update({ run_from: v })} runUntil={campaign.run_until ?? null} onRunUntilChange={(v) => update({ run_until: v })} /></CardRow>
