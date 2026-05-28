@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 
 import { requireOrgContext } from "@/lib/auth/org-context";
+import { createLogger } from "@/lib/logger";
 import { buildDnsRecords, createDomainIdentity, deriveDomainStatus } from "@/lib/ses-identities";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
+
+const log = createLogger("email-domains-route");
 
 const DOMAIN_RE = /^(?=.{1,253}$)(?!-)(?:[a-z0-9-]{1,63}\.)+[a-z]{2,63}$/;
 
@@ -47,7 +50,14 @@ export async function POST(request: Request) {
   const sesRegion = process.env.AWS_SES_REGION;
   if (!sesRegion) return NextResponse.json({ ok: false, error: "AWS_SES_REGION is not configured." }, { status: 500 });
 
-  const identity = await createDomainIdentity(normalizedDomain);
+  let identity;
+  try {
+    identity = await createDomainIdentity(normalizedDomain);
+  } catch (error) {
+    log("error", "Failed to create SES domain identity", { domain: normalizedDomain, error: (error as Error)?.message });
+    return NextResponse.json({ ok: false, error: "Couldn't create the domain identity in SES. Verify AWS SES IAM permissions (ses:CreateEmailIdentity, ses:PutEmailIdentityMailFromAttributes, ses:GetEmailIdentity) and region configuration." }, { status: 502 });
+  }
+
   const { data: domain, error } = await supabaseAdmin.from("email_domains").insert({
     org_id: orgId,
     domain: normalizedDomain,
