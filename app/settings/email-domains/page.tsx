@@ -68,7 +68,7 @@ export default function EmailDomainsPage() {
 
   return (
     <TooltipProvider>
-      <div className="space-y-6 p-6">
+      <div className="mx-auto w-full max-w-4xl space-y-6 p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Email domains</h1>
