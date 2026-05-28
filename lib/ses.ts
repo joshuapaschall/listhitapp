@@ -2,6 +2,7 @@ import {
   MessageTag,
   SESv2Client,
   SendEmailCommand,
+  type SendEmailCommandInput,
   type SendEmailCommandOutput,
 } from "@aws-sdk/client-sesv2"
 
@@ -12,6 +13,7 @@ export interface SendSesEmailParams {
   text?: string
   fromEmail?: string
   fromName?: string
+  replyTo?: string
   configurationSetName?: string
   tags?: Record<string, string | null | undefined>
   unsubscribeUrl?: string
@@ -149,7 +151,9 @@ export async function sendSesEmail(params: SendSesEmailParams): Promise<
       Value: String(Value),
     }))
 
-  const commandInput = {
+  const replyTo = params.replyTo?.trim()
+
+  const commandInput: SendEmailCommandInput = {
     FromEmailAddress: fromEmailAddress,
     Destination: {
       ToAddresses: [params.to],
@@ -164,14 +168,15 @@ export async function sendSesEmail(params: SendSesEmailParams): Promise<
         ...(filteredHeaders.length ? { Headers: filteredHeaders } : {}),
       },
     },
+    ...(replyTo ? { ReplyToAddresses: [replyTo] } : {}),
     ...(configurationSet ? { ConfigurationSetName: configurationSet } : {}),
     ...(emailTags.length ? { EmailTags: emailTags } : {}),
   }
 
   console.debug("Sending SES email", {
-    from: commandInput.FromEmailAddress,
-    to: commandInput.Destination.ToAddresses,
-    subject: commandInput.Content.Simple.Subject.Data,
+    from: fromEmailAddress,
+    to: [params.to],
+    subject: params.subject,
     configurationSet: configurationSet || null,
     headers: filteredHeaders.map(({ Name }) => Name),
   })

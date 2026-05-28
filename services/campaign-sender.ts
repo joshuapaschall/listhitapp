@@ -38,6 +38,9 @@ export interface EmailOptions {
   subject: string
   html: string
   dryRun?: boolean
+  fromEmail?: string
+  fromName?: string
+  replyTo?: string
   tags?: Record<string, string | null | undefined>
   unsubscribeUrl?: string
 }
@@ -57,6 +60,9 @@ export interface EmailQueuePayload {
   contact?: EmailContactPayload
   contacts?: EmailContactPayload[]
   campaignId?: string
+  fromEmail?: string
+  fromName?: string
+  replyTo?: string
   templateId?: string
   listIds?: number[]
 }
@@ -102,7 +108,17 @@ function computeRetryDelayMs(attempt: number) {
   return base + jitter
 }
 
-export async function sendEmailCampaign({ to, subject, html, dryRun, tags, unsubscribeUrl }: EmailOptions): Promise<string> {
+export async function sendEmailCampaign({
+  to,
+  subject,
+  html,
+  dryRun,
+  fromEmail,
+  fromName,
+  replyTo,
+  tags,
+  unsubscribeUrl,
+}: EmailOptions): Promise<string> {
   const recipients = Array.isArray(to) ? to : [to]
   if (dryRun) {
     recipients.forEach((r) => log("email", "[DRY RUN]", { to: r, subject }))
@@ -116,6 +132,9 @@ export async function sendEmailCampaign({ to, subject, html, dryRun, tags, unsub
         to: recipient,
         subject,
         html,
+        fromEmail,
+        fromName,
+        replyTo,
         tags,
         unsubscribeUrl,
       })
@@ -176,6 +195,9 @@ export async function queueEmailCampaign(
       subject: payload.subject,
       html: payload.html,
       campaignId: payload.campaignId,
+      fromEmail: payload.fromEmail,
+      fromName: payload.fromName,
+      replyTo: payload.replyTo,
       contact: {
         email: contact.email,
         firstName: contact.firstName,
@@ -282,17 +304,39 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
     contact: string,
     subject: string,
     html: string,
+    fromEmail?: string,
+    fromName?: string,
+    replyTo?: string,
     tags?: Record<string, string | null | undefined>,
     unsubscribeUrl?: string,
     attempt = 0,
   ): Promise<string> {
     try {
-      return await sendEmailCampaign({ to: contact, subject, html, tags, unsubscribeUrl })
+      return await sendEmailCampaign({
+        to: contact,
+        subject,
+        html,
+        fromEmail,
+        fromName,
+        replyTo,
+        tags,
+        unsubscribeUrl,
+      })
     } catch (err: any) {
       if (isSesRateLimitError(err) && attempt < EMAIL_RATE_MAX_RETRY) {
         const delay = EMAIL_RETRY_BACKOFF_MS * Math.max(1, attempt + 1)
         await sleep(delay)
-        return sendWithBackoff(contact, subject, html, tags, unsubscribeUrl, attempt + 1)
+        return sendWithBackoff(
+          contact,
+          subject,
+          html,
+          fromEmail,
+          fromName,
+          replyTo,
+          tags,
+          unsubscribeUrl,
+          attempt + 1,
+        )
       }
       throw err
     }
@@ -349,7 +393,16 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
         recipient_id: contact.recipientId,
         buyer_id: contact.buyerId,
       }
-      const providerId = await sendWithBackoff(contact.email, subject, html, tags, unsubscribeUrl)
+      const providerId = await sendWithBackoff(
+        contact.email,
+        subject,
+        html,
+        payload.fromEmail,
+        payload.fromName,
+        payload.replyTo,
+        tags,
+        unsubscribeUrl,
+      )
       const sentAt = new Date().toISOString()
       sent += 1
       await supabase
