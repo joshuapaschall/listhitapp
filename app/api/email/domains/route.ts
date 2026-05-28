@@ -10,6 +10,24 @@ export const dynamic = "force-dynamic";
 const log = createLogger("email-domains-route");
 
 const DOMAIN_RE = /^(?=.{1,253}$)(?!-)(?:[a-z0-9-]{1,63}\.)+[a-z]{2,63}$/;
+const FREE_WEBMAIL_DOMAINS = new Set([
+  "gmail.com",
+  "googlemail.com",
+  "outlook.com",
+  "hotmail.com",
+  "live.com",
+  "msn.com",
+  "yahoo.com",
+  "ymail.com",
+  "aol.com",
+  "icloud.com",
+  "me.com",
+  "mac.com",
+  "proton.me",
+  "protonmail.com",
+  "gmx.com",
+]);
+const FREE_WEBMAIL_ERROR = "You can't send from a free email provider like Gmail or Outlook — those can't be verified. Add a domain you own instead. (Replies can still go to your personal inbox — set that with Reply-to on a from-address.)";
 
 function normalizeDomain(input: string) {
   return input.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/\.+$/, "");
@@ -43,6 +61,7 @@ export async function POST(request: Request) {
   const body = await request.json();
   const normalizedDomain = typeof body?.domain === "string" ? normalizeDomain(body.domain) : "";
   if (!DOMAIN_RE.test(normalizedDomain)) return NextResponse.json({ ok: false, error: "Invalid domain." }, { status: 400 });
+  if (FREE_WEBMAIL_DOMAINS.has(normalizedDomain)) return NextResponse.json({ ok: false, error: FREE_WEBMAIL_ERROR }, { status: 422 });
 
   const { data: existing } = await supabaseAdmin.from("email_domains").select("id").eq("domain", normalizedDomain).maybeSingle();
   if (existing) return NextResponse.json({ ok: false, error: "That domain is already registered." }, { status: 409 });
