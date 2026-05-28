@@ -2,9 +2,11 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
-import { AlertCircle, ArrowLeft, Check, Clock, Copy, Loader2, Plus, RefreshCcw, ShieldCheck } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { AlertCircle, ArrowLeft, Check, Clock, Copy, Loader2, Plus, RefreshCcw, ShieldCheck, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -74,6 +76,7 @@ function getRecordGroups(records: DnsRecord[]): RecordGroup[] {
 }
 
 export default function EmailDomainDetailPage({ params }: { params: { id: string } }) {
+  const router = useRouter()
   const [domain, setDomain] = useState<DomainDetails | null>(null)
   const [loading, setLoading] = useState(true)
   const [manualChecking, setManualChecking] = useState(false)
@@ -87,6 +90,9 @@ export default function EmailDomainDetailPage({ params }: { params: { id: string
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const verifyInFlightRef = useRef(false)
 
   const previewAddress = useMemo(() => `${mailbox.trim() || "deals"}@${domain?.domain || "yourdomain.com"}`, [domain?.domain, mailbox])
@@ -159,6 +165,21 @@ export default function EmailDomainDetailPage({ params }: { params: { id: string
     window.setTimeout(() => setCopied(null), 1200)
   }
 
+  async function deleteDomain() {
+    setDeleting(true)
+    setDeleteError(null)
+    const response = await fetch(`/api/email/domains/${params.id}`, { method: "DELETE" })
+    const payload = await response.json()
+    if (!response.ok || !payload.ok) {
+      setDeleteError(payload.error || "Could not delete this domain.")
+      setDeleting(false)
+      return
+    }
+    toast.success("Domain deleted")
+    router.push("/settings/email-domains")
+  }
+
+
   async function addSender(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!domain) return
@@ -193,7 +214,7 @@ export default function EmailDomainDetailPage({ params }: { params: { id: string
 
   if (loading) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="mx-auto w-full max-w-4xl space-y-6 p-6">
         <Skeleton className="h-9 w-40" />
         <div className="space-y-2">
           <Skeleton className="h-8 w-72" />
@@ -211,7 +232,7 @@ export default function EmailDomainDetailPage({ params }: { params: { id: string
 
   if (!domain) {
     return (
-      <div className="space-y-4 p-6">
+      <div className="mx-auto w-full max-w-4xl space-y-6 p-6">
         <Button asChild variant="ghost">
           <Link href="/settings/email-domains">
             <ArrowLeft className="size-4" />
@@ -251,7 +272,7 @@ export default function EmailDomainDetailPage({ params }: { params: { id: string
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="mx-auto w-full max-w-4xl space-y-6 p-6">
       <Button asChild variant="ghost">
         <Link href="/settings/email-domains">
           <ArrowLeft className="size-4" />
@@ -259,12 +280,17 @@ export default function EmailDomainDetailPage({ params }: { params: { id: string
         </Link>
       </Button>
 
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-start gap-2">
-          <h1 className="text-2xl font-semibold tracking-tight" style={wrapStyle}>{domain.domain}</h1>
-          <Badge variant={domain.status === "verified" ? "default" : "secondary"}>{statusLabel(domain.status)}</Badge>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-start gap-2">
+            <h1 className="text-2xl font-semibold tracking-tight" style={wrapStyle}>{domain.domain}</h1>
+            <Badge variant={domain.status === "verified" ? "default" : "secondary"}>{statusLabel(domain.status)}</Badge>
+          </div>
+          <p className="text-sm text-muted-foreground">Add these DNS records at your domain provider, then verify when they have propagated.</p>
         </div>
-        <p className="text-sm text-muted-foreground">Add these DNS records at your domain provider, then verify when they have propagated.</p>
+        <Button onClick={() => setDeleteOpen(true)} size="icon" variant="ghost">
+          <Trash2 className="h-4 w-4 text-rose-600" />
+        </Button>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -342,7 +368,7 @@ export default function EmailDomainDetailPage({ params }: { params: { id: string
                         <div className="mb-3 flex flex-wrap items-center gap-2">
                           <Badge variant="outline">{record.type}</Badge>
                         </div>
-                        <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-4">
                           <div className="space-y-2">
                             <Label>Host/Name</Label>
                             <div className="flex items-start gap-2 rounded-md bg-muted/30 p-3">
@@ -451,6 +477,33 @@ export default function EmailDomainDetailPage({ params }: { params: { id: string
           </Card>
         </TabsContent>
       </Tabs>
+
+      <AlertDialog onOpenChange={(nextOpen) => {
+        setDeleteOpen(nextOpen)
+        if (nextOpen) setDeleteError(null)
+      }} open={deleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this domain?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteError || (
+                <>
+                  This removes {domain.domain} from sending, deletes its verification from SES, and removes any from-addresses on it. This can&apos;t be undone.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction disabled={deleting} onClick={(event) => {
+              event.preventDefault()
+              void deleteDomain()
+            }}>
+              {deleting ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
