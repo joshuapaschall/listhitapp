@@ -6,6 +6,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getWebRTCSipUri } from "@/lib/voice/webrtc-sip";
 import { bridgeCall, startRecording, playAudioUrl } from "@/lib/voice/call-control";
 import { getRoutingConfig } from "@/lib/voice/routing";
+import { FORWARD_RING_TIMEOUT_SECONDS } from "@/lib/voice/constants";
 import { startVoicemail } from "@/lib/voice/voicemail";
 import {
   TELNYX_API_URL,
@@ -114,6 +115,31 @@ async function safeAnswerThenTransfer(
     } catch (e: any) {
       const msg = String(e?.message || e);
       console.error(`transfer error attempt ${i}:`, msg);
+      if (msg.includes("422") && i < 3) {
+        await new Promise((r) => setTimeout(r, 200 * i));
+        continue;
+      }
+      return false;
+    }
+  }
+  return false;
+}
+
+
+async function safeTransfer(
+  callControlId: string,
+  to: string,
+  fromE164: string | null,
+  timeoutSecs: number,
+  targetLegClientState?: string,
+): Promise<boolean> {
+  for (let i = 1; i <= 3; i++) {
+    try {
+      await transfer(callControlId, to, fromE164, timeoutSecs, targetLegClientState);
+      return true;
+    } catch (e: any) {
+      const msg = String(e?.message || e);
+      console.error(`[telnyx-voice] transfer attempt ${i} failed:`, msg);
       if (msg.includes("422") && i < 3) {
         await new Promise((r) => setTimeout(r, 200 * i));
         continue;
@@ -298,20 +324,88 @@ export async function POST(req: Request) {
       }
 
       if (direction === "incoming") {
-        await answer(callControlId);
-        const sipUri = await getWebRTCSipUri();
+        const routing = await getRoutingConfig(toRaw);
+        const mode = routing.routingMode;
+        const needsForward = mode === "forwarding_only" || mode === "browser_first_then_forward";
+        const effectiveMode: typeof mode =
+          needsForward && !routing.forwardingNumber ? "browser_only" : mode;
 
-        if (sipUri) {
-          const routing = await getRoutingConfig(toRaw);
-          const bLegState = Buffer.from(JSON.stringify({ role: "browser_transfer" })).toString("base64");
-          await transfer(callControlId, sipUri, payload.from, routing.browserRingTimeoutSeconds, bLegState);
-        } else {
-          await sayAndHangup(
-            callControlId,
-            "Sorry, no agent is available right now. Please try again later."
-          );
+        console.log("[telnyx-voice] inbound routing", {
+          callControlId, did: toRaw, requestedMode: mode, effectiveMode,
+          hasForwardingNumber: Boolean(routing.forwardingNumber),
+          browserRingTimeout: routing.browserRingTimeoutSeconds,
+        });
+
+        await answer(callControlId);
+
+        if (effectiveMode === "forwarding_only") {
+          const fwd = routing.forwardingNumber!;
+          const fwdState = Buffer.from(JSON.stringify({ role: "forward_transfer" })).toString("base64");
+          const ok = await safeTransfer(callControlId, fwd, toRaw, FORWARD_RING_TIMEOUT_SECONDS, fwdState);
+          if (ok) {
+            await supabaseAdmin.from("calls").update({
+              status: "ringing",
+              routing_mode: "forwarding_only",
+              forwarded_to: fwd,
+              forwarded_at: new Date().toISOString(),
+            }).eq("call_sid", callControlId);
+          } else {
+            console.error("[telnyx-voice] forwarding_only transfer failed → voicemail", { callControlId });
+            await startVoicemail(callControlId, toRaw);
+          }
+          return NextResponse.json({ ok: true });
         }
 
+        const sipUri = await getWebRTCSipUri();
+        if (!sipUri) {
+          if (effectiveMode === "browser_first_then_forward" && routing.forwardingNumber) {
+            const fwd = routing.forwardingNumber;
+            const fwdState = Buffer.from(JSON.stringify({ role: "forward_transfer" })).toString("base64");
+            const ok = await safeTransfer(callControlId, fwd, toRaw, FORWARD_RING_TIMEOUT_SECONDS, fwdState);
+            if (ok) {
+              await supabaseAdmin.from("calls").update({
+                status: "ringing",
+                routing_mode: effectiveMode,
+                forwarded_to: fwd,
+                forwarded_at: new Date().toISOString(),
+              }).eq("call_sid", callControlId);
+            } else {
+              await startVoicemail(callControlId, toRaw);
+            }
+          } else {
+            await startVoicemail(callControlId, toRaw);
+          }
+          return NextResponse.json({ ok: true });
+        }
+
+        const bLegState = Buffer.from(JSON.stringify({ role: "browser_transfer" })).toString("base64");
+        const now = new Date();
+        const ok = await safeTransfer(callControlId, sipUri, payload.from, routing.browserRingTimeoutSeconds, bLegState);
+        if (ok) {
+          await supabaseAdmin.from("calls").update({
+            status: "ringing",
+            routing_mode: effectiveMode,
+            forwarded_to: sipUri,
+            forwarded_at: now.toISOString(),
+            browser_ring_timeout_at: new Date(now.getTime() + routing.browserRingTimeoutSeconds * 1000).toISOString(),
+          }).eq("call_sid", callControlId);
+        } else {
+          if (effectiveMode === "browser_first_then_forward" && routing.forwardingNumber) {
+            const fwd = routing.forwardingNumber;
+            const fwdState = Buffer.from(JSON.stringify({ role: "forward_transfer" })).toString("base64");
+            const fOk = await safeTransfer(callControlId, fwd, toRaw, FORWARD_RING_TIMEOUT_SECONDS, fwdState);
+            if (fOk) {
+              await supabaseAdmin.from("calls").update({
+                status: "ringing", routing_mode: effectiveMode,
+                forwarded_to: fwd, forwarded_at: new Date().toISOString(),
+              }).eq("call_sid", callControlId);
+            } else {
+              await startVoicemail(callControlId, toRaw);
+            }
+          } else {
+            await startVoicemail(callControlId, toRaw);
+          }
+        }
         return NextResponse.json({ ok: true });
       }
 
@@ -388,16 +482,35 @@ export async function POST(req: Request) {
           .eq("call_sid", callControlId)
           .maybeSingle();
         if (!selfRow) {
-          // A non-logged leg answering within this session = the browser transfer B-leg.
-          // Mark the logged A-leg as browser-answered so a later B-leg hangup won't voicemail.
-          const { error: updErr } = await supabaseAdmin
+          const { data: aLeg } = await supabaseAdmin
             .from("calls")
-            .update({ browser_answered_at: new Date().toISOString() })
+            .select("call_sid, forwarded_to, routing_mode")
             .eq("call_session_id", payload.call_session_id)
-            .is("browser_answered_at", null);
-          console.log("[telnyx-voice] browser transfer leg answered → browser_answered_at set", {
-            session: payload.call_session_id, bLeg: callControlId, updErr: updErr?.message ?? null,
-          });
+            .neq("call_sid", callControlId)
+            .maybeSingle();
+
+          const fwdTo = typeof aLeg?.forwarded_to === "string" ? aLeg.forwarded_to : null;
+          const isPstnForward = fwdTo != null && !fwdTo.startsWith("sip:");
+
+          if (isPstnForward && aLeg?.call_sid) {
+            const { error: updErr } = await supabaseAdmin
+              .from("calls")
+              .update({ forward_answered_at: new Date().toISOString(), status: "bridged" })
+              .eq("call_sid", aLeg.call_sid)
+              .is("forward_answered_at", null);
+            console.log("[telnyx-voice] PSTN forward leg answered → forward_answered_at set", {
+              session: payload.call_session_id, bLeg: callControlId, aLeg: aLeg.call_sid, updErr: updErr?.message ?? null,
+            });
+          } else {
+            const { error: updErr } = await supabaseAdmin
+              .from("calls")
+              .update({ browser_answered_at: new Date().toISOString() })
+              .eq("call_session_id", payload.call_session_id)
+              .is("browser_answered_at", null);
+            console.log("[telnyx-voice] browser transfer leg answered → browser_answered_at set", {
+              session: payload.call_session_id, bLeg: callControlId, updErr: updErr?.message ?? null,
+            });
+          }
         }
       }
       return NextResponse.json({ ok: true });
@@ -564,7 +677,7 @@ export async function POST(req: Request) {
         if (callControlId) {
           const { data: callRow } = await supabaseAdmin
             .from("calls")
-            .select("direction, answered_at, browser_answered_at, voicemail, voicemail_storage_path, status")
+            .select("direction, answered_at, browser_answered_at, forward_answered_at, voicemail, voicemail_storage_path, status")
             .eq("call_sid", callControlId)
             .maybeSingle();
           const hangupCause = payload?.hangup_cause ?? null;
@@ -578,6 +691,8 @@ export async function POST(req: Request) {
               // Voicemail flow triggered AND a message was stored.
               finalStatus = "voicemail";
             } else if (callRow?.browser_answered_at) {
+              finalStatus = "completed";
+            } else if (callRow?.forward_answered_at) {
               finalStatus = "completed";
             } else if (callRow?.direction === "outbound" && callRow?.answered_at) {
               finalStatus = "completed";
@@ -598,6 +713,7 @@ export async function POST(req: Request) {
               direction: callRow?.direction ?? null,
               answered_at: callRow?.answered_at ?? null,
               browser_answered_at: callRow?.browser_answered_at ?? null,
+              forward_answered_at: callRow?.forward_answered_at ?? null,
               voicemail: callRow?.voicemail ?? null,
               voicemail_storage_path: callRow?.voicemail_storage_path ?? null,
               prevStatus: callRow?.status ?? null,
@@ -639,43 +755,68 @@ export async function POST(req: Request) {
 
           if (!selfRow) {
             const decoded = decodeClientState(payload?.client_state ?? body?.client_state);
-            const isBrowserTransferLeg = decoded?.role === "browser_transfer";
-            // A declined or unavailable browser leg shows up as one of these causes. hangupSource is
-            // unreliable for WebRTC declines (observed "unknown"), so do not gate on it.
+            const role = decoded?.role ?? null;
+            const isBrowserTransferLeg = role === "browser_transfer";
+            const isForwardTransferLeg = role === "forward_transfer";
             const declineCauses = new Set(["call_rejected", "user_busy", "busy", "decline", "rejected"]);
             const isDecline = hangupCause != null && declineCauses.has(hangupCause);
             const isTimeout = hangupCause === "timeout" || hangupCause === "no_answer";
-            const isUnansweredTransfer = isBrowserTransferLeg && (isDecline || isTimeout);
+            const isUnanswered = isDecline || isTimeout;
 
             const { data: aRow } = await supabaseAdmin
               .from("calls")
-              .select("call_sid, to_number, voicemail, ended_at, browser_answered_at, direction")
+              .select("call_sid, to_number, voicemail, ended_at, browser_answered_at, forward_answered_at, direction, routing_mode")
               .eq("call_session_id", payload.call_session_id)
               .neq("call_sid", callControlId)
               .maybeSingle();
 
             console.log("[telnyx-voice] B-leg hangup eval", {
-              bLeg: callControlId,
-              aLeg: aRow?.call_sid ?? null,
-              isBrowserTransferLeg, hangupCause, hangupSource, isDecline, isTimeout,
+              bLeg: callControlId, aLeg: aRow?.call_sid ?? null,
+              role, hangupCause, hangupSource, isDecline, isTimeout,
               browser_answered_at: aRow?.browser_answered_at ?? null,
-              voicemail: aRow?.voicemail ?? null,
-              ended_at: aRow?.ended_at ?? null,
+              forward_answered_at: aRow?.forward_answered_at ?? null,
+              routing_mode: aRow?.routing_mode ?? null,
+              voicemail: aRow?.voicemail ?? null, ended_at: aRow?.ended_at ?? null,
             });
 
-            if (
-              isUnansweredTransfer &&
+            const aLiveInbound =
               aRow?.call_sid &&
               aRow.direction === "inbound" &&
               !aRow.browser_answered_at &&
+              !aRow.forward_answered_at &&
               !aRow.voicemail &&
-              !aRow.ended_at
-            ) {
-              console.log("[telnyx-voice] unanswered transfer → voicemail on A-leg", {
-                aLeg: aRow.call_sid, did: aRow.to_number, reason: isTimeout ? "timeout" : "decline",
-              });
+              !aRow.ended_at;
+
+            if (isBrowserTransferLeg && isUnanswered && aLiveInbound) {
+              if (aRow.routing_mode === "browser_first_then_forward") {
+                const routing = await getRoutingConfig(aRow.to_number ?? "");
+                if (routing.forwardingNumber) {
+                  console.log("[telnyx-voice] browser timeout → forwarding number", {
+                    aLeg: aRow.call_sid, fwd: routing.forwardingNumber,
+                  });
+                  const fwdState = Buffer.from(JSON.stringify({ role: "forward_transfer" })).toString("base64");
+                  const ok = await safeTransfer(aRow.call_sid, routing.forwardingNumber, aRow.to_number ?? null, FORWARD_RING_TIMEOUT_SECONDS, fwdState);
+                  if (ok) {
+                    await supabaseAdmin.from("calls").update({
+                      forwarded_to: routing.forwardingNumber,
+                      forwarded_at: new Date().toISOString(),
+                      status: "ringing",
+                    }).eq("call_sid", aRow.call_sid);
+                  } else {
+                    const vm = await startVoicemail(aRow.call_sid, aRow.to_number ?? null);
+                    console.log("[telnyx-voice] forward-after-browser failed → voicemail", vm);
+                  }
+                } else {
+                  const vm = await startVoicemail(aRow.call_sid, aRow.to_number ?? null);
+                  console.log("[telnyx-voice] browser_first_then_forward but no fwd number → voicemail", vm);
+                }
+              } else {
+                const vm = await startVoicemail(aRow.call_sid, aRow.to_number ?? null);
+                console.log("[telnyx-voice] browser_only unanswered → voicemail", vm);
+              }
+            } else if (isForwardTransferLeg && isUnanswered && aLiveInbound) {
               const vm = await startVoicemail(aRow.call_sid, aRow.to_number ?? null);
-              console.log("[telnyx-voice] startVoicemail result", vm);
+              console.log("[telnyx-voice] forward unanswered → voicemail", vm);
             }
           }
         }
