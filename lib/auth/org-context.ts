@@ -3,7 +3,7 @@ import { cookies } from "next/headers"
 
 import { supabaseAdmin } from "@/lib/supabase/admin"
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 function resolveDefaultOrgId() {
   const envOrg = process.env.DEFAULT_ORG_ID
