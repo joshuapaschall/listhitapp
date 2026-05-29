@@ -5,6 +5,8 @@ import { assertServer } from "@/utils/assert-server"
 
 assertServer()
 
+export const maxDuration = 300
+
 const DEFAULT_STUCK_SECONDS = 300
 const DEFAULT_LIMIT = 50
 
@@ -43,3 +45,5 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ requeued: data ?? 0 })
 }
+
+export const GET = POST

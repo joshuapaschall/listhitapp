@@ -1,15 +1,32 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Phone, Users, Wand2 } from "lucide-react"
-import { getPoolSize } from "@/lib/sms-throughput"
+import { fetchMessagingThroughput } from "@/lib/sms-throughput"
 
 interface SmsFromCardProps {
   buyerIds: string[]
 }
 
 export default function SmsFromCard({ buyerIds }: SmsFromCardProps) {
-  const poolSize = getPoolSize()
+  const [poolSize, setPoolSize] = useState(15)
   const defaultDid = process.env.NEXT_PUBLIC_DEFAULT_OUTBOUND_DID ?? null
+
+  useEffect(() => {
+    let mounted = true
+
+    fetchMessagingThroughput()
+      .then(({ poolSize }) => {
+        if (mounted) setPoolSize(poolSize)
+      })
+      .catch((err) => {
+        console.error("Failed to fetch messaging throughput", err)
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   return (
     <div className="space-y-4">

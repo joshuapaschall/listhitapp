@@ -1,3 +1,6 @@
+/*
+  DEPRECATED: Superseded by app/api/cron/dispatch-due-campaigns/route.ts. Keep this file for history; scheduled campaign dispatch now runs through Vercel cron.
+*/
 // @ts-nocheck
 // supabase/functions/send-scheduled-campaigns/index.ts
 // -----------------------------------------------
