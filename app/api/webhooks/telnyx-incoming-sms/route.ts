@@ -10,9 +10,10 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { assertServer } from "@/utils/assert-server"
 import { ensurePublicMediaUrls } from "@/utils/mms.server"
 import { normalizePhone, formatPhoneE164 } from "@/lib/dedup-utils"
-import { verifyTelnyxRequest } from "@/lib/telnyx"
+import { TELNYX_API_URL, telnyxHeaders, verifyTelnyxRequest } from "@/lib/telnyx"
 import { upsertAnonThread } from "@/services/thread-utils"
 import { processTelnyxStatusEvent } from "@/lib/telnyx-status-processor"
+import { classifyInboundSms } from "@/lib/sms/opt-keywords"
 
 export const runtime = "nodejs"
 
@@ -118,7 +119,8 @@ export async function POST(request: NextRequest) {
     `phone3_norm.eq.${encodedAlt}`,
   ].join(",")
 
-  const isStop = /^stop/i.test(text)
+  const intent = classifyInboundSms(text)
+  const isStop = intent === "stop"
 
   const { data: buyers, error: buyerErr } = await supabaseAdmin
     .from("buyers")
@@ -132,6 +134,7 @@ export async function POST(request: NextRequest) {
 
   const buyerIds = buyers?.map((b) => b.id) ?? []
   const targetIds = buyerIds.length ? buyerIds : [null]
+  let helpReplyThread: { id: string; buyerId: string } | null = null
 
   for (const buyerId of targetIds) {
     let campaignId: string | null = null
@@ -197,6 +200,11 @@ export async function POST(request: NextRequest) {
       })
       return new NextResponse("Supabase error", { status: 500 })
     }
+
+    if (intent === "help" && buyerId && !helpReplyThread) {
+      helpReplyThread = { id: thread.id, buyerId }
+    }
+
     // A.5 — Tag the inbound back to its originating campaign
     if (lastCampaignRecipient) {
       const recipientUpdates: Record<string, any> = {}
@@ -227,6 +235,80 @@ export async function POST(request: NextRequest) {
     if (updErr) {
       console.error("❌ STOP update error", updErr)
       return new NextResponse("Supabase error", { status: 500 })
+    }
+  }
+
+  if (intent === "start") {
+    const optedOutBuyerIds =
+      buyers
+        ?.filter((buyer) => buyer.can_receive_sms === false)
+        .map((buyer) => buyer.id) ?? []
+
+    if (optedOutBuyerIds.length) {
+      const { error: startErr } = await supabaseAdmin
+        .from("buyers")
+        .update({ can_receive_sms: true })
+        .in("id", optedOutBuyerIds)
+
+      if (startErr) {
+        console.error("❌ START update error", startErr)
+        return new NextResponse("Supabase error", { status: 500 })
+      }
+    }
+  }
+
+  if (intent === "help") {
+    const replyText =
+      process.env.SMS_HELP_AUTO_REPLY ||
+      "ListHit notifications. Msg & data rates may apply. Reply STOP to cancel. Contact: support@listhit.io"
+    const fromNumber = to ? formatPhoneE164(to) : null
+    const toNumber = formatPhoneE164(from)
+
+    if (!fromNumber || !toNumber) {
+      console.warn("⚠️ HELP auto-reply skipped due to invalid phone numbers", {
+        from,
+        to,
+      })
+    } else {
+      try {
+        const response = await fetch(`${TELNYX_API_URL}/messages`, {
+          method: "POST",
+          headers: telnyxHeaders(),
+          body: JSON.stringify({
+            from: fromNumber,
+            to: toNumber,
+            text: replyText,
+            messaging_profile_id: process.env.TELNYX_MESSAGING_PROFILE_ID,
+          }),
+        })
+
+        if (!response.ok) {
+          const errorText = await response.text()
+          throw new Error(`Telnyx HELP auto-reply failed: ${response.status} ${errorText}`)
+        }
+
+        const json = await response.json()
+        const providerId = json?.data?.id as string | undefined
+
+        if (helpReplyThread) {
+          const { error: helpMsgErr } = await supabaseAdmin.from("messages").insert({
+            thread_id: helpReplyThread.id,
+            buyer_id: helpReplyThread.buyerId,
+            direction: "outbound",
+            from_number: fromNumber,
+            to_number: toNumber,
+            body: replyText,
+            provider_id: providerId,
+            is_bulk: false,
+          })
+
+          if (helpMsgErr) {
+            console.error("❌ Failed to record HELP auto-reply", helpMsgErr)
+          }
+        }
+      } catch (err) {
+        console.error("❌ HELP auto-reply send error", err)
+      }
     }
   }
 
