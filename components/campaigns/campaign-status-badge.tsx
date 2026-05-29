@@ -1,11 +1,28 @@
-import { AlertCircle, AlertTriangle, CheckCircle2, Loader2 } from "lucide-react"
+import { AlertCircle, AlertTriangle, CheckCircle2, Clock, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
+// Status values the backend may set on the `campaigns` table. Keep in sync with:
+// - app/api/campaigns/send/route.ts (sets "pending", "processing")
+// - services/campaign-sender.ts (sets "processing", "pending", "sent", "error")
+// - services/sms-campaign-sender.ts (sets "processing")
+// - draft state from user creation
+// - scheduled state for future-dated sends
+// - completed_with_errors for partial-success sends
+type KnownStatus =
+  | "draft"
+  | "scheduled"
+  | "pending"
+  | "processing"
+  | "sending"
+  | "sent"
+  | "error"
+  | "completed_with_errors"
+
 type CampaignStatusBadgeProps = {
-  status: "draft" | "scheduled" | "sending" | "sent" | "error" | "completed_with_errors"
+  status: KnownStatus | string | null | undefined
 }
 
-const statusConfig: Record<CampaignStatusBadgeProps["status"], { label: string; className: string; icon?: JSX.Element }> = {
+const statusConfig: Record<KnownStatus, { label: string; className: string; icon?: JSX.Element }> = {
   draft: {
     label: "Draft",
     className: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
@@ -13,6 +30,17 @@ const statusConfig: Record<CampaignStatusBadgeProps["status"], { label: string; 
   scheduled: {
     label: "Scheduled",
     className: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
+    icon: <Clock className="size-3" />,
+  },
+  pending: {
+    label: "Queued",
+    className: "bg-brand-tint text-brand dark:bg-brand/20 dark:text-brand",
+    icon: <Clock className="size-3" />,
+  },
+  processing: {
+    label: "Sending",
+    className: "bg-brand-tint text-brand dark:bg-brand/20 dark:text-brand",
+    icon: <Loader2 className="size-3 animate-spin" />,
   },
   sending: {
     label: "Sending",
@@ -36,8 +64,13 @@ const statusConfig: Record<CampaignStatusBadgeProps["status"], { label: string; 
   },
 }
 
+const fallbackConfig: { label: string; className: string; icon?: JSX.Element } = {
+  label: "Unknown",
+  className: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+}
+
 export default function CampaignStatusBadge({ status }: CampaignStatusBadgeProps) {
-  const config = statusConfig[status]
+  const config = (status && statusConfig[status as KnownStatus]) || fallbackConfig
 
   return (
     <span
@@ -46,7 +79,7 @@ export default function CampaignStatusBadge({ status }: CampaignStatusBadgeProps
         config.className,
       )}
     >
-      {config.icon}
+      {"icon" in config ? config.icon : null}
       {config.label}
     </span>
   )
