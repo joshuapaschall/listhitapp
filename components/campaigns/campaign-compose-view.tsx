@@ -78,6 +78,7 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
   const [pickerKey, setPickerKey] = useState(0)
   const [editorSeed, setEditorSeed] = useState<TemplateContent | null>(null)
   const [editorKey, setEditorKey] = useState(0)
+  const [editorReady, setEditorReady] = useState(false)
   const [sendConfirmOpen, setSendConfirmOpen] = useState(false)
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false)
   const [changeTemplateOpen, setChangeTemplateOpen] = useState(false)
@@ -212,6 +213,7 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
   const openBuilder = () => {
     if (hasExistingDesign()) {
       setEditorSeed(campaign.design_json as TemplateContent)
+      setEditorReady(false)
       setEditorKey((k) => k + 1)
       setBuilderStep("editor")
     } else {
@@ -237,6 +239,7 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
       if (r.def.defaultSubject && !campaign.subject?.trim()) update({ subject: r.def.defaultSubject })
     }
     setEditorSeed(content)
+    setEditorReady(false)
     setEditorKey((k) => k + 1)
     update({ design_json: content })
     setBuilderStep("editor")
@@ -443,11 +446,19 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
               </div>
               <div className="flex items-center gap-2">
                 <Button variant="outline" onClick={() => setSaveTemplateOpen(true)}>Save as template</Button>
-                <Button onClick={onSaveContent} disabled={!isEditorStep}>Save & Close</Button>
+                <Button onClick={onSaveContent} disabled={!isEditorStep || !editorReady}>
+                  {isEditorStep && !editorReady ? "Loading editor…" : "Save & Close"}
+                </Button>
               </div>
             </div>
             <div className="min-h-0 flex-1">
-              <TemplaticalEmailEditor key={editorKey} ref={editorRef} initialContent={editorSeed} onChange={(content) => update({ design_json: content })} />
+              <TemplaticalEmailEditor
+                key={editorKey}
+                ref={editorRef}
+                initialContent={editorSeed}
+                onReady={() => setEditorReady(true)}
+                onChange={(content) => update({ design_json: content })}
+              />
             </div>
           </div>
         )}
@@ -485,7 +496,7 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
         <Input placeholder="Template name" value={templateName} onChange={(e) => setTemplateName(e.target.value)} />
         <DialogFooter>
           <Button variant="outline" onClick={() => setSaveTemplateOpen(false)}>Cancel</Button>
-          <Button onClick={saveAsTemplate} disabled={!templateName.trim() || savingTemplate}>{savingTemplate ? "Saving..." : "Save"}</Button>
+          <Button onClick={saveAsTemplate} disabled={!templateName.trim() || savingTemplate || !editorReady}>{savingTemplate ? "Saving..." : "Save"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

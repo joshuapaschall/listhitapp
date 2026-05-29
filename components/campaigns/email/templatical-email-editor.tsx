@@ -7,6 +7,7 @@ import { supabaseBrowser } from "@/lib/supabase-browser"
 interface TemplaticalEmailEditorProps {
   initialContent?: TemplateContent | null
   onChange?: (content: TemplateContent) => void
+  onReady?: () => void
 }
 
 export interface TemplaticalEmailEditorHandle {
@@ -64,15 +65,18 @@ async function openImageUpload(): Promise<UploadMediaResponse | null> {
 }
 
 const TemplaticalEmailEditor = forwardRef<TemplaticalEmailEditorHandle, TemplaticalEmailEditorProps>(
-  function TemplaticalEmailEditor({ initialContent, onChange }, ref) {
+  function TemplaticalEmailEditor({ initialContent, onChange, onReady }, ref) {
     const containerRef = useRef<HTMLDivElement | null>(null)
     const editorRef = useRef<TemplaticalEditor | null>(null)
     const onChangeRef = useRef(onChange)
+    const onReadyRef = useRef(onReady)
     const openImageUploadRef = useRef(openImageUpload)
 
     useEffect(() => {
       onChangeRef.current = onChange
     }, [onChange])
+
+    useEffect(() => { onReadyRef.current = onReady }, [onReady])
 
     useEffect(() => {
       const mountPoint = containerRef.current
@@ -123,6 +127,7 @@ const TemplaticalEmailEditor = forwardRef<TemplaticalEmailEditorHandle, Templati
           }
           instance = editor
           editorRef.current = editor
+          onReadyRef.current?.()
         })
         .catch((err) => {
           if (!cancelled) {
