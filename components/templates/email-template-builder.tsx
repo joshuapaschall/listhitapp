@@ -1,13 +1,13 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useState } from "react"
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
 import { ArrowLeft } from "lucide-react"
 import { toast } from "sonner"
 import EmailTemplatePicker, { type EmailPickResult } from "@/components/campaigns/email/email-template-picker"
-import type { TemplaticalEmailEditorHandle } from "@/components/campaigns/email/templatical-email-editor"
+import type { TemplaticalEditor } from "@/components/campaigns/email/templatical-email-editor"
 import type { TemplateContent } from "@templatical/editor"
 import { createDefaultTemplateContent, createHtmlBlock } from "@templatical/types"
 import { emptyEmailTemplate } from "@/lib/email-templates"
@@ -31,8 +31,6 @@ interface Props {
 export default function EmailTemplateBuilder({ slug, mode, id, initialName = "", initialDesign = null }: Props) {
   const router = useRouter()
   const queryClient = useQueryClient()
-  const editorRef = useRef<TemplaticalEmailEditorHandle>(null)
-
   const hasInitialDesign = !!initialDesign && Array.isArray(initialDesign.blocks) && initialDesign.blocks.length > 0
 
   const [name, setName] = useState(initialName)
@@ -43,6 +41,7 @@ export default function EmailTemplateBuilder({ slug, mode, id, initialName = "",
   const [editorKey, setEditorKey] = useState(0)
   const [saving, setSaving] = useState(false)
   const [changeTemplateOpen, setChangeTemplateOpen] = useState(false)
+  const [editorInstance, setEditorInstance] = useState<TemplaticalEditor | null>(null)
 
   const back = () => router.push(`/settings/templates/${slug}`)
 
@@ -60,13 +59,14 @@ export default function EmailTemplateBuilder({ slug, mode, id, initialName = "",
       content = r.def.build()
     }
     setEditorSeed(content)
+    setEditorInstance(null)
     setEditorKey((k) => k + 1)
     setBuilderStep("editor")
   }
 
   const handleSave = async () => {
-    const editor = editorRef.current
-    if (!editor?.isReady()) {
+    const editor = editorInstance
+    if (!editor) {
       toast.error("Editor not ready — try again in a moment")
       return
     }
@@ -130,13 +130,13 @@ export default function EmailTemplateBuilder({ slug, mode, id, initialName = "",
             <Button variant="ghost" onClick={() => setChangeTemplateOpen(true)}>Change template</Button>
             <div className="ml-auto flex items-center gap-2">
               <Button variant="ghost" onClick={back}>Cancel</Button>
-              <Button onClick={handleSave} disabled={saving || !name.trim()}>
-                {saving ? "Saving…" : "Save & Close"}
+              <Button onClick={handleSave} disabled={saving || !name.trim() || !editorInstance}>
+                {!editorInstance ? "Loading editor…" : saving ? "Saving…" : "Save & Close"}
               </Button>
             </div>
           </div>
           <div className="min-h-0 flex-1 p-4">
-            <TemplaticalEmailEditor key={editorKey} ref={editorRef} initialContent={editorSeed} />
+            <TemplaticalEmailEditor key={editorKey} initialContent={editorSeed} onReady={setEditorInstance} />
           </div>
         </>
       )}

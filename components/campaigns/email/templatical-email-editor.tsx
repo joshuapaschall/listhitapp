@@ -1,19 +1,15 @@
 "use client"
 
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react"
+import { useEffect, useRef } from "react"
 import { init, type TemplateContent, type TemplaticalEditor, type ThemeOverrides } from "@templatical/editor"
 import { supabaseBrowser } from "@/lib/supabase-browser"
+
+export type { TemplaticalEditor } from "@templatical/editor"
 
 interface TemplaticalEmailEditorProps {
   initialContent?: TemplateContent | null
   onChange?: (content: TemplateContent) => void
-  onReady?: () => void
-}
-
-export interface TemplaticalEmailEditorHandle {
-  getContent: () => TemplateContent | null
-  toMjml: () => Promise<string>
-  isReady: () => boolean
+  onReady?: (editor: TemplaticalEditor) => void
 }
 
 type UploadMediaResponse = { url: string; alt?: string }
@@ -64,96 +60,82 @@ async function openImageUpload(): Promise<UploadMediaResponse | null> {
   return { url: publicUrl, alt: "" }
 }
 
-const TemplaticalEmailEditor = forwardRef<TemplaticalEmailEditorHandle, TemplaticalEmailEditorProps>(
-  function TemplaticalEmailEditor({ initialContent, onChange, onReady }, ref) {
-    const containerRef = useRef<HTMLDivElement | null>(null)
-    const editorRef = useRef<TemplaticalEditor | null>(null)
-    const onChangeRef = useRef(onChange)
-    const onReadyRef = useRef(onReady)
-    const openImageUploadRef = useRef(openImageUpload)
+export default function TemplaticalEmailEditor({ initialContent, onChange, onReady }: TemplaticalEmailEditorProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const onChangeRef = useRef(onChange)
+  const onReadyRef = useRef(onReady)
+  const openImageUploadRef = useRef(openImageUpload)
 
-    useEffect(() => {
-      onChangeRef.current = onChange
-    }, [onChange])
+  useEffect(() => {
+    onChangeRef.current = onChange
+  }, [onChange])
 
-    useEffect(() => { onReadyRef.current = onReady }, [onReady])
+  useEffect(() => {
+    onReadyRef.current = onReady
+  }, [onReady])
 
-    useEffect(() => {
-      const mountPoint = containerRef.current
-      if (!mountPoint) return
+  useEffect(() => {
+    const mountPoint = containerRef.current
+    if (!mountPoint) return
 
-      const host = document.createElement("div")
-      host.style.height = "100%"
-      host.style.width = "100%"
-      mountPoint.appendChild(host)
+    const host = document.createElement("div")
+    host.style.height = "100%"
+    host.style.width = "100%"
+    mountPoint.appendChild(host)
 
-      let cancelled = false
-      let instance: TemplaticalEditor | null = null
+    let cancelled = false
+    let instance: TemplaticalEditor | null = null
 
-      init({
-        container: host,
-        content: initialContent ?? undefined,
-        uiTheme: "light",
-        theme,
-        fonts: {
-          defaultFont: "Inter",
-          defaultFallback: "Helvetica, Arial, sans-serif",
-          customFonts: [
-            { name: "Inter", url: "https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap", fallback: "Helvetica, Arial, sans-serif" },
-            { name: "Playfair Display", url: "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&display=swap", fallback: "Georgia, serif" },
-          ],
-        },
-        mergeTags: {
-          syntax: "handlebars",
-          tags: [
-            { label: "First name", value: "{{first_name}}" },
-            { label: "Last name", value: "{{last_name}}" },
-            { label: "Phone", value: "{{phone}}" },
-            { label: "Email", value: "{{email}}" },
-          ],
-        },
-        lint: { accessibility: {}, structure: {}, links: {} },
-        branding: false,
-        onChange: (content) => onChangeRef.current?.(content),
-        async onRequestMedia() {
-          return await openImageUploadRef.current()
-        },
-      })
-        .then((editor) => {
-          if (cancelled) {
-            editor.unmount()
-            host.remove()
-            return
-          }
-          instance = editor
-          editorRef.current = editor
-          onReadyRef.current?.()
-        })
-        .catch((err) => {
-          if (!cancelled) {
-            console.error("Templatical init failed", err)
-          }
-        })
-
-      return () => {
-        cancelled = true
-        instance?.unmount()
-        host.remove()
-        editorRef.current = null
-      }
-    }, [])
-
-    useImperativeHandle(ref, () => ({
-      isReady: () => editorRef.current !== null,
-      getContent: () => editorRef.current?.getContent() ?? null,
-      toMjml: async () => {
-        if (!editorRef.current) return ""
-        return editorRef.current.toMjml()
+    init({
+      container: host,
+      content: initialContent ?? undefined,
+      uiTheme: "light",
+      theme,
+      fonts: {
+        defaultFont: "Inter",
+        defaultFallback: "Helvetica, Arial, sans-serif",
+        customFonts: [
+          { name: "Inter", url: "https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap", fallback: "Helvetica, Arial, sans-serif" },
+          { name: "Playfair Display", url: "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&display=swap", fallback: "Georgia, serif" },
+        ],
       },
-    }), [])
+      mergeTags: {
+        syntax: "handlebars",
+        tags: [
+          { label: "First name", value: "{{first_name}}" },
+          { label: "Last name", value: "{{last_name}}" },
+          { label: "Phone", value: "{{phone}}" },
+          { label: "Email", value: "{{email}}" },
+        ],
+      },
+      lint: { accessibility: {}, structure: {}, links: {} },
+      branding: false,
+      onChange: (content) => onChangeRef.current?.(content),
+      async onRequestMedia() {
+        return await openImageUploadRef.current()
+      },
+    })
+      .then((editor) => {
+        if (cancelled) {
+          editor.unmount()
+          host.remove()
+          return
+        }
+        instance = editor
+        onReadyRef.current?.(editor)
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error("Templatical init failed", err)
+        }
+      })
 
-    return <div ref={containerRef} className="h-full min-h-[600px]" />
-  },
-)
+    return () => {
+      cancelled = true
+      instance?.unmount()
+      host.remove()
+    }
+  }, [])
 
-export default TemplaticalEmailEditor
+  return <div ref={containerRef} className="h-full min-h-[600px]" />
+}
