@@ -4,6 +4,14 @@
     {
       "path": "/api/cron/showing-reminders",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/sms-campaigns/process",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/sms-campaigns/requeue-stuck",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

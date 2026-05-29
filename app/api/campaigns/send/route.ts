@@ -1,20 +1,22 @@
 import { NextRequest, NextResponse } from "next/server"
-import { sendCampaignSMS } from "@/services/campaign-sender.server"
 import {
   processEmailQueue,
   queueEmailCampaign,
   type EmailContactPayload,
 } from "@/services/campaign-sender"
 import { createShortLinksBulk } from "@/services/shortlink-service"
-import { renderTemplate } from "@/lib/utils"
 import { assertServer } from "@/utils/assert-server"
 import { getCronRequestToken, isJwtLike } from "@/lib/cron-auth"
 import { linkifyHtml } from "@/lib/email/linkify-html"
 import { calculateSmsSegments } from "@/lib/sms-utils"
+import { formatPhoneE164 } from "@/lib/dedup-utils"
+import * as smsCampaignSender from "@/services/sms-campaign-sender"
 import { requireOrgContext } from "@/lib/auth/org-context"
 import { resolveCampaignSender, SenderNotVerifiedError } from "@/lib/email-sender-resolver"
 
 assertServer()
+
+export const maxDuration = 300
 
 const resolveTimezone = (tz?: string | null) =>
   tz && tz.trim() ? tz : "America/New_York"
@@ -187,15 +189,42 @@ export async function POST(request: NextRequest) {
   }
   finalIds = (allowed || []).map((r: any) => r.id)
 
-  await supabase.from("campaign_recipients").delete().eq("campaign_id", campaignId)
-  if (finalIds.length) {
-    const rows = finalIds.map((id) => ({ campaign_id: campaignId, buyer_id: id }))
-    const { error: insErr } = await supabase
+  if (campaign.channel === "sms") {
+    const { data: existingRows, error: existingErr } = await supabase
       .from("campaign_recipients")
-      .insert(rows)
-    if (insErr) {
-      console.error("Error inserting recipients", insErr)
+      .select("buyer_id")
+      .eq("campaign_id", campaignId)
+
+    if (existingErr) {
+      console.error("Error fetching existing recipients", existingErr)
       return new Response(JSON.stringify({ error: "Failed to fetch recipients" }), { status: 500 })
+    }
+
+    const existingBuyerIds = new Set((existingRows || []).map((row: any) => row.buyer_id))
+    const rows = finalIds
+      .filter((id) => !existingBuyerIds.has(id))
+      .map((id) => ({ campaign_id: campaignId, buyer_id: id, status: "pending" }))
+
+    if (rows.length) {
+      const { error: insErr } = await supabase
+        .from("campaign_recipients")
+        .insert(rows)
+      if (insErr) {
+        console.error("Error inserting recipients", insErr)
+        return new Response(JSON.stringify({ error: "Failed to fetch recipients" }), { status: 500 })
+      }
+    }
+  } else {
+    await supabase.from("campaign_recipients").delete().eq("campaign_id", campaignId)
+    if (finalIds.length) {
+      const rows = finalIds.map((id) => ({ campaign_id: campaignId, buyer_id: id }))
+      const { error: insErr } = await supabase
+        .from("campaign_recipients")
+        .insert(rows)
+      if (insErr) {
+        console.error("Error inserting recipients", insErr)
+        return new Response(JSON.stringify({ error: "Failed to fetch recipients" }), { status: 500 })
+      }
     }
   }
 
@@ -403,138 +432,128 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  async function handleRecipient(row: any) {
-    const buyer: any = (row as any).buyers || {}
-    if (buyer.sendfox_hidden) {
-      return false
-    }
-    let providerId: string | null = null
-    let fromNumber: string | null = null
-    let status = "sent"
-    let errorText: string | null = null
-    let shortUrlKey: string | null = null
-
+  if (campaign.channel === "sms") {
     try {
-      if (campaign.channel === "sms") {
+      if (!recipients.length) {
+        return new Response(
+          JSON.stringify({ error: "no recipients" }),
+          { status: 400 },
+        )
+      }
+
+      let mediaUrls: string[] | undefined
+      if (campaign.media_url) {
+        try {
+          const parsed = JSON.parse(campaign.media_url)
+          mediaUrls = Array.isArray(parsed) ? parsed : [campaign.media_url]
+        } catch {
+          mediaUrls = [campaign.media_url]
+        }
+      }
+
+      const queuedRecipients: Array<{
+        recipientId: string
+        buyerId: string
+        toNumber: string
+        body: string
+      }> = []
+
+      for (const row of recipients || []) {
+        if (["sent", "delivered"].includes((row.status || "").toLowerCase())) {
+          continue
+        }
+
+        const buyer: any = (row as any).buyers || {}
+        if (buyer.sendfox_hidden || !buyer.can_receive_sms) {
+          continue
+        }
+
         const numbers: string[] = []
-        if (buyer.phone && buyer.can_receive_sms) numbers.push(buyer.phone)
+        if (buyer.phone) numbers.push(buyer.phone)
         if (campaign.send_to_all_numbers) {
           if (buyer.phone2) numbers.push(buyer.phone2)
           if (buyer.phone3) numbers.push(buyer.phone3)
         }
-        if (!numbers.length) {
-          throw new Error("Buyer cannot receive SMS")
-        }
-        let mediaUrls: string[] | undefined
-        if (campaign.media_url) {
-          try {
-            const parsed = JSON.parse(campaign.media_url)
-            mediaUrls = Array.isArray(parsed) ? parsed : [campaign.media_url]
-          } catch {
-            mediaUrls = [campaign.media_url]
-          }
-        }
-        let smsBody = renderTemplate(campaign.message, buyer)
-        let shortKey: string | null = null
 
-        // Substitute URLs from the pre-computed per-recipient map (A.5.1 native shortener)
+        const uniqueNumbers = Array.from(
+          new Set(
+            numbers
+              .map((number) => formatPhoneE164(number))
+              .filter((number): number is string => Boolean(number)),
+          ),
+        )
+        if (!uniqueNumbers.length) {
+          continue
+        }
+
+        let smsBody = campaign.message || ""
+        let shortKey: string | null = null
         const recipientLinks = shortLinksByRecipient.get(row.id)
         if (recipientLinks && recipientLinks.length > 0) {
           for (const link of recipientLinks) {
             smsBody = smsBody.split(link.originalUrl).join(link.shortUrl)
           }
-          // Store the FIRST URL's slug as short_url_key for back-compat. Click attribution
-          // doesn't actually require this column anymore — the FK + RPC handle cascading
-          // — but other code may read short_url_key, so we keep it populated.
           shortKey = recipientLinks[0].slug
         }
-        const results = await sendCampaignSMS({
-          buyerId: row.buyer_id,
-          to: numbers,
-          body: smsBody,
-          mediaUrls,
-          campaignId,
-          dryRun,
-        })
 
-        fromNumber = results[0]?.from || null
-
-        providerId = results[0]?.sid || null
-
-        // insert additional recipient rows for extra numbers
-        if (results.length > 1) {
-          const extraRows = results.slice(1).map((r) => ({
-            campaign_id: campaignId,
-            buyer_id: row.buyer_id,
-            sent_at: new Date().toISOString(),
-            provider_id: r.sid,
-            from_number: r.from,
-            status: "sent",
-            error: null,
-          }))
-          const { error: insertErr } = await supabase
+        if (shortKey) {
+          await supabase
             .from("campaign_recipients")
-            .insert(extraRows)
-          if (insertErr) {
-            console.error("Error inserting extra recipients", insertErr)
-          }
+            .update({ short_url_key: shortKey })
+            .eq("id", row.id)
         }
-        shortUrlKey = shortKey
+
+        for (const toNumber of uniqueNumbers) {
+          queuedRecipients.push({
+            recipientId: row.id,
+            buyerId: row.buyer_id,
+            toNumber,
+            body: smsBody,
+          })
+        }
       }
-    } catch (err: any) {
-      status = "error"
-      errorText = err.message || String(err)
-    }
 
-    await supabase
-      .from("campaign_recipients")
-      .update({
-        sent_at: new Date().toISOString(),
-        provider_id: providerId,
-        from_number: fromNumber,
-        short_url_key: shortUrlKey,
-        status,
-        error: errorText,
+      if (!queuedRecipients.length) {
+        return new Response(
+          JSON.stringify({ error: "no recipients" }),
+          { status: 400 },
+        )
+      }
+
+      await smsCampaignSender.queueSmsCampaign({
+        campaignId,
+        mediaUrls,
+        recipients: queuedRecipients,
       })
-      .eq("id", row.id)
 
-    return status === "sent"
-  }
+      const queuedRecipientIds = Array.from(new Set(queuedRecipients.map((recipient) => recipient.recipientId)))
+      await supabase
+        .from("campaign_recipients")
+        .update({ status: "pending", error: null })
+        .in("id", queuedRecipientIds)
 
-  try {
-    if (!recipients.length) {
+      const { error: statusErr } = await supabase
+        .from("campaigns")
+        .update({ status: "processing" })
+        .eq("id", campaignId)
+
+      if (statusErr) {
+        console.error("Error updating campaign status", statusErr)
+      }
+
+      const dispatched = await smsCampaignSender.processSmsQueue(5)
       return new Response(
-        JSON.stringify({ error: "no recipients" }),
-        { status: 400 },
+        JSON.stringify({ ok: true, queued: queuedRecipients.length, dispatched }),
+        { status: 200 },
+      )
+    } catch (e: any) {
+      console.error("campaigns/send failed", { message: e?.message, stack: e?.stack })
+      return new Response(
+        JSON.stringify({ error: e?.message || "send failed" }),
+        { status: 500 },
       )
     }
-
-    const results = await Promise.allSettled(
-      (recipients || []).map((r) => handleRecipient(r)),
-    )
-
-    const allSuccess = results.every(
-      (res) => res.status === "fulfilled" && res.value === true,
-    )
-
-    const { error: statusErr } = await supabase
-      .from("campaigns")
-      .update({ status: allSuccess ? "sent" : "error", sent_at: new Date().toISOString() })
-      .eq("id", campaignId)
-
-    if (statusErr) {
-      console.error("Error updating campaign status", statusErr)
-    }
-
-    return new Response(
-      JSON.stringify({ ok: true, sent: recipients.length }),
-      { status: 200 },
-    )
-  } catch (e: any) {
-    console.error("campaigns/send failed", { message: e?.message, stack: e?.stack })
-    return new Response(
-      JSON.stringify({ error: e?.message || "send failed" }),
-      { status: 500 },
-    )
   }
+
+  return NextResponse.json({ error: "Unsupported campaign channel" }, { status: 400 })
 }
