@@ -7,8 +7,21 @@ import { getTelnyxApiKey } from "@/lib/voice-env"
 import { assertCronAuth } from "@/lib/cron-auth"
 
 async function fetchNumbers() {
+  const messagingProfileId = process.env.TELNYX_MESSAGING_PROFILE_ID
+  if (!messagingProfileId) {
+    throw new Error(
+      "Telnyx messaging profile env var is not set. Refusing to sync without a profile filter " +
+      "to prevent pulling in numbers from other Telnyx products on the same account."
+    )
+  }
+
   const numbers: any[] = []
-  let url = `${TELNYX_API_URL}/phone_numbers?page[number]=1&page[size]=100`
+  const params = new URLSearchParams({
+    "filter[messaging_profile_id]": messagingProfileId,
+    "page[number]": "1",
+    "page[size]": "100",
+  })
+  let url: string = `${TELNYX_API_URL}/phone_numbers?${params.toString()}`
   const headers = telnyxHeaders()
   while (url) {
     const res = await fetch(url, { headers })
