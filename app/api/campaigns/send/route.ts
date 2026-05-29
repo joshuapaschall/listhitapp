@@ -11,7 +11,7 @@ import { linkifyHtml } from "@/lib/email/linkify-html"
 import { calculateSmsSegments } from "@/lib/sms-utils"
 import { formatPhoneE164 } from "@/lib/dedup-utils"
 import * as smsCampaignSender from "@/services/sms-campaign-sender"
-import { requireOrgContext } from "@/lib/auth/org-context"
+import { requireOrgContext, resolveOrgIdForUser } from "@/lib/auth/org-context"
 import { resolveCampaignSender, SenderNotVerifiedError } from "@/lib/email-sender-resolver"
 
 assertServer()
@@ -364,7 +364,8 @@ export async function POST(request: NextRequest) {
 
     let sender
     try {
-      const { orgId } = await requireOrgContext()
+      const { orgId: sessionOrgId } = await requireOrgContext()
+      const orgId = sessionOrgId ?? await resolveOrgIdForUser(campaign.user_id)
       sender = await resolveCampaignSender(orgId, {
         fromEmail: campaign.from_email,
         fromName: campaign.from_name,

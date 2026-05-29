@@ -1,3 +1,6 @@
+/*
+  DEPRECATED: Superseded by Vercel cron routes. After confirming Vercel cron is firing emails, run scripts/db/06_retire_pg_cron.sql to remove the broken pg_cron jobs.
+*/
 -- Supabase pg_cron jobs for DispoTool / ListHit
 -- ============================================================================
 -- If you run this in the Supabase SQL editor, the ${...} placeholders will NOT

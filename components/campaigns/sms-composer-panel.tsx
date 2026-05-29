@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import EmojiPicker from "emoji-picker-react"
 import { ChevronDown, Mail, Phone, Smile, User, UserRound } from "lucide-react"
 import AssistantButton from "@/components/chat-assistant-button"
@@ -13,7 +13,7 @@ import { Progress } from "@/components/ui/progress"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { estimateCampaignCost, formatUsd } from "@/lib/sms-pricing"
-import { estimateDeliveryTime } from "@/lib/sms-throughput"
+import { estimateDeliveryTime, fetchMessagingThroughput } from "@/lib/sms-throughput"
 import { calculateSmsSegments } from "@/lib/sms-utils"
 
 interface SmsComposerPanelProps {
@@ -29,14 +29,36 @@ const STOP_SUFFIX_RE = /\s*Reply STOP to opt out\s*$/i
 export default function SmsComposerPanel({ message, onMessageChange, buyerIds, recipientCount, mediaUrls = [] }: SmsComposerPanelProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const [emojiOpen, setEmojiOpen] = useState(false)
+  const [throughputConfig, setThroughputConfig] = useState({ poolSize: 15, perNumberMpm: 2 })
   const segmentInfo = useMemo(() => calculateSmsSegments(message || ""), [message])
   const capacity = segmentInfo.segments === 1 ? (segmentInfo.encoding === "GSM-7" ? 160 : 70) : segmentInfo.segments * (segmentInfo.encoding === "GSM-7" ? 153 : 67)
   const charCount = capacity - segmentInfo.remaining
   const percentFull = Math.min(100, Math.max(0, (charCount / capacity) * 100))
   const hasMedia = false
   const cost = estimateCampaignCost({ recipients: recipientCount, segments: segmentInfo.segments, hasMedia })
-  const throughput = estimateDeliveryTime(recipientCount, segmentInfo.segments)
+  const throughput = estimateDeliveryTime({
+    recipients: recipientCount,
+    segments: segmentInfo.segments,
+    poolSize: throughputConfig.poolSize,
+    perNumberMpm: throughputConfig.perNumberMpm,
+  })
   const hasStopFooter = STOP_SUFFIX_RE.test(message)
+
+  useEffect(() => {
+    let mounted = true
+
+    fetchMessagingThroughput()
+      .then(({ poolSize, perNumberMpm }) => {
+        if (mounted) setThroughputConfig({ poolSize, perNumberMpm })
+      })
+      .catch((err) => {
+        console.error("Failed to fetch messaging throughput", err)
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   const insertToken = (token: string) => {
     const el = textareaRef.current

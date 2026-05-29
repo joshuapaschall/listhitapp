@@ -3,6 +3,8 @@ import { assertCronAuth } from "@/lib/cron-auth"
 import { supabaseAdmin } from "@/lib/supabase/admin"
 import { sendShowingReminder } from "@/lib/showing-notifications"
 
+export const maxDuration = 300
+
 export async function POST(req: NextRequest) {
   try {
     assertCronAuth(req)
@@ -40,3 +42,5 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ checked: showings?.length || 0, sent })
 }
+
+export const GET = POST

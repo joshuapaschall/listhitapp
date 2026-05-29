@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import { TELNYX_API_URL, telnyxHeaders } from "@/lib/telnyx"
 import { getTelnyxApiKey } from "@/lib/voice-env"
+import { assertCronAuth } from "@/lib/cron-auth"
 
 async function fetchNumbers() {
   const numbers: any[] = []
@@ -37,12 +38,7 @@ async function upsertNumbers(numbers: any[], supabase: any) {
   if (error) throw error
 }
 
-export async function GET() {
-  return NextResponse.json(
-    { message: "Use POST to sync voice numbers" },
-    { status: 405, headers: { Allow: "POST" } }
-  )
-}
+export const maxDuration = 60
 
 export async function POST(request: NextRequest) {
   const auth = request.headers.get("authorization")
@@ -50,11 +46,22 @@ export async function POST(request: NextRequest) {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 
-  if (!secret || !serviceKey || !supabaseUrl || !getTelnyxApiKey()) {
+  if (!serviceKey || !supabaseUrl || !getTelnyxApiKey()) {
     return NextResponse.json({ error: "Server not configured" }, { status: 500 })
   }
 
-  if (auth !== `Bearer ${secret}`) {
+  let isAuthorized = Boolean(secret && auth === `Bearer ${secret}`)
+  if (!isAuthorized) {
+    try {
+      assertCronAuth(request)
+      isAuthorized = true
+    } catch (err) {
+      if (err instanceof Response) return err
+      throw err
+    }
+  }
+
+  if (!isAuthorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
@@ -69,3 +76,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: err.message || "Unknown error" }, { status: 500 })
   }
 }
+
+export const GET = POST

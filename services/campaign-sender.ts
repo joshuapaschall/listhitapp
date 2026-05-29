@@ -7,9 +7,9 @@ import { appendUnsubscribeFooter, buildUnsubscribeUrl } from "@/lib/unsubscribe"
 
 const log = createLogger("campaign-sender")
 
-const EMAIL_QUEUE_CONCURRENCY = Number(process.env.EMAIL_QUEUE_CONCURRENCY || 2)
+const EMAIL_QUEUE_CONCURRENCY = Number(process.env.EMAIL_QUEUE_CONCURRENCY || 50)
 const EMAIL_SEND_DELAY_MS = Number(
-  process.env.EMAIL_SEND_DELAY_MS ?? process.env.SENDFOX_SEND_DELAY_MS ?? 750,
+  process.env.EMAIL_SEND_DELAY_MS ?? process.env.SENDFOX_SEND_DELAY_MS ?? 0,
 )
 const EMAIL_RETRY_BACKOFF_MS = Number(
   process.env.EMAIL_RETRY_BACKOFF_MS ?? process.env.SENDFOX_RATE_BACKOFF_MS ?? 2000,
@@ -427,7 +427,6 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
       if (job.campaign_id) {
         await refreshCampaignStatus(job.campaign_id)
       }
-      await sleep(EMAIL_SEND_DELAY_MS)
     } catch (err: any) {
       console.error("Queue dispatch failed", {
         campaignId: job.campaign_id,
