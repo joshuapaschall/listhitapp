@@ -45,3 +45,5 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ requeued: data ?? 0 })
 }
+
+export const GET = POST

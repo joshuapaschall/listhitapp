@@ -23,11 +23,11 @@ type SmsQueueRecipient = {
   recipientId: string
   buyerId: string
   toNumber: string
+  body: string
 }
 
 type QueueSmsCampaignPayload = {
   campaignId: string
-  body: string
   mediaUrls?: string[]
   recipients: SmsQueueRecipient[]
 }
@@ -235,7 +235,6 @@ async function sendSingleCampaignSms({
 
 export async function queueSmsCampaign({
   campaignId,
-  body,
   mediaUrls,
   recipients,
 }: QueueSmsCampaignPayload) {
@@ -248,7 +247,7 @@ export async function queueSmsCampaign({
     buyer_id: recipient.buyerId,
     to_number: recipient.toNumber,
     payload: {
-      body,
+      body: recipient.body,
       mediaUrls,
       campaignId,
     },
@@ -256,24 +255,31 @@ export async function queueSmsCampaign({
     max_attempts: SMS_QUEUE_MAX_ATTEMPTS,
   }))
 
-  const { data, error } = await supabase
-    .from("sms_campaign_queue")
-    .upsert(rows, {
-      onConflict: "campaign_id,recipient_id,to_number",
-      ignoreDuplicates: true,
-    })
-    .select()
+  const queuedRows: any[] = []
+  const batchSize = 1000
+  for (let i = 0; i < rows.length; i += batchSize) {
+    const batch = rows.slice(i, i + batchSize)
+    const { data, error } = await supabase
+      .from("sms_campaign_queue")
+      .upsert(batch, {
+        onConflict: "campaign_id,recipient_id,to_number",
+        ignoreDuplicates: true,
+      })
+      .select()
 
-  if (error) {
-    console.error("Failed to queue SMS campaign", error)
-    throw error
+    if (error) {
+      console.error("Failed to queue SMS campaign", error)
+      throw error
+    }
+
+    queuedRows.push(...(data || []))
   }
 
   if (campaignId) {
     await supabase.from("campaigns").update({ status: "processing" }).eq("id", campaignId)
   }
 
-  return data || []
+  return queuedRows
 }
 
 export async function processSmsQueue(limit = 5, opts: { leaseSeconds?: number; workerId?: string } = {}) {

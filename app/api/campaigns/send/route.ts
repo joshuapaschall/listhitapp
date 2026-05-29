@@ -10,7 +10,7 @@ import { getCronRequestToken, isJwtLike } from "@/lib/cron-auth"
 import { linkifyHtml } from "@/lib/email/linkify-html"
 import { calculateSmsSegments } from "@/lib/sms-utils"
 import { formatPhoneE164 } from "@/lib/dedup-utils"
-import { processSmsQueue, queueSmsCampaign } from "@/services/sms-campaign-sender"
+import * as smsCampaignSender from "@/services/sms-campaign-sender"
 import { requireOrgContext } from "@/lib/auth/org-context"
 import { resolveCampaignSender, SenderNotVerifiedError } from "@/lib/email-sender-resolver"
 
@@ -520,34 +520,11 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      const bodies = Array.from(new Set(queuedRecipients.map((recipient) => recipient.body)))
-      if (bodies.length === 1) {
-        await queueSmsCampaign({
-          campaignId,
-          body: bodies[0],
-          mediaUrls,
-          recipients: queuedRecipients.map(({ recipientId, buyerId, toNumber }) => ({
-            recipientId,
-            buyerId,
-            toNumber,
-          })),
-        })
-      } else {
-        for (const body of bodies) {
-          await queueSmsCampaign({
-            campaignId,
-            body,
-            mediaUrls,
-            recipients: queuedRecipients
-              .filter((recipient) => recipient.body === body)
-              .map(({ recipientId, buyerId, toNumber }) => ({
-                recipientId,
-                buyerId,
-                toNumber,
-              })),
-          })
-        }
-      }
+      await smsCampaignSender.queueSmsCampaign({
+        campaignId,
+        mediaUrls,
+        recipients: queuedRecipients,
+      })
 
       const queuedRecipientIds = Array.from(new Set(queuedRecipients.map((recipient) => recipient.recipientId)))
       await supabase
@@ -564,7 +541,7 @@ export async function POST(request: NextRequest) {
         console.error("Error updating campaign status", statusErr)
       }
 
-      const dispatched = await processSmsQueue(5)
+      const dispatched = await smsCampaignSender.processSmsQueue(5)
       return new Response(
         JSON.stringify({ ok: true, queued: queuedRecipients.length, dispatched }),
         { status: 200 },
