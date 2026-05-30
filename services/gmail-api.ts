@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { google, gmail_v1 } from "googleapis"
 import { createMimeMessage } from "mimetext"
 import { supabaseAdmin } from "@/lib/supabase"

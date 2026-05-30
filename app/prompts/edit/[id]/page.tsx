@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client"
 
 import { useEffect, useState } from "react"
@@ -25,7 +24,7 @@ export default function EditPromptPage() {
   useEffect(() => {
     PromptService.getPrompt(id)
       .then((p) => {
-        if (p) setInitial({ name: p.name, description: p.description, prompt: p.prompt })
+        if (p) setInitial({ name: p.name, description: p.description ?? null, prompt: p.prompt })
       })
       .finally(() => setLoading(false))
   }, [id])

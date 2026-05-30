@@ -1,4 +1,3 @@
-// @ts-nocheck
 import crypto from "crypto"
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
@@ -212,7 +211,7 @@ async function storeEmailEvent(input: {
   if (!supabase) return
   await supabase
     .from("email_events")
-    .insert(
+    .upsert(
       {
         provider_message_id: input.messageId || null,
         sns_message_id: input.snsMessageId || null,

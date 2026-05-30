@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
@@ -163,13 +162,14 @@ export default function RecipientDrilldownSheet({
     let isActive = true
     setLoading(true)
 
-    supabase
-      .from("email_events")
-      .select("id,event_type,created_at,event_ts,payload")
-      .eq("campaign_id", campaignId)
-      .eq("recipient_id", recipient.id)
-      .order("created_at", { ascending: true })
-      .then(({ data, error }) => {
+    ;(async () => {
+      try {
+        const { data, error } = await supabase
+          .from("email_events")
+          .select("id,event_type,created_at,event_ts,payload")
+          .eq("campaign_id", campaignId)
+          .eq("recipient_id", recipient.id)
+          .order("created_at", { ascending: true })
         if (!isActive) return
         if (error) {
           toast({
@@ -181,10 +181,10 @@ export default function RecipientDrilldownSheet({
           return
         }
         setEvents(data || [])
-      })
-      .finally(() => {
+      } finally {
         if (isActive) setLoading(false)
-      })
+      }
+    })()
 
     return () => {
       isActive = false
