@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { FFmpeg } from "@ffmpeg/ffmpeg";
@@ -92,7 +91,7 @@ export async function convertVideoToMp4(file: File): Promise<File> {
   await ffmpeg.exec(args);
 
   const data = await ffmpeg.readFile(outputName) as Uint8Array;
-  const blob = new Blob([data.buffer], { type: "video/mp4" });
+  const blob = new Blob([data], { type: "video/mp4" });
 
   ffmpeg.deleteFile(outputName).catch(() => {});
   ffmpeg.deleteFile(inputName).catch(() => {});
@@ -124,7 +123,7 @@ export async function convertAudioToMp3(file: File): Promise<File> {
   await ffmpeg.exec(args);
 
   const data = await ffmpeg.readFile(outputName) as Uint8Array;
-  const blob = new Blob([data.buffer], { type: "audio/mpeg" });
+  const blob = new Blob([data], { type: "audio/mpeg" });
 
   ffmpeg.deleteFile(outputName).catch(() => {});
   ffmpeg.deleteFile(inputName).catch(() => {});
