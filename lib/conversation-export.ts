@@ -1,4 +1,3 @@
-// @ts-nocheck
 import type { Message } from "@/lib/supabase"
 import Papa from "papaparse"
 
@@ -12,22 +11,22 @@ interface Row {
 
 export function formatConversationAsCSV(messages: Message[]): string {
   const rows: Row[] = messages.map((m) => ({
-    created_at: m.created_at,
-    direction: m.direction,
-    from_number: m.from_number,
-    to_number: m.to_number,
-    body: m.body,
+    created_at: m.created_at ?? "",
+    direction: m.direction ?? "",
+    from_number: m.from_number ?? null,
+    to_number: m.to_number ?? null,
+    body: m.body ?? null,
   }))
   return Papa.unparse(rows)
 }
 
 export function formatConversationAsJSON(messages: Message[]): string {
   const rows: Row[] = messages.map((m) => ({
-    created_at: m.created_at,
-    direction: m.direction,
-    from_number: m.from_number,
-    to_number: m.to_number,
-    body: m.body,
+    created_at: m.created_at ?? "",
+    direction: m.direction ?? "",
+    from_number: m.from_number ?? null,
+    to_number: m.to_number ?? null,
+    body: m.body ?? null,
   }))
   return JSON.stringify(rows, null, 2)
 }

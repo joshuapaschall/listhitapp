@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { supabase } from "./supabase/index";
 import { formatPhoneE164 } from "./dedup-utils";
 
@@ -6,7 +5,7 @@ export interface CallValidationResult {
   allowed: boolean;
   warnings: string[];
   blockers: string[];
-  metadata?: {
+  metadata: {
     isBusinessHours?: boolean;
     lastCallTime?: string;
     callCount24h?: number;
@@ -79,7 +78,8 @@ export class CallValidationService {
       return {
         allowed: false,
         warnings: [],
-        blockers: ["Validation system error - please try again"]
+        blockers: ["Validation system error - please try again"],
+        metadata: {}
       };
     }
   }

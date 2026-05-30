@@ -1,4 +1,3 @@
-// @ts-nocheck
 import type { Buyer } from "@/lib/supabase"
 
 export function exportBuyersToCSV(buyers: Buyer[], filename = "buyers-export.csv") {
@@ -59,7 +58,7 @@ export function exportBuyersToCSV(buyers: Buyer[], filename = "buyers-export.csv
     buyer.timeline || "",
     buyer.source || "",
     buyer.status || "",
-    new Date(buyer.created_at).toLocaleDateString(),
+    buyer.created_at ? new Date(buyer.created_at).toLocaleDateString() : "",
   ])
 
   // Combine headers and rows
