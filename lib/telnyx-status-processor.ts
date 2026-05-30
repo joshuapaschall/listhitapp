@@ -10,6 +10,20 @@ import { supabaseAdmin } from "@/lib/supabase"
  *
  * Returns a Response object that the route handler should return to Telnyx.
  */
+function isHardFailureStatus(status: string) {
+  return status === "delivery_failed" || status === "sending_failed" || status === "failed"
+}
+
+function isClearLandline(lineType: string | null) {
+  if (!lineType) return false
+  const normalized = lineType.trim().toLowerCase()
+  return (
+    normalized === "landline" ||
+    normalized.includes("landline") ||
+    normalized === "fixed line"
+  )
+}
+
 export async function processTelnyxStatusEvent(body: any): Promise<Response> {
   const eventType = body?.data?.event_type as string | undefined
   const payload = body?.data?.payload
@@ -22,6 +36,8 @@ export async function processTelnyxStatusEvent(body: any): Promise<Response> {
       : null
   const status = (finalToStatus ?? payload?.status) as string | undefined
   const errorDetail = payload?.errors?.[0]?.detail as string | undefined
+  const rawLineType = payload?.to?.[0]?.line_type
+  const lineType = typeof rawLineType === "string" && rawLineType.length ? rawLineType : null
 
   if (!messageId || !status) {
     return new Response("Missing params", { status: 400 })
@@ -29,7 +45,7 @@ export async function processTelnyxStatusEvent(body: any): Promise<Response> {
 
   const { data: existing } = await supabaseAdmin
     .from("campaign_recipients")
-    .select("id,delivered_at,rejected_at,delivery_delayed_at,actual_cost_usd")
+    .select("id,buyer_id,delivered_at,rejected_at,delivery_delayed_at,actual_cost_usd")
     .eq("provider_id", messageId)
     .maybeSingle()
 
@@ -40,6 +56,10 @@ export async function processTelnyxStatusEvent(body: any): Promise<Response> {
 
   const updates: Record<string, any> = {
     status,
+  }
+
+  if (lineType) {
+    updates.line_type = lineType
   }
 
   if (errorDetail) {
@@ -58,7 +78,7 @@ export async function processTelnyxStatusEvent(body: any): Promise<Response> {
     updates.delivered_at = now
   }
   if (
-    (status === "delivery_failed" || status === "sending_failed" || status === "failed") &&
+    isHardFailureStatus(status) &&
     !existing.rejected_at
   ) {
     updates.rejected_at = now
@@ -99,6 +119,11 @@ export async function processTelnyxStatusEvent(body: any): Promise<Response> {
   if (error) {
     console.error("❌ Failed to update campaign recipient:", error)
     return new Response("Error", { status: 500 })
+  }
+
+  if (isHardFailureStatus(status) && isClearLandline(lineType)) {
+    const { suppressBuyerSms } = await import("@/lib/sms/suppress")
+    await suppressBuyerSms(existing.buyer_id, "landline")
   }
 
   return new Response(null, { status: 204 })

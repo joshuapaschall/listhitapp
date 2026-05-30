@@ -29,7 +29,7 @@ vi.mock("../lib/supabase", () => {
       }
     },
   }
-  return { supabase: client }
+  return { supabase: client, supabaseAdmin: client }
 })
 
 describe("Telnyx status webhook", () => {
@@ -38,6 +38,7 @@ describe("Telnyx status webhook", () => {
       {
         id: "r1",
         provider_id: "m1",
+        buyer_id: "b1",
         delivered_at: null,
         rejected_at: null,
         delivery_delayed_at: null,
