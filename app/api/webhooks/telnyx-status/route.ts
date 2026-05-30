@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { NextRequest } from "next/server"
 import { verifyTelnyxRequest } from "@/lib/telnyx"
 import { processTelnyxStatusEvent } from "@/lib/telnyx-status-processor"

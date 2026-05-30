@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { supabase, type Buyer, type MessageThread } from "@/lib/supabase"
 
 export interface ThreadWithBuyer extends MessageThread {
@@ -99,7 +98,13 @@ export async function listAutosentMessages(): Promise<AutosentMessage[]> {
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
   if (error) throw error
-  return (data || []) as AutosentMessage[]
+  return (data || []).map((m: any) => ({
+    ...m,
+    buyers: Array.isArray(m.buyers) ? (m.buyers[0] ?? null) : (m.buyers ?? null),
+    message_threads: Array.isArray(m.message_threads)
+      ? (m.message_threads[0] ?? null)
+      : (m.message_threads ?? null),
+  })) as AutosentMessage[]
 }
 
 export async function countUnreadThreads(): Promise<number> {
