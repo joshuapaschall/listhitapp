@@ -12,60 +12,11 @@ import ScheduleShowingModal from "@/components/showings/schedule-showing-modal"
 import { Sidebar } from "@/components/layout/sidebar"
 import { Header } from "@/components/layout/header"
 import {
-  Home,
   Users,
   Building,
   DollarSign,
   Calendar,
-  BarChart3,
-  Target,
-  Inbox,
 } from "lucide-react"
-
-const navigation = [
-  {
-    title: "Dashboard",
-    icon: Home,
-    href: "/dashboard",
-    badge: null,
-  },
-  {
-    title: "Buyers",
-    icon: Users,
-    href: "/",
-    badge: "247",
-  },
-  {
-    title: "Properties",
-    icon: Home,
-    href: "/properties",
-    badge: "156",
-  },
-  {
-    title: "Showings",
-    icon: Calendar,
-    href: "/showings",
-    badge: "5",
-  },
-  {
-    title: "Campaigns",
-    icon: Target,
-    href: "/campaigns",
-    badge: null,
-  },
-  {
-    title: "Email",
-    icon: Inbox,
-    href: "/gmail",
-    badge: null,
-  },
-  {
-    title: "Reports",
-    icon: BarChart3,
-    href: "/reports/deliverability",
-    badge: null,
-  },
-]
 
 const quickActions = [
   { label: "Add Buyer", icon: Users, action: "add-buyer" },

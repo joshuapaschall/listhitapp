@@ -16,12 +16,10 @@ import {
   Building,
   DollarSign,
   Calendar,
-  BarChart3,
   ChevronLeft,
   ChevronRight,
   Phone,
   Target,
-  Shield,
 } from "lucide-react"
 import {
   Accordion,
@@ -89,23 +87,7 @@ const navigation = [
     href: "/offers",
     badge: null,
   },
-  {
-    title: "Reports",
-    icon: BarChart3,
-    href: "/reports",
-    badge: null,
-  },
-  {
-    title: "Admin",
-    icon: Shield,
-    items: [
-      { title: "Health", href: "/api/diag/health", badge: null as string | null },
-    ],
-    badge: null,
-  },
 ]
-
-
 
 interface SidebarProps {
   className?: string
