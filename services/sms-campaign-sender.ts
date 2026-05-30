@@ -5,6 +5,7 @@ import { formatPhoneE164, normalizePhone } from "@/lib/dedup-utils"
 import { TELNYX_API_URL, getTelnyxApiKey } from "@/lib/voice-env"
 import { insertNotification } from "@/lib/notifications"
 import { evaluateSmsCampaignSafety, type SmsSafetyVerdict } from "@/lib/sms/sms-safety-guard"
+import { isWithinQuietHours, nextSendTime, SMS_CAMPAIGN_MPM } from "@/lib/sms/area-code-timezone"
 import { suppressBuyerSms } from "@/lib/sms/suppress"
 import { ensurePublicMediaUrls } from "@/utils/mms.server"
 
@@ -326,7 +327,9 @@ export async function queueSmsCampaign({
   const supabase = requireAdmin()
   if (!recipients.length) return []
 
-  const rows = recipients.map((recipient) => ({
+  const spacingMs = Math.ceil(60000 / SMS_CAMPAIGN_MPM)
+  const scheduledStart = Date.now()
+  const rows = recipients.map((recipient, idx) => ({
     campaign_id: campaignId,
     recipient_id: recipient.recipientId,
     buyer_id: recipient.buyerId,
@@ -337,6 +340,7 @@ export async function queueSmsCampaign({
       campaignId,
     },
     status: "pending",
+    scheduled_for: new Date(scheduledStart + idx * spacingMs).toISOString(),
     max_attempts: SMS_QUEUE_MAX_ATTEMPTS,
   }))
 
@@ -418,6 +422,27 @@ export async function processSmsQueue(limit = 5, opts: { leaseSeconds?: number; 
     }
     const attemptNumber = Number(job.attempts ?? 0) + 1
     const maxAttempts = Number(job.max_attempts ?? SMS_QUEUE_MAX_ATTEMPTS)
+    const now = new Date()
+    if (!isWithinQuietHours(job.to_number, now)) {
+      const scheduledFor = nextSendTime(job.to_number, now).toISOString()
+      await supabase
+        .from("sms_campaign_queue")
+        .update({
+          status: "pending",
+          scheduled_for: scheduledFor,
+          locked_at: null,
+          lock_expires_at: null,
+          locked_by: null,
+        })
+        .eq("id", job.id)
+      log("sms", "Rescheduled SMS outside recipient quiet hours", {
+        jobId: job.id,
+        campaignId: job.campaign_id,
+        toNumber: job.to_number,
+        scheduledFor,
+      })
+      continue
+    }
     try {
       const payload = job.payload as SmsQueuePayload
       if (!payload?.body) {
