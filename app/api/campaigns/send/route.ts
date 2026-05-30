@@ -501,7 +501,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const queuedRecipients: Array<{
+      let queuedRecipients: Array<{
         recipientId: string
         buyerId: string
         toNumber: string
@@ -561,6 +561,26 @@ export async function POST(request: NextRequest) {
             body: smsBody,
           })
         }
+      }
+
+      // De-duplicate across campaign recipients by to_number, keeping the first occurrence.
+      const queuedRecipientCountBeforeDedup = queuedRecipients.length
+      const seenSmsNumbers = new Set<string>()
+      queuedRecipients = queuedRecipients.filter((recipient) => {
+        const normalizedNumber = formatPhoneE164(recipient.toNumber)
+        if (!normalizedNumber || seenSmsNumbers.has(normalizedNumber)) {
+          return false
+        }
+        seenSmsNumbers.add(normalizedNumber)
+        recipient.toNumber = normalizedNumber
+        return true
+      })
+      const duplicateCount = queuedRecipientCountBeforeDedup - queuedRecipients.length
+      if (duplicateCount > 0) {
+        console.log("Removed duplicate SMS recipients before queueing", {
+          campaignId,
+          duplicateCount,
+        })
       }
 
       if (!queuedRecipients.length) {
