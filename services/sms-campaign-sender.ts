@@ -3,6 +3,9 @@ import { createLogger } from "@/lib/logger"
 import { renderTemplate } from "@/lib/utils"
 import { formatPhoneE164, normalizePhone } from "@/lib/dedup-utils"
 import { TELNYX_API_URL, getTelnyxApiKey } from "@/lib/voice-env"
+import { insertNotification } from "@/lib/notifications"
+import { evaluateSmsCampaignSafety, type SmsSafetyVerdict } from "@/lib/sms/sms-safety-guard"
+import { suppressBuyerSms } from "@/lib/sms/suppress"
 import { ensurePublicMediaUrls } from "@/utils/mms.server"
 
 const log = createLogger("sms-campaign-sender")
@@ -84,8 +87,86 @@ async function updateRecipientStatus(
     .eq("id", recipientId)
 }
 
+async function countSmsCampaignRecipients(campaignId: string) {
+  const supabase = requireAdmin()
+  const [{ count: sent }, { count: failures }, { count: optOuts }] = await Promise.all([
+    supabase
+      .from("campaign_recipients")
+      .select("id", { count: "exact", head: true })
+      .eq("campaign_id", campaignId)
+      .not("sent_at", "is", null),
+    supabase
+      .from("campaign_recipients")
+      .select("id", { count: "exact", head: true })
+      .eq("campaign_id", campaignId)
+      .not("rejected_at", "is", null),
+    supabase
+      .from("campaign_recipients")
+      .select("id", { count: "exact", head: true })
+      .eq("campaign_id", campaignId)
+      .not("unsubscribed_at", "is", null),
+  ])
+
+  return {
+    sent: sent || 0,
+    failures: failures || 0,
+    optOuts: optOuts || 0,
+  }
+}
+
+async function pauseSmsCampaignForSafety(
+  campaignId: string,
+  verdict: SmsSafetyVerdict & { trip: true; reason: "failure" | "optout" },
+) {
+  const supabase = requireAdmin()
+  const { data: campaign } = await supabase
+    .from("campaigns")
+    .select("status")
+    .eq("id", campaignId)
+    .maybeSingle()
+
+  if (campaign?.status === "paused_by_safety") return
+
+  await supabase
+    .from("campaigns")
+    .update({ status: "paused_by_safety" })
+    .eq("id", campaignId)
+
+  await supabase
+    .from("sms_campaign_queue")
+    .update({
+      status: "paused",
+      locked_at: null,
+      lock_expires_at: null,
+      locked_by: null,
+    })
+    .eq("campaign_id", campaignId)
+    .in("status", ["pending", "processing"])
+
+  await insertNotification({
+    type: "campaign_paused_safety",
+    title: "SMS campaign paused for safety",
+    body: `Auto-paused: ${verdict.reason} rate exceeded the SMS safety threshold.`,
+    metadata: {
+      campaignId,
+      channel: "sms",
+      reason: verdict.reason,
+      failureRate: verdict.failureRate,
+      optOutRate: verdict.optOutRate,
+    },
+  })
+}
+
 async function refreshCampaignStatus(campaignId: string) {
   const supabase = requireAdmin()
+  const { data: campaign } = await supabase
+    .from("campaigns")
+    .select("status")
+    .eq("id", campaignId)
+    .maybeSingle()
+
+  if (campaign?.status === "paused_by_safety") return
+
   const { count: pending } = await supabase
     .from("sms_campaign_queue")
     .select("id", { count: "exact", head: true })
@@ -176,12 +257,16 @@ async function sendSingleCampaignSms({
     const text = await response.text()
     console.error("Telnyx error", text)
     let msg = `Telnyx API error: ${response.status}`
+    let telnyxCode: string | undefined
     try {
       const err = JSON.parse(text)
+      const code = err.errors?.[0]?.code
+      if (code !== undefined && code !== null) telnyxCode = String(code)
       if (err.errors && err.errors[0]?.detail) msg = err.errors[0].detail
     } catch {}
-    const error = new Error(msg) as Error & { status?: number }
+    const error = new Error(msg) as Error & { status?: number; telnyxCode?: string }
     error.status = response.status
+    if (telnyxCode) error.telnyxCode = telnyxCode
     throw error
   }
 
@@ -302,10 +387,35 @@ export async function processSmsQueue(limit = 5, opts: { leaseSeconds?: number; 
     return { processed: 0, sent: 0 }
   }
 
+  const pausedCampaignIds = new Set<string>()
+  const campaignIds = Array.from(
+    new Set(
+      (jobs as any[])
+        .map((job) => job.campaign_id)
+        .filter((campaignId): campaignId is string => Boolean(campaignId)),
+    ),
+  )
+
+  for (const campaignId of campaignIds) {
+    const counts = await countSmsCampaignRecipients(campaignId)
+    const verdict = evaluateSmsCampaignSafety(counts)
+    if (verdict.trip && verdict.reason) {
+      pausedCampaignIds.add(campaignId)
+      await pauseSmsCampaignForSafety(campaignId, {
+        ...verdict,
+        trip: true,
+        reason: verdict.reason,
+      })
+    }
+  }
+
   let sent = 0
 
   for (const rawJob of jobs) {
     const job = rawJob as any
+    if (job.campaign_id && pausedCampaignIds.has(job.campaign_id)) {
+      continue
+    }
     const attemptNumber = Number(job.attempts ?? 0) + 1
     const maxAttempts = Number(job.max_attempts ?? SMS_QUEUE_MAX_ATTEMPTS)
     try {
@@ -369,6 +479,9 @@ export async function processSmsQueue(limit = 5, opts: { leaseSeconds?: number; 
       })
       const errorDetails = err?.message || String(err)
       const nowIso = new Date().toISOString()
+      if (err?.telnyxCode === "40300") {
+        await suppressBuyerSms(job.buyer_id, "carrier_opt_out")
+      }
       const retryable = isRetryableError(err)
       const updates: Record<string, any> = {
         attempts: attemptNumber,
@@ -392,7 +505,7 @@ export async function processSmsQueue(limit = 5, opts: { leaseSeconds?: number; 
           error: errorDetails,
         })
       }
-      if (job.campaign_id) {
+      if (job.campaign_id && !pausedCampaignIds.has(job.campaign_id)) {
         await refreshCampaignStatus(job.campaign_id)
       }
     }

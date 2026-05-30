@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getCronRequestToken, isJwtLike } from "@/lib/cron-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { processEmailQueue } from "@/services/campaign-sender"
+import { processSmsQueue } from "@/services/sms-campaign-sender"
 import { assertServer } from "@/utils/assert-server"
 
 assertServer()
@@ -55,7 +56,7 @@ export async function POST(
 
   let campaignQuery = supabaseAdmin
     .from("campaigns")
-    .select("id,status,user_id")
+    .select("id,status,user_id,channel")
     .eq("id", params.id)
   if (authSource === "user_jwt" && userId) {
     campaignQuery = campaignQuery.eq("user_id", userId)
@@ -73,8 +74,9 @@ export async function POST(
     )
   }
 
+  const queueTable = campaign.channel === "sms" ? "sms_campaign_queue" : "email_campaign_queue"
   const { count, error: queueError } = await supabaseAdmin
-    .from("email_campaign_queue")
+    .from(queueTable)
     .update(
       {
         status: "pending",
@@ -107,7 +109,11 @@ export async function POST(
     )
   }
 
-  await processEmailQueue(3)
+  if (campaign.channel === "sms") {
+    await processSmsQueue(5)
+  } else {
+    await processEmailQueue(3)
+  }
 
   return NextResponse.json({ ok: true, resumed: count || 0 })
 }
