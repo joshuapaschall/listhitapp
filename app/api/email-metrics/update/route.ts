@@ -9,7 +9,9 @@ export async function POST(req: NextRequest) {
     try {
       const body = await req.json()
       userId = body.userId
-    } catch {}
+    } catch (err) {
+      console.error("email-metrics/update: failed to parse request body:", err)
+    }
     if (!userId) {
       const cookieStore = cookies()
       const supabase = createRouteHandlerClient({ cookies: () => cookieStore })

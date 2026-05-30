@@ -101,7 +101,9 @@ export async function POST(request: NextRequest) {
         } else if (data.error?.message) {
           msg = data.error.message
         }
-      } catch {}
+      } catch (err) {
+        console.error("messages/schedule: failed to parse Telnyx error response:", err)
+      }
       return new Response(JSON.stringify({ error: msg }), { status: res.status })
     }
 

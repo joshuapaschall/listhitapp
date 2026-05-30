@@ -264,7 +264,9 @@ async function sendSingleCampaignSms({
       const code = err.errors?.[0]?.code
       if (code !== undefined && code !== null) telnyxCode = String(code)
       if (err.errors && err.errors[0]?.detail) msg = err.errors[0].detail
-    } catch {}
+    } catch (err) {
+      console.error("sms-campaign-sender: failed to parse Telnyx error response:", err)
+    }
     const error = new Error(msg) as Error & { status?: number; telnyxCode?: string }
     error.status = response.status
     if (telnyxCode) error.telnyxCode = telnyxCode

@@ -12,6 +12,7 @@ import {
 import { Check, ChevronDown, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import ConfirmDialog from "@/components/ui/confirm-dialog"
 
 interface Account {
   id: string
@@ -45,6 +46,7 @@ function getAvatarColor(email: string): string {
 
 export default function AccountSwitcher({ accounts }: AccountSwitcherProps) {
   const [open, setOpen] = useState(false)
+  const [pendingDisconnect, setPendingDisconnect] = useState<Account | null>(null)
   const queryClient = useQueryClient()
   const active = accounts.find((a) => a.is_active)
   const inactive = accounts.filter((a) => !a.is_active)
@@ -63,10 +65,14 @@ export default function AccountSwitcher({ accounts }: AccountSwitcherProps) {
     }
   }
 
-  const handleDisconnect = async (e: React.MouseEvent, accountId: string, email: string) => {
+  const handleDisconnectClick = (e: React.MouseEvent, account: Account) => {
     e.preventDefault()
     e.stopPropagation()
-    if (!confirm(`Disconnect ${email}?`)) return
+    setOpen(false)
+    setPendingDisconnect(account)
+  }
+
+  const performDisconnect = async (accountId: string) => {
     try {
       const res = await fetch(`/api/gmail/accounts/${accountId}`, { method: "DELETE" })
       if (!res.ok) throw new Error("Failed to disconnect")
@@ -129,7 +135,7 @@ export default function AccountSwitcher({ accounts }: AccountSwitcherProps) {
             </div>
             <p className="min-w-0 flex-1 truncate text-sm">{acc.email}</p>
             <button
-              onClick={(e) => handleDisconnect(e, acc.id, acc.email)}
+              onClick={(e) => handleDisconnectClick(e, acc)}
               className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
               title="Disconnect"
             >
@@ -147,6 +153,21 @@ export default function AccountSwitcher({ accounts }: AccountSwitcherProps) {
           </a>
         </DropdownMenuItem>
       </DropdownMenuContent>
+      <ConfirmDialog
+        open={pendingDisconnect !== null}
+        onOpenChange={(o) => !o && setPendingDisconnect(null)}
+        destructive
+        title="Disconnect account?"
+        description={
+          pendingDisconnect
+            ? `${pendingDisconnect.email} will be disconnected from ListHit.`
+            : undefined
+        }
+        actionText="Disconnect"
+        onConfirm={async () => {
+          if (pendingDisconnect) await performDisconnect(pendingDisconnect.id)
+        }}
+      />
     </DropdownMenu>
   )
 }

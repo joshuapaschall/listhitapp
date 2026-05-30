@@ -33,8 +33,7 @@ export function getFfmpegPath(): string | null {
 
   try {
     // NOTE: keep this import dynamic so it doesn't break edge runtimes
-    // @ts-ignore
-    const ffmpegStatic = require("ffmpeg-static") as string | null
+    const ffmpegStatic: string | null = require("ffmpeg-static")
     candidates.push({ path: ffmpegStatic })
   } catch {
     // ignore

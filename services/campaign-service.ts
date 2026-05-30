@@ -182,7 +182,9 @@ export class CampaignService {
       try {
         const data = await res.json()
         if (data?.error) errorMsg = data.error
-      } catch {}
+      } catch (err) {
+        console.error("campaign-service: failed to parse send-campaign error response:", err)
+      }
       throw new Error(errorMsg)
     }
   }
