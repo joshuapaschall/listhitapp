@@ -8,7 +8,7 @@ const log = createLogger("api:campaigns:duplicate")
 
 export async function POST(
   _req: Request,
-  { params }: { params: { campaignId: string } },
+  { params }: { params: { id: string } },
 ) {
   try {
     const cookieStore = cookies()
@@ -25,7 +25,7 @@ export async function POST(
     const { data: campaign, error: fetchError } = await supabase
       .from("campaigns")
       .select("*")
-      .eq("id", params.campaignId)
+      .eq("id", params.id)
       .single()
 
     if (fetchError || !campaign || campaign.user_id !== user.id || campaign.deleted_at) {

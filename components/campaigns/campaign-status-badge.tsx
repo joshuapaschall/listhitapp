@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils"
 
 // Status values the backend may set on the `campaigns` table. Keep in sync with:
 // - app/api/campaigns/send/route.ts (sets "pending", "processing")
-// - services/campaign-sender.ts (sets "processing", "pending", "sent", "error")
+// - services/campaign-sender.ts (sets "processing", "pending", "sent", "error" and safety breaker "paused_by_safety")
 // - services/sms-campaign-sender.ts (sets "processing")
 // - draft state from user creation
 // - scheduled state for future-dated sends
@@ -17,6 +17,7 @@ type KnownStatus =
   | "sent"
   | "error"
   | "completed_with_errors"
+  | "paused_by_safety"
 
 type CampaignStatusBadgeProps = {
   status: KnownStatus | string | null | undefined
@@ -60,6 +61,11 @@ const statusConfig: Record<KnownStatus, { label: string; className: string; icon
   completed_with_errors: {
     label: "Sent with errors",
     className: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+    icon: <AlertTriangle className="size-3" />,
+  },
+  paused_by_safety: {
+    label: "Paused (safety)",
+    className: "bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300",
     icon: <AlertTriangle className="size-3" />,
   },
 }

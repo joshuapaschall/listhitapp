@@ -4,6 +4,8 @@ import { renderTemplate } from "@/lib/utils"
 import { sendSesEmail } from "@/lib/ses"
 import { getSesQuota } from "@/lib/ses-quota"
 import { appendUnsubscribeFooter, buildUnsubscribeUrl } from "@/lib/unsubscribe"
+import { evaluateCampaignSafety, type CampaignSafetyVerdict } from "@/lib/email/deliverability-guard"
+import { insertNotification } from "@/lib/notifications"
 
 const log = createLogger("campaign-sender")
 
@@ -259,6 +261,14 @@ async function updateRecipientStatus(
 
 async function refreshCampaignStatus(campaignId: string) {
   const supabase = requireAdmin()
+  const { data: campaign } = await supabase
+    .from("campaigns")
+    .select("status")
+    .eq("id", campaignId)
+    .maybeSingle()
+
+  if (campaign?.status === "paused_by_safety") return
+
   const { count: pending } = await supabase
     .from("email_campaign_queue")
     .select("id", { count: "exact", head: true })
@@ -276,6 +286,75 @@ async function refreshCampaignStatus(campaignId: string) {
   } else {
     await supabase.from("campaigns").update({ status: "processing" }).eq("id", campaignId)
   }
+}
+
+async function countCampaignRecipients(campaignId: string) {
+  const supabase = requireAdmin()
+  const [{ count: sent }, { count: hardBounces }, { count: complaints }] = await Promise.all([
+    supabase
+      .from("campaign_recipients")
+      .select("id", { count: "exact", head: true })
+      .eq("campaign_id", campaignId)
+      .not("sent_at", "is", null),
+    supabase
+      .from("campaign_recipients")
+      .select("id", { count: "exact", head: true })
+      .eq("campaign_id", campaignId)
+      .eq("bounce_type", "Permanent"),
+    supabase
+      .from("campaign_recipients")
+      .select("id", { count: "exact", head: true })
+      .eq("campaign_id", campaignId)
+      .not("complained_at", "is", null),
+  ])
+
+  return {
+    sent: sent || 0,
+    hardBounces: hardBounces || 0,
+    complaints: complaints || 0,
+  }
+}
+
+async function pauseCampaignForSafety(
+  campaignId: string,
+  verdict: CampaignSafetyVerdict & { trip: true; reason: "bounce" | "complaint" },
+) {
+  const supabase = requireAdmin()
+  const { data: campaign } = await supabase
+    .from("campaigns")
+    .select("status")
+    .eq("id", campaignId)
+    .maybeSingle()
+
+  if (campaign?.status === "paused_by_safety") return
+
+  await supabase
+    .from("campaigns")
+    .update({ status: "paused_by_safety" })
+    .eq("id", campaignId)
+
+  await supabase
+    .from("email_campaign_queue")
+    .update({
+      status: "paused",
+      locked_at: null,
+      lock_expires_at: null,
+      locked_by: null,
+    })
+    .eq("campaign_id", campaignId)
+    .in("status", ["pending", "processing"])
+
+  await insertNotification({
+    type: "campaign_paused_safety",
+    title: "Campaign paused for safety",
+    body: `Auto-paused: ${verdict.reason} rate exceeded the safety threshold.`,
+    metadata: {
+      campaignId,
+      reason: verdict.reason,
+      bounceRate: verdict.bounceRate,
+      complaintRate: verdict.complaintRate,
+    },
+  })
 }
 
 export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number; workerId?: string } = {}) {
@@ -296,6 +375,24 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
 
   if (!jobs || jobs.length === 0) {
     return { processed: 0, sent: 0 }
+  }
+
+  const pausedCampaignIds = new Set<string>()
+  const campaignIds = Array.from(
+    new Set(
+      (jobs as any[])
+        .map((job) => job.campaign_id)
+        .filter((campaignId): campaignId is string => Boolean(campaignId)),
+    ),
+  )
+
+  for (const campaignId of campaignIds) {
+    const counts = await countCampaignRecipients(campaignId)
+    const verdict = evaluateCampaignSafety(counts)
+    if (verdict.trip && verdict.reason) {
+      pausedCampaignIds.add(campaignId)
+      await pauseCampaignForSafety(campaignId, { ...verdict, trip: true, reason: verdict.reason })
+    }
   }
 
   let sent = 0
@@ -344,6 +441,9 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
 
   for (const rawJob of jobs) {
     const job = rawJob as any
+    if (job.campaign_id && pausedCampaignIds.has(job.campaign_id)) {
+      continue
+    }
     let currentContactEmail: string | null = null
     const attemptNumber = Number(job.attempts ?? 0) + 1
     const maxAttempts = Number(job.max_attempts ?? EMAIL_QUEUE_MAX_ATTEMPTS)
@@ -424,7 +524,7 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
         sent_at: sentAt,
         provider_id: providerId,
       })
-      if (job.campaign_id) {
+      if (job.campaign_id && !pausedCampaignIds.has(job.campaign_id)) {
         await refreshCampaignStatus(job.campaign_id)
       }
     } catch (err: any) {
@@ -458,7 +558,7 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
           error: errorDetails,
         })
       }
-      if (job.campaign_id) {
+      if (job.campaign_id && !pausedCampaignIds.has(job.campaign_id)) {
         await refreshCampaignStatus(job.campaign_id)
       }
     }
