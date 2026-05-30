@@ -24,8 +24,6 @@ describe("dashboard kpis", () => {
       "voicemailsLeft",
       "emailsSent",
       "emailsSentDelta",
-      "emailsReceived",
-      "emailsReceivedDelta",
       "emailsOpened",
       "emailBounces",
       "openRate",

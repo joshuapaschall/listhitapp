@@ -86,7 +86,7 @@ export default function ChartsSection({
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center">
-            Emails Sent vs. Received
+            Emails Sent
             <Delta delta={emailTrends.delta} />
           </CardTitle>
         </CardHeader>
@@ -97,7 +97,6 @@ export default function ChartsSection({
               <YAxis stroke="hsl(var(--muted-foreground))" />
               <Tooltip />
               <Line type="monotone" dataKey="sent" name="Sent" stroke="hsl(var(--primary))" strokeWidth={2} />
-              <Line type="monotone" dataKey="received" name="Received" stroke="hsl(var(--muted-foreground))" strokeWidth={2} />
             </LineChart>
           </ResponsiveContainer>
         </CardContent>

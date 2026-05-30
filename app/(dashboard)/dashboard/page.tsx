@@ -42,7 +42,6 @@ import TextsReceivedCard from "@/components/dashboard/kpi-cards/TextsReceivedCar
 import CallsMadeCard from "@/components/dashboard/kpi-cards/CallsMadeCard"
 import CallsReceivedCard from "@/components/dashboard/kpi-cards/CallsReceivedCard"
 import EmailsSentCard from "@/components/dashboard/kpi-cards/EmailsSentCard"
-import EmailsReceivedCard from "@/components/dashboard/kpi-cards/EmailsReceivedCard"
 import CampaignsRunningCard from "@/components/dashboard/kpi-cards/CampaignsRunningCard"
 import TotalContactsCard from "@/components/dashboard/kpi-cards/TotalContactsCard"
 import OffersCreatedCard from "@/components/dashboard/kpi-cards/OffersCreatedCard"
@@ -137,7 +136,6 @@ export default function DashboardPage() {
             </KPISection>
             <KPISection title="Email Metrics" icon={Mail} shade="even">
               <EmailsSentCard value={kpis.emailsSent} />
-              <EmailsReceivedCard value={kpis.emailsReceived} />
               <OpenRateCard value={kpis.openRate} />
               <ClickRateCard value={kpis.clickRate} />
               <BounceRateCard value={kpis.bounceRate} />
