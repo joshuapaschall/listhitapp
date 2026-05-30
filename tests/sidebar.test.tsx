@@ -1,14 +1,11 @@
 /** @jest-environment jsdom */
-import { render, screen, fireEvent } from "@testing-library/react"
+import React from "react"
+import { render, screen } from "@testing-library/react"
 import { Sidebar } from "../components/layout/sidebar"
 
-const roleMock = vi.fn()
-const invalidateQueries = vi.fn()
+(globalThis as typeof globalThis & { React: typeof React }).React = React
 
-vi.mock("../hooks/use-user-role", () => ({
-  __esModule: true,
-  default: () => roleMock(),
-}))
+const invalidateQueries = vi.fn()
 
 vi.mock("@tanstack/react-query", () => ({
   useQuery: vi.fn(() => ({ data: 0 })),
@@ -21,18 +18,12 @@ vi.mock("../lib/supabase", () => {
   return { supabase: client, supabaseAdmin: client }
 })
 
-describe("Sidebar admin links", () => {
-  test("shows admin navigation when role is admin", () => {
-    roleMock.mockReturnValue("admin")
+describe("Sidebar navigation", () => {
+  test("does not render removed reports or admin links", () => {
     render(<Sidebar />)
-    fireEvent.click(screen.getByText("Admin"))
-    expect(screen.getByText("Users")).toBeTruthy()
-    expect(screen.getByText("Permissions")).toBeTruthy()
-  })
 
-  test("hides admin navigation for users", () => {
-    roleMock.mockReturnValue("user")
-    render(<Sidebar />)
+    expect(screen.queryByText("Reports")).toBeNull()
     expect(screen.queryByText("Admin")).toBeNull()
+    expect(screen.queryByText("Health")).toBeNull()
   })
 })
