@@ -57,8 +57,8 @@ export interface EmailContactPayload {
 }
 
 export interface EmailQueuePayload {
-  subject: string
-  html: string
+  subject?: string
+  html?: string
   contact?: EmailContactPayload
   contacts?: EmailContactPayload[]
   campaignId?: string
@@ -187,6 +187,26 @@ export async function queueEmailCampaign(
     spacingMs,
     windowSize: windowSize === Infinity ? "unlimited" : windowSize,
   })
+
+  if (payload.campaignId) {
+    const { error: contentError } = await supabase
+      .from("email_campaign_content")
+      .upsert(
+        {
+          campaign_id: payload.campaignId,
+          subject: payload.subject ?? "",
+          html: payload.html ?? "",
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "campaign_id" },
+      )
+
+    if (contentError) {
+      console.error("Failed to store email campaign content", contentError)
+      throw contentError
+    }
+  }
+
   const baseTime = scheduledFor.getTime()
   const rows = contacts.map((contact, idx) => ({
     campaign_id: payload.campaignId ?? null,
@@ -194,8 +214,12 @@ export async function queueEmailCampaign(
     buyer_id: contact.buyerId ?? null,
     to_email: contact.email,
     payload: {
-      subject: payload.subject,
-      html: payload.html,
+      ...(payload.campaignId
+        ? {}
+        : {
+            subject: payload.subject,
+            html: payload.html,
+          }),
       campaignId: payload.campaignId,
       fromEmail: payload.fromEmail,
       fromName: payload.fromName,
@@ -411,6 +435,14 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
     }
   }
 
+  const { data: contentRows } = campaignIds.length
+    ? await supabase
+        .from("email_campaign_content")
+        .select("campaign_id,subject,html")
+        .in("campaign_id", campaignIds)
+    : { data: [] }
+  const contentMap = new Map(contentRows?.map((row) => [row.campaign_id, row]) ?? [])
+
   let sent = 0
 
   async function sendWithBackoff(
@@ -476,8 +508,11 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
         phone: contact.phone,
         email: contact.email,
       }
-      const subject = renderTemplate(payload.subject, buyer)
-      let html = renderTemplate(payload.html, buyer)
+      const content = job.campaign_id ? contentMap.get(job.campaign_id) : undefined
+      const rawSubject = content?.subject ?? payload.subject ?? ""
+      const rawHtml = content?.html ?? payload.html ?? ""
+      const subject = renderTemplate(rawSubject, buyer)
+      let html = renderTemplate(rawHtml, buyer)
       if (!emailShortlinksDisabled()) {
         try {
           const { replaceUrlsWithShortLinks } = await import("./shortlink-service")
