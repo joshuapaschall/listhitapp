@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client"
 
 import { useState, useEffect, useMemo, useRef } from "react"
@@ -1650,8 +1649,8 @@ function BuyersPageContent() {
                     <td className="p-3 font-mono text-sm whitespace-nowrap text-body">{buyer.phone || "No phone"}</td>
                     <td className="p-3 text-body">
                       <Badge
-                        className={`${getScoreColor(buyer.score)} border-0`}
-                        title={`Buyer score: ${buyer.score}/100`}
+                        className={`${getScoreColor(buyer.score ?? 0)} border-0`}
+                        title={`Buyer score: ${buyer.score ?? 0}/100`}
                       >
                         {buyer.score}
                       </Badge>
@@ -1702,12 +1701,15 @@ function BuyersPageContent() {
                       </div>
                     </td>
                     <td className="p-3 text-sm text-secondary font-mono whitespace-nowrap">
-                      {formatDate(buyer.created_at)}
+                      {buyer.created_at ? formatDate(buyer.created_at) : "—"}
                     </td>
                     <td className="p-3 text-body">
+                      {(() => {
+                      const status = buyer.status ?? "lead"
+                      return (
                       <div className="flex flex-col space-y-2">
-                        <span className={`${getStatusColor(buyer.status)} chip w-fit`}>
-                          {buyer.status.charAt(0).toUpperCase() + buyer.status.slice(1)}
+                        <span className={`${getStatusColor(status)} chip w-fit`}>
+                          {status.charAt(0).toUpperCase() + status.slice(1)}
                         </span>
                         <div className="flex items-center space-x-2">
                           {buyer.can_receive_email && (
@@ -1722,6 +1724,8 @@ function BuyersPageContent() {
                           )}
                         </div>
                       </div>
+                      )
+                      })()}
                     </td>
                     <td className="p-3">
                       <div className="flex items-center space-x-1">
