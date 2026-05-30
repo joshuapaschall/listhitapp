@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client"
 
 import type React from "react"
@@ -124,7 +123,7 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
     monthly_payment_max: "",
 
     // Status & Notes
-    status: "lead" as const,
+    status: "lead",
     score: 50,
     vip: false,
     vetted: false,
@@ -162,13 +161,13 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
         beds_min: buyer.beds_min?.toString() || "",
         baths_min: buyer.baths_min?.toString() || "",
         min_arv: buyer.min_arv?.toString() || "",
-        min_arv_percent: (buyer.min_arv_percent ?? buyer.min_arv_percentage)?.toString() || "",
+        min_arv_percent: buyer.min_arv_percent?.toString() || "",
         min_gross_margin: buyer.min_gross_margin?.toString() || "",
         max_gross_margin: buyer.max_gross_margin?.toString() || "",
-        down_payment_min: (buyer.down_payment_min ?? buyer.min_down_payment)?.toString() || "",
-        down_payment_max: (buyer.down_payment_max ?? buyer.max_down_payment)?.toString() || "",
-        monthly_payment_min: (buyer.monthly_payment_min ?? buyer.min_monthly_payment)?.toString() || "",
-        monthly_payment_max: (buyer.monthly_payment_max ?? buyer.max_monthly_payment)?.toString() || "",
+        down_payment_min: buyer.down_payment_min?.toString() || "",
+        down_payment_max: buyer.down_payment_max?.toString() || "",
+        monthly_payment_min: buyer.monthly_payment_min?.toString() || "",
+        monthly_payment_max: buyer.monthly_payment_max?.toString() || "",
         status: buyer.status || "lead",
         score: buyer.score || 50,
         vip: buyer.vip || false,
@@ -212,7 +211,7 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
 
     setLoading(true)
     try {
-      const { full_name: _unused, budget_range: _unused2, ...restFormData } = formData
+      const { full_name: _unused, ...restFormData } = formData
       const updateData = {
         ...restFormData,
         asking_price_min: formData.asking_price_min ? Number.parseFloat(formData.asking_price_min) : null,

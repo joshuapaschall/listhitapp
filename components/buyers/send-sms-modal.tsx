@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client"
 
 import { useState, useEffect, useRef } from "react"
@@ -141,7 +140,7 @@ export default function SendSmsModal({ open, onOpenChange, buyer, onSuccess }: S
     if (!buyer || (!message.trim() && attachments.length === 0)) return
     for (const file of attachments) {
       const ext = file.name.slice(file.name.lastIndexOf(".")).toLowerCase()
-      if (!ALLOWED_MMS_EXTENSIONS.includes(ext)) {
+      if (!(ALLOWED_MMS_EXTENSIONS as readonly string[]).includes(ext)) {
         toast.error(`Unsupported file type: ${file.name}`)
         return
       }

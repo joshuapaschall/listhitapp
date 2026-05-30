@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
@@ -111,8 +110,8 @@ export default function GroupTreeSelector({ value, onChange, allowCreate = true 
     })
 
     groupsData.forEach((group) => {
-      const folderId = group.criteria?.folder || "custom-groups"
-      const folderName = group.criteria?.folderName || folderId
+      const folderId = String(group.criteria?.folder || "custom-groups")
+      const folderName = String(group.criteria?.folderName || folderId)
       let folder = baseFolders.find((f) => f.id === folderId)
       if (!folder) {
         folder = { id: folderId, name: folderName, groups: [], expanded: true }

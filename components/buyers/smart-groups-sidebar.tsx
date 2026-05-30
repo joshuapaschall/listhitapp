@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client"
 
 import React, { useState, useEffect, useCallback } from "react"
@@ -199,7 +198,7 @@ export default function SmartGroupsSidebar({
 
     // Categorize groups into folders
     groupsData.forEach((group) => {
-      const folderId = group.criteria?.folder || "custom-groups"
+      const folderId = String(group.criteria?.folder || "custom-groups")
       let folder = baseFolders.find((f) => f.id === folderId)
       if (!folder) {
         folder = { id: folderId, name: folderId, groups: [], expanded: true }
@@ -618,7 +617,7 @@ export default function SmartGroupsSidebar({
                             onClick={(e) => {
                               e.stopPropagation()
                               // Open SendFoxContactsViewer for this list
-                              setViewListId(group.sendfox_list_id)
+                              setViewListId(group.sendfox_list_id ?? null)
                               setShowContacts(true)
                             }}
                           >
@@ -639,10 +638,10 @@ export default function SmartGroupsSidebar({
                                 setGroupForm({
                                   name: group.name,
                                   description: group.description || "",
-                                  type: group.type,
+                                  type: group.type || "manual",
                                   color: group.color || "#3B82F6",
                                   icon: (group.criteria?.icon as IconValue) || "users",
-                                  folder: group.criteria?.folder || folder.id,
+                                  folder: String(group.criteria?.folder || folder.id),
                                 })
                               }}
                             >

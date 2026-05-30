@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client"
 
 import { useState, useEffect } from "react"
@@ -1234,7 +1233,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
                 <ChevronRight className="ml-2 h-4 w-4" />
               </Button>
             ) : (
-              <Button onClick={handleSubmit} disabled={loading} className="bg-emerald-600 hover:bg-emerald-700">
+              <Button onClick={() => handleSubmit()} disabled={loading} className="bg-emerald-600 hover:bg-emerald-700">
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client"
 
 // CSV importer with support for mapping templates, manual tags, locations,
@@ -90,6 +89,7 @@ export async function importBuyersFromCsv(
   extraLocations: string[],
   extraPropertyTypes: string[],
   groupIds: string[],
+  defaultListId: number | null,
   onProgress?: (pct: number) => void,
 ): Promise<{ inserted: number; updated: number }> {
   log("import", "Starting import with mapping:", mapping)
@@ -436,13 +436,13 @@ export default function ImportBuyersModal({ onSuccess }: ImportBuyersModalProps)
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
-      complete: (res) => {
+      complete: (res: { data: Record<string, string>[]; meta: { fields?: string[] } }) => {
         log("parse", "Parsed CSV data:", res.data.slice(0, 3))
         setCsvRows(res.data)
         setHeaders(res.meta.fields || [])
         setStep(1)
       },
-      error: (err) => {
+      error: (err: { message: string }) => {
         setError(`Failed to parse CSV file: ${err.message}`)
       },
     })
@@ -465,6 +465,7 @@ export default function ImportBuyersModal({ onSuccess }: ImportBuyersModalProps)
         extraLocations,
         extraPropertyTypes,
         groupIds,
+        defaultListId,
         (p) => setImportProgress(p),
       )
 
