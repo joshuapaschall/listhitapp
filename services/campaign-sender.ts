@@ -359,6 +359,22 @@ async function pauseCampaignForSafety(
 
 export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number; workerId?: string } = {}) {
   const supabase = requireAdmin()
+  const { data: latestReputationSnapshot, error: reputationError } = await supabase
+    .from("ses_reputation_snapshots")
+    .select("sending_state")
+    .order("captured_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (reputationError) {
+    console.error("Failed to read SES reputation snapshot", reputationError)
+  }
+
+  if (latestReputationSnapshot?.sending_state === "frozen") {
+    log("queue", "Email sending frozen by account reputation guard")
+    return { processed: 0, sent: 0, frozen: true }
+  }
+
   const effectiveLimit = Math.max(1, limit || EMAIL_QUEUE_CONCURRENCY)
   const leaseSeconds = opts.leaseSeconds ?? EMAIL_QUEUE_LEASE_SECONDS
   const workerId = opts.workerId ?? EMAIL_QUEUE_WORKER_ID

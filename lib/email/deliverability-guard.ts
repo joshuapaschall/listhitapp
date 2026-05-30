@@ -38,3 +38,71 @@ export function evaluateCampaignSafety(input: {
 
   return { trip: false, bounceRate, complaintRate }
 }
+
+// Phase 2 — account-wide reputation guard.
+// These thresholds freeze below AWS SES review thresholds so sending stops before
+// the account enters the SES enforcement ladder.
+export const ACCOUNT_WARN_BOUNCE_RATE = 0.03
+export const ACCOUNT_WARN_COMPLAINT_RATE = 0.0005
+export const ACCOUNT_FREEZE_BOUNCE_RATE = 0.04
+export const ACCOUNT_FREEZE_COMPLAINT_RATE = 0.0008
+export const ACCOUNT_MIN_WINDOW_SENT = 500
+
+export type AccountState = "healthy" | "warn" | "frozen"
+
+export type AccountVerdict = {
+  state: AccountState
+  reason: string | null
+  bounceRate: number
+  complaintRate: number
+}
+
+export function evaluateAccountState(input: {
+  windowSent: number
+  hardBounces: number
+  complaints: number
+  enforcementStatus: string | null
+  sendingEnabled: boolean | null
+}): AccountVerdict {
+  const enforcementStatus = input.enforcementStatus?.trim() || null
+  const bounceRate = input.windowSent > 0 ? input.hardBounces / input.windowSent : 0
+  const complaintRate = input.windowSent > 0 ? input.complaints / input.windowSent : 0
+
+  if (enforcementStatus && enforcementStatus.toUpperCase() !== "HEALTHY") {
+    return {
+      state: "frozen",
+      reason: `enforcement:${enforcementStatus}`,
+      bounceRate,
+      complaintRate,
+    }
+  }
+
+  if (input.sendingEnabled === false) {
+    return {
+      state: "frozen",
+      reason: "sending_disabled",
+      bounceRate,
+      complaintRate,
+    }
+  }
+
+  if (input.windowSent < ACCOUNT_MIN_WINDOW_SENT) {
+    return { state: "healthy", reason: null, bounceRate, complaintRate }
+  }
+
+  if (
+    bounceRate >= ACCOUNT_FREEZE_BOUNCE_RATE ||
+    complaintRate >= ACCOUNT_FREEZE_COMPLAINT_RATE
+  ) {
+    return { state: "frozen", reason: "rate", bounceRate, complaintRate }
+  }
+
+  if (
+    bounceRate >= ACCOUNT_WARN_BOUNCE_RATE ||
+    complaintRate >= ACCOUNT_WARN_COMPLAINT_RATE
+  ) {
+    return { state: "warn", reason: "rate", bounceRate, complaintRate }
+  }
+
+  return { state: "healthy", reason: null, bounceRate, complaintRate }
+}

@@ -6,6 +6,7 @@
     { "path": "/api/sms-campaigns/requeue-stuck",    "schedule": "*/5 * * * *" },
     { "path": "/api/cron/dispatch-due-campaigns",    "schedule": "*/2 * * * *" },
     { "path": "/api/email-campaigns/process",        "schedule": "* * * * *" },
+    { "path": "/api/cron/ses-reputation",            "schedule": "*/5 * * * *" },
     { "path": "/api/email-campaigns/requeue-stuck",  "schedule": "*/5 * * * *" },
     { "path": "/api/sync/voice-numbers",             "schedule": "0 6 * * *" }
   ]
