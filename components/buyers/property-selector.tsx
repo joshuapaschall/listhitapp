@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client"
 
 import { useEffect, useState } from "react"
@@ -34,7 +33,7 @@ export default function PropertySelector({
         .then((data) =>
           setProperties(
             data.sort((a, b) =>
-              a.address.localeCompare(b.address, undefined, {
+              (a.address ?? "").localeCompare(b.address ?? "", undefined, {
                 sensitivity: "base",
               }),
             ),
