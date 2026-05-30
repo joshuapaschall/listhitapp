@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client"
 
 import { cn } from "@/lib/utils"
@@ -17,7 +16,7 @@ interface ConversationRowProps {
 }
 
 export default function ConversationRow({ thread, selected, onSelect }: ConversationRowProps) {
-  const isFresh = useFreshnessTimer(new Date(thread.updated_at))
+  const isFresh = useFreshnessTimer(new Date(thread.updated_at ?? 0))
   let queryClient: ReturnType<typeof useQueryClient> | null = null
   try {
     // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -28,7 +27,7 @@ export default function ConversationRow({ thread, selected, onSelect }: Conversa
   const buyer = thread.buyers
   const name = buyer
     ? buyer.full_name || `${buyer.fname || ""} ${buyer.lname || ""}`.trim() || "Unnamed"
-    : thread.phone_number
+    : thread.phone_number ?? ""
 
   const color = !thread.unread
     ? "bg-gray-400"
@@ -36,7 +35,7 @@ export default function ConversationRow({ thread, selected, onSelect }: Conversa
     ? "bg-blue-500"
     : "bg-red-500"
 
-  const timestamp = formatSmartTimestamp(thread.updated_at)
+  const timestamp = formatSmartTimestamp(thread.updated_at ?? null)
 
   const initials = name
     .split(" ")
