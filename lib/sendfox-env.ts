@@ -1,3 +1,6 @@
 export function getSendfoxToken() {
-  return process.env.SENDFOX_API_TOKEN || process.env.SENDFOX_API_KEY || ""
+  const canonicalToken = process.env.SENDFOX_API_TOKEN
+  const deprecatedToken = process.env.SENDFOX_API_KEY
+
+  return canonicalToken || deprecatedToken || ""
 }

@@ -20,16 +20,11 @@ export const ALL_ENV_VARS = [
   "TELNYX_MESSAGING_PROFILE_ID",
   // Required for call control flows:
   "CALL_CONTROL_APP_ID",
-  "TELNYX_DEFAULT_CALLER_ID",
-  "SHORTIO_API_KEY",
-  "SHORTIO_DOMAIN",
   "GOOGLE_CLIENT_ID",
   "GOOGLE_CLIENT_SECRET",
   "GMAIL_FROM",
   "NEXT_PUBLIC_GOOGLE_REDIRECT_URI",
-  "NEXT_PUBLIC_SHORTIO_DOMAIN",
   "SENDFOX_API_TOKEN",
-  "SENDFOX_API_KEY",
 ] as const
 
 // Minimal env to let the UI render and Supabase client hydrate.
@@ -42,7 +37,6 @@ const CORE_RENDER_ENV = [
 const VOICE_ENV = [
   "TELNYX_API_KEY",
   "CALL_CONTROL_APP_ID",
-  "TELNYX_DEFAULT_CALLER_ID",
 ] as const
 
 type Key = (typeof ALL_ENV_VARS)[number]
