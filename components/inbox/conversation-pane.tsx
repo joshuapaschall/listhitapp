@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
@@ -301,7 +300,7 @@ function MediaGrid({ urls }: { urls: string[] }) {
 }
 
 interface ConversationPaneProps {
-  thread: MessageThread | null;
+  thread: ThreadWithBuyer | null;
 }
 
 interface LocalMessage extends Message {
@@ -395,7 +394,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
           setOwnedDids(
             data.numbers
               .map((num: string) => normalizeDid(num))
-              .filter((num): num is string => Boolean(num)),
+              .filter((num: string | null): num is string => Boolean(num)),
           );
         }
       } catch (err) {
@@ -500,20 +499,22 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
         .map((m) => ({ ...m, media_urls: parseMedia((m as any).media_urls) }))
         .sort(
           (a, b) =>
-            new Date(a.created_at).getTime() -
-            new Date(b.created_at).getTime(),
+            new Date(a.created_at ?? 0).getTime() -
+            new Date(b.created_at ?? 0).getTime(),
         );
 
       if (
         thread.campaign_id &&
+        thread.phone_number &&
         all.length &&
         all[0].direction === "inbound" &&
         !all.some((m) => m.is_bulk)
       ) {
-        const nums = [thread.phone_number];
-        if (thread.phone_number.length === 10)
-          nums.push(`+1${thread.phone_number}`);
-        else nums.push(`+${thread.phone_number}`);
+        const phoneNumber = thread.phone_number;
+        const nums = [phoneNumber];
+        if (phoneNumber.length === 10)
+          nums.push(`+1${phoneNumber}`);
+        else nums.push(`+${phoneNumber}`);
 
         const { data: bulk } = await supabase
           .from("messages")
@@ -527,7 +528,10 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
           .maybeSingle();
 
         if (bulk && !all.find((m) => m.id === bulk.id)) {
-          all.unshift(bulk as LocalMessage);
+          all.unshift({
+            ...(bulk as LocalMessage),
+            media_urls: parseMedia((bulk as any).media_urls),
+          });
         }
       }
 
@@ -825,7 +829,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
       }
 
       return await new Promise<File>((resolve, reject) => {
-        const img = new Image();
+        const img = new window.Image();
         const reader = new FileReader();
 
         reader.onload = () => {
@@ -896,7 +900,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
 
     for (const file of attachments) {
       const ext = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
-      if (!ALLOWED_MMS_EXTENSIONS.includes(ext)) {
+      if (!(ALLOWED_MMS_EXTENSIONS as readonly string[]).includes(ext)) {
         toast.error(`Unsupported file type: ${file.name}`);
         return;
       }
@@ -1181,7 +1185,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
 
   const name = buyer
     ? buyer.full_name || `${buyer.fname || ""} ${buyer.lname || ""}`.trim() || "Unnamed"
-    : thread.phone_number;
+    : thread.phone_number ?? "";
   const { segments: smsSegments, remaining } = calculateSmsSegments(input);
   const selectValue = selectedDid || preferredFrom || undefined;
 
@@ -1285,14 +1289,15 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
       <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2">
         {messages.map((m) => {
           if (m.direction === "event") {
-            const upper = m.body.toUpperCase();
-            let eventText = m.body;
+            const body = m.body ?? "";
+            const upper = body.toUpperCase();
+            let eventText = body;
             if (upper.startsWith("UNSUBSCRIBED")) {
               eventText = `${name} unsubscribed`;
             } else if (upper.startsWith("MISSED CALL")) {
               eventText = `Missed call from ${name}`;
             } else if (upper.startsWith("CALL")) {
-              const match = m.body.match(/\(([^)]+)\)/);
+              const match = body.match(/\(([^)]+)\)/);
               const dur = match ? match[1] : "";
               eventText = `${name} called you${dur ? ` (${dur})` : ""}`;
             }
@@ -1303,7 +1308,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
               >
                 <span className="text-[10px] uppercase text-muted-foreground">{eventText}</span>
                 <span className="mt-1 text-xs text-muted-foreground">
-                  {new Date(m.created_at).toLocaleString()}
+                  {new Date(m.created_at ?? 0).toLocaleString()}
                 </span>
               </div>
             );
@@ -1320,13 +1325,13 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
                   <span className="text-xs text-muted-foreground">{m.body}</span>
                 )}
                 <span className="mt-1 text-xs text-muted-foreground">
-                  {new Date(m.created_at).toLocaleString()}
+                  {new Date(m.created_at ?? 0).toLocaleString()}
                 </span>
               </div>
             );
           }
           const isOutbound = m.direction === "outbound";
-          const time = new Date(m.created_at).toLocaleTimeString([], {
+          const time = new Date(m.created_at ?? 0).toLocaleTimeString([], {
             hour: "numeric",
             minute: "2-digit",
           });
@@ -1555,7 +1560,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
               <Calendar
                 mode="single"
                 selected={scheduleDate ?? undefined}
-                onSelect={setScheduleDate}
+                onSelect={(date) => setScheduleDate(date ?? null)}
               />
               <Input
                 id="schedule-time"

@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
@@ -83,7 +82,9 @@ export default function ListPane({ onSelect, selectedId }: ListPaneProps) {
         () => queryClient.invalidateQueries({ queryKey: ["message-threads"] }),
       )
       .subscribe();
-    return () => supabase.removeChannel(channel);
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [queryClient]);
 
   /* ---------- render ---------- */

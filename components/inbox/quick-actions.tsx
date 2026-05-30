@@ -6,7 +6,7 @@ import { Menu } from "lucide-react";
 import React from "react";
 
 interface QuickActionsProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }
 
 export default function QuickActions({ children }: QuickActionsProps) {
