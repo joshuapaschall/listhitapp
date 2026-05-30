@@ -5,8 +5,8 @@ import { assertServer } from "@/utils/assert-server"
 
 assertServer()
 
-export async function GET(_req: NextRequest, { params }: { params: { campaignId: string } }) {
-  const campaignId = (params.campaignId ?? "").trim().replace(/^<+/, "").replace(/>+$/, "")
+export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+  const campaignId = (params.id ?? "").trim().replace(/^<+/, "").replace(/>+$/, "")
   const cookieStore = cookies()
   const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
   const { supabaseAdmin } = await import("@/lib/supabase")

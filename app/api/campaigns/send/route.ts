@@ -9,10 +9,12 @@ import { assertServer } from "@/utils/assert-server"
 import { getCronRequestToken, isJwtLike } from "@/lib/cron-auth"
 import { linkifyHtml } from "@/lib/email/linkify-html"
 import { calculateSmsSegments } from "@/lib/sms-utils"
-import { formatPhoneE164 } from "@/lib/dedup-utils"
+import { formatPhoneE164, normalizeEmail } from "@/lib/dedup-utils"
 import * as smsCampaignSender from "@/services/sms-campaign-sender"
 import { requireOrgContext, resolveOrgIdForUser } from "@/lib/auth/org-context"
 import { resolveCampaignSender, SenderNotVerifiedError } from "@/lib/email-sender-resolver"
+import { isValidEmailSyntax } from "@/lib/email/validate-syntax"
+import { insertNotification } from "@/lib/notifications"
 
 assertServer()
 
@@ -338,22 +340,69 @@ export async function POST(request: NextRequest) {
   }
 
   if (campaign.channel === "email") {
-    const emailContacts: EmailContactPayload[] = (recipients || [])
+    let emailContacts: EmailContactPayload[] = (recipients || [])
       .map((row: any) => {
         const buyer: any = (row as any).buyers || {}
         if (!buyer.email || !buyer.can_receive_email || buyer.sendfox_hidden) {
           return null
         }
-      return {
-        email: buyer.email,
-        firstName: buyer.fname,
-        lastName: buyer.lname,
-        phone: buyer.phone,
-        recipientId: row.id,
-        buyerId: row.buyer_id,
-      }
+        return {
+          email: buyer.email,
+          firstName: buyer.fname,
+          lastName: buyer.lname,
+          phone: buyer.phone,
+          recipientId: row.id,
+          buyerId: row.buyer_id,
+        }
       })
       .filter(Boolean) as EmailContactPayload[]
+
+    const seenEmails = new Set<string>()
+    const removedInvalid: string[] = []
+    let removedDuplicates = 0
+    const cleanedEmailContacts: EmailContactPayload[] = []
+
+    for (const contact of emailContacts) {
+      const normalizedEmail = normalizeEmail(contact.email)
+      if (!normalizedEmail || !isValidEmailSyntax(normalizedEmail)) {
+        if (contact.recipientId) removedInvalid.push(contact.recipientId)
+        continue
+      }
+
+      if (seenEmails.has(normalizedEmail)) {
+        removedDuplicates += 1
+        continue
+      }
+
+      seenEmails.add(normalizedEmail)
+      cleanedEmailContacts.push(contact)
+    }
+
+    emailContacts = cleanedEmailContacts
+
+    if (removedInvalid.length > 0) {
+      await supabase
+        .from("campaign_recipients")
+        .update({ status: "error", error: "invalid_email_syntax" })
+        .in("id", removedInvalid)
+    }
+
+    if (removedInvalid.length > 0 || removedDuplicates > 0) {
+      console.warn("Recipients filtered before email send", {
+        campaignId: campaign.id,
+        invalid: removedInvalid.length,
+        duplicates: removedDuplicates,
+      })
+      await insertNotification({
+        type: "email_hygiene",
+        title: "Recipients filtered before send",
+        body: `${removedInvalid.length} invalid, ${removedDuplicates} duplicate addresses skipped.`,
+        metadata: {
+          campaignId: campaign.id,
+          invalidSample: removedInvalid.slice(0, 10),
+        },
+      })
+    }
 
     if (!emailContacts.length) {
       return new Response(

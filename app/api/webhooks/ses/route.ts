@@ -45,6 +45,8 @@ type SnsMessage = {
   SigningCertURL?: string
 }
 
+type SesBounceType = "Permanent" | "Transient" | "Undetermined" | string
+
 type SesEvent = {
   eventType?: string
   notificationType?: string
@@ -52,6 +54,10 @@ type SesEvent = {
     messageId?: string
     timestamp?: string
     tags?: Record<string, string[]>
+  }
+  bounce?: {
+    bounceType?: SesBounceType
+    timestamp?: string
   }
   timestamp?: string
 }
@@ -231,6 +237,7 @@ async function updateRecipient(
     providerId?: string
     messageId?: string
     skipClickUpdate?: boolean
+    bounceType?: SesBounceType
   },
 ) {
   if (!supabase) return
@@ -239,8 +246,11 @@ async function updateRecipient(
   if (eventType === "click" && !ctx.skipClickUpdate) updates.clicked_at = ctx.timestamp
   if (eventType === "delivery") updates.delivered_at = ctx.timestamp
   if (eventType === "bounce") {
-    updates.bounced_at = ctx.timestamp
-    updates.status = "bounced"
+    updates.bounce_type = ctx.bounceType || null
+    if (ctx.bounceType === "Permanent") {
+      updates.bounced_at = ctx.timestamp
+      updates.status = "bounced"
+    }
   }
   if (eventType === "complaint") {
     updates.complained_at = ctx.timestamp
@@ -327,8 +337,15 @@ async function findBuyerId(
   return null
 }
 
-async function suppressBuyer(eventType: string, buyerId: string | null, timestamp: string) {
+async function suppressBuyer(
+  eventType: string,
+  buyerId: string | null,
+  timestamp: string,
+  bounceType?: SesBounceType,
+) {
   if (!supabase || !buyerId) return
+  if (eventType === "bounce" && bounceType !== "Permanent") return
+
   const updates: Record<string, any> = {
     can_receive_email: false,
     email_suppressed: true,
@@ -378,6 +395,7 @@ export async function POST(req: NextRequest) {
   }
 
   const evt = eventName(payload)
+  const bounceType = payload.bounce?.bounceType
   const timestamp = eventTimestamp(payload) || parseTimestamp(snsMessage.Timestamp)
   const messageId = payload.mail?.messageId
   const tags = payload.mail?.tags
@@ -405,6 +423,7 @@ export async function POST(req: NextRequest) {
       providerId: messageId,
       messageId: messageId || undefined,
       skipClickUpdate,
+      bounceType,
     })
   } else {
     log("warn", "Missing SES event timestamp", { messageId, eventType: evt })
@@ -417,7 +436,7 @@ export async function POST(req: NextRequest) {
       messageId: messageId || undefined,
     })
     if (timestamp) {
-      await suppressBuyer(evt, buyerId, timestamp)
+      await suppressBuyer(evt, buyerId, timestamp, bounceType)
     }
   }
 

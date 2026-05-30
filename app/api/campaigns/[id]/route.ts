@@ -9,7 +9,7 @@ const allowed = new Set([
   "name", "subject", "message", "group_ids", "buyer_ids", "scheduled_at", "timezone", "run_from", "run_until", "weekday_only", "media_url", "send_to_all_numbers", "from_name", "from_email", "preview_text", "status", "design_json", "mjml",
 ])
 
-export async function PATCH(req: Request, { params }: { params: { campaignId: string } }) {
+export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   try {
     const supabase = createRouteHandlerClient({ cookies })
     const { data: { user } } = await supabase.auth.getUser()
@@ -18,7 +18,7 @@ export async function PATCH(req: Request, { params }: { params: { campaignId: st
     const { data: campaign } = await supabase
       .from("campaigns")
       .select("id,status,user_id")
-      .eq("id", params.campaignId)
+      .eq("id", params.id)
       .eq("user_id", user.id)
       .maybeSingle()
 
@@ -32,7 +32,7 @@ export async function PATCH(req: Request, { params }: { params: { campaignId: st
     Object.keys(body || {}).forEach((k) => { if (allowed.has(k)) update[k] = body[k] })
     update.updated_at = new Date().toISOString()
 
-    const { data, error } = await supabase.from("campaigns").update(update).eq("id", params.campaignId).select("*").single()
+    const { data, error } = await supabase.from("campaigns").update(update).eq("id", params.id).select("*").single()
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
     return NextResponse.json(data)
   } catch (error) {
