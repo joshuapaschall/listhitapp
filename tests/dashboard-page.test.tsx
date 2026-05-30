@@ -51,8 +51,6 @@ vi.mock("../services/dashboard-service", () => ({
     voicemailsLeft: 0,
     emailsSent: 3,
     emailsSentDelta: 0,
-    emailsReceived: 2,
-    emailsReceivedDelta: 0,
     emailsOpened: 1,
     emailBounces: 0,
     openRate: 0,
@@ -124,7 +122,7 @@ describe.skip("DashboardPage", () => {
     expect(await screen.findByText(/Performance Trends/i)).toBeTruthy()
     expect(await screen.findByText(/Texts Sent vs. Received/i)).toBeTruthy()
     expect(screen.getByText(/Calls Made vs. Received/i)).toBeTruthy()
-    expect(screen.getByText(/Emails Sent vs. Received/i)).toBeTruthy()
+    expect(screen.getByText(/Emails Sent/i)).toBeTruthy()
     expect(screen.getByText(/Offers Created vs. Accepted/i)).toBeTruthy()
     expect(screen.getByText(/Showings Scheduled vs. Offers Created/i)).toBeTruthy()
     expect(screen.getAllByText(/Unsubscribe Rate/i).length).toBeGreaterThan(0)
