@@ -73,7 +73,7 @@ vi.mock("../lib/supabase", () => {
 })
 
 describe("sendCampaignSMS sticky sender", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     mappings = []
     messages = []
     threads = []
@@ -91,7 +91,7 @@ describe("sendCampaignSMS sticky sender", () => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://cdn"
     process.env.TELNYX_MESSAGING_PROFILE_ID = "MP123"
     vi.resetModules()
-    sendCampaignSMS = require("../services/campaign-sender.server").sendCampaignSMS
+    sendCampaignSMS = (await import("../services/campaign-sender.server")).sendCampaignSMS
   })
 
   test("uses stored number when mapping exists", async () => {
