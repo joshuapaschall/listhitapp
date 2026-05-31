@@ -1,3 +1,5 @@
+import { BuyerService } from "../services/buyer-service"
+
 let buyers: any[] = []
 let idCounter = 1
 const fetchMock = vi.fn()
@@ -55,8 +57,6 @@ vi.mock("../lib/supabase", () => {
   return { supabase: client, supabaseAdmin: client }
 })
 
-
-const { BuyerService } = require("../services/buyer-service")
 
 describe("BuyerService.searchBuyers", () => {
   beforeEach(() => {
@@ -118,11 +118,11 @@ describe("BuyerService.addBuyer", () => {
     idCounter = 1
     fetchMock.mockReset().mockResolvedValue({ ok: true, json: () => Promise.resolve({ id: 1 }) })
     ;(global as any).fetch = fetchMock
-    delete process.env.SENDFOX_DEFAULT_LIST_ID
+    delete process.env.NEXT_PUBLIC_SENDFOX_DEFAULT_LIST_ID
   })
 
   test("adds contact to default SendFox list", async () => {
-    process.env.SENDFOX_DEFAULT_LIST_ID = "1"
+    process.env.NEXT_PUBLIC_SENDFOX_DEFAULT_LIST_ID = "1"
     await BuyerService.addBuyer({ email: "test@example.com" })
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/sendfox/contact",
@@ -133,9 +133,9 @@ describe("BuyerService.addBuyer", () => {
   })
 
   test("re-adding buyer overwrites lists", async () => {
-    process.env.SENDFOX_DEFAULT_LIST_ID = "1"
+    process.env.NEXT_PUBLIC_SENDFOX_DEFAULT_LIST_ID = "1"
     await BuyerService.addBuyer({ email: "test@example.com" })
-    process.env.SENDFOX_DEFAULT_LIST_ID = "2"
+    process.env.NEXT_PUBLIC_SENDFOX_DEFAULT_LIST_ID = "2"
     await BuyerService.addBuyer({ email: "test@example.com" })
     const bodies = fetchMock.mock.calls.map((c: any) => JSON.parse(c[1].body))
     expect(bodies[0]).toEqual({ email: "test@example.com", lists: [1] })
