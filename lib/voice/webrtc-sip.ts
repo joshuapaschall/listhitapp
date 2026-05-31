@@ -9,6 +9,10 @@
  * invalid". So we transfer to the connection username from
  * TELNYX_WEBRTC_SIP_USERNAME, which is exactly what the browser registers as.
  */
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("webrtc-sip");
+
 export async function getWebRTCSipUri(): Promise<string | null> {
   try {
     const username = (process.env.TELNYX_WEBRTC_SIP_USERNAME ?? "").trim();
@@ -17,7 +21,7 @@ export async function getWebRTCSipUri(): Promise<string | null> {
       return null;
     }
     const sipUri = `sip:${username}@sip.telnyx.com`;
-    console.log("[webrtc-sip] resolved inbound transfer target", { sipUri });
+    log("[webrtc-sip] resolved inbound transfer target", { sipUri });
     return sipUri;
   } catch (error) {
     console.error("[webrtc-sip] failed to resolve WebRTC SIP URI", error);

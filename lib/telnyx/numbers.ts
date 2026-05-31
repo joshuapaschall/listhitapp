@@ -5,6 +5,9 @@ import {
   getSipCredentialConnectionId,
   getTelnyxApiKey,
 } from "@/lib/voice-env";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("telnyx-numbers");
 
 export type FromNumber = {
   e164: string;
@@ -133,7 +136,7 @@ export async function listPurchasedNumbersForOrigin(): Promise<FromNumber[]> {
 
   const items = Array.from(byE164.values()).sort((a, b) => a.e164.localeCompare(b.e164));
   if (TELNYX_DEBUG) {
-    console.log("[numbers.voice] sample", items.slice(0, 3));
+    log("[numbers.voice] sample", items.slice(0, 3));
   }
   return items;
 }

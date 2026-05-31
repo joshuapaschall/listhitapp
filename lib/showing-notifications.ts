@@ -5,11 +5,14 @@ import { FROM_EMAIL, resend } from "@/lib/resend"
 import { insertNotification } from "@/lib/notifications"
 import type { Buyer, Property, Showing } from "@/lib/supabase"
 import { assertServer } from "@/utils/assert-server"
+import { createLogger } from "@/lib/logger"
+
+const log = createLogger("showing-notifications")
 
 assertServer()
 
 export async function resolveFromNumber(buyerId: string): Promise<string | null> {
-  console.log(`[showing-sms] resolveFromNumber called for buyer ${buyerId}`)
+  log(`[showing-sms] resolveFromNumber called for buyer ${buyerId}`)
 
   const { data: recentThread } = await supabaseAdmin
     .from("message_threads")
@@ -21,7 +24,7 @@ export async function resolveFromNumber(buyerId: string): Promise<string | null>
 
   const threadNumber = formatPhoneE164(recentThread?.preferred_from_number)
   if (threadNumber) {
-    console.log(`[showing-sms] resolved from thread.preferred_from_number: ${threadNumber}`)
+    log(`[showing-sms] resolved from thread.preferred_from_number: ${threadNumber}`)
     return threadNumber
   }
 
@@ -33,13 +36,13 @@ export async function resolveFromNumber(buyerId: string): Promise<string | null>
 
   const stickyNumber = formatPhoneE164(stickySender?.from_number)
   if (stickyNumber) {
-    console.log(`[showing-sms] resolved from sticky buyer_sms_senders: ${stickyNumber}`)
+    log(`[showing-sms] resolved from sticky buyer_sms_senders: ${stickyNumber}`)
     return stickyNumber
   }
 
   const fallback = formatPhoneE164(process.env.DEFAULT_OUTBOUND_DID)
   if (fallback) {
-    console.log(`[showing-sms] resolved from DEFAULT_OUTBOUND_DID: ${fallback}`)
+    log(`[showing-sms] resolved from DEFAULT_OUTBOUND_DID: ${fallback}`)
     return fallback
   }
 
@@ -48,7 +51,7 @@ export async function resolveFromNumber(buyerId: string): Promise<string | null>
 }
 
 async function sendShowingSms(showing: Showing, buyer: Buyer, property: Property | null | undefined, messageBody: string) {
-  console.log(`[showing-sms] sendShowingSms START for showing ${showing.id}`, {
+  log(`[showing-sms] sendShowingSms START for showing ${showing.id}`, {
     buyerId: buyer?.id,
     hasPhone: !!buyer?.phone,
     phoneValue: buyer?.phone,
@@ -82,7 +85,7 @@ async function sendShowingSms(showing: Showing, buyer: Buyer, property: Property
   }
 
   const messagingProfileId = process.env.TELNYX_MESSAGING_PROFILE_ID
-  console.log(`[showing-sms] About to send via Telnyx`, {
+  log(`[showing-sms] About to send via Telnyx`, {
     from,
     to,
     bodyPreview: messageBody.slice(0, 60),
@@ -104,7 +107,7 @@ async function sendShowingSms(showing: Showing, buyer: Buyer, property: Property
     })
 
     const responseText = await response.text()
-    console.log(`[showing-sms] Telnyx responded`, { status: response.status, body: responseText.slice(0, 500) })
+    log(`[showing-sms] Telnyx responded`, { status: response.status, body: responseText.slice(0, 500) })
 
     if (!response.ok) {
       throw new Error(`Telnyx send failed (${response.status}): ${responseText}`)
@@ -112,7 +115,7 @@ async function sendShowingSms(showing: Showing, buyer: Buyer, property: Property
 
     const payload = responseText ? JSON.parse(responseText) : {}
     const providerId: string | null = payload?.data?.id || null
-    console.log(`[showing-sms] Telnyx accepted, provider_id: ${providerId}`)
+    log(`[showing-sms] Telnyx accepted, provider_id: ${providerId}`)
 
     const { data: existingThread } = await supabaseAdmin
       .from("message_threads")
@@ -139,13 +142,13 @@ async function sendShowingSms(showing: Showing, buyer: Buyer, property: Property
         throw threadError
       }
       threadId = createdThread.id
-      console.log(`[showing-sms] Created new thread ${threadId}`)
+      log(`[showing-sms] Created new thread ${threadId}`)
     } else {
       await supabaseAdmin
         .from("message_threads")
         .update({ preferred_from_number: from, updated_at: new Date().toISOString() })
         .eq("id", threadId)
-      console.log(`[showing-sms] Updated existing thread ${threadId}`)
+      log(`[showing-sms] Updated existing thread ${threadId}`)
     }
 
     const { error: msgError } = await supabaseAdmin.from("messages").insert({
@@ -161,7 +164,7 @@ async function sendShowingSms(showing: Showing, buyer: Buyer, property: Property
     if (msgError) {
       console.error(`[showing-sms] Failed to insert message row:`, msgError)
     } else {
-      console.log(`[showing-sms] SUCCESS — SMS sent and logged to messages table`)
+      log(`[showing-sms] SUCCESS — SMS sent and logged to messages table`)
     }
   } catch (error) {
     console.error(`[showing-sms] Showing SMS notification failed:`, error)
@@ -170,7 +173,7 @@ async function sendShowingSms(showing: Showing, buyer: Buyer, property: Property
 
 async function sendShowingEmail(subject: string, buyer: Buyer, html: string) {
   if (!buyer.email || buyer.can_receive_email === false) {
-    console.log("Skipping showing email: no email or email opt-out", { email: buyer.email, canReceive: buyer.can_receive_email })
+    log("Skipping showing email: no email or email opt-out", { email: buyer.email, canReceive: buyer.can_receive_email })
     return
   }
   if (!resend) {
@@ -178,9 +181,9 @@ async function sendShowingEmail(subject: string, buyer: Buyer, html: string) {
     return
   }
   try {
-    console.log("Sending showing email:", { to: buyer.email, subject, from: FROM_EMAIL })
+    log("Sending showing email:", { to: buyer.email, subject, from: FROM_EMAIL })
     const result = await resend.emails.send({ from: FROM_EMAIL, to: buyer.email, subject, html })
-    console.log("Showing email sent successfully:", result)
+    log("Showing email sent successfully:", result)
   } catch (error) {
     console.error("Showing email notification failed:", error)
   }

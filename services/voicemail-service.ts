@@ -1,5 +1,8 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { TELNYX_API_URL, getTelnyxApiKey } from "@/lib/voice-env";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("voicemail-service");
 
 const TELNYX_API_KEY = getTelnyxApiKey();
 
@@ -23,10 +26,10 @@ export class VoicemailService {
     options: VoicemailOptions = {}
   ) {
     try {
-      console.log('📬 Starting voicemail sequence');
-      console.log('  Call Control ID:', callControlId);
-      console.log('  From:', fromNumber);
-      console.log('  To:', toNumber);
+      log('📬 Starting voicemail sequence');
+      log('  Call Control ID:', callControlId);
+      log('  From:', fromNumber);
+      log('  To:', toNumber);
 
       // Get voicemail box configuration
       const box = await this.getVoicemailBox(toNumber);
@@ -102,7 +105,7 @@ export class VoicemailService {
       throw new Error('Failed to answer call for voicemail');
     }
 
-    console.log('✅ Call answered for voicemail');
+    log('✅ Call answered for voicemail');
   }
 
   /**
@@ -134,7 +137,7 @@ export class VoicemailService {
       throw new Error('Failed to play voicemail greeting');
     }
 
-    console.log('✅ Playing voicemail greeting');
+    log('✅ Playing voicemail greeting');
   }
 
   /**
@@ -168,7 +171,7 @@ export class VoicemailService {
       throw new Error('Failed to speak voicemail greeting');
     }
 
-    console.log('✅ Speaking voicemail greeting via TTS');
+    log('✅ Speaking voicemail greeting via TTS');
   }
 
   /**
@@ -213,10 +216,10 @@ export class VoicemailService {
       throw new Error('Failed to start voicemail recording');
     }
 
-    console.log('✅ Started voicemail recording');
-    console.log(`  Max length: ${maxLength}s`);
-    console.log(`  Silence timeout: ${silenceTimeout}s`);
-    console.log(`  Transcription: ${transcriptionEnabled}`);
+    log('✅ Started voicemail recording');
+    log(`  Max length: ${maxLength}s`);
+    log(`  Silence timeout: ${silenceTimeout}s`);
+    log(`  Transcription: ${transcriptionEnabled}`);
   }
 
   /**
@@ -284,7 +287,7 @@ export class VoicemailService {
       throw error;
     }
 
-    console.log('✅ Created pending voicemail record:', data.id);
+    log('✅ Created pending voicemail record:', data.id);
     return data;
   }
 
@@ -329,7 +332,7 @@ export class VoicemailService {
         return;
       }
 
-      console.log('✅ Voicemail recording saved:', voicemail.id);
+      log('✅ Voicemail recording saved:', voicemail.id);
 
       // Download and store locally for long-term retention
       await this.downloadAndStoreRecording(voicemail.id, recordingUrl);
@@ -367,7 +370,7 @@ export class VoicemailService {
         return;
       }
 
-      console.log('✅ Voicemail transcription saved');
+      log('✅ Voicemail transcription saved');
     } catch (error) {
       console.error('❌ Error handling transcription:', error);
     }
@@ -411,7 +414,7 @@ export class VoicemailService {
         })
         .eq('id', voicemailId);
 
-      console.log('✅ Recording stored locally:', fileName);
+      log('✅ Recording stored locally:', fileName);
     } catch (error) {
       console.error('❌ Failed to download and store recording:', error);
     }
@@ -432,10 +435,10 @@ export class VoicemailService {
       if (!box?.email_notifications) return;
 
       // TODO: Implement email notifications
-      console.log('📧 Would send voicemail notification to:', box.notification_emails);
+      log('📧 Would send voicemail notification to:', box.notification_emails);
 
       // TODO: Implement real-time notifications via WebSocket/SSE
-      console.log('🔔 Would send real-time notification');
+      log('🔔 Would send real-time notification');
 
     } catch (error) {
       console.error('❌ Failed to send notifications:', error);
@@ -539,7 +542,7 @@ export class VoicemailService {
     }
 
     const data = await response.json();
-    console.log('✅ Greeting uploaded to Telnyx Media:', name);
+    log('✅ Greeting uploaded to Telnyx Media:', name);
     return data;
   }
 }

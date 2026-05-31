@@ -5,6 +5,9 @@ import {
   type SendEmailCommandInput,
   type SendEmailCommandOutput,
 } from "@aws-sdk/client-sesv2"
+import { createLogger } from "@/lib/logger"
+
+const log = createLogger("ses")
 
 export interface SendSesEmailParams {
   to: string
@@ -173,7 +176,7 @@ export async function sendSesEmail(params: SendSesEmailParams): Promise<
     ...(emailTags.length ? { EmailTags: emailTags } : {}),
   }
 
-  console.debug("Sending SES email", {
+  log("Sending SES email", {
     from: fromEmailAddress,
     to: [params.to],
     subject: params.subject,
@@ -184,7 +187,7 @@ export async function sendSesEmail(params: SendSesEmailParams): Promise<
   const command = new SendEmailCommand(commandInput)
   const response = await sesClient.send(command)
 
-  console.debug("SES email sent", {
+  log("SES email sent", {
     messageId: response.MessageId,
     configurationSet: configurationSet || null,
     requestId: response.$metadata?.requestId,

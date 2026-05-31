@@ -1,4 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase"
+import { createLogger } from "@/lib/logger"
+
+const log = createLogger("telnyx-status-processor")
 
 /**
  * Processes a Telnyx outbound message lifecycle event (message.sent, message.delivered,
@@ -27,7 +30,7 @@ function isClearLandline(lineType: string | null) {
 export async function processTelnyxStatusEvent(body: any): Promise<Response> {
   const eventType = body?.data?.event_type as string | undefined
   const payload = body?.data?.payload
-  console.log(">>>>>>>>> status <<<<<<<<<", { eventType, status: payload?.status })
+  log(">>>>>>>>> status <<<<<<<<<", { eventType, status: payload?.status })
 
   const messageId = payload?.id as string | undefined
   const finalToStatus =

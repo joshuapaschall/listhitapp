@@ -1,6 +1,9 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { playAudioUrl, startRecording, stopRecording } from "@/lib/voice/call-control";
 import { getVoicemailGreetingUrl } from "@/lib/voice/routing";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("voicemail");
 
 export interface StartVoicemailResult {
   ok: boolean;
@@ -21,7 +24,7 @@ export async function startVoicemail(
     .eq("call_sid", pstnCallControlId)
     .maybeSingle();
   if (pre?.voicemail) {
-    console.log("[startVoicemail] already voicemail, skipping", { pstnCallControlId });
+    log("[startVoicemail] already voicemail, skipping", { pstnCallControlId });
     return { ok: true, hadGreeting: false };
   }
 
@@ -34,15 +37,15 @@ export async function startVoicemail(
 
   const greetingCmdId = `vm-greet-${pstnCallControlId}`.slice(0, 127);
   const greetingUrl = await getVoicemailGreetingUrl(did ?? "");
-  console.log("[startVoicemail] begin", { pstnCallControlId, did, hasGreeting: Boolean(greetingUrl) });
+  log("[startVoicemail] begin", { pstnCallControlId, did, hasGreeting: Boolean(greetingUrl) });
 
   if (greetingUrl) {
     const play = await playAudioUrl(pstnCallControlId, greetingUrl, false, "self", greetingCmdId);
-    console.log("[startVoicemail] playback_start", { ok: play.ok, detail: play.ok ? "ok" : play.error });
+    log("[startVoicemail] playback_start", { ok: play.ok, detail: play.ok ? "ok" : play.error });
     if (!play.ok) {
       const is422 = typeof play.error === "string" && play.error.startsWith("422");
       if (is422) {
-        console.log("[startVoicemail] 422 on greeting => caller gone, aborting", { pstnCallControlId });
+        log("[startVoicemail] 422 on greeting => caller gone, aborting", { pstnCallControlId });
         return { ok: false, hadGreeting: true, callerGone: true };
       }
       console.error("[startVoicemail] greeting playback failed; falling back to beep-record", play.error, { pstnCallControlId });
@@ -63,7 +66,7 @@ export async function startVoicemail(
       .from("calls")
       .update({ recording_state: "recording", voicemail_recording_id: vmRecId })
       .eq("call_sid", pstnCallControlId);
-    console.log("[startVoicemail] voicemail beep-record started", { pstnCallControlId, vmRecId });
+    log("[startVoicemail] voicemail beep-record started", { pstnCallControlId, vmRecId });
   } else {
     const is422 = typeof rec.error === "string" && rec.error.startsWith("422");
     if (is422) return { ok: false, hadGreeting: false, callerGone: true };
