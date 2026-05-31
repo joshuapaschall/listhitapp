@@ -48,7 +48,7 @@ vi.mock("../lib/supabase", () => {
       },
     }),
   }
-  return { supabase: client }
+  return { supabase: client, supabaseAdmin: client }
 })
 
 beforeEach(() => {
