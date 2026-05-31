@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
+import { requirePermission } from "@/lib/permissions/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireOrgContext } from "../../_shared";
 
 export async function GET(_: Request, { params }: { params: { id: string } }) {
-  const { user, orgId } = await requireOrgContext();
+  const { user, orgId, supabase } = await requireOrgContext();
   if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  const denied = await requirePermission(supabase, "settings.markets");
+  if (denied) return denied;
   const { data, error } = await supabaseAdmin
     .from("inbound_numbers")
     .select("e164, label, enabled, config_override, voicemail_greeting_url, voicemail_greeting_source, call_routing_mode, call_forwarding_number, browser_ring_timeout_seconds")
@@ -16,8 +19,10 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
 }
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
-  const { user, orgId } = await requireOrgContext();
+  const { user, orgId, supabase } = await requireOrgContext();
   if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  const denied = await requirePermission(supabase, "settings.markets");
+  if (denied) return denied;
   const body = await request.json();
   const assign = Array.isArray(body.assign) ? body.assign : [];
   const unassign = Array.isArray(body.unassign) ? body.unassign : [];

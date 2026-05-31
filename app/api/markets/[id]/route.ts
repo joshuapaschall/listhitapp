@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
+import { requirePermission } from "@/lib/permissions/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireOrgContext, validatePatchBody } from "../_shared";
 
 export async function GET(_: Request, { params }: { params: { id: string } }) {
-  const { user, orgId } = await requireOrgContext();
+  const { user, orgId, supabase } = await requireOrgContext();
   if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  const denied = await requirePermission(supabase, "settings.markets");
+  if (denied) return denied;
   const { data: market, error } = await supabaseAdmin.from("markets").select("*").eq("org_id", orgId).eq("id", params.id).maybeSingle();
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   if (!market) return NextResponse.json({ ok: false, error: "Market not found" }, { status: 404 });
@@ -13,8 +16,10 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
 }
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
-  const { user, orgId } = await requireOrgContext();
+  const { user, orgId, supabase } = await requireOrgContext();
   if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  const denied = await requirePermission(supabase, "settings.markets");
+  if (denied) return denied;
   const body = await request.json();
   const { update, error: validationError } = validatePatchBody(body);
   if (validationError) return NextResponse.json({ ok: false, error: validationError }, { status: 400 });
@@ -25,8 +30,10 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 }
 
 export async function DELETE(_: Request, { params }: { params: { id: string } }) {
-  const { user, orgId } = await requireOrgContext();
+  const { user, orgId, supabase } = await requireOrgContext();
   if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  const denied = await requirePermission(supabase, "settings.markets");
+  if (denied) return denied;
   const { count } = await supabaseAdmin.from("inbound_numbers").select("*", { count: "exact", head: true }).eq("org_id", orgId).eq("market_id", params.id);
   if ((count ?? 0) > 0) return NextResponse.json({ error: "Move numbers out first", numberCount: count ?? 0 }, { status: 409 });
   const { error } = await supabaseAdmin.from("markets").delete().eq("org_id", orgId).eq("id", params.id);

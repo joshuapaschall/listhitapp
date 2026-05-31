@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
+import { requirePermission } from "@/lib/permissions/server";
 import { requireOrgContext } from "./_shared";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export async function GET() {
-  const { user, orgId } = await requireOrgContext();
+  const { user, orgId, supabase } = await requireOrgContext();
   if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  const denied = await requirePermission(supabase, "settings.markets");
+  if (denied) return denied;
   if (!orgId) return NextResponse.json({ ok: false, error: "Missing org" }, { status: 400 });
 
   const { data: markets, error } = await supabaseAdmin.from("markets").select("*").eq("org_id", orgId).order("name");
@@ -24,8 +27,10 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const { user, orgId } = await requireOrgContext();
+  const { user, orgId, supabase } = await requireOrgContext();
   if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  const denied = await requirePermission(supabase, "settings.markets");
+  if (denied) return denied;
   if (!orgId) return NextResponse.json({ ok: false, error: "Missing org" }, { status: 400 });
   const body = await request.json();
   const name = typeof body.name === "string" ? body.name.trim() : "";

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import EmojiPicker from "emoji-picker-react";
+import { Can } from "@/components/auth/Can";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -1384,7 +1385,15 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
         })}
         <div ref={endRef} />
       </div>
-      <div className="border-t p-2 space-y-2 sticky bottom-0 bg-background">
+      <Can
+        permission="inbox.send"
+        fallback={
+          <div className="border-t bg-background p-4 text-sm text-muted-foreground">
+            You can view this conversation, but you do not have permission to send inbox messages.
+          </div>
+        }
+      >
+        <div className="border-t p-2 space-y-2 sticky bottom-0 bg-background">
         <Textarea
           ref={textareaRef}
           value={input}
@@ -1646,7 +1655,8 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
             </div>
           </div>
         </div>
-      </div>
+        </div>
+      </Can>
       <EditBuyerModal
         open={showEdit}
         onOpenChange={setShowEdit}

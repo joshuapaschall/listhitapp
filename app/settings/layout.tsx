@@ -4,18 +4,22 @@ import type { ReactNode } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import MainLayout from "@/components/layout/main-layout"
+import { Can } from "@/components/auth/Can"
+import type { PermissionKey } from "@/lib/permissions/keys"
 import { cn } from "@/lib/utils"
 
-const navItems = [
+const navItems: Array<{ href: string; label: string; description: string; permission?: PermissionKey }> = [
   {
     href: "/settings/markets",
     label: "Markets",
     description: "Group your numbers and configure routing & voicemail",
+    permission: "settings.markets",
   },
   {
     href: "/settings/templates/sms",
     label: "Message Templates",
     description: "Manage SMS, email, and quick-reply templates",
+    permission: "settings.templates",
   },
   {
     href: "/settings/keywords",
@@ -26,11 +30,13 @@ const navItems = [
     href: "/settings/email-domains",
     label: "Email Domains",
     description: "Verify sender domains and manage from-addresses",
+    permission: "settings.email_domains",
   },
   {
     href: "/settings/integrations",
     label: "Integrations",
     description: "SendFox, Telnyx, Gmail, and other connected services",
+    permission: "settings.integrations",
   },
 ]
 
@@ -50,7 +56,7 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
           <nav className="space-y-1 px-2 pb-4">
             {navItems.map((item) => {
               const active = pathname.startsWith(item.href)
-              return (
+              const link = (
                 <Link
                   key={item.href}
                   href={item.href}
@@ -66,6 +72,14 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
                     {item.description}
                   </span>
                 </Link>
+              )
+
+              if (!item.permission) return link
+
+              return (
+                <Can key={item.href} permission={item.permission}>
+                  {link}
+                </Can>
               )
             })}
           </nav>

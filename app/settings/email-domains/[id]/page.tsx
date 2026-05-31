@@ -5,6 +5,7 @@ import Link from "next/link"
 import { AlertCircle, ArrowLeft, Check, Clock, Copy, Loader2, Plus, RefreshCcw, ShieldCheck } from "lucide-react"
 import { toast } from "sonner"
 
+import { PermissionGate } from "@/components/auth/PermissionGate"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -193,7 +194,8 @@ export default function EmailDomainDetailPage({ params }: { params: { id: string
 
   if (loading) {
     return (
-      <div className="space-y-6 p-6">
+      <PermissionGate permission="settings.email_domains" title="Email domains">
+        <div className="space-y-6 p-6">
         <Skeleton className="h-9 w-40" />
         <div className="space-y-2">
           <Skeleton className="h-8 w-72" />
@@ -205,13 +207,15 @@ export default function EmailDomainDetailPage({ params }: { params: { id: string
             <Skeleton className="h-20 w-full" />
           </CardContent>
         </Card>
-      </div>
+        </div>
+      </PermissionGate>
     )
   }
 
   if (!domain) {
     return (
-      <div className="space-y-4 p-6">
+      <PermissionGate permission="settings.email_domains" title="Email domains">
+        <div className="space-y-4 p-6">
         <Button asChild variant="ghost">
           <Link href="/settings/email-domains">
             <ArrowLeft className="size-4" />
@@ -224,7 +228,8 @@ export default function EmailDomainDetailPage({ params }: { params: { id: string
             <CardDescription>We couldn&apos;t load this email domain.</CardDescription>
           </CardHeader>
         </Card>
-      </div>
+        </div>
+      </PermissionGate>
     )
   }
 
@@ -251,7 +256,8 @@ export default function EmailDomainDetailPage({ params }: { params: { id: string
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <PermissionGate permission="settings.email_domains" title="Email domains">
+      <div className="space-y-6 p-6">
       <Button asChild variant="ghost">
         <Link href="/settings/email-domains">
           <ArrowLeft className="size-4" />
@@ -451,6 +457,7 @@ export default function EmailDomainDetailPage({ params }: { params: { id: string
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
+      </div>
+    </PermissionGate>
   )
 }

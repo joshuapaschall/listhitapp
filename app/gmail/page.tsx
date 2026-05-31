@@ -6,6 +6,7 @@ import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-quer
 import { Mail } from "lucide-react"
 import { toast } from "sonner"
 import MainLayout from "@/components/layout/main-layout"
+import { usePermissions } from "@/hooks/use-permissions"
 import { Button } from "@/components/ui/button"
 import { ListPane, ConversationPane, ComposeWindow, Sidebar, TopBar } from "@/components/gmail"
 
@@ -40,6 +41,8 @@ export default function GmailPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const queryClient = useQueryClient()
+  const { can, loading: permissionsLoading } = usePermissions()
+  const canAccessGmail = can("gmail.access")
 
   const { data: accounts = [], isLoading: accountsLoading } = useQuery<GmailAccount[]>({
     queryKey: ["gmail-accounts"],
@@ -48,6 +51,7 @@ export default function GmailPage() {
       if (!res.ok) return []
       return res.json()
     },
+    enabled: !permissionsLoading && canAccessGmail,
   })
 
   const hasActiveAccount = accounts.some((account) => account.is_active)
@@ -59,7 +63,7 @@ export default function GmailPage() {
       if (!res.ok) throw new Error("Failed labels")
       return res.json()
     },
-    enabled: hasActiveAccount,
+    enabled: !permissionsLoading && canAccessGmail && hasActiveAccount,
     staleTime: 30 * 1000,
     refetchInterval: 60_000,
     refetchOnWindowFocus: true,
@@ -104,7 +108,7 @@ export default function GmailPage() {
       return json as ThreadsResponse
     },
     placeholderData: keepPreviousData,
-    enabled: hasActiveAccount,
+    enabled: !permissionsLoading && canAccessGmail && hasActiveAccount,
     refetchOnWindowFocus: true,
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,
@@ -192,6 +196,12 @@ export default function GmailPage() {
     window.addEventListener("keydown", onKeyDown)
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [threads, selectedThread, showCompose, keyboardIndex, queryClient])
+
+  if (permissionsLoading) return <MainLayout><div className="flex h-full items-center justify-center p-8"><div className="text-sm text-muted-foreground">Checking Gmail permissions...</div></div></MainLayout>
+
+  if (!canAccessGmail) {
+    return <MainLayout><div className="space-y-2 p-6"><h1 className="text-2xl font-semibold tracking-tight">Gmail</h1><p className="text-sm text-muted-foreground">You do not have permission to access Gmail.</p></div></MainLayout>
+  }
 
   if (accountsLoading) return <MainLayout><div className="flex h-full items-center justify-center p-8"><div className="text-sm text-muted-foreground">Loading...</div></div></MainLayout>
 

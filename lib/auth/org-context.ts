@@ -25,9 +25,9 @@ export async function resolveOrgIdForUser(userId: string): Promise<string | null
 export async function requireOrgContext() {
   const supabase = createRouteHandlerClient({ cookies })
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { user: null, orgId: null }
+  if (!user) return { user: null, orgId: null, supabase }
 
   const orgId = await resolveOrgIdForUser(user.id)
 
-  return { user, orgId }
+  return { user, orgId, supabase }
 }

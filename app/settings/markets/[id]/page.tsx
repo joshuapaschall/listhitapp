@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 
+import { PermissionGate } from "@/components/auth/PermissionGate";
 import CallRoutingEditor from "@/components/settings/shared/call-routing-editor";
 import VoicemailGreetingEditor from "@/components/settings/shared/voicemail-greeting-editor";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -61,13 +62,18 @@ export default function MarketDetailPage() {
   }, [id]);
 
   if (!market) {
-    return <div className="p-8">Loading...</div>;
+    return (
+      <PermissionGate permission="settings.markets" title="Markets">
+        <div className="p-8">Loading...</div>
+      </PermissionGate>
+    );
   }
 
   const otherMarkets = allMarkets.filter((entry) => entry.id !== market.id);
 
   return (
-    <div className="space-y-6 p-8">
+    <PermissionGate permission="settings.markets" title="Markets">
+      <div className="space-y-6 p-8">
       <Link href="/settings/markets" className="text-sm text-muted-foreground hover:text-emerald-700">← Back to Markets</Link>
 
       <div className="flex items-start justify-between gap-4">
@@ -259,7 +265,8 @@ export default function MarketDetailPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+      </div>
+    </PermissionGate>
   );
 }
 

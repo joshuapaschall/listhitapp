@@ -3,6 +3,7 @@ import { cookies } from "next/headers"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { randomBytes } from "crypto"
 import { assertServer } from "@/utils/assert-server"
+import { requirePermission } from "@/lib/permissions/server"
 
 assertServer()
 
@@ -21,6 +22,8 @@ export async function GET() {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
+  const denied = await requirePermission(supabase, "gmail.access")
+  if (denied) return denied
 
   const clientId = process.env.GOOGLE_CLIENT_ID
   const redirectUri = process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI

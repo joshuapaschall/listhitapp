@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requirePermission } from "@/lib/permissions/server";
 import { requireOrgContext } from "@/lib/auth/org-context";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -14,8 +15,10 @@ function normalizeOptionalEmail(value: unknown) {
 }
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
-  const { user, orgId } = await requireOrgContext();
+  const { user, orgId, supabase } = await requireOrgContext();
   if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  const denied = await requirePermission(supabase, "settings.email_domains");
+  if (denied) return denied;
   if (!orgId) return NextResponse.json({ ok: false, error: "Organization context missing" }, { status: 400 });
 
   const { data: existingSender, error: existingError } = await supabaseAdmin.from("email_senders").select("*").eq("org_id", orgId).eq("id", params.id).maybeSingle();
@@ -48,8 +51,10 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 }
 
 export async function DELETE(_: Request, { params }: { params: { id: string } }) {
-  const { user, orgId } = await requireOrgContext();
+  const { user, orgId, supabase } = await requireOrgContext();
   if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  const denied = await requirePermission(supabase, "settings.email_domains");
+  if (denied) return denied;
   if (!orgId) return NextResponse.json({ ok: false, error: "Organization context missing" }, { status: 400 });
   const { error } = await supabaseAdmin.from("email_senders").delete().eq("org_id", orgId).eq("id", params.id);
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });

@@ -3,6 +3,7 @@ import { cookies } from "next/headers"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { getActiveAccount } from "@/services/gmail-tokens"
 import { assertServer } from "@/utils/assert-server"
+import { requirePermission } from "@/lib/permissions/server"
 
 assertServer()
 
@@ -43,6 +44,8 @@ export async function GET(_req: NextRequest) {
   const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const denied = await requirePermission(supabase, "gmail.access")
+  if (denied) return denied
 
   try {
     const { accessToken, email } = await getActiveAccount(user.id)

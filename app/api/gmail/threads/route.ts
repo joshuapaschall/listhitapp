@@ -3,6 +3,7 @@ import { listThreads, getThread, listDrafts } from "@/services/gmail-api"
 import { cookies } from "next/headers"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { assertServer } from "@/utils/assert-server"
+import { requirePermission } from "@/lib/permissions/server"
 
 assertServer()
 
@@ -11,6 +12,8 @@ export async function GET(request: NextRequest) {
   const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 })
+  const denied = await requirePermission(supabase, "gmail.access")
+  if (denied) return denied
 
   const userId = user.id
   const maxParam = request.nextUrl.searchParams.get("maxResults")

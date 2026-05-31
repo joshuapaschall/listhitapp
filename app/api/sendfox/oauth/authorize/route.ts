@@ -2,6 +2,7 @@ import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { randomUUID } from "crypto"
+import { requirePermission } from "@/lib/permissions/server"
 import { getSendfoxAuthorizationUrl } from "@/services/sendfox-auth"
 
 export async function GET() {
@@ -13,6 +14,9 @@ export async function GET() {
   if (!user) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 })
   }
+
+  const denied = await requirePermission(supabase, "settings.integrations")
+  if (denied) return denied
 
   try {
     const state = randomUUID()

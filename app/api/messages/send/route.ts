@@ -1,4 +1,7 @@
 import { NextRequest } from "next/server"
+import { cookies } from "next/headers"
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
+import { requirePermission } from "@/lib/permissions/server"
 import { supabase, supabaseAdmin } from "@/lib/supabase"
 import { scheduleSMS, lookupCarrier } from "@/lib/sms-rate-limiter"
 import { normalizePhone, formatPhoneE164 } from "@/lib/dedup-utils"
@@ -8,6 +11,11 @@ import { TELNYX_API_URL, telnyxHeaders } from "@/lib/telnyx"
 import { getTelnyxApiKey } from "@/lib/voice-env"
 
 export async function POST(request: NextRequest) {
+  const cookieStore = cookies()
+  const routeSupabase = createRouteHandlerClient({ cookies: () => cookieStore })
+  const denied = await requirePermission(routeSupabase, "inbox.send")
+  if (denied) return denied
+
   const { buyerId, threadId, to, body, mediaUrls, from: overrideFrom } =
     await request.json()
 

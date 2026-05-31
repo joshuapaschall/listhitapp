@@ -5,6 +5,7 @@ import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { normalizeEmail } from "@/lib/dedup-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { assertServer } from "@/utils/assert-server"
+import { requirePermission } from "@/lib/permissions/server"
 
 assertServer()
 
@@ -17,24 +18,31 @@ function htmlToPlainText(html: string): string {
 }
 
 export async function POST(request: NextRequest) {
-  const formData = await request.formData()
-  const from = (formData.get("from") as string | null) || defaultFromAddress
-  const threadId = formData.get("threadId") as string | null
-  const to = formData.get("to") as string | null
-  const cc = formData.get("cc") as string | null
-  const bcc = formData.get("bcc") as string | null
-  const subject = formData.get("subject") as string | null
-  const html = formData.get("html") as string | null
-  const fileEntries = formData.getAll("attachments")
   const cookieStore = cookies()
   const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 })
+  const denied = await requirePermission(supabase, "gmail.access")
+  if (denied) return denied
+  const contentType = request.headers.get("content-type") ?? ""
+  const isFormData = contentType.includes("multipart/form-data") || contentType.includes("application/x-www-form-urlencoded")
+  const formData = isFormData ? await request.formData() : null
+  const json = formData ? null : await request.json().catch(() => ({}))
+  const from = ((formData?.get("from") as string | null) || json?.from || defaultFromAddress) as string
+  const threadId = (formData?.get("threadId") as string | null) || json?.threadId || null
+  const to = (formData?.get("to") as string | null) || json?.to || null
+  const cc = (formData?.get("cc") as string | null) || json?.cc || null
+  const bcc = (formData?.get("bcc") as string | null) || json?.bcc || null
+  const subject = (formData?.get("subject") as string | null) || json?.subject || null
+  const html = (formData?.get("html") as string | null) || json?.html || undefined
+  const plainText = (formData?.get("text") as string | null) || json?.text || null
+  const fileEntries = formData?.getAll("attachments") ?? []
   const userId = user.id
-  if (!threadId || !to || !subject || !html) return new Response(JSON.stringify({ error: "threadId, to, subject and html are required" }), { status: 400 })
+  if (!threadId || !to || !subject || (!html && !plainText)) return new Response(JSON.stringify({ error: "threadId, to, subject and html are required" }), { status: 400 })
   if (!from) return new Response(JSON.stringify({ error: "GMAIL_FROM not configured" }), { status: 500 })
 
-  let totalSize = Buffer.byteLength(html, "utf8")
+  const text = plainText || htmlToPlainText(html || "")
+  let totalSize = Buffer.byteLength(html || text, "utf8")
   const attachmentList: Array<{ filename: string; contentType: string; data: Buffer }> = []
   for (const entry of fileEntries) {
     if (entry instanceof File) {
@@ -62,7 +70,6 @@ export async function POST(request: NextRequest) {
     }
     if (!inReplyTo) return new Response(JSON.stringify({ error: "Message-ID not found in thread" }), { status: 400 })
 
-    const text = htmlToPlainText(html)
     const useRichBuilder = attachmentList.length > 0 || !!cc || !!bcc
     const raw = useRichBuilder
       ? buildReplyWithAttachments({ from, to, cc: cc || undefined, bcc: bcc || undefined, subject, text, html, inReplyTo, references: refs, attachments: attachmentList })

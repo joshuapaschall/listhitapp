@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react"
 import Link from "next/link"
 import { HelpCircle, Loader2, Plus } from "lucide-react"
 
+import { PermissionGate } from "@/components/auth/PermissionGate"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -67,7 +68,8 @@ export default function EmailDomainsPage() {
   }
 
   return (
-    <TooltipProvider>
+    <PermissionGate permission="settings.email_domains" title="Email domains">
+      <TooltipProvider>
       <div className="space-y-6 p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -169,6 +171,7 @@ export default function EmailDomainsPage() {
           </div>
         )}
       </div>
-    </TooltipProvider>
+      </TooltipProvider>
+    </PermissionGate>
   )
 }
