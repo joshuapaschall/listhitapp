@@ -35,6 +35,7 @@ import { PROPERTY_TYPES } from "@/lib/constant"
 import LocationSelector from "./location-selector"
 import GroupTreeSelector from "./group-tree-selector"
 import { addBuyersToGroups } from "@/lib/group-service"
+import { Can } from "@/components/auth/Can"
 
 // Field mapping definitions
 const FIELD_MAPPINGS = [
@@ -499,11 +500,13 @@ export default function ImportBuyersModal({ onSuccess }: ImportBuyersModalProps)
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button className="btn-primary">
-          <FileUp className="mr-2 h-4 w-4" /> Import Buyers
-        </Button>
-      </DialogTrigger>
+      <Can permission="buyers.import">
+        <DialogTrigger asChild>
+          <Button className="btn-primary">
+            <FileUp className="mr-2 h-4 w-4" /> Import Buyers
+          </Button>
+        </DialogTrigger>
+      </Can>
 
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         {step === 0 ? (

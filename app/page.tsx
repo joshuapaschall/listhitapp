@@ -59,6 +59,8 @@ import TagFilterSelector from "@/components/buyers/tag-filter-selector"
 import { CallButton } from "@/components/voice/CallButton"
 import LocationFilterSelector from "@/components/buyers/location-filter-selector"
 import { exportBuyersToCSV } from "@/lib/export-utils"
+import { Can } from "@/components/auth/Can"
+import { usePermissions } from "@/hooks/use-permissions"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { PROPERTY_TYPES } from "@/lib/constant"
 import { saveAudienceSnapshot } from "@/lib/campaign-audience"
@@ -348,124 +350,6 @@ const fetchBuyerIds = async (
   return (data || []).map((row: any) => row.id) as string[]
 }
 
-// Fetch all buyers data for export when selecting all
-const fetchAllBuyersData = async (
-  filters: FilterState,
-  quickFilters: string[] = [],
-  groupId?: string,
-) => {
-  let query: any = supabase.from("buyers")
-
-  if (groupId) {
-    query = query
-      .select("* , buyer_groups!inner(group_id)")
-      .eq("buyer_groups.group_id", groupId)
-  } else {
-    query = query.select("*")
-  }
-
-  query = query.eq("sendfox_hidden", false).is("deleted_at", null)
-
-  // Apply same filters as above
-  if (filters.search) {
-    const encoded = encodeURIComponent(filters.search)
-    query = query.or(
-      `fname.ilike.%${encoded}%,lname.ilike.%${encoded}%,email.ilike.%${encoded}%,phone.ilike.%${encoded}%`,
-    )
-  }
-
-  if (filters.vip === "vip") {
-    query = query.eq("vip", true)
-  } else if (filters.vip === "not-vip") {
-    query = query.eq("vip", false)
-  }
-
-  if (filters.vetted === "vetted") {
-    query = query.eq("vetted", true)
-  } else if (filters.vetted === "not-vetted") {
-    query = query.eq("vetted", false)
-  }
-
-  if (filters.minScore) {
-    query = query.gte("score", Number.parseInt(filters.minScore))
-  }
-
-  if (filters.maxScore) {
-    query = query.lte("score", Number.parseInt(filters.maxScore))
-  }
-
-  if (filters.createdAfter) {
-    query = query.gte("created_at", filters.createdAfter)
-  }
-
-  if (filters.createdBefore) {
-    query = query.lte("created_at", filters.createdBefore)
-  }
-
-  if (filters.selectedTags && filters.selectedTags.length > 0) {
-    query = query.contains("tags", filters.selectedTags)
-  }
-
-  if (filters.excludeTags && filters.excludeTags.length > 0) {
-    const exclude = `{${filters.excludeTags
-      .map((tag) => `"${tag}"`)
-      .join(",")}}`
-    query = query.not("tags", "ov", exclude)
-  }
-
-  if (filters.selectedLocations && filters.selectedLocations.length > 0) {
-    query = query.overlaps("locations", filters.selectedLocations)
-  }
-
-  if (filters.propertyType && filters.propertyType !== "any") {
-    query = query.overlaps("property_type", [filters.propertyType])
-  }
-
-  if (filters.canReceiveEmail === "yes") {
-    query = query.eq("can_receive_email", true)
-  } else if (filters.canReceiveEmail === "no") {
-    query = query.eq("can_receive_email", false)
-  }
-
-  if (filters.canReceiveSMS === "yes") {
-    query = query.eq("can_receive_sms", true)
-  } else if (filters.canReceiveSMS === "no") {
-    query = query.eq("can_receive_sms", false)
-  }
-
-  if (quickFilters.includes("vip")) {
-    query = query.eq("vip", true)
-  }
-
-  if (quickFilters.includes("hot")) {
-    query = query.gte("score", 85)
-  }
-
-  if (quickFilters.includes("new")) {
-    const sevenDaysAgo = new Date()
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-    query = query.gte("created_at", sevenDaysAgo.toISOString())
-  }
-
-  if (quickFilters.includes("highScore")) {
-    query = query.gte("score", 90)
-  }
-
-  const { data, error } = await query
-
-  if (error) {
-    log("error", "Failed to fetch all buyers", { error })
-    throw error
-  }
-
-  const buyersOnly = (data || []).map((row: any) => {
-    const { buyer_groups, ...rest } = row
-    return rest
-  })
-
-  return buyersOnly as Buyer[]
-}
-
 const fetchBuyersByIds = async (ids: string[]): Promise<Buyer[]> => {
   if (ids.length === 0) return []
   const { data, error } = await supabase
@@ -487,6 +371,7 @@ function BuyersPageContent() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const suppressBuyerModalAutoOpenRef = useRef(false)
+  const { loading: permissionsLoading, can, isAdmin } = usePermissions()
 
   // UI state
   const [selectedBuyers, setSelectedBuyers] = useState<string[]>([])
@@ -531,6 +416,7 @@ function BuyersPageContent() {
   })
 
   const debouncedSearch = useDebounce(filters.search)
+  const canViewBuyers = isAdmin || can("buyers.view")
 
   // React Query for buyers with caching
   const {
@@ -561,6 +447,7 @@ function BuyersPageContent() {
     retry: 1,
     retryDelay: 1000,
     placeholderData: keepPreviousData,
+    enabled: !permissionsLoading && canViewBuyers,
   })
 
   // React Query for tags with caching
@@ -576,6 +463,7 @@ function BuyersPageContent() {
     gcTime: 60 * 60 * 1000, // 1 hour
     retry: 1,
     retryDelay: 1000,
+    enabled: !permissionsLoading && canViewBuyers,
   })
 
   // React Query for buyer counts by group
@@ -584,6 +472,7 @@ function BuyersPageContent() {
     queryFn: BuyerService.getBuyerCountsByGroup,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
+    enabled: !permissionsLoading && canViewBuyers,
   })
 
   // React Query for total buyer count
@@ -592,6 +481,7 @@ function BuyersPageContent() {
     queryFn: BuyerService.getTotalBuyerCount,
     staleTime: 30 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
+    enabled: !permissionsLoading && canViewBuyers,
   })
 
   const buyers = useMemo(() => buyersData?.buyers || [], [buyersData])
@@ -636,7 +526,7 @@ function BuyersPageContent() {
   }, [buyers, editingBuyer?.id, searchParams, showEditBuyerModal])
 
   const loading =
-    (buyersLoading && !buyersData) || tagsLoading || countsLoading || totalCountLoading
+    permissionsLoading || (buyersLoading && !buyersData) || tagsLoading || countsLoading || totalCountLoading
   const error = buyersError || tagsError
   const isError = isBuyersError || isTagsError
 
@@ -668,6 +558,7 @@ function BuyersPageContent() {
 
   // Preload next page for better UX
   useEffect(() => {
+    if (!canViewBuyers) return
     if (currentPage < totalPages) {
       queryClient.prefetchQuery({
         queryKey: [
@@ -698,6 +589,7 @@ function BuyersPageContent() {
     queryClient,
     activeQuickFilters,
     itemsPerPage,
+    canViewBuyers,
   ])
 
   // Reset to first page when filters change
@@ -729,34 +621,37 @@ function BuyersPageContent() {
       toast.error("Please select buyers to export")
       return
     }
-    let selectedBuyerData: Buyer[] = []
 
-    if (allSelected) {
-      selectedBuyerData = await fetchAllBuyersData(
-        { ...filters, search: debouncedSearch },
-        activeQuickFilters,
-        selectedGroupId,
-      )
-    } else {
-      const missingIds = selectedBuyers.filter(
-        (id) => !buyers.find((b: Buyer) => b.id === id),
-      )
-      const extra = missingIds.length
-        ? await fetchAllBuyersData(
-            { ...filters, search: debouncedSearch },
-            activeQuickFilters,
-            selectedGroupId,
-          )
-        : []
-      selectedBuyerData = [
-        ...buyers.filter((buyer: Buyer) => selectedBuyers.includes(buyer.id)),
-        ...(extra || []).filter((b) => selectedBuyers.includes(b.id)),
-      ]
+    try {
+      const response = await fetch("/api/buyers/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filters: { ...filters, search: debouncedSearch },
+          quickFilters: activeQuickFilters,
+          groupId: selectedGroupId || undefined,
+          buyerIds: allSelected ? undefined : selectedBuyers,
+        }),
+      })
+
+      if (response.status === 403) {
+        toast.error("You don't have permission to export buyers.")
+        return
+      }
+
+      if (!response.ok) {
+        throw new Error("export failed")
+      }
+
+      const { buyers: selectedBuyerData = [] } = await response.json()
+      const timestamp = new Date().toISOString().split("T")[0]
+      const filename = `buyers-export-${timestamp}.csv`
+      exportBuyersToCSV(selectedBuyerData, filename)
+      toast.success("Export started")
+    } catch (err) {
+      log("error", "Failed to export buyers", { error: err })
+      toast.error("Failed to export buyers")
     }
-    const timestamp = new Date().toISOString().split("T")[0]
-    const filename = `buyers-export-${timestamp}.csv`
-    exportBuyersToCSV(selectedBuyerData, filename)
-    toast.success("Export started")
   }
 
   // Bulk actions
@@ -1097,6 +992,21 @@ function BuyersPageContent() {
     )
   }
 
+
+  if (!canViewBuyers) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="text-center max-w-md px-6">
+          <Users className="h-12 w-12 text-secondary mx-auto mb-4" />
+          <h2 className="text-xl font-semibold mb-2">You don&apos;t have access to Buyers</h2>
+          <p className="text-sm text-muted-foreground">
+            Ask an administrator to grant buyers.view before you can view buyer records.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   if (isError) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -1189,21 +1099,26 @@ function BuyersPageContent() {
                 )}
               </div>
               <div className="flex gap-2 flex-wrap">
-                <Button
-                  className="btn-primary"
-                  onClick={() => setShowAddBuyerModal(true)}
-                  aria-label="Add a new buyer manually"
-                >
-                  <Plus className="mr-1 h-4 w-4" /> Add Buyer
-                </Button>
-                <ImportBuyersModal
+                <Can permission="buyers.edit">
+                  <Button
+                    className="btn-primary"
+                    onClick={() => setShowAddBuyerModal(true)}
+                    aria-label="Add a new buyer manually"
+                  >
+                    <Plus className="mr-1 h-4 w-4" /> Add Buyer
+                  </Button>
+                </Can>
+                <Can permission="buyers.import">
+                  <ImportBuyersModal
                   onSuccess={() => {
                     queryClient.invalidateQueries({ queryKey: ["buyers"] })
                     queryClient.invalidateQueries({ queryKey: ["buyerCountsByGroup"] })
                     queryClient.invalidateQueries({ queryKey: ["totalBuyersCount"] })
                   }}
-                />
-                <DropdownMenu>
+                  />
+                </Can>
+                <Can permission="buyers.export">
+                  <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
                       variant="outline"
@@ -1223,7 +1138,8 @@ function BuyersPageContent() {
                       Export as CSV ({selectedBuyers.length} buyers)
                     </DropdownMenuItem>
                   </DropdownMenuContent>
-                </DropdownMenu>
+                  </DropdownMenu>
+                </Can>
                 <Button asChild className="btn-secondary" aria-label="Create a new marketing campaign">
                   <Link href="/campaigns/new">
                     <Target className="mr-1 h-4 w-4" /> Campaign
@@ -1323,14 +1239,16 @@ function BuyersPageContent() {
                       </Link>
                     </Button>
 
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => setShowBulkDeleteDialog(true)}
-                      aria-label="Delete selected buyers"
-                    >
-                      <Trash2 className="mr-1 h-4 w-4" /> Delete
-                    </Button>
+                    <Can permission="buyers.delete">
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => setShowBulkDeleteDialog(true)}
+                        aria-label="Delete selected buyers"
+                      >
+                        <Trash2 className="mr-1 h-4 w-4" /> Delete
+                      </Button>
+                    </Can>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -1753,15 +1671,17 @@ function BuyersPageContent() {
                           size="icon"
                           variant="ghost"
                         />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 group"
-                          onClick={() => handleEditBuyer(buyer)}
-                          aria-label={`Edit ${formatName(buyer)}`}
-                        >
-                          <Edit className="h-4 w-4 text-gray-500 group-hover:text-sky-600 transition" />
-                        </Button>
+                        <Can permission="buyers.edit">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 group"
+                            onClick={() => handleEditBuyer(buyer)}
+                            aria-label={`Edit ${formatName(buyer)}`}
+                          >
+                            <Edit className="h-4 w-4 text-gray-500 group-hover:text-sky-600 transition" />
+                          </Button>
+                        </Can>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button
@@ -1774,12 +1694,14 @@ function BuyersPageContent() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent>
-                            <DropdownMenuItem
-                              onClick={() => setBuyerToDelete(buyer)}
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Delete
-                            </DropdownMenuItem>
+                            <Can permission="buyers.delete">
+                              <DropdownMenuItem
+                                onClick={() => setBuyerToDelete(buyer)}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete
+                              </DropdownMenuItem>
+                            </Can>
                             <DropdownMenuItem
                               onClick={() => {
                                 log("buyers", "Block buyer:", buyer.id)
@@ -1891,29 +1813,33 @@ function BuyersPageContent() {
         )}
       </div>
 
-      <AddBuyerModal
-        open={showAddBuyerModal}
+      <Can permission="buyers.edit">
+        <AddBuyerModal
+          open={showAddBuyerModal}
         onOpenChange={setShowAddBuyerModal}
         onSuccessAction={(_b) => {
           queryClient.invalidateQueries({ queryKey: ["buyers"] })
           queryClient.invalidateQueries({ queryKey: ["buyerCountsByGroup"] })
           queryClient.invalidateQueries({ queryKey: ["totalBuyersCount"] })
         }}
-        onEditBuyer={(buyer) => {
-          setEditingBuyer(buyer)
-          setShowEditBuyerModal(true)
-        }}
-      />
-      <EditBuyerModal
-        open={showEditBuyerModal}
+          onEditBuyer={(buyer) => {
+            setEditingBuyer(buyer)
+            setShowEditBuyerModal(true)
+          }}
+        />
+      </Can>
+      <Can permission="buyers.edit">
+        <EditBuyerModal
+          open={showEditBuyerModal}
         onOpenChange={handleEditBuyerModalChange}
         buyer={editingBuyer}
-        onSuccess={() => {
-          queryClient.invalidateQueries({ queryKey: ["buyers"] })
-          queryClient.invalidateQueries({ queryKey: ["buyerCountsByGroup"] })
-          queryClient.invalidateQueries({ queryKey: ["totalBuyersCount"] })
-        }}
-      />
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ["buyers"] })
+            queryClient.invalidateQueries({ queryKey: ["buyerCountsByGroup"] })
+            queryClient.invalidateQueries({ queryKey: ["totalBuyersCount"] })
+          }}
+        />
+      </Can>
       <SendSmsModal
         open={showSendSmsModal}
         onOpenChange={setShowSendSmsModal}

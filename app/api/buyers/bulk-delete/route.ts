@@ -1,7 +1,15 @@
 import { NextRequest } from "next/server"
+import { cookies } from "next/headers"
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { supabase } from "@/lib/supabase"
+import { requirePermission } from "@/lib/permissions/server"
 
 export async function POST(req: NextRequest) {
+  const cookieStore = cookies()
+  const routeSupabase = createRouteHandlerClient({ cookies: () => cookieStore })
+  const denied = await requirePermission(routeSupabase, "buyers.delete")
+  if (denied) return denied
+
   try {
     const { ids } = await req.json()
     if (!Array.isArray(ids) || ids.length === 0) return new Response(JSON.stringify({ error: "ids required" }), { status: 400 })
