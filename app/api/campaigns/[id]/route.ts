@@ -2,8 +2,16 @@ import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 import { createLogger } from "@/lib/logger"
+import { hasPermission } from "@/lib/permissions/server"
 
 const log = createLogger("api:campaigns:patch")
+
+async function hasAnyCampaignSendPermission(supabase: any) {
+  return (
+    (await hasPermission(supabase, "campaigns.send_sms")) ||
+    (await hasPermission(supabase, "campaigns.send_email"))
+  )
+}
 
 const allowed = new Set([
   "name", "subject", "message", "group_ids", "buyer_ids", "scheduled_at", "timezone", "run_from", "run_until", "weekday_only", "media_url", "send_to_all_numbers", "from_name", "from_email", "preview_text", "status", "design_json", "mjml",
@@ -23,6 +31,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       .maybeSingle()
 
     if (!campaign) return NextResponse.json({ error: "Campaign not found" }, { status: 404 })
+    if (!(await hasAnyCampaignSendPermission(supabase))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
     if (campaign.status === "sent" || campaign.status === "sending") {
       return NextResponse.json({ error: "Campaign already sent — cannot edit" }, { status: 403 })
     }

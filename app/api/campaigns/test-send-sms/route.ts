@@ -6,6 +6,7 @@ import { renderTemplate } from "@/lib/utils"
 import { formatPhoneE164 } from "@/lib/dedup-utils"
 import { sendCampaignSMS } from "@/services/campaign-sender.server"
 import { getUserMergeContext } from "@/lib/user-context"
+import { requirePermission } from "@/lib/permissions/server"
 
 function parseMediaUrls(value: unknown): string[] {
   if (!value || typeof value !== "string") return []
@@ -19,6 +20,9 @@ function parseMediaUrls(value: unknown): string[] {
 
 export async function POST(request: Request) {
   const supabase = createRouteHandlerClient({ cookies })
+  const denied = await requirePermission(supabase, "campaigns.send_sms")
+  if (denied) return denied
+
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   const { campaignId, testPhone, forceDryRun } = await request.json()

@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server"
 import { cookies } from "next/headers"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
+import { requirePermission } from "@/lib/permissions/server"
 
 export async function POST(request: NextRequest) {
   const { campaignId } = await request.json()
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest) {
 
   const { data: campaign, error: campaignError } = await supabase
     .from("campaigns")
-    .select("id, user_id")
+    .select("id, user_id, channel")
     .eq("id", campaignId)
     .maybeSingle()
 
@@ -52,6 +53,16 @@ export async function POST(request: NextRequest) {
       status: 403,
       headers: { "Content-Type": "application/json" },
     })
+  }
+
+  if (campaign.channel === "sms") {
+    const denied = await requirePermission(supabase, "campaigns.send_sms")
+    if (denied) return denied
+  }
+
+  if (campaign.channel === "email") {
+    const denied = await requirePermission(supabase, "campaigns.send_email")
+    if (denied) return denied
   }
 
   const baseUrl =
@@ -81,21 +92,22 @@ export async function POST(request: NextRequest) {
     })
 
     const text = await res.text()
-    const contentType = res.headers.get("content-type") || ""
+    const ok = res.ok ?? (res.status >= 200 && res.status < 300)
+    const contentType = res.headers?.get?.("content-type") || ""
 
     if ([301, 302, 303, 307, 308].includes(res.status)) {
       return new Response(
         JSON.stringify({
           error: "Redirected",
           status: res.status,
-          location: res.headers.get("location"),
+          location: res.headers?.get?.("location"),
           body: text,
         }),
         { status: res.status, headers: { "Content-Type": "application/json" } },
       )
     }
 
-    if (!res.ok) {
+    if (!ok) {
       let body: any = null
       if (text.trim().length > 0 && contentType.includes("application/json")) {
         try {
