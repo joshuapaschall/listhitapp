@@ -3,6 +3,11 @@ import { render, screen, fireEvent } from "@testing-library/react"
 import SendSmsModal from "../components/buyers/send-sms-modal"
 import { ALLOWED_MMS_EXTENSIONS, MAX_MMS_SIZE } from "../utils/uploadMedia"
 
+vi.mock("@/hooks/use-session", () => ({
+  useSession: () => ({ user: { id: "u1", email: "test@test.com" }, session: null, loading: false }),
+  SessionProvider: ({ children }: any) => children,
+}))
+
 // jsdom doesn't implement createObjectURL
 // @ts-ignore
 global.URL.createObjectURL = vi.fn(() => "blob:mock")

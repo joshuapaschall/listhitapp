@@ -4,6 +4,8 @@ import ConversationPane from "../components/inbox/conversation-pane"
 import { NowProvider } from "../hooks/use-now"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
+vi.mock("@/components/voice/CallButton", () => ({ CallButton: () => null }))
+
 // Mock AddBuyerModal to instantly create a buyer
 vi.mock("@/components/buyers/add-buyer-modal", () => ({
   __esModule: true,
