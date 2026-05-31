@@ -239,59 +239,69 @@ export async function importBuyersFromCsv(
     })
 
     if (inserts.length) {
-      const { data, error } = await supabase
-        .from("buyers")
-        .insert(inserts)
-        .select("id")
+      const response = await fetch("/api/buyers/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ buyers: inserts }),
+      })
 
-      if (error) {
-        console.error("Insert error:", error)
-        throw error
+      if (response.status === 403) {
+        throw new Error("You don't have permission to import buyers.")
       }
 
-      if (data) {
-        insertedIds.push(...data.map((b: any) => b.id))
-        totalInserted += data.length
-        for (let i = 0; i < inserts.length; i++) {
-          const b = inserts[i]
-          const id = data[i]?.id
-          if (b.email && id) {
-            const lists: number[] = []
-            if (defaultListId) lists.push(defaultListId)
-            try {
-              const res = await fetch("/api/sendfox/contact", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  email: b.email,
-                  first_name: b.fname,
-                  lists,
-                }),
-              })
-              const sf = await res.json()
-              if (sf?.id) {
-                await supabase
-                  .from("buyers")
-                  .update({ sendfox_contact_id: sf.id })
-                  .eq("id", id)
-              }
-            } catch (err) {
-              console.error("SendFox sync error", err)
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}))
+        throw new Error(result?.error || "Failed to import buyers")
+      }
+
+      const result = await response.json()
+      const ids = (result?.insertedIds || result?.ids || []) as string[]
+      insertedIds.push(...ids)
+      totalInserted += ids.length
+      for (let i = 0; i < inserts.length; i++) {
+        const b = inserts[i]
+        const id = ids[i]
+        if (b.email && id) {
+          const lists: number[] = []
+          if (defaultListId) lists.push(defaultListId)
+          try {
+            const res = await fetch("/api/sendfox/contact", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                email: b.email,
+                first_name: b.fname,
+                lists,
+              }),
+            })
+            const sf = await res.json()
+            if (sf?.id) {
+              await supabase
+                .from("buyers")
+                .update({ sendfox_contact_id: sf.id })
+                .eq("id", id)
             }
+          } catch (err) {
+            console.error("SendFox sync error", err)
           }
         }
       }
     }
 
     for (const u of updates) {
-      const { error } = await supabase
-        .from("buyers")
-        .update(u.data)
-        .eq("id", u.id)
+      const response = await fetch("/api/buyers/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ updates: [{ id: u.id, data: u.data }] }),
+      })
 
-      if (error) {
-        console.error("Update error:", error)
-        throw error
+      if (response.status === 403) {
+        throw new Error("You don't have permission to import buyers.")
+      }
+
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}))
+        throw new Error(result?.error || "Failed to update imported buyer")
       }
 
       insertedIds.push(u.id)

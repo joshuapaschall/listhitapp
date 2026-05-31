@@ -670,7 +670,18 @@ function BuyersPageContent() {
         const currentTags = buyer.tags || []
         const newTags = [...new Set([...currentTags, ...tagsToAdd])]
 
-        await supabase.from("buyers").update({ tags: newTags }).eq("id", buyer.id)
+        const response = await fetch(`/api/buyers/${buyer.id}/tags`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tags: newTags }),
+        })
+
+        if (response.status === 403) {
+          toast.error("You don't have permission to edit buyers.")
+          return
+        }
+
+        if (!response.ok) throw new Error("Failed to update buyer tags")
       }
 
       // Invalidate queries to refresh data
@@ -700,7 +711,18 @@ function BuyersPageContent() {
         const currentTags = buyer.tags || []
         const newTags = currentTags.filter((tag: string) => !tagsToRemove.includes(tag))
 
-        await supabase.from("buyers").update({ tags: newTags }).eq("id", buyer.id)
+        const response = await fetch(`/api/buyers/${buyer.id}/tags`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tags: newTags }),
+        })
+
+        if (response.status === 403) {
+          toast.error("You don't have permission to edit buyers.")
+          return
+        }
+
+        if (!response.ok) throw new Error("Failed to update buyer tags")
       }
 
       queryClient.invalidateQueries({ queryKey: ["buyers"] })
