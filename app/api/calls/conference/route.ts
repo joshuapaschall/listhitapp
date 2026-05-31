@@ -1,8 +1,17 @@
+import { cookies } from "next/headers"
 import { NextRequest, NextResponse } from "next/server"
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
+
+import { requirePermission } from "@/lib/permissions/server"
 import { TELNYX_API_URL, telnyxHeaders } from "@/lib/telnyx"
 
 export async function POST(request: NextRequest) {
   try {
+    const cookieStore = cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+    const denied = await requirePermission(supabase, "calls.make_receive")
+    if (denied) return denied
+
     const { callControlId, command, conferenceId, ...options } = await request.json()
 
     if (!callControlId || !command) {
@@ -94,6 +103,11 @@ export async function POST(request: NextRequest) {
 // GET endpoint to list conference participants
 export async function GET(request: NextRequest) {
   try {
+    const cookieStore = cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+    const denied = await requirePermission(supabase, "calls.make_receive")
+    if (denied) return denied
+
     const { searchParams } = new URL(request.url)
     const conferenceId = searchParams.get("conferenceId")
 

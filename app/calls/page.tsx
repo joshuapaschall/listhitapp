@@ -7,7 +7,9 @@ import { ArrowUpRight, Phone, RefreshCw } from "lucide-react";
 import MainLayout from "@/components/layout/main-layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Can } from "@/components/auth/Can";
 import { useToast } from "@/hooks/use-toast";
+import { usePermissions } from "@/hooks/use-permissions";
 import CallLogFilters, { CallLogFiltersValue } from "@/components/calls/call-log-filters";
 import CallLogTable, { CallRow } from "@/components/calls/call-log-table";
 import { contactName, externalNumber, formatPhone, relativeCallTime } from "@/lib/calls/format";
@@ -41,6 +43,8 @@ export default function CallsPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { makeCall } = useCall();
+  const { can, loading: permissionsLoading } = usePermissions();
+  const canMakeReceiveCalls = can("calls.make_receive");
 
   useEffect(() => setPage(1), [filters]);
 
@@ -75,9 +79,14 @@ export default function CallsPage() {
       if (!response.ok) throw new Error("Failed to fetch calls");
       return response.json() as Promise<{ calls: CallRow[]; pagination: { page: number; totalPages: number; hasPrev: boolean; hasNext: boolean; total: number } }>;
     },
+    enabled: canMakeReceiveCalls,
   });
 
-  const { data: statsData } = useQuery({ queryKey: ["calls-stats"], queryFn: async () => (await fetch("/api/calls/stats")).json() as Promise<{ stats: { callsToday: number; talkTimeTodaySeconds: number; missedToday: number; newVoicemails: number } }> });
+  const { data: statsData } = useQuery({
+    queryKey: ["calls-stats"],
+    queryFn: async () => (await fetch("/api/calls/stats")).json() as Promise<{ stats: { callsToday: number; talkTimeTodaySeconds: number; missedToday: number; newVoicemails: number } }>,
+    enabled: canMakeReceiveCalls,
+  });
 
   const filteredCalls = useMemo(() => {
     const needle = filters.search.toLowerCase().trim();
@@ -97,6 +106,32 @@ export default function CallsPage() {
     if (!selectedCall) return [];
     return filteredCalls.filter((c) => c.id !== selectedCall.id && (selectedCall.buyer_id ? c.buyer_id === selectedCall.buyer_id : externalNumber(c) === externalNumber(selectedCall))).slice(0, 4);
   }, [filteredCalls, selectedCall]);
+
+  if (permissionsLoading) {
+    return (
+      <MainLayout>
+        <div className="mx-auto flex min-h-[60vh] max-w-[1400px] items-center justify-center px-6 py-8">
+          <p className="text-sm text-muted-foreground">Checking call permissions...</p>
+        </div>
+      </MainLayout>
+    );
+  }
+
+  if (!canMakeReceiveCalls) {
+    return (
+      <MainLayout>
+        <div className="mx-auto flex min-h-[60vh] max-w-[1400px] items-center justify-center px-6 py-8">
+          <div className="max-w-md text-center">
+            <Phone className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+            <h2 className="mb-2 text-xl font-semibold">You don&apos;t have access to Calls</h2>
+            <p className="text-sm text-muted-foreground">
+              Ask an administrator to grant calls.make_receive before you can use calling features.
+            </p>
+          </div>
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>
@@ -163,8 +198,10 @@ export default function CallsPage() {
                   <p className="text-sm text-muted-foreground">{formatPhone(externalNumber(selectedCall))}</p>
                   {selectedCall.buyer?.id ? <Link href={`/buyers/${selectedCall.buyer.id}`} className="mt-1 inline-flex items-center gap-1 text-sm text-emerald-700">View buyer <ArrowUpRight className="h-3.5 w-3.5" /></Link> : null}
                 </div>
-                <Button className="w-full bg-[#059669] hover:bg-[#047857]" onClick={() => makeCall(selectedCall.direction === "inbound" ? selectedCall.from_number ?? "" : selectedCall.to_number ?? "", selectedCall.buyer?.id ?? undefined)}>Call back</Button>
-                {selectedCall.telnyx_recording_id || selectedCall.recording_url || selectedCall.voicemail_storage_path ? <div className="rounded-lg border bg-card p-3"><audio controls className="w-full" src={selectedCall.call_sid ? `/api/recordings/${selectedCall.call_sid}/stream` : selectedCall.recording_url ?? selectedCall.voicemail_storage_path ?? undefined} /></div> : null}
+                <Can permission="calls.make_receive">
+                  <Button className="w-full bg-[#059669] hover:bg-[#047857]" onClick={() => makeCall(selectedCall.direction === "inbound" ? selectedCall.from_number ?? "" : selectedCall.to_number ?? "", selectedCall.buyer?.id ?? undefined)}>Call back</Button>
+                </Can>
+                {selectedCall.telnyx_recording_id || selectedCall.recording_url || selectedCall.voicemail_storage_path ? <Can permission="calls.recordings"><div className="rounded-lg border bg-card p-3"><audio controls className="w-full" src={selectedCall.call_sid ? `/api/recordings/${selectedCall.call_sid}/stream` : selectedCall.recording_url ?? selectedCall.voicemail_storage_path ?? undefined} /></div></Can> : null}
                 <div>
                   <p className="mb-2 text-sm font-medium">Recent with this contact</p>
                   <div className="space-y-2">

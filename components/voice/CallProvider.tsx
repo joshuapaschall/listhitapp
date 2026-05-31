@@ -4,6 +4,7 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { CallWidget } from "@/components/voice/CallWidget";
 import { IncomingRingtone } from "@/components/voice/IncomingRingtone";
 import { Call, TelnyxRTC } from "@telnyx/webrtc";
+import { usePermissions } from "@/hooks/use-permissions";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 
 type CallStatus = "idle" | "connecting" | "on-call" | "error";
@@ -57,6 +58,8 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const [customerLegId, setCustomerLegId] = useState<string | null>(null);
   const [dialerOpen, setDialerOpen] = useState(false);
   const [currentContact, setCurrentContact] = useState<{ name?: string; number?: string } | null>(null);
+  const { can, loading: permissionsLoading } = usePermissions();
+  const canMakeReceiveCalls = can("calls.make_receive");
   const activeCallRef = useRef<Call | null>(null);
   const incomingCallRef = useRef<Call | null>(null);
   const conferenceIdRef = useRef<string | null>(null);
@@ -102,6 +105,12 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let created: TelnyxRTC | null = null;
     let mounted = true;
+
+    if (permissionsLoading) return undefined;
+    if (!canMakeReceiveCalls) {
+      setStatus("idle");
+      return undefined;
+    }
 
     const init = async () => {
       try {
@@ -272,7 +281,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       try { created?.disconnect(); } catch {}
       setDevice(null);
     };
-  }, [reportPresence]);
+  }, [canMakeReceiveCalls, permissionsLoading, reportPresence]);
 
   const dialInternal = useCallback(async (destination: string, callerIdNumber?: string) => {
     if (!device) throw new Error("Phone not ready");
