@@ -5,6 +5,7 @@ import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 
+import { requirePermission } from "@/lib/permissions/server"
 import {
   createWebRTCToken,
   ensureUserTelephonyCredential,
@@ -24,6 +25,9 @@ export async function POST() {
         { status: 401 },
       )
     }
+
+    const denied = await requirePermission(supabase, "calls.make_receive")
+    if (denied) return denied
 
     const credential = await ensureUserTelephonyCredential(user.id)
     const { token } = await createWebRTCToken(credential.id)

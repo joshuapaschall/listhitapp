@@ -1,3 +1,4 @@
+import { Can } from "@/components/auth/Can";
 import { Button } from "@/components/ui/button";
 import { Pause, Play, Download } from "lucide-react";
 
@@ -39,16 +40,18 @@ export default function RecordingPlayer(props: RecordingPlayerProps) {
   };
 
   return (
-    <div className="flex items-center gap-2">
-      <Button variant="outline" size="icon" className="h-8 w-8" onClick={onToggle} aria-label={isPlaying ? "Pause recording" : "Play recording"}>
-        {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-      </Button>
-      <Button asChild variant="outline" size="icon" className="h-8 w-8" aria-label="Download recording">
-        <a href={`/api/recordings/${id}/download`} download>
-          <Download className="h-4 w-4" />
-        </a>
-      </Button>
-      <span className="text-xs text-muted-foreground">{status === "voicemail" ? "Voicemail" : "Recording"}</span>
-    </div>
+    <Can permission="calls.recordings">
+      <div className="flex items-center gap-2">
+        <Button variant="outline" size="icon" className="h-8 w-8" onClick={onToggle} aria-label={isPlaying ? "Pause recording" : "Play recording"}>
+          {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+        </Button>
+        <Button asChild variant="outline" size="icon" className="h-8 w-8" aria-label="Download recording">
+          <a href={`/api/recordings/${id}/download`} download>
+            <Download className="h-4 w-4" />
+          </a>
+        </Button>
+        <span className="text-xs text-muted-foreground">{status === "voicemail" ? "Voicemail" : "Recording"}</span>
+      </div>
+    </Can>
   );
 }

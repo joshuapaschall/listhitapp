@@ -1,4 +1,8 @@
+import { cookies } from "next/headers"
 import { NextRequest, NextResponse } from "next/server"
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
+
+import { requirePermission } from "@/lib/permissions/server"
 import { TELNYX_API_URL, telnyxHeaders } from "@/lib/telnyx"
 
 export async function POST(
@@ -6,6 +10,11 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
+    const cookieStore = cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+    const denied = await requirePermission(supabase, "calls.make_receive")
+    if (denied) return denied
+
     const { to } = await request.json()
     const callControlId = params.id
 

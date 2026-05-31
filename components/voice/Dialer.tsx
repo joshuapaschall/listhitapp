@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
+import { Can } from "@/components/auth/Can";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -81,7 +82,8 @@ export function Dialer({ open, onOpenChange }: { open: boolean; onOpenChange: (o
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Can permission="calls.make_receive">
+      <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>New call</DialogTitle>
@@ -151,6 +153,7 @@ export function Dialer({ open, onOpenChange }: { open: boolean; onOpenChange: (o
           </Button>
         </div>
       </DialogContent>
-    </Dialog>
+      </Dialog>
+    </Can>
   );
 }

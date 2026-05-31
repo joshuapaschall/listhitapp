@@ -5,6 +5,8 @@ import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 
+import { requirePermission } from "@/lib/permissions/server"
+
 export async function GET() {
   try {
     const cookieStore = cookies()
@@ -15,6 +17,9 @@ export async function GET() {
     if (!user?.id) {
       return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 })
     }
+
+    const denied = await requirePermission(supabase, "calls.make_receive")
+    if (denied) return denied
 
     const login = (process.env.TELNYX_WEBRTC_SIP_USERNAME ?? "").trim()
     const password = (process.env.TELNYX_WEBRTC_SIP_PASSWORD ?? "").trim()

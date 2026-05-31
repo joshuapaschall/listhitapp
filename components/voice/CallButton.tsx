@@ -1,6 +1,7 @@
 "use client";
 
 import { Phone } from "lucide-react";
+import { Can } from "@/components/auth/Can";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCall } from "@/components/voice/CallProvider";
@@ -30,25 +31,27 @@ export function CallButton({ phone, name, buyerId, fromNumber, size = "icon", va
   const reason = !phoneE164 ? "No valid phone number" : !device ? "Phone is not ready" : isBusy ? "You are already on a call" : status === "error" ? "Phone is unavailable" : "";
 
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span>
-            <Button
-              type="button"
-              variant={variant}
-              size={size}
-              className="text-[var(--brand)] hover:text-[var(--brand-hover)]"
-              onClick={handleCall}
-              disabled={disabled}
-              aria-label={name ? `Call ${name}` : "Call contact"}
-            >
-              <Phone className="h-4 w-4" />
-            </Button>
-          </span>
-        </TooltipTrigger>
-        {disabled ? <TooltipContent>{reason}</TooltipContent> : null}
-      </Tooltip>
-    </TooltipProvider>
+    <Can permission="calls.make_receive">
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span>
+              <Button
+                type="button"
+                variant={variant}
+                size={size}
+                className="text-[var(--brand)] hover:text-[var(--brand-hover)]"
+                onClick={handleCall}
+                disabled={disabled}
+                aria-label={name ? `Call ${name}` : "Call contact"}
+              >
+                <Phone className="h-4 w-4" />
+              </Button>
+            </span>
+          </TooltipTrigger>
+          {disabled ? <TooltipContent>{reason}</TooltipContent> : null}
+        </Tooltip>
+      </TooltipProvider>
+    </Can>
   );
 }
