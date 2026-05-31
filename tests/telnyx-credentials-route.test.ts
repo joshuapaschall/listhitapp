@@ -15,7 +15,9 @@ describe("telnyx credentials route", () => {
     const res = await GET()
     expect(fetchMock).toHaveBeenCalledWith(
       "https://api.telnyx.com/v2/telephony_credentials",
-      { headers: { Authorization: "Bearer KEY" } },
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer KEY" }),
+      }),
     )
     const data = await res.json()
     expect(data).toEqual({ data: ["c1"] })

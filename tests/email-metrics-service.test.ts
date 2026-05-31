@@ -1,3 +1,5 @@
+vi.unmock("@/services/email-metrics-service")
+vi.unmock("../services/email-metrics-service")
 vi.mock("../services/gmail-metrics-service", () => ({
   getGmailMetrics: vi.fn()
 }))
