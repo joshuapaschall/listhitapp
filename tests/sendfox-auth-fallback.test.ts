@@ -12,6 +12,16 @@ vi.mock("@supabase/auth-helpers-nextjs", () => ({
     auth: {
       getUser: getUserMock,
     },
+    from: (table: string) => {
+      if (table === "profiles") {
+        return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { role: "admin" }, error: null }) }) }) }
+      }
+      if (table === "permissions") {
+        const query = { eq: () => query, then: (resolve: any) => resolve({ data: [], error: null }) }
+        return { select: () => query }
+      }
+      throw new Error(`Unexpected auth table ${table}`)
+    },
   }),
 }))
 

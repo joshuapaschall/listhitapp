@@ -1,6 +1,7 @@
 import { cookies } from "next/headers"
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { hasPermission } from "@/lib/permissions/server"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
   buildSendfoxContextFromIntegration,
@@ -18,6 +19,18 @@ export default async function IntegrationsPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser()
+
+  const allowed = await hasPermission(supabase, "settings.integrations")
+  if (!allowed) {
+    return (
+      <div className="max-w-4xl space-y-2 p-6">
+        <h1 className="text-2xl font-semibold tracking-tight">Integrations</h1>
+        <p className="text-sm text-muted-foreground">
+          You do not have permission to access this settings area.
+        </p>
+      </div>
+    )
+  }
 
   const integration = user ? await getSendfoxIntegration(user.id).catch(() => null) : null
   const envContext = getDefaultSendfoxContext()

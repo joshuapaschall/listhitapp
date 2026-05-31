@@ -5,6 +5,7 @@ import { ChevronRight, Globe, MapPin, Plus, Star } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
+import { PermissionGate } from "@/components/auth/PermissionGate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -69,7 +70,8 @@ export default function MarketsPage() {
   }
 
   return (
-    <div className="space-y-8 p-8">
+    <PermissionGate permission="settings.markets" title="Markets">
+      <div className="space-y-8 p-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">Markets</h1>
@@ -129,7 +131,8 @@ export default function MarketsPage() {
           </button>
         </div>
       )}
-    </div>
+      </div>
+    </PermissionGate>
   );
 }
 

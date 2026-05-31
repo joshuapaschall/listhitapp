@@ -21,6 +21,16 @@ vi.mock("@supabase/auth-helpers-nextjs", () => ({
   __esModule: true,
   createRouteHandlerClient: () => ({
     auth: { getUser: async () => ({ data: { user: { id: "u1" } } }) },
+    from: (table: string) => {
+      if (table === "profiles") {
+        return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { role: "admin" }, error: null }) }) }) }
+      }
+      if (table === "permissions") {
+        const query = { eq: () => query, then: (resolve: any) => resolve({ data: [], error: null }) }
+        return { select: () => query }
+      }
+      throw new Error(`Unexpected auth table ${table}`)
+    },
   }),
 }))
 
@@ -68,6 +78,15 @@ vi.mock("@/services/gmail-api", gmailApiMockFactory)
 
 vi.mock("@supabase/supabase-js", () => ({
   createClient: () => supabase,
+}))
+
+vi.mock("@/lib/supabase", () => ({
+  get supabaseAdmin() {
+    return supabase
+  },
+  get supabase() {
+    return supabase
+  },
 }))
 
 function buildSupabase(rows: any[] = [], buyers: any[] = []) {

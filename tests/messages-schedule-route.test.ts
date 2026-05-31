@@ -7,6 +7,26 @@ let insertedRow: any = null
 // @ts-ignore
 global.fetch = fetchMock
 
+vi.mock("next/headers", () => ({
+  cookies: () => ({ get: vi.fn(), set: vi.fn(), delete: vi.fn() }),
+}))
+
+vi.mock("@supabase/auth-helpers-nextjs", () => ({
+  createRouteHandlerClient: () => ({
+    auth: { getUser: async () => ({ data: { user: { id: "user-1" } }, error: null }) },
+    from: (table: string) => {
+      if (table === "profiles") {
+        return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { role: "admin" }, error: null }) }) }) }
+      }
+      if (table === "permissions") {
+        const query = { eq: () => query, then: (resolve: any) => resolve({ data: [], error: null }) }
+        return { select: () => query }
+      }
+      throw new Error(`Unexpected auth table ${table}`)
+    },
+  }),
+}))
+
 vi.mock("@/utils/mms.server", () => ({
   ensurePublicMediaUrls: (...args: any[]) => ensureMock(...args),
 }))

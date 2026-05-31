@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
+import { requirePermission } from "@/lib/permissions/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireOrgContext, validatePatchBody } from "../../_shared";
 
 export async function PATCH(request: Request, { params }: { params: { e164: string } }) {
-  const { user, orgId } = await requireOrgContext();
+  const { user, orgId, supabase } = await requireOrgContext();
   if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  const denied = await requirePermission(supabase, "settings.markets");
+  if (denied) return denied;
   const body = await request.json();
   const validation = validatePatchBody(body);
   if (validation.error) return NextResponse.json({ ok: false, error: validation.error }, { status: 400 });

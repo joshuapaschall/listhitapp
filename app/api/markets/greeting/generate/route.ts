@@ -1,4 +1,5 @@
 import { PollyClient, SynthesizeSpeechCommand, type VoiceId } from "@aws-sdk/client-polly";
+import { requirePermission } from "@/lib/permissions/server";
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireOrgContext } from "../../_shared";
@@ -6,11 +7,19 @@ import { DEFAULT_VOICE_ID, POLLY_VOICES } from "@/lib/voice/polly-voices";
 
 const GREETING_BUCKET = "voicemail-greetings";
 
-export async function GET() { return NextResponse.json({ ok: true, voices: POLLY_VOICES, defaultVoiceId: DEFAULT_VOICE_ID }); }
+export async function GET() {
+  const { user, supabase } = await requireOrgContext();
+  if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  const denied = await requirePermission(supabase, "settings.markets");
+  if (denied) return denied;
+  return NextResponse.json({ ok: true, voices: POLLY_VOICES, defaultVoiceId: DEFAULT_VOICE_ID });
+}
 
 export async function POST(request: Request) {
-  const { user } = await requireOrgContext();
+  const { user, supabase } = await requireOrgContext();
   if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  const denied = await requirePermission(supabase, "settings.markets");
+  if (denied) return denied;
   const contentType = request.headers.get("content-type") ?? "";
   const ts = Date.now();
 

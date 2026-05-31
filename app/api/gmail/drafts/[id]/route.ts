@@ -4,6 +4,7 @@ import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { getDraft, updateDraft, buildMessageWithAttachments } from "@/services/gmail-api"
 import { decodeMessage } from "@/lib/gmail-utils"
 import { assertServer } from "@/utils/assert-server"
+import { requirePermission } from "@/lib/permissions/server"
 
 assertServer()
 
@@ -33,6 +34,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const denied = await requirePermission(supabase, "gmail.access")
+  if (denied) return denied
 
   try {
     const draft = await getDraft(user.id, params.id)
@@ -80,6 +83,8 @@ export async function PUT(
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
+  const denied = await requirePermission(supabase, "gmail.access")
+  if (denied) return denied
   if (!to || !subject || html === null) {
     return NextResponse.json(
       { error: "to, subject and html are required" },

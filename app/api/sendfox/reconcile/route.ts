@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server"
 import { cookies } from "next/headers"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
-import { getUserRole } from "@/lib/get-user-role"
+import { requirePermission } from "@/lib/permissions/server"
 import { reconcileSendfoxLists } from "@/services/sendfox-service"
 
 export async function POST(req: NextRequest) {
@@ -15,10 +15,8 @@ export async function POST(req: NextRequest) {
     if (!(authHeader && serviceKey && authHeader === `Bearer ${serviceKey}`)) {
       const cookieStore = cookies()
       const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
-      const role = await getUserRole(supabase)
-      if (role !== "admin") {
-        return new Response(JSON.stringify({ error: "forbidden" }), { status: 403 })
-      }
+      const denied = await requirePermission(supabase, "settings.integrations")
+      if (denied) return denied
     }
 
     const result = await reconcileSendfoxLists({ listId, dryRun })

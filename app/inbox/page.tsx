@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { getThreadByBuyer, ThreadWithBuyer } from "@/services/message-service";
 import { useToast } from "@/components/ui/use-toast";
 import MainLayout from "@/components/layout/main-layout";
+import { usePermissions } from "@/hooks/use-permissions";
 import { ListPane, ConversationPane } from "@/components/inbox";
 
 function InboxPageContent() {
@@ -12,6 +13,7 @@ function InboxPageContent() {
   const searchParams = useSearchParams();
   const buyerId = searchParams.get("buyerId");
   const { toast } = useToast();
+  const { can, loading: permissionsLoading } = usePermissions();
 
   useEffect(() => {
     const loadThread = async () => {
@@ -29,6 +31,25 @@ function InboxPageContent() {
 
     loadThread();
   }, [buyerId, toast]);
+
+  if (permissionsLoading) {
+    return (
+      <MainLayout>
+        <div className="p-6 text-sm text-muted-foreground">Checking inbox permissions...</div>
+      </MainLayout>
+    );
+  }
+
+  if (!can("inbox.view")) {
+    return (
+      <MainLayout>
+        <div className="space-y-2 p-6">
+          <h1 className="text-2xl font-semibold tracking-tight">Inbox</h1>
+          <p className="text-sm text-muted-foreground">You do not have permission to view the inbox.</p>
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>

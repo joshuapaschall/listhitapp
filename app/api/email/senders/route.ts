@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requirePermission } from "@/lib/permissions/server";
 import { requireOrgContext } from "@/lib/auth/org-context";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -19,8 +20,10 @@ function validateEmail(value: string) {
 }
 
 export async function GET(request: Request) {
-  const { user, orgId } = await requireOrgContext();
+  const { user, orgId, supabase } = await requireOrgContext();
   if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  const denied = await requirePermission(supabase, "settings.email_domains");
+  if (denied) return denied;
   if (!orgId) return NextResponse.json({ ok: false, error: "Organization context missing" }, { status: 400 });
   const { searchParams } = new URL(request.url);
   const domainId = searchParams.get("domain_id");
@@ -32,8 +35,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const { user, orgId } = await requireOrgContext();
+  const { user, orgId, supabase } = await requireOrgContext();
   if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  const denied = await requirePermission(supabase, "settings.email_domains");
+  if (denied) return denied;
   if (!orgId) return NextResponse.json({ ok: false, error: "Organization context missing" }, { status: 400 });
   const body = await request.json();
   const domainId = typeof body?.domain_id === "string" ? body.domain_id : "";

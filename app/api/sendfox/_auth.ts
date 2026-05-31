@@ -1,5 +1,6 @@
 import { cookies } from "next/headers"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
+import { requirePermission } from "@/lib/permissions/server"
 import {
   buildSendfoxContextFromIntegration,
   getDefaultSendfoxContext,
@@ -24,6 +25,15 @@ export async function loadSendfoxRouteContext(): Promise<SendfoxRouteContext> {
       userId: "",
       authContext: null,
       response: new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 }),
+    }
+  }
+
+  const denied = await requirePermission(supabase, "settings.integrations")
+  if (denied) {
+    return {
+      userId: user.id,
+      authContext: null,
+      response: denied,
     }
   }
 
