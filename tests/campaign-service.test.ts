@@ -1,3 +1,4 @@
+import { describe, test, expect, beforeEach, vi } from "vitest"
 import { CampaignService } from "../services/campaign-service"
 
 let campaigns: any[] = []
@@ -11,6 +12,12 @@ global.fetch = fetchMock
 
 
 vi.mock("@/lib/supabase", () => {
+  return {
+    supabase: {
+      from: (table: string) => {
+        switch (table) {
+          case "campaigns":
+            return {
               insert: (rows: any[]) => {
                 const record = {
                   id: `c${idCounter++}`,
@@ -139,6 +146,11 @@ vi.mock("@/lib/supabase", () => {
             }
           default:
             throw new Error(`Unexpected table ${table}`)
+        }
+      },
+    },
+  }
+})
 
 beforeEach(() => {
   campaigns = []
@@ -151,6 +163,17 @@ beforeEach(() => {
 describe("CampaignService", () => {
   test("createCampaign inserts campaign and recipients", async () => {
     buyers.push({ id: "b1", phone: "+1000", email: "test@example.com", can_receive_sms: true, can_receive_email: true, sendfox_hidden: false })
+    await CampaignService.createCampaign({
+      userId: "u1",
+      name: "Test",
+      channel: "sms",
+      message: "hi",
+      buyerIds: ["b1"],
+      groupIds: [],
+    })
+    expect(campaigns.length).toBe(1)
+    expect(recipients.length).toBe(1)
+  })
 
   test("createCampaign ignores hidden buyers", async () => {
     buyers.push({ id: "b1", phone: "+1000", sendfox_hidden: true })
@@ -165,12 +188,17 @@ describe("CampaignService", () => {
     expect(recipients.length).toBe(0)
   })
 
+  test("sendNow posts to API route for filtered campaign", async () => {
+    const campaign = await CampaignService.createCampaign({
+      userId: "u1",
+      name: "Filtered",
       channel: "email",
       message: "msg",
       buyerIds: [],
       groupIds: [],
       filters: { tags: ["vip"], locations: ["FL"], minScore: 70 },
     })
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ success: true }) })
     await CampaignService.sendNow(campaign.id)
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/campaigns/send-now",
@@ -205,67 +233,6 @@ describe("CampaignService", () => {
 
   test("sendNow throws on failure", async () => {
     buyers.push({ id: "b1", phone: "+1222", email: "a@test.com", can_receive_sms: true, can_receive_email: true, sendfox_hidden: false })
-    const campaign = await CampaignService.createCampaign({ userId: "u1", name: "Test", channel: "sms", message: "fail", buyerIds: ["b1"], groupIds: [] })
-    fetchMock.mockResolvedValue({ ok: false, json: async () => ({ error: "bad" }) })
-    await expect(CampaignService.sendNow(campaign.id)).rejects.toThrow("bad")
-  })
-
-  test("schedule updates campaign fields", async () => {
-    buyers.push({ id: "b1", phone: "+1222", email: "a@test.com", can_receive_sms: true, can_receive_email: true, sendfox_hidden: false })
-    const campaign = await CampaignService.createCampaign({ userId: "u1", name: "Test", channel: "sms", message: "hi", buyerIds: ["b1"], groupIds: [] })
-    const updated = await CampaignService.schedule(campaign.id, "2024-01-01T12:00:00Z", {
-      weekdayOnly: true,
-      runFrom: "09:00:00",
-      runUntil: "17:00:00",
-    })
-    expect(updated.weekday_only).toBe(true)
-    expect(updated.run_from).toBe("09:00:00")
-    expect(updated.run_until).toBe("17:00:00")
-  })
-
-  test("listCampaigns paginates and returns metrics", async () => {
-    for (let i = 1; i <= 25; i++) {
-      buyers.push({ id: `b${i}`, sendfox_hidden: false })
-      const camp = await CampaignService.createCampaign({
-        userId: "u1",
-        name: `C${i}`,
-        channel: "sms",
-        message: "hi",
-        buyerIds: [`b${i}`],
-        groupIds: [],
-      })
-      const rec = recipients.find((r) => r.campaign_id === camp.id) as any
-      rec.status = i % 2 === 0 ? "sent" : "error"
-    }
-
-    const page1 = await CampaignService.listCampaigns(1)
-    expect(page1.totalCount).toBe(25)
-    expect(page1.campaigns.length).toBe(20)
-    expect(page1.campaigns[0]).toHaveProperty("sentCount")
-    expect(page1.campaigns[0]).toHaveProperty("errorCount")
-
-    const page2 = await CampaignService.listCampaigns(2)
-    expect(page2.campaigns.length).toBe(5)
-    expect(page2.campaigns[0]).toHaveProperty("sentCount")
-    expect(page2.campaigns[0]).toHaveProperty("errorCount")
-  })
-
-  test("listCampaigns includes buyer names", async () => {
-    buyers.push({ id: "b1", full_name: "John Doe", fname: "John", lname: "Doe", can_receive_sms: true, can_receive_email: true, sendfox_hidden: false })
-    await CampaignService.createCampaign({
-      userId: "u1",
-      name: "Test",
-      channel: "sms",
-      message: "hi",
-      buyerIds: ["b1"],
-      groupIds: [],
-    })
-
-    const result = await CampaignService.listCampaigns(1)
-    const recipient = result.campaigns[0].campaign_recipients[0]
-    expect(recipient.buyers.full_name).toBe("John Doe")
-  })
-})
     const campaign = await CampaignService.createCampaign({ userId: "u1", name: "Test", channel: "sms", message: "fail", buyerIds: ["b1"], groupIds: [] })
     fetchMock.mockResolvedValue({ ok: false, json: async () => ({ error: "bad" }) })
     await expect(CampaignService.sendNow(campaign.id)).rejects.toThrow("bad")

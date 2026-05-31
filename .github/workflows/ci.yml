@@ -64,8 +64,6 @@ jobs:
           SENDFOX_DEFAULT_LIST_ID: "0"
           SENDFOX_DELETED_LIST_ID: "999999"
           SENDFOX_REDIRECT_URI: https://placeholder.example.com/auth/sendfox/callback
-          SHORTIO_API_KEY: ci-placeholder-shortio-api-key
-          SHORTIO_DOMAIN: placeholder.example.com
           SITE_URL: https://placeholder.example.com
         run: pnpm run build
 
