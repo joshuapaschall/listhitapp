@@ -27,7 +27,11 @@ vi.mock("@/lib/supabase", () => {
       throw new Error(`Unexpected table ${table}`)
     },
   }
-  return { supabase: client }
+  return {
+    supabase: client,
+    supabaseAdmin: client,
+    __setBuyerGroups: (data: any[]) => { buyerGroups = data },
+  }
 })
 
 describe("addBuyersToGroups", () => {
