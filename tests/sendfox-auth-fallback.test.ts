@@ -32,7 +32,7 @@ describe("loadSendfoxRouteContext auth fallback", () => {
     getSendfoxIntegrationMock.mockResolvedValue(null)
     getDefaultSendfoxContextMock.mockReturnValue({ accessToken: "env-token", source: "env" })
 
-    const { loadSendfoxRouteContext } = require("../app/api/sendfox/_auth")
+    const { loadSendfoxRouteContext } = await import("../app/api/sendfox/_auth")
     const result = await loadSendfoxRouteContext()
 
     expect(result.response).toBeUndefined()
@@ -45,7 +45,7 @@ describe("loadSendfoxRouteContext auth fallback", () => {
     getSendfoxIntegrationMock.mockResolvedValue(null)
     getDefaultSendfoxContextMock.mockReturnValue(null)
 
-    const { loadSendfoxRouteContext } = require("../app/api/sendfox/_auth")
+    const { loadSendfoxRouteContext } = await import("../app/api/sendfox/_auth")
     const result = await loadSendfoxRouteContext()
 
     expect(result.authContext).toBeNull()
@@ -62,7 +62,7 @@ describe("loadSendfoxRouteContext auth fallback", () => {
     buildSendfoxContextFromIntegrationMock.mockReturnValue({ accessToken: "user-token", source: "user" })
     getDefaultSendfoxContextMock.mockReturnValue({ accessToken: "env-token", source: "env" })
 
-    const { loadSendfoxRouteContext } = require("../app/api/sendfox/_auth")
+    const { loadSendfoxRouteContext } = await import("../app/api/sendfox/_auth")
     const result = await loadSendfoxRouteContext()
 
     expect(buildSendfoxContextFromIntegrationMock).toHaveBeenCalledWith({ id: "int-1", user_id: "user-3" })
