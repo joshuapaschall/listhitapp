@@ -22,11 +22,11 @@ const updateMock = vi.fn((data) => {
   }
 })
 
-const fromMock = vi.fn((table: string) => {
+const { fromMock } = vi.hoisted(() => ({ fromMock: vi.fn((table: string) => {
   if (table === "buyers") return { select: selectBuyerMock, update: updateMock }
   if (table === "buyer_groups") return { select: selectBuyerGroupMock }
   return { select: selectBuyerMock, update: updateMock }
-})
+}) }))
 
 vi.mock("../lib/supabase", () => ({
   supabaseAdmin: { from: fromMock },
