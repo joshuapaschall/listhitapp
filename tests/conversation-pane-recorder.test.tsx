@@ -4,6 +4,8 @@ import ConversationPane from "../components/inbox/conversation-pane"
 import { NowProvider } from "../hooks/use-now"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
+vi.mock("@/components/voice/CallButton", () => ({ CallButton: () => null }))
+
 // jsdom doesn't implement createObjectURL
 // @ts-ignore
 global.URL.createObjectURL = vi.fn(() => "blob:url")
