@@ -64,6 +64,7 @@ import VoiceRecorder from "@/components/voice/VoiceRecorder";
 import UploadModal from "./upload-modal";
 import QuickReplyModal from "./quick-reply-modal";
 import { CallButton } from "@/components/voice/CallButton";
+import { useMyMergeContext } from "@/hooks/use-my-merge-context";
 
 const mergeTags = [
   { label: "Contact's First Name", value: "{{first_name}}" },
@@ -315,11 +316,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
   const [messages, setMessages] = useState<LocalMessage[]>([]);
   const [input, setInput] = useState("");
   const [templates, setTemplates] = useState<TemplateRecord[]>([]);
-  const [agentDetails, setAgentDetails] = useState<{
-    firstName?: string;
-    lastName?: string;
-    displayName?: string;
-  }>({});
+  const myMergeContext = useMyMergeContext();
   const [showEmoji, setShowEmoji] = useState(false);
   const [attachments, setAttachments] = useState<File[]>([]);
   const oversizedNonImages = attachments.filter(
@@ -362,28 +359,6 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
   useEffect(() => {
     void loadQuickReplies();
   }, [loadQuickReplies]);
-
-  useEffect(() => {
-    const loadAgent = async () => {
-      try {
-        const res = await fetch("/api/me");
-        if (!res.ok) return;
-        const data = await res.json().catch(() => ({}));
-        const display = typeof data.display_name === "string" ? data.display_name : "";
-        const parts = display.trim().split(/\s+/).filter(Boolean);
-        setAgentDetails({
-          displayName: display,
-          firstName:
-            data.first_name || (parts.length ? parts[0] : ""),
-          lastName:
-            data.last_name || (parts.length > 1 ? parts.slice(1).join(" ") : ""),
-        });
-      } catch (err) {
-        console.error("Failed to load agent details", err);
-      }
-    };
-    loadAgent();
-  }, []);
 
   useEffect(() => {
     const loadVoiceNumbers = async () => {
@@ -647,20 +622,6 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
         (buyer as any)?.form_link ||
         buyer?.website ||
         "";
-      const myFirstName =
-        agentDetails.firstName ||
-        (agentDetails.displayName
-          ? agentDetails.displayName.split(" ")[0] || ""
-          : "");
-      const myLastName =
-        agentDetails.lastName ||
-        (agentDetails.displayName
-          ? agentDetails.displayName
-              .split(" ")
-              .slice(1)
-              .join(" ") || ""
-          : "");
-
       return {
         buyer: {
           fname,
@@ -669,13 +630,11 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
           email,
           contact_form_link: contactFormLink,
         },
-        agent: { myFirstName, myLastName },
+        agent: myMergeContext,
       };
     },
     [
-      agentDetails.displayName,
-      agentDetails.firstName,
-      agentDetails.lastName,
+      myMergeContext,
       buyer,
       thread,
     ],

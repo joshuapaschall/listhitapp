@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase"
 import { createLogger } from "@/lib/logger"
 import { renderTemplate } from "@/lib/utils"
+import { getUserMergeContext, type UserMergeContext } from "@/lib/user-context"
 import { sendSesEmail } from "@/lib/ses"
 import { getSesQuota } from "@/lib/ses-quota"
 import { appendUnsubscribeFooter, buildUnsubscribeUrl } from "@/lib/unsubscribe"
@@ -442,6 +443,22 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
         .in("campaign_id", campaignIds)
     : { data: [] }
   const contentMap = new Map(contentRows?.map((row) => [row.campaign_id, row]) ?? [])
+  const { data: campaignRows } = campaignIds.length
+    ? await supabase
+        .from("campaigns")
+        .select("id,user_id")
+        .in("id", campaignIds)
+    : { data: [] }
+  const campaignUserIdMap = new Map(
+    campaignRows?.map((row) => [row.id, row.user_id as string | null]) ?? [],
+  )
+  const campaignMergeContextEntries = await Promise.all(
+    Array.from(campaignUserIdMap.entries()).map(async ([campaignId, userId]) => [
+      campaignId,
+      await getUserMergeContext(supabase, userId),
+    ] as const),
+  )
+  const campaignMergeContextMap = new Map<string, UserMergeContext>(campaignMergeContextEntries)
 
   let sent = 0
 
@@ -511,8 +528,9 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
       const content = job.campaign_id ? contentMap.get(job.campaign_id) : undefined
       const rawSubject = content?.subject ?? payload.subject ?? ""
       const rawHtml = content?.html ?? payload.html ?? ""
-      const subject = renderTemplate(rawSubject, buyer)
-      let html = renderTemplate(rawHtml, buyer)
+      const senderContext = campaignMergeContextMap.get(job.campaign_id || payload.campaignId || "")
+      const subject = renderTemplate(rawSubject, buyer, senderContext)
+      let html = renderTemplate(rawHtml, buyer, senderContext)
       if (!emailShortlinksDisabled()) {
         try {
           const { replaceUrlsWithShortLinks } = await import("./shortlink-service")

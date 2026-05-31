@@ -6,6 +6,7 @@ import { BuyerService } from "@/services/buyer-service"
 import { renderTemplate } from "@/lib/utils"
 import type { Buyer } from "@/lib/supabase"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useMyMergeContext } from "@/hooks/use-my-merge-context"
 
 interface SmsPhonePreviewProps {
   message: string
@@ -21,6 +22,7 @@ const FALLBACK_BUYERS: Buyer[] = [
 export default function SmsPhonePreview({ message, buyerIds, mediaUrls = [] }: SmsPhonePreviewProps) {
   const [sampleBuyers, setSampleBuyers] = useState<Buyer[]>(FALLBACK_BUYERS)
   const [previewIndex, setPreviewIndex] = useState(0)
+  const myMergeContext = useMyMergeContext()
 
   useEffect(() => {
     let mounted = true
@@ -40,7 +42,10 @@ export default function SmsPhonePreview({ message, buyerIds, mediaUrls = [] }: S
   }, [buyerIds])
 
   const activeBuyer = sampleBuyers[previewIndex] || FALLBACK_BUYERS[0]
-  const rendered = useMemo(() => renderTemplate(message || "", activeBuyer), [message, activeBuyer])
+  const rendered = useMemo(
+    () => renderTemplate(message || "", activeBuyer, myMergeContext),
+    [message, activeBuyer, myMergeContext],
+  )
 
   return (
     <div className="space-y-2">
