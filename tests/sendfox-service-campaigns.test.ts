@@ -19,11 +19,11 @@ vi.mock("../lib/supabase", () => ({
 }))
 
 describe("sendfox-service campaigns", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     fetchMock.mockReset()
     process.env.SENDFOX_API_TOKEN = "tok"
     vi.resetModules()
-    const mod = require("../services/sendfox-service")
+    const mod = await import("../services/sendfox-service")
     createCampaign = mod.createCampaign
     sendCampaign = mod.sendCampaign
     getCampaignStats = mod.getCampaignStats
@@ -55,7 +55,7 @@ describe("sendfox-service campaigns", () => {
     await getCampaignStats(99)
     expect(fetchMock).toHaveBeenCalledWith(
       "https://sendfox.com/api/campaigns/99/stats",
-      expect.objectContaining({ method: undefined }),
+      expect.objectContaining({ headers: expect.any(Object) }),
     )
   })
 
@@ -73,7 +73,7 @@ describe("sendfox-service campaigns", () => {
     await getMe()
     expect(fetchMock).toHaveBeenCalledWith(
       "https://sendfox.com/api/me",
-      expect.objectContaining({ method: undefined }),
+      expect.objectContaining({ headers: expect.any(Object) }),
     )
   })
 })
