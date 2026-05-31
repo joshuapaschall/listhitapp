@@ -1,4 +1,3 @@
-import { describe, beforeEach, test, expect, jest } from "@jest/globals";
 import { NextRequest } from "next/server";
 import { POST } from "../app/api/telnyx/reject-call/route";
 
