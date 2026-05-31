@@ -29,14 +29,15 @@ describe("sync voice numbers route", () => {
     process.env.SUPABASE_SERVICE_ROLE_KEY = "svc"
     process.env.NEXT_PUBLIC_SUPABASE_URL = "http://local"
     process.env.TELNYX_API_KEY = "key"
+    process.env.TELNYX_MESSAGING_PROFILE_ID = "mp1"
   })
 
-  test("GET returns 405", async () => {
+  test("GET triggers a sync (aliases POST) and requires auth", async () => {
     const { GET } = await import("../app/api/sync/voice-numbers/route")
-    const res = await GET()
-    const body = await res.json()
-    expect(res.status).toBe(405)
-    expect(body.message).toMatch(/POST/)
+    const req = new NextRequest("http://test", { method: "GET" })
+    const res = await GET(req)
+    // GET is wired to POST; without valid auth it must be rejected.
+    expect(res.status).toBe(401)
   })
 
   test("rejects missing auth", async () => {
