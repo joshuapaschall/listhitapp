@@ -10,6 +10,7 @@ interface OfferCardProps {
   offer: OfferWithRelations
   onClick: (offer: OfferWithRelations) => void
   className?: string
+  draggable?: boolean
 }
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
@@ -27,10 +28,11 @@ function getRelativeTime(dateString?: string) {
   return `${Math.floor(daysAgo / 7)}w ago`
 }
 
-export default function OfferCard({ offer, onClick, className }: OfferCardProps) {
+export default function OfferCard({ offer, onClick, className, draggable = true }: OfferCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: offer.id,
     data: { offer },
+    disabled: !draggable,
   })
 
   const style = {
@@ -46,10 +48,11 @@ export default function OfferCard({ offer, onClick, className }: OfferCardProps)
       <div
         ref={setNodeRef}
         style={style}
-        {...listeners}
-        {...attributes}
+        {...(draggable ? listeners : {})}
+        {...(draggable ? attributes : {})}
         className={cn(
-          "rounded-lg border bg-card p-3 shadow-sm cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow",
+          "rounded-lg border bg-card p-3 shadow-sm hover:shadow-md transition-shadow",
+          draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer",
           isDragging && "opacity-50",
           className,
         )}

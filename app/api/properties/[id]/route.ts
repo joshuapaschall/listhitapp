@@ -1,10 +1,18 @@
+import { cookies } from "next/headers"
 import { NextRequest, NextResponse } from "next/server"
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { supabaseAdmin } from "@/lib/supabase/admin"
+import { requirePermission } from "@/lib/permissions/server"
 
 type RouteContext = { params: Promise<{ id: string }> }
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
   try {
+    const cookieStore = cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+    const denied = await requirePermission(supabase, "properties.manage")
+    if (denied) return denied
+
     const { id } = await context.params
     const body = await request.json()
 
@@ -68,6 +76,11 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
 export async function DELETE(_request: NextRequest, context: RouteContext) {
   try {
+    const cookieStore = cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+    const denied = await requirePermission(supabase, "properties.manage")
+    if (denied) return denied
+
     const { id } = await context.params
 
     const { data: images } = await supabaseAdmin

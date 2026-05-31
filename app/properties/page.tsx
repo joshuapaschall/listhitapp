@@ -8,7 +8,9 @@ import { Grid3X3, Home, LinkIcon, List, Pencil, Eye } from "lucide-react"
 import { PropertyService } from "@/services/property-service"
 import type { Property, PropertyImage } from "@/lib/supabase"
 import MainLayout from "@/components/layout/main-layout"
+import { Can } from "@/components/auth/Can"
 import { useDebounce } from "@/hooks/use-debounce"
+import { usePermissions } from "@/hooks/use-permissions"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
@@ -72,6 +74,7 @@ const formatPrice = (value?: number | null) => {
 
 export default function PropertiesPage() {
   const queryClient = useQueryClient()
+  const { can, loading: permissionsLoading } = usePermissions()
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [search, setSearch] = useState("")
   const [cityFilter, setCityFilter] = useState("")
@@ -140,6 +143,7 @@ export default function PropertiesPage() {
         perPage: ITEMS_PER_PAGE,
       }),
     placeholderData: keepPreviousData,
+    enabled: !permissionsLoading && can("properties.view"),
   })
 
   const properties = useMemo(() => (data?.properties ?? []) as PropertyWithImages[], [data?.properties])
@@ -185,6 +189,25 @@ export default function PropertiesPage() {
     queryClient.invalidateQueries({ queryKey: ["properties"] })
   }
 
+  if (permissionsLoading) {
+    return (
+      <MainLayout>
+        <div className="p-4 text-sm text-muted-foreground">Checking property permissions...</div>
+      </MainLayout>
+    )
+  }
+
+  if (!can("properties.view")) {
+    return (
+      <MainLayout>
+        <div className="space-y-2 p-4">
+          <h1 className="text-2xl font-bold">Properties</h1>
+          <p className="text-sm text-muted-foreground">You do not have permission to view properties.</p>
+        </div>
+      </MainLayout>
+    )
+  }
+
   return (
     <MainLayout>
       <div className="space-y-4 p-4">
@@ -192,13 +215,17 @@ export default function PropertiesPage() {
           <h1 className="text-2xl font-bold">Properties</h1>
           <div className="flex items-center gap-2">
             {selectedIds.length > 0 && (
-              <Button variant="destructive" size="sm" onClick={() => setShowDeleteDialog(true)}>
-                Delete Selected ({selectedIds.length})
-              </Button>
+              <Can permission="properties.manage">
+                <Button variant="destructive" size="sm" onClick={() => setShowDeleteDialog(true)}>
+                  Delete Selected ({selectedIds.length})
+                </Button>
+              </Can>
             )}
-            <Button asChild>
-              <Link href="/properties/add">Add Property</Link>
-            </Button>
+            <Can permission="properties.manage">
+              <Button asChild>
+                <Link href="/properties/add">Add Property</Link>
+              </Button>
+            </Can>
           </div>
         </div>
 
@@ -234,8 +261,10 @@ export default function PropertiesPage() {
         {viewMode === "grid" ? (
           <>
             <div className="mb-2 flex items-center gap-2">
-              <Checkbox checked={selectedIds.length === properties.length && properties.length > 0} onCheckedChange={toggleSelectAll} />
-              <span className="text-sm text-muted-foreground">Select all on this page</span>
+              <Can permission="properties.manage">
+                <Checkbox checked={selectedIds.length === properties.length && properties.length > 0} onCheckedChange={toggleSelectAll} />
+                <span className="text-sm text-muted-foreground">Select all on this page</span>
+              </Can>
             </div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
               {properties.map((property) => {
@@ -249,8 +278,10 @@ export default function PropertiesPage() {
                       <Badge className={`absolute right-2 top-2 ${statusStyles[property.status || ""] || ""}`}>{statusLabel(property.status)}</Badge>
                       <div className="absolute inset-0 hidden items-center justify-center gap-2 bg-black/35 group-hover:flex">
                         <Button size="icon" variant="secondary" onClick={(e) => { e.stopPropagation(); openDetails(property.id) }}><Eye className="h-4 w-4" /></Button>
-                        <Button asChild size="icon" variant="secondary" onClick={(e) => e.stopPropagation()}><Link href={`/properties/edit/${property.id}`}><Pencil className="h-4 w-4" /></Link></Button>
-                        <Button size="icon" variant="secondary" onClick={(e) => { e.stopPropagation(); generateLink(property) }}><LinkIcon className="h-4 w-4" /></Button>
+                        <Can permission="properties.manage">
+                          <Button asChild size="icon" variant="secondary" onClick={(e) => e.stopPropagation()}><Link href={`/properties/edit/${property.id}`}><Pencil className="h-4 w-4" /></Link></Button>
+                          <Button size="icon" variant="secondary" onClick={(e) => { e.stopPropagation(); generateLink(property) }}><LinkIcon className="h-4 w-4" /></Button>
+                        </Can>
                       </div>
                     </div>
                     <CardContent className="space-y-2 p-4">
@@ -259,7 +290,9 @@ export default function PropertiesPage() {
                           <div className="font-semibold">{property.address || "-"}</div>
                           <div className="text-sm text-muted-foreground">{[property.city, property.state, property.zip].filter(Boolean).join(", ") || "-"}</div>
                         </div>
-                        <Checkbox checked={selectedIds.includes(property.id)} onCheckedChange={() => toggleSelect(property.id)} onClick={(e) => e.stopPropagation()} />
+                        <Can permission="properties.manage">
+                          <Checkbox checked={selectedIds.includes(property.id)} onCheckedChange={() => toggleSelect(property.id)} onClick={(e) => e.stopPropagation()} />
+                        </Can>
                       </div>
                       <div className="text-lg font-bold">{formatPrice(property.price)}</div>
                       <div className="inline-flex rounded-full bg-muted px-3 py-1 text-xs">{`${property.bedrooms || 0} bd • ${property.bathrooms || 0} ba • ${(property.sqft || 0).toLocaleString()} sqft`}</div>
@@ -272,7 +305,7 @@ export default function PropertiesPage() {
         ) : (
           <div className="rounded-md border">
             <Table>
-              <TableHeader><TableRow><TableHead className="w-10"><Checkbox checked={selectedIds.length === properties.length && properties.length > 0} onCheckedChange={toggleSelectAll} /></TableHead><TableHead>Property</TableHead><TableHead>Price</TableHead><TableHead>Specs</TableHead><TableHead>Status</TableHead><TableHead className="w-40">Actions</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead className="w-10"><Can permission="properties.manage"><Checkbox checked={selectedIds.length === properties.length && properties.length > 0} onCheckedChange={toggleSelectAll} /></Can></TableHead><TableHead>Property</TableHead><TableHead>Price</TableHead><TableHead>Specs</TableHead><TableHead>Status</TableHead><TableHead className="w-40">Actions</TableHead></TableRow></TableHeader>
               <TableBody>
                 {properties.map((property) => {
                   const images = (property.property_images || []).slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
@@ -280,12 +313,12 @@ export default function PropertiesPage() {
                   const firstImage = (featured || images[0])?.image_url
                   return (
                     <TableRow key={property.id}>
-                      <TableCell><Checkbox checked={selectedIds.includes(property.id)} onCheckedChange={() => toggleSelect(property.id)} /></TableCell>
+                      <TableCell><Can permission="properties.manage"><Checkbox checked={selectedIds.includes(property.id)} onCheckedChange={() => toggleSelect(property.id)} /></Can></TableCell>
                       <TableCell><div className="flex items-center gap-3"><div className="relative h-16 w-16 overflow-hidden rounded-md bg-muted">{firstImage ? <Image src={firstImage} alt={property.address || "Property"} fill className="object-cover" sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" /> : <div className="flex h-full items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200"><Home className="h-5 w-5 text-slate-500" /></div>}</div><div><div className="font-medium">{property.address}</div><div className="text-sm text-muted-foreground">{[property.city, property.state, property.zip].filter(Boolean).join(", ")}</div></div></div></TableCell>
                       <TableCell>{formatPrice(property.price)}</TableCell>
                       <TableCell>{`${property.bedrooms || 0} bd • ${property.bathrooms || 0} ba • ${(property.sqft || 0).toLocaleString()} sqft`}</TableCell>
                       <TableCell><Badge className={statusStyles[property.status || ""] || ""}>{statusLabel(property.status)}</Badge></TableCell>
-                      <TableCell><div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => openDetails(property.id)}>View</Button><Button asChild size="sm" variant="outline"><Link href={`/properties/edit/${property.id}`}>Edit</Link></Button></div></TableCell>
+                      <TableCell><div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => openDetails(property.id)}>View</Button><Can permission="properties.manage"><Button asChild size="sm" variant="outline"><Link href={`/properties/edit/${property.id}`}>Edit</Link></Button></Can></div></TableCell>
                     </TableRow>
                   )
                 })}

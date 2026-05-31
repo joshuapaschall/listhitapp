@@ -13,6 +13,7 @@ import {
   XCircle,
 } from "lucide-react"
 import MainLayout from "@/components/layout/main-layout"
+import { Can } from "@/components/auth/Can"
 import EditBuyerModal from "@/components/buyers/edit-buyer-modal"
 import ScheduleShowingModal from "@/components/showings/schedule-showing-modal"
 import EditShowingModal from "@/components/showings/edit-showing-modal"
@@ -25,11 +26,13 @@ import { Card } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { usePermissions } from "@/hooks/use-permissions"
 import type { Buyer, ShowingWithRelations } from "@/lib/supabase"
 
 const STATUSES = ["all", "scheduled", "completed", "canceled", "rescheduled"]
 
 export default function ShowingsPage() {
+  const { can, loading: permissionsLoading } = usePermissions()
   const params = useSearchParams()
   const defaultOpen = params.get("new") === "1"
   const [statusFilter, setStatusFilter] = useState<string>("all")
@@ -50,6 +53,7 @@ export default function ShowingsPage() {
         startDate: startDate || undefined,
         endDate: endDate || undefined,
       }),
+    enabled: !permissionsLoading && can("showings.view"),
   })
 
   const now = new Date().toISOString()
@@ -73,6 +77,25 @@ export default function ShowingsPage() {
     setShowEditModal(true)
   }
 
+  if (permissionsLoading) {
+    return (
+      <MainLayout>
+        <div className="p-4 text-sm text-muted-foreground">Checking showing permissions...</div>
+      </MainLayout>
+    )
+  }
+
+  if (!can("showings.view")) {
+    return (
+      <MainLayout>
+        <div className="space-y-2 p-4">
+          <h1 className="text-2xl font-bold tracking-tight">Showings</h1>
+          <p className="text-sm text-muted-foreground">You do not have permission to view showings.</p>
+        </div>
+      </MainLayout>
+    )
+  }
+
   return (
     <MainLayout>
       <div className="space-y-6 p-4 md:p-6">
@@ -81,10 +104,12 @@ export default function ShowingsPage() {
             <h1 className="text-2xl font-bold tracking-tight">Showings</h1>
             <p className="mt-1 text-sm text-muted-foreground">Manage property showings and appointments</p>
           </div>
-          <Button onClick={() => setShowScheduleModal(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Schedule Showing
-          </Button>
+          <Can permission="showings.manage">
+            <Button onClick={() => setShowScheduleModal(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Schedule Showing
+            </Button>
+          </Can>
         </div>
 
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -187,23 +212,27 @@ export default function ShowingsPage() {
           buyer={selectedBuyer}
           onSuccess={refetch}
         />
-        <EditShowingModal
-          open={showEditShowing}
-          onOpenChange={setShowEditShowing}
-          showing={selectedShowing}
-          onSuccess={refetch}
-        />
-        <DeleteShowingModal
-          open={showDeleteShowing}
-          onOpenChange={setShowDeleteShowing}
-          showing={selectedShowing}
-          onSuccess={refetch}
-        />
-        <ScheduleShowingModal
-          open={showScheduleModal}
-          onOpenChange={setShowScheduleModal}
-          onSuccess={refetch}
-        />
+        <Can permission="showings.manage">
+          <EditShowingModal
+            open={showEditShowing}
+            onOpenChange={setShowEditShowing}
+            showing={selectedShowing}
+            onSuccess={refetch}
+          />
+          <DeleteShowingModal
+            open={showDeleteShowing}
+            onOpenChange={setShowDeleteShowing}
+            showing={selectedShowing}
+            onSuccess={refetch}
+          />
+        </Can>
+        <Can permission="showings.manage">
+          <ScheduleShowingModal
+            open={showScheduleModal}
+            onOpenChange={setShowScheduleModal}
+            onSuccess={refetch}
+          />
+        </Can>
       </div>
     </MainLayout>
   )

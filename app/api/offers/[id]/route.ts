@@ -1,5 +1,8 @@
+import { cookies } from "next/headers"
 import { NextRequest, NextResponse } from "next/server"
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { supabaseAdmin } from "@/lib/supabase/admin"
+import { requirePermission } from "@/lib/permissions/server"
 import { insertNotification } from "@/lib/notifications"
 import { sendOfferStatusNotification } from "@/lib/offer-notifications"
 
@@ -16,6 +19,11 @@ const statusTimestampMap: Record<string, string> = {
 }
 
 export async function GET(_: NextRequest, context: RouteContext) {
+  const cookieStore = cookies()
+  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+  const denied = await requirePermission(supabase, "offers.view")
+  if (denied) return denied
+
   const { id } = await context.params
   const { data, error } = await supabaseAdmin.from("offers").select(OFFER_SELECT).eq("id", id).maybeSingle()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -24,6 +32,11 @@ export async function GET(_: NextRequest, context: RouteContext) {
 }
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
+  const cookieStore = cookies()
+  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+  const denied = await requirePermission(supabase, "offers.manage")
+  if (denied) return denied
+
   const { id } = await context.params
   const updates = await request.json()
 
@@ -57,6 +70,11 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 }
 
 export async function DELETE(_: NextRequest, context: RouteContext) {
+  const cookieStore = cookies()
+  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+  const denied = await requirePermission(supabase, "offers.manage")
+  if (denied) return denied
+
   const { id } = await context.params
   const { data: offer } = await supabaseAdmin.from("offers").select("id,buyer_id,property_id").eq("id", id).maybeSingle()
   const { error } = await supabaseAdmin.from("offers").delete().eq("id", id)

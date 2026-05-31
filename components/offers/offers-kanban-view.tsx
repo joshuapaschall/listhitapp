@@ -22,6 +22,7 @@ interface OffersKanbanViewProps {
   isLoading: boolean
   onRefetch: () => void
   onOfferClick: (offer: OfferWithRelations) => void
+  canManage?: boolean
 }
 
 const KANBAN_COLUMNS = [
@@ -33,14 +34,15 @@ const KANBAN_COLUMNS = [
   { id: "withdrawn", label: "Withdrawn", color: "bg-gray-500" },
 ] as const
 
-function KanbanColumn({ id, label, color, offers, onOfferClick }: {
+function KanbanColumn({ id, label, color, offers, onOfferClick, canManage }: {
   id: string
   label: string
   color: string
   offers: OfferWithRelations[]
   onOfferClick: (offer: OfferWithRelations) => void
+  canManage: boolean
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id })
+  const { setNodeRef, isOver } = useDroppable({ id, disabled: !canManage })
 
   return (
     <div className="flex flex-col min-w-[280px] w-[280px]">
@@ -59,14 +61,14 @@ function KanbanColumn({ id, label, color, offers, onOfferClick }: {
         {offers.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">No offers</p>
         ) : (
-          offers.map((offer) => <OfferCard key={offer.id} offer={offer} onClick={onOfferClick} />)
+          offers.map((offer) => <OfferCard key={offer.id} offer={offer} onClick={onOfferClick} draggable={canManage} />)
         )}
       </div>
     </div>
   )
 }
 
-export default function OffersKanbanView({ offers, isLoading, onRefetch, onOfferClick }: OffersKanbanViewProps) {
+export default function OffersKanbanView({ offers, isLoading, onRefetch, onOfferClick, canManage = false }: OffersKanbanViewProps) {
   const [activeOffer, setActiveOffer] = useState<OfferWithRelations | null>(null)
 
   const sensors = useSensors(
@@ -90,6 +92,7 @@ export default function OffersKanbanView({ offers, isLoading, onRefetch, onOffer
     const offer = event.active.data.current?.offer as OfferWithRelations | undefined
     const newStatus = event.over?.id as string | undefined
 
+    if (!canManage) return
     if (!offer || !newStatus || newStatus === offer.status) return
 
     try {
@@ -100,7 +103,7 @@ export default function OffersKanbanView({ offers, isLoading, onRefetch, onOffer
       toast.error("Failed to update offer status")
       onRefetch()
     }
-  }, [onRefetch])
+  }, [canManage, onRefetch])
 
   if (isLoading) {
     return <p className="text-sm text-muted-foreground">Loading offers...</p>
@@ -116,12 +119,13 @@ export default function OffersKanbanView({ offers, isLoading, onRefetch, onOffer
             label={column.label}
             color={column.color}
             offers={column.offers}
-            onOfferClick={onOfferClick}
+              onOfferClick={onOfferClick}
+              canManage={canManage}
           />
         ))}
       </div>
       <DragOverlay>
-        {activeOffer ? <OfferCard offer={activeOffer} onClick={() => undefined} className="rotate-2 scale-105" /> : null}
+        {activeOffer ? <OfferCard offer={activeOffer} onClick={() => undefined} className="rotate-2 scale-105" draggable={canManage} /> : null}
       </DragOverlay>
     </DndContext>
   )

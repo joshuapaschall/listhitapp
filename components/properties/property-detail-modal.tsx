@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Can } from "@/components/auth/Can"
 import type { Property } from "@/lib/supabase"
 import { PropertyService } from "@/services/property-service"
 import ScheduleShowingModal from "@/components/showings/schedule-showing-modal"
@@ -114,15 +115,19 @@ export default function PropertyDetailModal({
           </div>
           {property && (
             <DialogFooter className="flex justify-end gap-2">
-              <Button asChild variant="outline" size="sm">
-                <Link href={`/properties/edit/${property.id}`}>Edit</Link>
-              </Button>
+              <Can permission="properties.manage">
+                <Button asChild variant="outline" size="sm">
+                  <Link href={`/properties/edit/${property.id}`}>Edit</Link>
+                </Button>
+              </Can>
               <Button variant="outline" size="sm" onClick={() => setShowSchedule(true)}>
                 Schedule Showing
               </Button>
-              <Button variant="destructive" size="sm" onClick={() => setShowDelete(true)}>
-                Delete
-              </Button>
+              <Can permission="properties.manage">
+                <Button variant="destructive" size="sm" onClick={() => setShowDelete(true)}>
+                  Delete
+                </Button>
+              </Can>
             </DialogFooter>
           )}
         </DialogContent>
@@ -133,15 +138,17 @@ export default function PropertyDetailModal({
         property={property}
         onSuccess={onUpdated}
       />
-      <DeletePropertyModal
-        open={showDelete}
-        onOpenChange={setShowDelete}
-        property={property}
-        onSuccess={() => {
-          if (onUpdated) onUpdated()
-          handleClose()
-        }}
-      />
+      <Can permission="properties.manage">
+        <DeletePropertyModal
+          open={showDelete}
+          onOpenChange={setShowDelete}
+          property={property}
+          onSuccess={() => {
+            if (onUpdated) onUpdated()
+            handleClose()
+          }}
+        />
+      </Can>
     </>
   )
 }
