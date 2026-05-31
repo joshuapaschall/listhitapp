@@ -2,6 +2,11 @@
 import { render } from "@testing-library/react"
 import ConversationRow from "../components/inbox/conversation-row"
 
+// Pin timezone so date-fns isToday/isYesterday in formatSmartTimestamp are
+// deterministic regardless of the host machine's zone. The fixed instants in
+// these tests are written in UTC and only read as "Yesterday" under UTC.
+process.env.TZ = "UTC"
+
 vi.useFakeTimers().setSystemTime(new Date("2024-01-01T00:10:00Z"))
 
 describe("ConversationRow", () => {
