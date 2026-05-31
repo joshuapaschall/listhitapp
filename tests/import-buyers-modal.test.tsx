@@ -65,7 +65,24 @@ describe("importBuyersFromCsv", () => {
     buyerGroups = []
     idCounter = 1
     groupService.addBuyersToGroups.mockClear()
-    ;(global.fetch as any) = vi.fn(async () => ({ ok: true, json: async () => ({}) }))
+    ;(global.fetch as any) = vi.fn(async (url: string, opts: any) => {
+      if (typeof url === "string" && url.includes("/api/buyers/import")) {
+        const body = JSON.parse(opts.body)
+        if (body.buyers) {
+          const recs = body.buyers.map((r: any) => ({ id: `b${idCounter++}`, ...r }))
+          buyers.push(...recs)
+          return { ok: true, status: 200, json: async () => ({ insertedIds: recs.map((r: any) => r.id) }) }
+        }
+        if (body.updates) {
+          for (const u of body.updates) {
+            const idx = buyers.findIndex((b) => b.id === u.id)
+            if (idx !== -1) buyers[idx] = { ...buyers[idx], ...u.data }
+          }
+          return { ok: true, status: 200, json: async () => ({}) }
+        }
+      }
+      return { ok: true, status: 200, json: async () => ({}) }
+    })
   })
 
   afterEach(() => {
@@ -83,7 +100,7 @@ describe("importBuyersFromCsv", () => {
   })
 
   test("updates existing buyers and merges tags", async () => {
-    buyers.push({ id: "b1", email: "jane@example.com", tags: ["existing"] })
+    buyers.push({ id: "b1", email: "jane@example.com", email_norm: "jane@example.com", tags: ["existing"] })
     const rows = [{ Email: "jane@example.com", Tags: "VIP" }]
     const mapping = { email: "Email", tags: "Tags" }
     const result = await importBuyersFromCsv(rows, mapping, ["oldtag"], [], [], ["g2"])
