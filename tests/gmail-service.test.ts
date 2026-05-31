@@ -27,37 +27,33 @@ vi.mock("googleapis", () => {
   }
 })
 
-vi.mock("@supabase/supabase-js", () => ({
-  createClient: () => ({
+vi.mock("@/lib/supabase", () => ({
+  supabaseAdmin: {
     from: (table: string) => {
       if (table === "gmail_tokens") {
-        tokenSelect = vi.fn(() => ({
-          eq: vi.fn(() => ({
-            maybeSingle: async () => ({ data: tokenRow, error: null }),
-          })),
-        }))
+        const chain: any = {
+          eq: () => chain,
+          maybeSingle: async () => ({ data: tokenRow, error: null }),
+        }
+        tokenSelect = vi.fn(() => chain)
         tokenUpdate = vi.fn((data: any) => ({
           eq: vi.fn(async () => {
             tokenRow = { ...tokenRow, ...data }
             return { data: tokenRow, error: null }
           }),
         }))
-        return {
-          select: tokenSelect,
-          update: tokenUpdate,
-        }
+        return { select: tokenSelect, update: tokenUpdate }
       }
-      return {
-        upsert: upsertMock,
-        update: updateMock,
-        select: selectMock,
-      }
+      return { upsert: upsertMock, update: updateMock, select: selectMock }
     },
-  }),
+  },
+  supabase: {
+    from: () => ({ select: selectMock }),
+  },
 }))
 
 describe("gmail-service", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     listMock.mockReset()
     sendMock.mockReset()
@@ -73,7 +69,7 @@ describe("gmail-service", () => {
     process.env.GOOGLE_CLIENT_SECRET = "sec"
     process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI = "uri"
     process.env.GMAIL_FROM = "me@test.com"
-    const mod = require("../services/gmail-api")
+    const mod = await import("../services/gmail-api")
     listThreadsFn = mod.listThreads
     sendEmailFn = mod.sendEmail
   })
@@ -84,8 +80,8 @@ describe("gmail-service", () => {
     expect(listMock).toHaveBeenCalledWith({
       userId: "me",
       maxResults: 5,
-      q: "in:inbox",
       format: "full",
+      labelIds: ["INBOX"],
     })
     expect(upsertMock).toHaveBeenCalled()
     expect(tokenSelect).toHaveBeenCalled()
@@ -106,7 +102,7 @@ describe("gmail-service", () => {
       ok: true,
       json: async () => ({ access_token: "new", expires_in: 3600 }),
     }))
-    const tokens = require("../services/gmail-tokens")
+    const tokens = await import("../services/gmail-tokens")
     const tok = await tokens.getAccessToken("u1")
     expect(fetch).toHaveBeenCalled()
     expect(tokenUpdate).toHaveBeenCalled()
@@ -114,14 +110,14 @@ describe("gmail-service", () => {
   })
 
   test("setThreadStarred modifies labels", async () => {
-    const mod = require("../services/gmail-api")
+    const mod = await import("../services/gmail-api")
     await mod.setThreadStarred("u1", "t1", true)
     expect(modifyMock).toHaveBeenCalled()
     expect(updateMock).toHaveBeenCalled()
   })
 
   test("setThreadUnread modifies labels", async () => {
-    const mod = require("../services/gmail-api")
+    const mod = await import("../services/gmail-api")
     await mod.setThreadUnread("u1", "t1", false)
     expect(modifyMock).toHaveBeenCalled()
     expect(updateMock).toHaveBeenCalled()
@@ -131,7 +127,7 @@ describe("gmail-service", () => {
     selectMock.mockImplementation(() => ({
       eq: vi.fn(async () => ({ count: 2, error: null })),
     }))
-    const mod = require("../services/gmail-supabase")
+    const mod = await import("../services/gmail-supabase")
     const count = await mod.countUnreadEmailThreads()
     expect(selectMock).toHaveBeenCalled()
     expect(count).toBe(2)

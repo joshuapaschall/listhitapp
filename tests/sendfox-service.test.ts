@@ -14,25 +14,35 @@ global.fetch = fetchMock
 let groups: any[] = []
 vi.mock("../lib/supabase", () => ({
   supabaseAdmin: {
-    from: () => ({
+    from: (table: string) => ({
       select: () => ({
-        in: (_col: string, values: any[]) =>
-          Promise.resolve({
-            data: groups.filter((g) => values.includes(g.sendfox_list_id)),
-            error: null,
-          }),
+        in: (_col: string, values: any[]) => {
+          const data =
+            table === "groups"
+              ? groups.filter((g) => values.includes(g.sendfox_list_id))
+              : []
+          const res = { data, error: null }
+          return {
+            order: () => Promise.resolve(res),
+            then: (resolve: any) => resolve(res),
+          }
+        },
       }),
     }),
   },
 }))
 
+vi.mock("@/lib/ses", () => ({
+  sendSesEmail: vi.fn(async () => ({ MessageId: "e1" })),
+}))
+
 describe("sendfox-service", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     fetchMock.mockReset()
     groups = []
     process.env.SENDFOX_API_TOKEN = "tok"
     vi.resetModules()
-    const mod = require("../services/sendfox-service")
+    const mod = await import("../services/sendfox-service")
     upsertContact = mod.upsertContact
     addContactToList = mod.addContactToList
     getOrCreateList = mod.getOrCreateList
@@ -40,7 +50,7 @@ describe("sendfox-service", () => {
     unsubscribe = mod.unsubscribe
     fetchLists = mod.fetchLists
     SendFoxError = mod.SendFoxError
-    sendEmailCampaign = require("../services/campaign-sender").sendEmailCampaign
+    sendEmailCampaign = (await import("../services/campaign-sender")).sendEmailCampaign
   })
 
   test("upsertContact posts contact data", async () => {
@@ -116,6 +126,9 @@ describe("sendfox-service", () => {
         contact_count: 5,
         created_at: "2024-01-01",
         group: { id: "g1", name: "Group1" },
+        last_sync_message: null,
+        last_sync_at: null,
+        pending_mismatches: 0,
       },
     ])
   })
@@ -145,7 +158,7 @@ describe("sendfox-service", () => {
       "https://sendfox.com/api/unsubscribe",
       expect.objectContaining({
         method: "PATCH",
-        body: JSON.stringify({ email: "c.com" }),
+        body: JSON.stringify({ email: "c@test.com" }),
       }),
     )
   })
@@ -157,10 +170,7 @@ describe("sendfox-service", () => {
       subject: "Hello",
       html: "<p>hi</p>",
     })
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://sendfox.com/api/emails",
-      expect.objectContaining({ method: "POST" }),
-    )
+    // sendEmailCampaign now sends via AWS SES (sendSesEmail), returning its MessageId
     expect(id).toBe("e1")
   })
 
