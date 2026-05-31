@@ -1,298 +1,264 @@
 import { NextRequest } from "next/server"
 import { POST } from "../app/api/campaigns/send/route"
 
-let campaigns: any[] = []
-let recipients: any[] = []
-let buyers: any[] = []
-let buyerGroups: any[] = []
-let smsMock = vi.fn()
-let emailMock = vi.fn()
-let shortMock = vi.fn()
-let supabase: any
-let recipientUpdates: any[] = []
-let recipientCounter = 1
+// Shared mutable state the mocked @/lib/supabase reads. vi.hoisted so the
+// hoisted vi.mock factory can reference the stable client object.
+const h = vi.hoisted(() => {
+  const state: any = {
+    campaigns: [] as any[],
+    recipients: [] as any[],
+    buyers: [] as any[],
+    buyerGroups: [] as any[],
+    recipientCounter: 1,
+  }
 
-vi.mock("@supabase/supabase-js", () => ({
-  createClient: () => supabase,
-}))
+  const nested = (row: any, col: string) => {
+    if (col.includes(".")) {
+      const [a, b] = col.split(".")
+      return row?.[a]?.[b]
+    }
+    return row?.[col]
+  }
 
-vi.mock("../services/campaign-sender.server", () => ({
-  sendCampaignSMS: (...args: any[]) => smsMock(...args),
-}))
-vi.mock("../services/campaign-sender", () => ({
-  sendEmailCampaign: (...args: any[]) => emailMock(...args),
-}))
+  function chainable(getRows: () => any[]) {
+    let rows = getRows()
+    const q: any = {
+      eq: (col: string, val: any) => {
+        rows = rows.filter((r) => nested(r, col) === val)
+        return q
+      },
+      in: (col: string, vals: any[]) => {
+        rows = rows.filter((r) => vals.includes(nested(r, col)))
+        return q
+      },
+      is: (col: string, val: any) => {
+        rows = rows.filter((r) => nested(r, col) === val)
+        return q
+      },
+      order: () => q,
+      limit: () => q,
+      maybeSingle: async () => ({ data: rows[0] || null, error: null }),
+      single: async () => ({ data: rows[0] || null, error: null }),
+      then: (resolve: any) => resolve({ data: rows, error: null }),
+    }
+    return q
+  }
 
-vi.mock("../services/shortlink-service", () => ({
-  replaceUrlsWithShortLinks: (...args: any[]) => shortMock(...args),
-  createShortLinksBulk: (...args: any[]) => shortMock(...args),
-}))
+  const recipientsWithBuyers = () =>
+    state.recipients.map((r: any) => ({
+      ...r,
+      buyers: r.buyers || state.buyers.find((b: any) => b.id === r.buyer_id),
+    }))
+  const groupsWithBuyers = () =>
+    state.buyerGroups.map((g: any) => ({
+      ...g,
+      buyers: state.buyers.find((b: any) => b.id === g.buyer_id),
+    }))
 
-vi.mock("@/lib/supabase", () => ({
-  get supabaseAdmin() {
-    return supabase
-  },
-  get supabase() {
-    return supabase
-  },
-}))
-
-function buildSupabase() {
-  return {
+  const client: any = {
     from: (table: string) => {
       if (table === "campaigns") {
         return {
-          select: () => ({
-            eq: (_c: string, id: string) => ({
-              maybeSingle: async () => ({
-                data: campaigns.find((c) => c.id === id) || null,
-                error: null,
-              }),
-            }),
-          }),
-          update: () => ({ eq: async () => ({ data: null, error: null }) }),
+          select: () => chainable(() => state.campaigns),
+          update: () => ({ eq: async () => ({ error: null }), in: async () => ({ error: null }) }),
+        }
+      }
+      if (table === "buyer_groups") {
+        return { select: () => chainable(groupsWithBuyers) }
+      }
+      if (table === "buyers") {
+        return {
+          select: () => chainable(() => state.buyers),
+          update: () => ({ eq: async () => ({ error: null }), in: async () => ({ error: null }) }),
         }
       }
       if (table === "campaign_recipients") {
         return {
-          select: () => {
-            let result = recipients.map((r) => ({ ...r }))
-            const query: any = {
-              eq: (col: string, val: any) => {
-                if (col === "campaign_id") result = result.filter((r) => r.campaign_id === val)
-                if (col === "buyers.sendfox_hidden") result = result.filter((r) => !r.buyers?.sendfox_hidden)
-                if (col === "buyers.sendfox_suppressed") result = result.filter((r) => !r.buyers?.sendfox_suppressed)
-                return query
-              },
-              then: async (resolve: any) => resolve({ data: result, error: null })
-            }
-            return query
-          },
+          select: () => chainable(recipientsWithBuyers),
           insert: async (rows: any[]) => {
-            rows.forEach((r) => {
-              recipients.push({
-                id: `r${recipientCounter++}`,
+            rows.forEach((r) =>
+              state.recipients.push({
+                id: `r${state.recipientCounter++}`,
                 ...r,
-                buyers: buyers.find((b) => b.id === r.buyer_id),
-              })
-            })
+                buyers: state.buyers.find((b: any) => b.id === r.buyer_id),
+              }),
+            )
             return { error: null }
           },
           delete: () => ({
-            eq: (col: string, val: any) => {
-              recipients = recipients.filter((r) => r[col] !== val)
-              return Promise.resolve({ error: null })
+            eq: async (col: string, val: any) => {
+              state.recipients = state.recipients.filter((r: any) => r[col] !== val)
+              return { error: null }
             },
           }),
-          update: (updates: any) => ({
-            eq: async (_c: string, id: string) => {
-              const row = recipients.find((r) => r.id === id)
-              if (row) Object.assign(row, updates)
-              recipientUpdates.push({ updates, id })
-              return { data: row, error: null }
-            },
-          }),
-        }
-      }
-      if (table === "buyer_groups") {
-        return {
-          select: () => {
-            let result = buyerGroups.map((g) => ({ ...g, buyers: buyers.find((b) => b.id === g.buyer_id) }))
-            const query: any = {
-              in: (_col: string, vals: any[]) => {
-                result = result.filter((r) => vals.includes(r.group_id))
-                return query
-              },
-              eq: (col: string, val: any) => {
-                if (col === "buyers.sendfox_hidden") result = result.filter((r) => !r.buyers?.sendfox_hidden)
-                if (col === "buyers.sendfox_suppressed") result = result.filter((r) => !r.buyers?.sendfox_suppressed)
-                return query
-              },
-              then: async (resolve: any) => resolve({ data: result, error: null })
-            }
-            return query
-          }
-        }
-      }
-      if (table === "buyers") {
-        return {
-          select: () => ({
-            in: (_col: string, vals: any[]) => ({
-              eq: (col: string, val: any) => {
-                const data = buyers.filter((b) => vals.includes(b.id) && b[col] === val)
-                return Promise.resolve({ data, error: null })
-              },
-            }),
-          }),
+          update: () => ({ eq: async () => ({ error: null }), in: async () => ({ error: null }) }),
         }
       }
       if (table === "buyer_sms_senders") {
-        return {
-          select: () => ({
-            eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }),
-          }),
-        }
+        return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) }
       }
       throw new Error(`Unexpected table ${table}`)
     },
+    auth: { getUser: async () => ({ data: { user: null }, error: null }) },
   }
-}
+
+  return { state, client }
+})
+
+vi.mock("@/lib/supabase", () => ({ supabaseAdmin: h.client, supabase: h.client }))
+
+vi.mock("@/services/sms-campaign-sender", () => ({
+  queueSmsCampaign: vi.fn(async () => ({})),
+  processSmsQueue: vi.fn(async () => 0),
+}))
+vi.mock("@/services/campaign-sender", () => ({
+  queueEmailCampaign: vi.fn(async () => ({})),
+  processEmailQueue: vi.fn(async () => 0),
+  sendEmailCampaign: vi.fn(async () => "e1"),
+}))
+vi.mock("@/services/shortlink-service", () => ({
+  // Return one short link per requested input, echoing slug from the target.
+  createShortLinksBulk: vi.fn(async (inputs: any[]) =>
+    inputs.map((_: any, i: number) => ({ shortUrl: `https://s.io/${i}`, slug: `s${i}` })),
+  ),
+  createShortLink: vi.fn(async () => null),
+}))
+
+// Email-path dependencies
+vi.mock("@/lib/auth/org-context", () => ({
+  requireOrgContext: async () => ({ orgId: "o1" }),
+  resolveOrgIdForUser: async () => "o1",
+}))
+vi.mock("@/lib/email-sender-resolver", () => ({
+  SenderNotVerifiedError: class SenderNotVerifiedError extends Error {},
+  resolveCampaignSender: async () => ({
+    fromEmail: "from@test.com",
+    fromName: "Test",
+    replyTo: "reply@test.com",
+  }),
+}))
+vi.mock("@/lib/notifications", () => ({
+  insertNotification: vi.fn(async () => ({})),
+}))
+
+let smsSender: any
+let emailSender: any
 
 describe("send route templates", () => {
-  beforeEach(() => {
-    campaigns = []
-    recipients = []
-    buyers = []
-    buyerGroups = []
-    recipientUpdates = []
-    smsMock.mockReset()
-    emailMock.mockReset()
-    shortMock.mockReset()
-    recipientCounter = 1
-    supabase = buildSupabase()
+  beforeEach(async () => {
+    h.state.campaigns = []
+    h.state.recipients = []
+    h.state.buyers = []
+    h.state.buyerGroups = []
+    h.state.recipientCounter = 1
+    process.env.SUPABASE_URL = "http://local"
     process.env.SUPABASE_SERVICE_ROLE_KEY = "tok"
-    process.env.NEXT_PUBLIC_SUPABASE_URL = "http://local"
-    process.env.EMAIL_DISABLE_SHORTLINKS = "1"
+    process.env.CRON_SECRET = "cron"
+    process.env.TELNYX_MESSAGING_PROFILE_ID = "mp1"
+    process.env.AWS_SES_FROM_EMAIL = "from@test.com"
+    smsSender = await import("@/services/sms-campaign-sender")
+    emailSender = await import("@/services/campaign-sender")
+    ;(smsSender.queueSmsCampaign as any).mockClear()
+    ;(smsSender.processSmsQueue as any).mockClear()
+    ;(emailSender.queueEmailCampaign as any).mockClear()
+    ;(emailSender.processEmailQueue as any).mockClear()
   })
 
-  test("renders template for SMS", async () => {
-    campaigns.push({ id: "c1", channel: "sms", message: "Hi {{first_name}}", buyer_ids: ["b1"] })
-    buyers.push({ id: "b1", fname: "John", lname: "Doe", phone: "+1222", can_receive_sms: true, sendfox_hidden: false })
-    smsMock.mockResolvedValue([{ sid: "1", from: "+1555" }])
-    shortMock.mockResolvedValue({ html: "Hi John", key: "k1" })
-    const req = new NextRequest("http://test", {
+  const req = (campaignId: string) =>
+    new NextRequest("http://test", {
       method: "POST",
-      headers: { "Authorization": "Bearer tok" },
-      body: JSON.stringify({ campaignId: "c1" }),
+      headers: { Authorization: "Bearer tok" }, // matches SUPABASE_SERVICE_ROLE_KEY
+      body: JSON.stringify({ campaignId }),
     })
-    await POST(req)
-    expect(shortMock).toHaveBeenCalled()
-    expect(smsMock).toHaveBeenCalledWith(
-      expect.objectContaining({ body: "Hi John" })
-    )
-    expect(recipientUpdates[0].updates.short_url_key).toBe("k1")
-  })
 
-  test("renders template for email", async () => {
-    campaigns.push({ id: "c2", channel: "email", subject: "Hey {{first_name}}", message: "Dear {{last_name}}", buyer_ids: ["b2"] })
-    buyers.push({ id: "b2", fname: "Jane", lname: "Smith", email: "a@test.com", can_receive_email: true, sendfox_hidden: false })
-    emailMock.mockResolvedValue("id1")
-    const req = new NextRequest("http://test", {
-      method: "POST",
-      headers: { "Authorization": "Bearer tok" },
-      body: JSON.stringify({ campaignId: "c2" }),
-    })
-    await POST(req)
-    expect(shortMock).not.toHaveBeenCalled()
-    expect(emailMock).toHaveBeenCalledWith(
-      expect.objectContaining({ subject: "Hey Jane" })
+  test("queues SMS with the raw template + recipients (rendering deferred)", async () => {
+    h.state.campaigns.push({ id: "c1", channel: "sms", message: "Hi {{first_name}}", buyer_ids: ["b1"] })
+    h.state.buyers.push({ id: "b1", fname: "John", lname: "Doe", phone: "+15125550111", can_receive_sms: true, sendfox_hidden: false, sendfox_suppressed: false })
+    const res = await POST(req("c1"))
+    expect(res.status).toBe(200)
+    expect(smsSender.queueSmsCampaign).toHaveBeenCalledWith(
+      expect.objectContaining({
+        campaignId: "c1",
+        recipients: expect.arrayContaining([
+          expect.objectContaining({ buyerId: "b1", body: "Hi {{first_name}}" }),
+        ]),
+      }),
     )
   })
 
-  test("enables short links for email when configured", async () => {
-    process.env.EMAIL_DISABLE_SHORTLINKS = "0"
-    campaigns.push({ id: "c5", channel: "email", subject: "Hey {{first_name}}", message: "<a href=\"https://example.com\">link</a>", buyer_ids: ["b5"] })
-    buyers.push({ id: "b5", fname: "Alex", lname: "Jones", email: "alex@test.com", can_receive_email: true, sendfox_hidden: false })
-    emailMock.mockResolvedValue("id5")
-    shortMock.mockResolvedValue({ html: "updated", key: "path" })
-    const req = new NextRequest("http://test", {
-      method: "POST",
-      headers: { "Authorization": "Bearer tok" },
-      body: JSON.stringify({ campaignId: "c5" }),
-    })
-    await POST(req)
-    expect(shortMock).toHaveBeenCalledWith("<a href=\"https://example.com\">link</a>", { anchorHrefOnly: true })
-    expect(emailMock).toHaveBeenCalledWith(
-      expect.objectContaining({ html: "updated" })
+  test("queues email with the raw subject/html (rendering deferred)", async () => {
+    h.state.campaigns.push({ id: "c2", channel: "email", subject: "Hey {{first_name}}", message: "Dear {{last_name}}", buyer_ids: ["b2"] })
+    h.state.buyers.push({ id: "b2", fname: "Jane", lname: "Smith", email: "a@test.com", can_receive_email: true, sendfox_hidden: false, sendfox_suppressed: false })
+    const res = await POST(req("c2"))
+    expect(res.status).toBe(200)
+    expect(emailSender.queueEmailCampaign).toHaveBeenCalledWith(
+      expect.objectContaining({
+        campaignId: "c2",
+        subject: "Hey {{first_name}}",
+        contacts: expect.arrayContaining([expect.objectContaining({ email: "a@test.com" })]),
+      }),
+      expect.anything(),
     )
   })
 
-  test("trims SMS body after short link replacement", async () => {
+  test("replaces SMS URLs with per-recipient short links before queueing", async () => {
+    h.state.campaigns.push({ id: "c5", channel: "sms", message: "See https://example.com now", buyer_ids: ["b5"] })
+    h.state.buyers.push({ id: "b5", fname: "Alex", phone: "+15125550155", can_receive_sms: true, sendfox_hidden: false, sendfox_suppressed: false })
+    const res = await POST(req("c5"))
+    expect(res.status).toBe(200)
+    const arg = (smsSender.queueSmsCampaign as any).mock.calls[0][0]
+    expect(arg.recipients[0].body).toBe("See https://s.io/0 now")
+  })
+
+  test("queues the full SMS body without trimming", async () => {
     const msg = "x".repeat(170)
-    campaigns.push({ id: "c3", channel: "sms", message: msg, buyer_ids: ["b3"] })
-    buyers.push({ id: "b3", phone: "+1999", can_receive_sms: true, sendfox_hidden: false })
-    smsMock.mockResolvedValue([{ sid: "1", from: "+1555" }])
-    shortMock.mockResolvedValue({ html: msg, key: "k1" })
-    const req = new NextRequest("http://test", {
-      method: "POST",
-      headers: { "Authorization": "Bearer tok" },
-      body: JSON.stringify({ campaignId: "c3" }),
-    })
-    await POST(req)
-    expect(smsMock).toHaveBeenCalledWith(
-      expect.objectContaining({ body: msg.slice(0, 160) })
+    h.state.campaigns.push({ id: "c3", channel: "sms", message: msg, buyer_ids: ["b3"] })
+    h.state.buyers.push({ id: "b3", phone: "+15125550133", can_receive_sms: true, sendfox_hidden: false, sendfox_suppressed: false })
+    const res = await POST(req("c3"))
+    expect(res.status).toBe(200)
+    expect(smsSender.queueSmsCampaign).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recipients: expect.arrayContaining([expect.objectContaining({ body: msg })]),
+      }),
     )
-    expect(recipientUpdates[0].updates.short_url_key).toBe("k1")
   })
 
-  test("skips hidden buyers", async () => {
-    campaigns.push({ id: "c4", channel: "sms", message: "Hi", buyer_ids: ["b4"] })
-    buyers.push({ id: "b4", phone: "+1222", can_receive_sms: true, sendfox_hidden: true })
-    smsMock.mockResolvedValue([{ sid: "1", from: "+1555" }])
-    const req = new NextRequest("http://test", {
-      method: "POST",
-      headers: { Authorization: "Bearer tok" },
-      body: JSON.stringify({ campaignId: "c4" }),
-    })
-    await POST(req)
-    expect(smsMock).not.toHaveBeenCalled()
+  test("skips hidden buyers (no recipients -> 400, queue untouched)", async () => {
+    h.state.campaigns.push({ id: "c4", channel: "sms", message: "Hi", buyer_ids: ["b4"] })
+    h.state.buyers.push({ id: "b4", phone: "+15125550144", can_receive_sms: true, sendfox_hidden: true, sendfox_suppressed: false })
+    const res = await POST(req("c4"))
+    expect(res.status).toBe(400)
+    expect(smsSender.queueSmsCampaign).not.toHaveBeenCalled()
   })
 
   test("returns 400 when no recipients", async () => {
-    campaigns.push({ id: "c5", channel: "email", message: "Hi", buyer_ids: ["b5"] })
-    const req = new NextRequest("http://test", {
-      method: "POST",
-      headers: { Authorization: "Bearer tok" },
-      body: JSON.stringify({ campaignId: "c5" }),
-    })
-    const res = await POST(req)
+    h.state.campaigns.push({ id: "c6", channel: "email", message: "Hi", buyer_ids: ["b6"] })
+    const res = await POST(req("c6"))
     expect(res.status).toBe(400)
   })
 
   test("returns 200 when recipients exist", async () => {
-    campaigns.push({ id: "c6", channel: "email", message: "Hello", buyer_ids: ["b6"] })
-    buyers.push({ id: "b6", email: "a@test.com", can_receive_email: true, sendfox_hidden: false })
-    emailMock.mockResolvedValue("id1")
-    const req = new NextRequest("http://test", {
-      method: "POST",
-      headers: { Authorization: "Bearer tok" },
-      body: JSON.stringify({ campaignId: "c6" }),
-    })
-    const res = await POST(req)
+    h.state.campaigns.push({ id: "c7", channel: "email", message: "Hello", buyer_ids: ["b7"] })
+    h.state.buyers.push({ id: "b7", email: "a@test.com", can_receive_email: true, sendfox_hidden: false, sendfox_suppressed: false })
+    const res = await POST(req("c7"))
     expect(res.status).toBe(200)
     const body = await res.json()
-    expect(body.sent).toBe(1)
+    expect(body.queued).toBe(1)
   })
 
-  test("merges buyer_ids and group_ids arrays to build recipients", async () => {
-    campaigns.push({
-      id: "c7",
-      channel: "sms",
-      message: "Hi",
-      buyer_ids: ["b1"],
-      group_ids: ["g1"],
-    })
-    buyers.push(
-      { id: "b1", phone: "+1222", can_receive_sms: true, sendfox_hidden: false, sendfox_suppressed: false },
-      { id: "b2", phone: "+1333", can_receive_sms: true, sendfox_hidden: false, sendfox_suppressed: false },
+  test("merges buyer_ids and group_ids into ONE batched queue call", async () => {
+    h.state.campaigns.push({ id: "c8", channel: "sms", message: "Hi", buyer_ids: ["b1"], group_ids: ["g1"] })
+    h.state.buyers.push(
+      { id: "b1", phone: "+15125550101", can_receive_sms: true, sendfox_hidden: false, sendfox_suppressed: false },
+      { id: "b2", phone: "+15125550102", can_receive_sms: true, sendfox_hidden: false, sendfox_suppressed: false },
     )
-    buyerGroups.push({ buyer_id: "b2", group_id: "g1" })
-    smsMock.mockResolvedValue([{ sid: "1", from: "+1555" }])
-
-    const req = new NextRequest("http://test", {
-      method: "POST",
-      headers: { Authorization: "Bearer tok" },
-      body: JSON.stringify({ campaignId: "c7" }),
-    })
-
-    const res = await POST(req)
+    h.state.buyerGroups.push({ buyer_id: "b2", group_id: "g1" })
+    const res = await POST(req("c8"))
     expect(res.status).toBe(200)
 
-    const campaignRecipients = recipients
-      .filter((r) => r.campaign_id === "c7")
-      .map((r) => r.buyer_id)
-      .sort()
-    expect(campaignRecipients).toEqual(["b1", "b2"])
-    expect(smsMock).toHaveBeenCalledTimes(2)
+    expect(smsSender.queueSmsCampaign).toHaveBeenCalledTimes(1)
+    const arg = (smsSender.queueSmsCampaign as any).mock.calls[0][0]
+    const buyerIds = arg.recipients.map((r: any) => r.buyerId).sort()
+    expect(buyerIds).toEqual(["b1", "b2"])
   })
 })
