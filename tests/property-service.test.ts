@@ -8,6 +8,7 @@ let idCounter = 1
 
 const fetchMock = vi.fn()
 global.fetch = fetchMock as any
+;(globalThis as any).window = { location: { origin: "http://test" } }
 
 vi.mock("../lib/supabase", () => {
   const client = {
@@ -139,9 +140,26 @@ describe("PropertyService", () => {
   beforeEach(() => {
     properties = []
     idCounter = 1
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: async () => ({ latitude: 10, longitude: 20 }),
+    fetchMock.mockImplementation(async (url: string, opts: any = {}) => {
+      const method = opts.method || "GET"
+      if (url === "/api/properties" && method === "POST") {
+        const input = JSON.parse(opts.body)
+        const record = { id: String(idCounter++), latitude: 10, longitude: 20, ...input }
+        properties.push(record)
+        return { ok: true, status: 200, json: async () => ({ property: record }) }
+      }
+      const m = url.match(/^\/api\/properties\/([^/?]+)$/)
+      if (m && (method === "PATCH" || method === "PUT")) {
+        const idx = properties.findIndex((x) => x.id === m[1])
+        if (idx !== -1) properties[idx] = { ...properties[idx], ...JSON.parse(opts.body) }
+        return { ok: true, status: 200, json: async () => ({ property: properties[idx] }) }
+      }
+      if (m && method === "DELETE") {
+        const idx = properties.findIndex((x) => x.id === m[1])
+        if (idx !== -1) properties.splice(idx, 1)
+        return { ok: true, status: 200, json: async () => ({ success: true }) }
+      }
+      return { ok: true, status: 200, json: async () => ({}) }
     })
     shortMock.mockReset()
   })
@@ -235,7 +253,7 @@ describe("PropertyService", () => {
     const page1 = await PropertyService.getProperties({
       search: "Austin",
       page: 1,
-      pageSize: 1,
+      perPage: 1,
       sortBy: "price",
       sortOrder: "asc",
     })
@@ -247,7 +265,7 @@ describe("PropertyService", () => {
     const page2 = await PropertyService.getProperties({
       search: "Austin",
       page: 2,
-      pageSize: 1,
+      perPage: 1,
       sortBy: "price",
       sortOrder: "asc",
     })
@@ -283,9 +301,9 @@ describe("PropertyService", () => {
 
   test("addProperty generates short link", async () => {
     shortMock.mockResolvedValue({
-      shortURL: "http://s.io/a",
-      path: "myslug",
-      idString: "id1",
+      slug: "myslug",
+      shortUrl: "http://s.io/a",
+      id: "id1",
     })
     const prop = await PropertyService.addProperty({
       address: "sl",
@@ -294,8 +312,7 @@ describe("PropertyService", () => {
       short_slug: "myslug",
     })
     expect(shortMock).toHaveBeenCalledWith(
-      "https://example.com/listing",
-      "myslug",
+      expect.objectContaining({ targetUrl: "https://example.com/listing", slug: "myslug" }),
     )
     expect(prop.short_url_key).toBe("myslug")
     expect(prop.short_url).toBe("http://s.io/a")
