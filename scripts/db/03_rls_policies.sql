@@ -6,8 +6,7 @@ declare
   tbl text;
 begin
   for tbl in select unnest(array[
-    'active_conferences','agent_active_calls','agent_events','agent_sessions','agents','agents_sessions',
-    'buyers','buyer_groups','buyer_list_consent','buyer_sms_senders','campaigns','campaign_recipients',
+    'active_conferences','buyers','buyer_groups','buyer_list_consent','buyer_sms_senders','campaigns','campaign_recipients',
     'calls','calls_sessions','call_transfers','email_builder_templates','email_campaign_definitions',
     'email_campaign_queue','email_events','email_messages','email_templates','email_threads','gmail_threads',
     'gmail_tokens','groups','inbound_numbers','media_links','messages','message_threads','negative_keywords',
@@ -84,18 +83,6 @@ create policy "voice_numbers read" on public.voice_numbers
 drop policy if exists "active_conferences read" on public.active_conferences;
 create policy "active_conferences read" on public.active_conferences
   for select to authenticated using (true);
-
--- Agents: allow authenticated users to fetch their row
-drop policy if exists "agent can select own row" on public.agents;
-create policy "agent can select own row" on public.agents
-  for select to authenticated using (auth.uid() = auth_user_id);
-
--- Agent presence management
-drop policy if exists "agent can manage own presence" on public.agents_sessions;
-create policy "agent can manage own presence" on public.agents_sessions
-  for all to authenticated
-  using (exists (select 1 from public.agents a where a.auth_user_id = auth.uid() and a.id = agent_id))
-  with check (exists (select 1 from public.agents a where a.auth_user_id = auth.uid() and a.id = agent_id));
 
 -- Email builder: creators can manage their resources
 drop policy if exists "Users manage their email_builder_templates" on public.email_builder_templates;

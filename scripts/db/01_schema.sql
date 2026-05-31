@@ -486,58 +486,6 @@ create table if not exists public.voice_numbers (
   created_at timestamptz not null default now()
 );
 
--- NOTE: The agents subsystem is DROPPED in production via scripts/db/20260525_drop_agents.sql.
--- The DDL below is retained for historical bootstrap only and does not reflect the live schema.
--- Do not rely on this for current-state; see the dated migrations for the authoritative schema.
--- Agents
-create table if not exists public.agents (
-  id uuid primary key default gen_random_uuid(),
-  email text unique not null,
-  password_hash text not null,
-  display_name text not null,
-  sip_username text,
-  sip_password text,
-  telnyx_credential_id text,
-  telephony_credential_id text,
-  status text default 'offline' check (status in ('available', 'busy', 'offline')),
-  last_call_at timestamptz,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  auth_user_id uuid references auth.users(id) on delete set null
-);
-
-create index if not exists agents_status_idx on public.agents(status);
-create index if not exists agents_email_idx on public.agents(email);
-create index if not exists agents_auth_user_idx on public.agents(auth_user_id);
-
--- Agent sessions (call control)
-create table if not exists public.agent_sessions (
-  agent_id uuid primary key references public.agents(id) on delete cascade,
-  call_control_id text unique not null,
-  jwt_expires_at timestamptz,
-  connected_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create index if not exists agent_sessions_call_control_idx on public.agent_sessions(call_control_id);
-
--- Agent active calls
-create table if not exists public.agent_active_calls (
-  id uuid primary key default gen_random_uuid(),
-  agent_id uuid unique references public.agents(id),
-  customer_leg_id text,
-  agent_leg_id text,
-  consult_leg_id text,
-  hold_state text default 'active',
-  playback_state text default 'idle',
-  last_playback_cmd_id uuid,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
-);
-
-create index if not exists agent_active_calls_agent_idx on public.agent_active_calls(agent_id);
-create index if not exists agent_active_calls_hold_state_idx on public.agent_active_calls(hold_state);
-
 -- Call transfers
 create table if not exists public.call_transfers (
   id uuid primary key default gen_random_uuid(),
@@ -563,13 +511,6 @@ create table if not exists public.calls_sessions (
   updated_at timestamptz default now()
 );
 
--- Agent events
-create table if not exists public.agent_events (
-  id uuid primary key default gen_random_uuid(),
-  data jsonb not null,
-  created_at timestamptz default now()
-);
-
 -- Calls
 create table if not exists public.calls (
   id uuid primary key default gen_random_uuid(),
@@ -593,14 +534,13 @@ create table if not exists public.calls (
   recording_state text default 'pending',
   recording_duration_seconds integer,
   recording_accessed_at timestamptz,
-  recording_accessed_by uuid references public.agents(id),
+  recording_accessed_by uuid,
   searchable tsvector generated always as (
     setweight(to_tsvector('simple', coalesce(from_number, '')), 'A') ||
     setweight(to_tsvector('simple', coalesce(to_number, '')), 'A') ||
     setweight(to_tsvector('simple', coalesce(status, '')), 'C')
   ) stored,
   webrtc boolean not null default false,
-  from_agent_id uuid references public.agents(id),
   recording_confidence double precision
 );
 
@@ -610,13 +550,12 @@ create index if not exists calls_buyer_idx on public.calls(buyer_id);
 create index if not exists calls_search_gin_idx on public.calls using gin(searchable);
 create index if not exists calls_from_trgm_idx on public.calls using gin(from_number gin_trgm_ops);
 create index if not exists calls_to_trgm_idx on public.calls using gin(to_number gin_trgm_ops);
-create index if not exists calls_from_agent_idx on public.calls(from_agent_id);
 
 -- Recording access log
 create table if not exists public.recording_access_log (
   id uuid primary key default gen_random_uuid(),
   call_sid text references public.calls(call_sid),
-  accessed_by uuid references public.agents(id),
+  accessed_by uuid,
   access_type text check (access_type in ('play', 'download', 'share')),
   accessed_at timestamptz default now(),
   ip_address inet,
@@ -642,19 +581,6 @@ create table if not exists public.active_conferences (
 create unique index if not exists active_conferences_conference_id_key on public.active_conferences(conference_id);
 create index if not exists idx_active_conferences_created_at on public.active_conferences(created_at desc);
 create index if not exists idx_active_conferences_webrtc_joined on public.active_conferences(webrtc_joined);
-
--- Agent presence sessions (WebRTC)
-create table if not exists public.agents_sessions (
-  id uuid primary key default gen_random_uuid(),
-  agent_id uuid references public.agents(id) on delete cascade,
-  sip_username text not null,
-  status text not null check (status in ('online', 'offline')),
-  last_seen timestamptz not null default now(),
-  client_id text not null,
-  unique (agent_id, client_id)
-);
-
-create index if not exists agents_sessions_online_idx on public.agents_sessions(status, last_seen desc);
 
 -- Voice routing tables
 create table if not exists public.org_voice_settings (
