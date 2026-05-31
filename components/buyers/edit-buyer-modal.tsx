@@ -236,9 +236,21 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
       }
 
       log("update", "Updating buyer with data:", updateData)
-      const { error } = await supabase.from("buyers").update(updateData).eq("id", buyer.id)
+      const response = await fetch(`/api/buyers/${buyer.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updateData),
+      })
 
-      if (error) throw error
+      if (response.status === 403) {
+        toast.error("You don't have permission to add or edit buyers.")
+        return
+      }
+
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}))
+        throw new Error(result?.error || "Failed to update buyer")
+      }
 
       const groupsToAdd = groupIds.filter((id) => !originalGroupIds.includes(id))
       const groupsToRemove = originalGroupIds.filter((id) => !groupIds.includes(id))

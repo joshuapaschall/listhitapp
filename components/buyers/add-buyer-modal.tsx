@@ -331,23 +331,42 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
         })
         updateData.updated_at = new Date().toISOString()
 
-        const { error } = await supabase
-          .from("buyers")
-          .update(updateData)
-          .eq("id", existingBuyer.id)
+        const response = await fetch(`/api/buyers/${existingBuyer.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updateData),
+        })
 
-        if (error) throw error
+        if (response.status === 403) {
+          toast.error("You don't have permission to add or edit buyers.")
+          return
+        }
+
+        if (!response.ok) {
+          const result = await response.json().catch(() => ({}))
+          throw new Error(result?.error || "Failed to update buyer")
+        }
 
         newBuyerId = existingBuyer.id
       } else {
-        const { data, error } = await supabase
-          .from("buyers")
-          .insert([insertData])
-          .select()
+        const response = await fetch("/api/buyers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(insertData),
+        })
 
-        if (error) throw error
+        if (response.status === 403) {
+          toast.error("You don't have permission to add or edit buyers.")
+          return
+        }
 
-        newBuyerId = data?.[0]?.id as string | undefined
+        if (!response.ok) {
+          const result = await response.json().catch(() => ({}))
+          throw new Error(result?.error || "Failed to add buyer")
+        }
+
+        const result = await response.json()
+        newBuyerId = result?.buyer?.id as string | undefined
       }
 
       if (newBuyerId && groupIds.length) {
