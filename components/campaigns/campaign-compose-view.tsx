@@ -27,6 +27,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { BuyerService } from "@/services/buyer-service"
 import { TemplateService } from "@/services/template-service"
 import SmsSendTimeCard from "@/components/campaigns/sms-send-time-card"
+import { Can } from "@/components/auth/Can"
 
 
 const TemplaticalEmailEditor = dynamic(() => import("@/components/campaigns/email/templatical-email-editor"), {
@@ -245,8 +246,8 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
   }
 
   const sendNow = async () => {
-    // Get the logged-in user's access token. This JWT carries the `sub` claim
-    // that the send route requires; the anon key does not.
+    // Confirm the user still has a browser session before calling the
+    // permission-gated send-now route.
     const supabase = supabaseBrowser()
     const { data: { session } } = await supabase.auth.getSession()
     const accessToken = session?.access_token
@@ -260,11 +261,10 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(campaign),
     })
-    const response = await fetch("/api/campaigns/send", {
+    const response = await fetch("/api/campaigns/send-now", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify({ campaignId: campaign.id }),
     })
@@ -359,7 +359,7 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
     <div className="sticky top-0 bg-background/80 backdrop-blur z-10 border-b border-border py-4 px-6">
       <div className="max-w-4xl mx-auto flex items-center justify-between">
         <div className="flex items-center gap-2"><Button variant="ghost" size="icon" onClick={() => router.push("/campaigns")}><ArrowLeft className="h-4 w-4" /></Button><Input className="w-auto min-w-[200px] max-w-[400px]" value={campaign.name || "Untitled campaign"} onChange={(e) => update({ name: e.target.value })} /><CampaignStatusBadge status={campaign.status} />{hasEdited && <span className="text-xs text-muted-foreground ml-2">{autosaveState === "saving" ? "Saving…" : autosaveState === "failed" ? "Save failed" : "Saved"}</span>}</div>
-        <div className="flex gap-2"><Button variant="ghost" onClick={() => router.push("/campaigns")}>Finish later</Button><Button variant="brand" disabled={!canSend || !!campaign.scheduled_at} title={!canSend ? `Add: ${itemsMissing}` : ""} onClick={() => setSendConfirmOpen(true)}>Send</Button></div>
+        <div className="flex gap-2"><Button variant="ghost" onClick={() => router.push("/campaigns")}>Finish later</Button><Can permission="campaigns.send_email"><Button variant="brand" disabled={!canSend || !!campaign.scheduled_at} title={!canSend ? `Add: ${itemsMissing}` : ""} onClick={() => setSendConfirmOpen(true)}>Send</Button></Can></div>
       </div>
     </div>
     <main className="max-w-4xl mx-auto px-6 py-8 space-y-3">
@@ -426,7 +426,7 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction className="bg-brand text-white hover:bg-brand/90" onClick={sendNow}>Send now</AlertDialogAction>
+          <Can permission="campaigns.send_email"><AlertDialogAction className="bg-brand text-white hover:bg-brand/90" onClick={sendNow}>Send now</AlertDialogAction></Can>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

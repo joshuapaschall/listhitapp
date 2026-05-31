@@ -1,6 +1,14 @@
 import { NextRequest } from "next/server"
 import { cookies } from "next/headers"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
+import { hasPermission } from "@/lib/permissions/server"
+
+async function hasAnyCampaignSendPermission(supabase: any) {
+  return (
+    (await hasPermission(supabase, "campaigns.send_sms")) ||
+    (await hasPermission(supabase, "campaigns.send_email"))
+  )
+}
 
 export async function POST(request: NextRequest) {
   const { campaignId } = await request.json()
@@ -49,6 +57,13 @@ export async function POST(request: NextRequest) {
 
   const ownerId = campaign.user_id ?? campaign.created_by
   if (!ownerId || ownerId !== user.id) {
+    return new Response(JSON.stringify({ error: "Forbidden" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json" },
+    })
+  }
+
+  if (!(await hasAnyCampaignSendPermission(supabase))) {
     return new Response(JSON.stringify({ error: "Forbidden" }), {
       status: 403,
       headers: { "Content-Type": "application/json" },

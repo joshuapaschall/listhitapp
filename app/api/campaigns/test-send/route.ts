@@ -3,6 +3,7 @@ import { cookies } from "next/headers"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { sendSesEmail } from "@/lib/ses"
 import { assertServer } from "@/utils/assert-server"
+import { requirePermission } from "@/lib/permissions/server"
 
 assertServer()
 
@@ -15,6 +16,9 @@ export async function POST(request: NextRequest) {
 
     const cookieStore = cookies()
     const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+    const denied = await requirePermission(supabase, "campaigns.send_email")
+    if (denied) return denied
+
     const {
       data: { user },
       error: authError,

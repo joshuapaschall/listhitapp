@@ -21,6 +21,7 @@ import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { BuyerService } from "@/services/buyer-service"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
+import { Can } from "@/components/auth/Can"
 
 
 
@@ -120,8 +121,8 @@ export default function SmsCampaignComposeView({ initialCampaign }: { initialCam
 
   const update = (patch: any) => { setCampaign((p: any) => ({ ...p, ...patch })); setHasEdited(true) }
   const sendNow = async () => {
-    // Get the logged-in user's access token. This JWT carries the `sub` claim
-    // that the send route requires; the anon key does not.
+    // Confirm the user still has a browser session before calling the
+    // permission-gated send-now route.
     const supabase = supabaseBrowser()
     const { data: { session } } = await supabase.auth.getSession()
     const accessToken = session?.access_token
@@ -135,11 +136,10 @@ export default function SmsCampaignComposeView({ initialCampaign }: { initialCam
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(campaign),
     })
-    const res = await fetch("/api/campaigns/send", {
+    const res = await fetch("/api/campaigns/send-now", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify({ campaignId: campaign.id }),
     })
@@ -170,7 +170,7 @@ export default function SmsCampaignComposeView({ initialCampaign }: { initialCam
 
 
   return <div className="min-h-screen bg-background">
-    <div className="sticky top-0 bg-background/80 backdrop-blur z-10 border-b border-border py-4 px-6"><div className="max-w-4xl mx-auto flex items-center justify-between"><div className="flex items-center gap-2"><Button variant="ghost" size="icon" onClick={() => router.push("/campaigns")}><ArrowLeft className="h-4 w-4" /></Button><Input className="w-auto min-w-[200px] max-w-[400px]" value={campaign.name || "Untitled campaign"} onChange={(e) => update({ name: e.target.value })} /><CampaignStatusBadge status={campaign.status} />{hasEdited && <span className="text-xs text-muted-foreground">{autosaveState === "saving" ? "Saving…" : autosaveState === "failed" ? "Save failed" : "Saved"}</span>}</div><div className="flex items-start gap-2"><div><Input className="h-9 w-[130px]" value={testPhone} onChange={(e) => setTestPhone(e.target.value)} placeholder="+1 (770) 555-0123" />{isTestPhoneInvalid && <p className="mt-1 text-xs text-red-500">Enter a valid US phone number</p>}</div><Button variant="outline" size="sm" disabled={!testPhone.trim() || isTestPhoneInvalid || sendingTest || !campaign.message?.trim()} onClick={sendTest}><TestTube2 className="h-4 w-4" />Send test</Button><Button variant="brand" disabled={!canSend || !!campaign.scheduled_at} onClick={() => setSendConfirmOpen(true)}>Send</Button></div></div></div>
+    <div className="sticky top-0 bg-background/80 backdrop-blur z-10 border-b border-border py-4 px-6"><div className="max-w-4xl mx-auto flex items-center justify-between"><div className="flex items-center gap-2"><Button variant="ghost" size="icon" onClick={() => router.push("/campaigns")}><ArrowLeft className="h-4 w-4" /></Button><Input className="w-auto min-w-[200px] max-w-[400px]" value={campaign.name || "Untitled campaign"} onChange={(e) => update({ name: e.target.value })} /><CampaignStatusBadge status={campaign.status} />{hasEdited && <span className="text-xs text-muted-foreground">{autosaveState === "saving" ? "Saving…" : autosaveState === "failed" ? "Save failed" : "Saved"}</span>}</div><div className="flex items-start gap-2"><div><Input className="h-9 w-[130px]" value={testPhone} onChange={(e) => setTestPhone(e.target.value)} placeholder="+1 (770) 555-0123" />{isTestPhoneInvalid && <p className="mt-1 text-xs text-red-500">Enter a valid US phone number</p>}</div><Can permission="campaigns.send_sms"><Button variant="outline" size="sm" disabled={!testPhone.trim() || isTestPhoneInvalid || sendingTest || !campaign.message?.trim()} onClick={sendTest}><TestTube2 className="h-4 w-4" />Send test</Button></Can><Can permission="campaigns.send_sms"><Button variant="brand" disabled={!canSend || !!campaign.scheduled_at} onClick={() => setSendConfirmOpen(true)}>Send</Button></Can></div></div></div>
     <main className="max-w-4xl mx-auto px-6 py-8 space-y-3">
       <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="to" title="To" valid={toValid} ctaText="Add recipients" summary={toValid ? `${recipientCount} recipients` : "Who are you sending this to?"}>{hasPrefillSnapshot ? <AudienceFilterSummaryCard snapshot={hasPrefillSnapshot} onPreview={() => setPreviewOpen(true)} onAdjust={() => router.push("/buyers")} onClear={() => { setHasPrefillSnapshot(null); update({ buyer_ids: [] }) }} /> : <GroupTreeSelector value={campaign.group_ids || []} onChange={(ids) => update({ group_ids: ids })} />}</CardRow>
       <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="from" title="From" valid={fromValid} ctaText="View sender" summary="Per-recipient routing with fallback"><SmsFromCard buyerIds={allRecipientIds} /></CardRow>
@@ -188,7 +188,7 @@ export default function SmsCampaignComposeView({ initialCampaign }: { initialCam
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction className="bg-brand text-white hover:bg-brand/90" onClick={async (e) => { e.preventDefault(); setSendConfirmOpen(false); await sendNow() }}>Send now</AlertDialogAction>
+          <Can permission="campaigns.send_sms"><AlertDialogAction className="bg-brand text-white hover:bg-brand/90" onClick={async (e) => { e.preventDefault(); setSendConfirmOpen(false); await sendNow() }}>Send now</AlertDialogAction></Can>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

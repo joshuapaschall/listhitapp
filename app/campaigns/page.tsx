@@ -31,6 +31,8 @@ import ConfirmInputDialog from "@/components/ui/confirm-input-dialog"
 import CampaignStatusBadge from "@/components/campaigns/campaign-status-badge"
 import { clearAudienceSnapshot, readAudienceSnapshot } from "@/lib/campaign-audience"
 import { toast } from "sonner"
+import { CanAny } from "@/components/auth/Can"
+import { usePermissions } from "@/hooks/use-permissions"
 
 type CampaignRow = any
 type UiStatus = "draft" | "scheduled" | "sending" | "sent" | "error" | "completed_with_errors"
@@ -47,6 +49,8 @@ export default function CampaignsPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const queryClient = useQueryClient()
+  const { can, isAdmin, loading: permissionsLoading } = usePermissions()
+  const canViewCampaigns = isAdmin || can("campaigns.view")
 
   useEffect(() => {
     const type = searchParams.get("type")
@@ -66,6 +70,7 @@ export default function CampaignsPage() {
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ["campaigns", "wave-a2"],
     queryFn: () => CampaignService.listCampaigns(1, {}, 100),
+    enabled: !permissionsLoading && canViewCampaigns,
   })
 
   const campaigns = data?.campaigns || []
@@ -151,6 +156,32 @@ export default function CampaignsPage() {
     }
   }
 
+  if (permissionsLoading) {
+    return (
+      <MainLayout>
+        <div className="flex h-[60vh] items-center justify-center">
+          <p className="text-sm text-muted-foreground">Loading campaign permissions...</p>
+        </div>
+      </MainLayout>
+    )
+  }
+
+  if (!canViewCampaigns) {
+    return (
+      <MainLayout>
+        <div className="flex h-[60vh] items-center justify-center bg-background">
+          <div className="max-w-md px-6 text-center">
+            <Mail className="mx-auto mb-4 size-12 text-secondary" />
+            <h2 className="mb-2 text-xl font-semibold">You don&apos;t have access to Campaigns</h2>
+            <p className="text-sm text-muted-foreground">
+              Ask an administrator to grant campaigns.view before you can view campaigns.
+            </p>
+          </div>
+        </div>
+      </MainLayout>
+    )
+  }
+
   return (
     <MainLayout>
       <div className="px-6 py-8 max-w-[1400px] mx-auto">
@@ -161,7 +192,9 @@ export default function CampaignsPage() {
               {campaigns.length} campaigns • {sentThisMonth} sent this month
             </p>
           </div>
-          <Button variant="brand" onClick={() => !pickerOpen && setPickerOpen(true)}><Plus className="size-4" />New Campaign</Button>
+          <CanAny permissions={["campaigns.send_sms", "campaigns.send_email"]}>
+            <Button variant="brand" onClick={() => !pickerOpen && setPickerOpen(true)}><Plus className="size-4" />New Campaign</Button>
+          </CanAny>
         </div>
 
         <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -221,7 +254,9 @@ export default function CampaignsPage() {
             <Mail className="mx-auto size-12 text-muted-foreground" />
             <h2 className="mt-4 text-xl font-semibold">No campaigns yet</h2>
             <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">Send your first email or SMS campaign to start reaching your buyers.</p>
-            <Button variant="brand" className="mt-6" onClick={() => !pickerOpen && setPickerOpen(true)}>Create your first campaign</Button>
+            <CanAny permissions={["campaigns.send_sms", "campaigns.send_email"]}>
+              <Button variant="brand" className="mt-6" onClick={() => !pickerOpen && setPickerOpen(true)}>Create your first campaign</Button>
+            </CanAny>
           </div>
         ) : filteredCampaigns.length === 0 ? (
           <div className="rounded-lg border bg-card py-24 text-center">
@@ -295,16 +330,22 @@ export default function CampaignsPage() {
                             </Button>
                           )}
                           {(uiStatus === "draft" || uiStatus === "scheduled") && (
-                            <Button variant="ghost" size="icon" onClick={() => router.push(uiStatus === "draft" ? `/campaigns/${campaign.id}/edit` : `/campaigns/${campaign.id}`)}>
-                              <Pencil className="size-4" />
-                            </Button>
+                            <CanAny permissions={["campaigns.send_sms", "campaigns.send_email"]}>
+                              <Button variant="ghost" size="icon" onClick={() => router.push(uiStatus === "draft" ? `/campaigns/${campaign.id}/edit` : `/campaigns/${campaign.id}`)}>
+                                <Pencil className="size-4" />
+                              </Button>
+                            </CanAny>
                           )}
-                          <Button variant="ghost" size="icon" onClick={() => handleDuplicate(campaign.id)}>
-                            <Copy className="size-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => setDeleteId(campaign.id)}>
-                            <Trash2 className="size-4" />
-                          </Button>
+                          <CanAny permissions={["campaigns.send_sms", "campaigns.send_email"]}>
+                            <Button variant="ghost" size="icon" onClick={() => handleDuplicate(campaign.id)}>
+                              <Copy className="size-4" />
+                            </Button>
+                          </CanAny>
+                          <CanAny permissions={["campaigns.send_sms", "campaigns.send_email"]}>
+                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => setDeleteId(campaign.id)}>
+                              <Trash2 className="size-4" />
+                            </Button>
+                          </CanAny>
                         </div>
                       </TableCell>
                     </TableRow>

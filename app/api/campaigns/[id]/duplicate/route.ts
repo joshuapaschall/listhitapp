@@ -3,8 +3,16 @@ import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 import { createLogger } from "@/lib/logger"
+import { hasPermission } from "@/lib/permissions/server"
 
 const log = createLogger("api:campaigns:duplicate")
+
+async function hasAnyCampaignSendPermission(supabase: any) {
+  return (
+    (await hasPermission(supabase, "campaigns.send_sms")) ||
+    (await hasPermission(supabase, "campaigns.send_email"))
+  )
+}
 
 export async function POST(
   _req: Request,
@@ -30,6 +38,10 @@ export async function POST(
 
     if (fetchError || !campaign || campaign.user_id !== user.id || campaign.deleted_at) {
       return NextResponse.json({ error: "Campaign not found" }, { status: 404 })
+    }
+
+    if (!(await hasAnyCampaignSendPermission(supabase))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
     const duplicateCampaign = {
