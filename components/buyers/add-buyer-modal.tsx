@@ -28,6 +28,7 @@ import TagSelector from "./tag-selector"
 import { PROPERTY_TYPES } from "@/lib/constant"
 import LocationSelector from "./location-selector"
 import GroupTreeSelector from "./group-tree-selector"
+import { Can } from "@/components/auth/Can"
 import { addBuyersToGroups } from "@/lib/group-service"
 import PropertySelector from "./property-selector"
 import { PropertyService } from "@/services/property-service"
@@ -1197,9 +1198,11 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
                 Update Buyer
               </Button>
               {onEditBuyer && (
-                <Button size="sm" variant="outline" onClick={handleEditExisting} disabled={loading}>
-                  Edit Buyer
-                </Button>
+                <Can permission="buyers.edit">
+                  <Button size="sm" variant="outline" onClick={handleEditExisting} disabled={loading}>
+                    Edit Buyer
+                  </Button>
+                </Can>
               )}
               <Button
                 size="sm"
