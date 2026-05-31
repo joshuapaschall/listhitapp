@@ -32,7 +32,7 @@ import {
   MAX_MMS_SIZE,
   uploadMediaFile,
 } from "@/utils/uploadMedia"
-import { useSession } from "@/hooks/use-session"
+import { useMyMergeContext } from "@/hooks/use-my-merge-context"
 
 interface SendSmsModalProps {
   open: boolean
@@ -58,7 +58,7 @@ export default function SendSmsModal({ open, onOpenChange, buyer, onSuccess }: S
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { segments: smsSegments, remaining } = calculateSmsSegments(message)
   const hasOversize = attachments.some((f) => f.size > MAX_MMS_SIZE)
-  const { user } = useSession()
+  const myMergeContext = useMyMergeContext()
 
   useEffect(() => {
     if (open) {
@@ -103,7 +103,7 @@ export default function SendSmsModal({ open, onOpenChange, buyer, onSuccess }: S
     if (p && buyer) {
       setGenerating(true)
       try {
-        const finalPrompt = renderTemplate(p.prompt, buyer)
+        const finalPrompt = renderTemplate(p.prompt, buyer, myMergeContext)
         const res = await fetch("/api/openai/ask", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

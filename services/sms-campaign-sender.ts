@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase"
 import { createLogger } from "@/lib/logger"
 import { renderTemplate } from "@/lib/utils"
+import { getUserMergeContext, type UserMergeContext } from "@/lib/user-context"
 import { formatPhoneE164, normalizePhone } from "@/lib/dedup-utils"
 import { TELNYX_API_URL, getTelnyxApiKey } from "@/lib/voice-env"
 import { insertNotification } from "@/lib/notifications"
@@ -415,6 +416,23 @@ export async function processSmsQueue(limit = 5, opts: { leaseSeconds?: number; 
     }
   }
 
+  const { data: campaignRows } = campaignIds.length
+    ? await supabase
+        .from("campaigns")
+        .select("id,user_id")
+        .in("id", campaignIds)
+    : { data: [] }
+  const campaignUserIdMap = new Map(
+    campaignRows?.map((row) => [row.id, row.user_id as string | null]) ?? [],
+  )
+  const campaignMergeContextEntries = await Promise.all(
+    Array.from(campaignUserIdMap.entries()).map(async ([campaignId, userId]) => [
+      campaignId,
+      await getUserMergeContext(supabase, userId),
+    ] as const),
+  )
+  const campaignMergeContextMap = new Map<string, UserMergeContext>(campaignMergeContextEntries)
+
   let sent = 0
 
   for (const rawJob of jobs) {
@@ -463,7 +481,8 @@ export async function processSmsQueue(limit = 5, opts: { leaseSeconds?: number; 
       if (buyerError) throw buyerError
       if (!buyer) throw new Error("Buyer not found for SMS job")
 
-      const body = renderTemplate(payload.body, buyer)
+      const senderContext = campaignMergeContextMap.get(job.campaign_id || payload.campaignId || "")
+      const body = renderTemplate(payload.body, buyer, senderContext)
       const result = await sendSingleCampaignSms({
         buyerId: job.buyer_id,
         toNumber: job.to_number,

@@ -5,6 +5,7 @@ import { calculateSmsSegments } from "@/lib/sms-utils"
 import { renderTemplate } from "@/lib/utils"
 import { formatPhoneE164 } from "@/lib/dedup-utils"
 import { sendCampaignSMS } from "@/services/campaign-sender.server"
+import { getUserMergeContext } from "@/lib/user-context"
 
 function parseMediaUrls(value: unknown): string[] {
   if (!value || typeof value !== "string") return []
@@ -35,7 +36,12 @@ export async function POST(request: Request) {
   const seg = calculateSmsSegments(campaign.message || "")
   if (seg.segments > 10) return NextResponse.json({ error: "Message exceeds 10 segments" }, { status: 400 })
 
-  const rendered = renderTemplate(campaign.message || "", { fname: "Test", lname: "User", phone: formattedPhone } as any)
+  const senderContext = await getUserMergeContext(supabase, user.id)
+  const rendered = renderTemplate(
+    campaign.message || "",
+    { fname: "Test", lname: "User", phone: formattedPhone } as any,
+    senderContext,
+  )
   const dryRun = forceDryRun ?? (process.env.LISTHIT_DRY_RUN === "1")
   const results = await sendCampaignSMS({ buyerId: undefined, to: [formattedPhone], body: rendered, mediaUrls, dryRun, campaignId: undefined, isTest: true })
   if (dryRun) {
