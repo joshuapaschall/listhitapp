@@ -25,10 +25,9 @@ declare
 begin
   for tbl in select unnest(array[
     'profiles','groups','buyers','email_threads','message_threads','sms_templates','email_templates',
-    'quick_reply_templates','gmail_tokens','ai_prompts','properties','showings','offers','agents',
-    'agent_sessions','agent_active_calls','calls_sessions','org_voice_settings','inbound_numbers',
-    'user_integrations','email_builder_templates','email_campaign_definitions','email_campaign_queue',
-    'agents_sessions'
+    'quick_reply_templates','gmail_tokens','ai_prompts','properties','showings','offers',
+    'calls_sessions','org_voice_settings','inbound_numbers','user_integrations',
+    'email_builder_templates','email_campaign_definitions','email_campaign_queue'
   ]) loop
     execute format('drop trigger if exists %I_moddatetime on public.%I', tbl, tbl);
     execute format('create trigger %I_moddatetime before update on public.%I for each row execute procedure public.moddatetime()', tbl, tbl);
@@ -75,21 +74,6 @@ begin
   end if;
 
   return query select coalesce(deleted_count, 0) + coalesce(inserted_count, 0) + coalesce(default_count, 0);
-end;
-$$;
-
--- Agent password verification
-create or replace function public.verify_agent_password(agent_email text, password text)
-returns table(id uuid, email text, display_name text, sip_username text, telephony_credential_id text, status text)
-language plpgsql
-security definer
-as $$
-begin
-  return query
-  select a.id, a.email, a.display_name, a.sip_username, a.telephony_credential_id, a.status
-  from public.agents a
-  where a.email = agent_email
-    and a.password_hash = crypt(password, a.password_hash);
 end;
 $$;
 
