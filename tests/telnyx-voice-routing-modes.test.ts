@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import { useMswServer } from "./helpers/msw"
 
 // All mocks live inside vi.hoisted() so they exist before vi.mock factories
 // (which Vitest hoists to the top of the module) reference them. Declaring them
@@ -86,6 +87,8 @@ function inboundReq(callId: string) {
     }),
   });
 }
+
+useMswServer();
 
 describe("telnyx voice routing modes", () => {
   beforeEach(() => {

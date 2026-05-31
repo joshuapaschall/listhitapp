@@ -1,5 +1,5 @@
 import "@testing-library/jest-dom/vitest"
-import { afterAll, afterEach, beforeAll, vi } from "vitest"
+import { vi } from "vitest"
 import { TextDecoder, TextEncoder } from "util"
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
@@ -77,7 +77,7 @@ vi.mock("next/headers", async () => {
 })
 
 // MSW server for Telnyx HTTP (uses MSW v2 syntax)
-const server = setupServer(
+export const mswServer = setupServer(
   http.post("https://api.telnyx.com/v2/telephony_credentials/:id/token", () =>
     HttpResponse.json({
       data: { token: "test-token", expires_at: new Date().toISOString() },
@@ -98,20 +98,5 @@ const server = setupServer(
   })
 )
 
-beforeAll(() => {
-  try {
-    server.listen({ onUnhandledRequest: "warn" })
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    if (!message.includes("already patched")) throw err
-    server.resetHandlers()
-  }
-})
-afterEach(() => server.resetHandlers())
-afterAll(() => {
-  try {
-    server.close()
-  } catch {
-    // worker may have already torn down
-  }
-})
+// MSW is not started globally — it wrapped manual fetch mocks and broke them.
+// Files needing the Telnyx HTTP handlers opt in via useMswServer() from tests/helpers/msw.ts
