@@ -65,26 +65,6 @@ INSERT INTO groups (name, slug, description, type, color) VALUES
   ('Past Clients', 'past-clients', 'Previous successful transactions', 'manual', '#6B7280')
 ON CONFLICT DO NOTHING;
 
--- Optional demo call-center agent for local testing
-INSERT INTO agents (
-  email,
-  password_hash,
-  display_name,
-  sip_username,
-  sip_password,
-  telephony_credential_id,
-  status
-) VALUES (
-  'agent1@company.com',
-  crypt('test123', gen_salt('bf')),
-  'Agent One',
-  'agent1',
-  'test123',
-  'REPLACE_WITH_TELNYX_CREDENTIAL_ID',
-  'offline'
-)
-ON CONFLICT (email) DO NOTHING;
-
 -- Insert comprehensive sample buyers
 INSERT INTO buyers (
   fname, lname, email, phone, phone2, company,

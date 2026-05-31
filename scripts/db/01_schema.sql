@@ -486,6 +486,9 @@ create table if not exists public.voice_numbers (
   created_at timestamptz not null default now()
 );
 
+-- NOTE: The agents subsystem is DROPPED in production via scripts/db/20260525_drop_agents.sql.
+-- The DDL below is retained for historical bootstrap only and does not reflect the live schema.
+-- Do not rely on this for current-state; see the dated migrations for the authoritative schema.
 -- Agents
 create table if not exists public.agents (
   id uuid primary key default gen_random_uuid(),
