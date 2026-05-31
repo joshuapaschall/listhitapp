@@ -8,6 +8,9 @@ import {
   getSipCredentialConnectionId,
   getTelnyxApiKey,
 } from "@/lib/voice-env"
+import { createLogger } from "@/lib/logger"
+
+const log = createLogger("telnyx-credentials")
 
 export interface TelnyxCredential {
   id: string
@@ -106,7 +109,7 @@ export async function createCredential(): Promise<TelnyxCredential> {
 
   warnIfConnectionIdsOverlap()
 
-  console.log("🔑 Creating credential with connection_id:", sipConnectionId)
+  log("🔑 Creating credential with connection_id:", sipConnectionId)
 
   const res = await fetch(`${TELNYX_API_URL}/telephony_credentials`, {
     method: "POST",
@@ -140,7 +143,7 @@ export async function createCredential(): Promise<TelnyxCredential> {
     throw new Error("Telnyx returned credential for unexpected Call Control App ID")
   }
 
-  console.log("🔑 Created credential:", {
+  log("🔑 Created credential:", {
     username: cred.sip_username,
     connection_id: cred.connection_id,
     expected_connection_id: sipConnectionId,

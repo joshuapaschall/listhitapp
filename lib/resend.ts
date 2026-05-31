@@ -1,4 +1,7 @@
 import { assertServer } from "@/utils/assert-server"
+import { createLogger } from "@/lib/logger"
+
+const log = createLogger("resend")
 
 assertServer()
 
@@ -6,7 +9,7 @@ const apiKey = process.env.RESEND_API_KEY
 if (!apiKey) {
   console.warn("Missing RESEND_API_KEY — email notifications disabled")
 } else {
-  console.log("Resend configured with API key ending in:", apiKey.slice(-6))
+  log("Resend configured with API key ending in:", apiKey.slice(-6))
 }
 
 export const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "ListHit <notifications@listhit.io>"

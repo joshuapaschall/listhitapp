@@ -1,4 +1,7 @@
 import { TELNYX_API_URL, getTelnyxApiKey } from "@/lib/voice-env";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("voicemail-polling-service");
 
 /**
  * Voicemail Polling Service - Direct from Telnyx API
@@ -36,7 +39,7 @@ export class VoicemailPollingService {
       }
 
       const { data: recordings } = await response.json();
-      console.log(`📬 Found ${recordings?.length || 0} recordings`);
+      log(`📬 Found ${recordings?.length || 0} recordings`);
 
       // Return recordings directly - no database storage
       return recordings || [];
