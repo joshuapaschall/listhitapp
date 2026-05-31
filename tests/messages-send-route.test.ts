@@ -19,8 +19,6 @@ const smsRateLimiterMock = {
   lookupCarrier: vi.fn(async () => "verizon"),
 }
 
-const mms = await import("@/utils/mms.server")
-
 const matchFilters = (record: any, filters: Record<string, any>) => {
   return Object.entries(filters).every(([key, value]) => {
     if (value === null) {
@@ -227,6 +225,20 @@ vi.mock("@/lib/supabase", () => ({
   supabaseAdmin: supabaseClient,
 }))
 
+// Cookie auth: messages/send gates on createRouteHandlerClient + requirePermission.
+vi.mock("next/headers", () => ({ cookies: () => ({}) }))
+vi.mock("@supabase/auth-helpers-nextjs", () => ({
+  createRouteHandlerClient: () => ({
+    auth: { getUser: async () => ({ data: { user: { id: "u1" } }, error: null }) },
+  }),
+}))
+vi.mock("@/lib/permissions/server", () => ({
+  requirePermission: async () => null,
+}))
+
+// Imported after the mocks/supabaseClient so the @/lib/supabase factory (and any
+// transitive load via mms.server) resolves with supabaseClient already defined.
+const mms = await import("@/utils/mms.server")
 const mod = await import("../app/api/messages/send/route")
 const { POST } = mod
 
@@ -243,6 +255,7 @@ describe("messages send route", () => {
     fetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({ data: { id: "SM1", from: "+1555" } }),
+      text: async () => JSON.stringify({ data: { id: "SM1", from: "+1555" } }),
       arrayBuffer: async () => new ArrayBuffer(1),
       headers: { get: () => "image/jpeg" },
     })
@@ -316,7 +329,7 @@ describe("messages send route", () => {
   })
 
   test("returns 422 when media cannot be processed", async () => {
-    const ensureSpy = jest
+    const ensureSpy = vi
       .spyOn(mms, "ensurePublicMediaUrls")
       .mockResolvedValue([])
     const req = new NextRequest("http://test", {
@@ -359,7 +372,7 @@ describe("messages send route", () => {
     threads.push({
       id: "t1",
       buyer_id: "b3",
-      phone_number: "1444",
+      phone_number: "444",
       campaign_id: null,
       preferred_from_number: "+1888",
     })
@@ -376,7 +389,7 @@ describe("messages send route", () => {
     threads.push({
       id: "t2",
       buyer_id: "b4",
-      phone_number: "1555",
+      phone_number: "555",
       campaign_id: null,
       preferred_from_number: null,
     })
@@ -469,6 +482,7 @@ describe("messages send route", () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ data: { id: "SMX", from: { phone_number: "+1888" } } }),
+      text: async () => JSON.stringify({ data: { id: "SMX", from: { phone_number: "+1888" } } }),
       arrayBuffer: async () => new ArrayBuffer(1),
       headers: { get: () => "image/jpeg" },
     })
