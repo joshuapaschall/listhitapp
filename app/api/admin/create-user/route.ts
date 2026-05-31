@@ -2,26 +2,60 @@ import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { supabaseAdmin } from "@/lib/supabase"
-import { getUserRole } from "@/lib/get-user-role"
+import { requirePermission } from "@/lib/permissions/server"
 import { ensureUserTelephonyCredential } from "@/lib/telnyx/credentials"
+
+/**
+ * Generates a throwaway password the invited user never sees or uses. They set
+ * their own password via the "set your password" email sent below, mirroring
+ * SendText.io's invite flow — admins never handle a password.
+ */
+function throwawayPassword(): string {
+  const bytes = new Uint8Array(24)
+  globalThis.crypto.getRandomValues(bytes)
+  const random = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")
+  // Append a fixed suffix so the value always satisfies complexity policies.
+  return `${random}Aa1!`
+}
 
 export async function POST(request: NextRequest) {
   const cookieStore = cookies()
   const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
-  const role = await getUserRole(supabase)
-  if (role !== "admin") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-  }
-  const { email, password, role: userRole } = await request.json()
-  if (!email || !password || !userRole) {
+  const denied = await requirePermission(supabase, "users.manage")
+  if (denied) return denied
+
+  const { email, fullName, role } = await request.json()
+  if (!email || !role) {
     return NextResponse.json({ error: "Missing params" }, { status: 400 })
   }
-  const { data, error } = await supabaseAdmin.auth.admin.createUser({ email, password })
+  if (role !== "user" && role !== "admin") {
+    return NextResponse.json({ error: "Invalid role" }, { status: 400 })
+  }
+
+  const { data, error } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    email_confirm: true,
+    password: throwawayPassword(),
+    user_metadata: fullName ? { display_name: fullName } : undefined,
+  })
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+
   const id = data.user?.id
   if (id) {
-    const { error: pErr } = await supabaseAdmin.from("profiles").insert({ id, role: userRole })
+    // A DB trigger upserts the profile row on auth-user creation, so upsert here
+    // to set the role + display name without colliding on the primary key.
+    const { error: pErr } = await supabaseAdmin
+      .from("profiles")
+      .upsert({ id, email, role, display_name: fullName ?? null })
     if (pErr) return NextResponse.json({ error: "Profile insert failed" }, { status: 500 })
+
+    // Send a "set your password" email so the invited user chooses their own
+    // password — no password is ever returned to the admin.
+    try {
+      await (supabaseAdmin.auth.admin as any).resetPasswordForEmail(email)
+    } catch (resetError) {
+      console.error("[create-user] Failed to send invite email", resetError)
+    }
 
     try {
       await ensureUserTelephonyCredential(id)
@@ -29,5 +63,6 @@ export async function POST(request: NextRequest) {
       console.error("[create-user] Failed to provision Telnyx credential", telephonyError)
     }
   }
-  return NextResponse.json({ success: true })
+
+  return NextResponse.json({ ok: true, user: data.user })
 }

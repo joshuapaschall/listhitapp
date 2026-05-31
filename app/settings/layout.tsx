@@ -38,6 +38,12 @@ const navItems: Array<{ href: string; label: string; description: string; permis
     description: "SendFox, Telnyx, Gmail, and other connected services",
     permission: "settings.integrations",
   },
+  {
+    href: "/settings/users",
+    label: "Users",
+    description: "Invite teammates and manage roles & permissions",
+    permission: "users.manage",
+  },
 ]
 
 export default function SettingsLayout({ children }: { children: ReactNode }) {
