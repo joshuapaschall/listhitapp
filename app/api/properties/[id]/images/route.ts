@@ -1,5 +1,8 @@
+import { cookies } from "next/headers"
 import { NextRequest, NextResponse } from "next/server"
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { supabaseAdmin } from "@/lib/supabase/admin"
+import { requirePermission } from "@/lib/permissions/server"
 
 const BUCKET = "property-images"
 const MAX_FILE_SIZE = 10 * 1024 * 1024
@@ -8,6 +11,11 @@ const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic"]
 type RouteContext = { params: Promise<{ id: string }> }
 
 export async function POST(request: NextRequest, context: RouteContext) {
+  const cookieStore = cookies()
+  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+  const denied = await requirePermission(supabase, "properties.manage")
+  if (denied) return denied
+
   const { id: propertyId } = await context.params
 
   const { data: property, error: propErr } = await supabaseAdmin
@@ -91,6 +99,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
 }
 
 export async function DELETE(request: NextRequest, context: RouteContext) {
+  const cookieStore = cookies()
+  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+  const denied = await requirePermission(supabase, "properties.manage")
+  if (denied) return denied
+
   const { id: propertyId } = await context.params
   const { imageId } = (await request.json()) as { imageId?: string }
   if (!imageId) return NextResponse.json({ error: "imageId required" }, { status: 400 })
@@ -108,6 +121,11 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 }
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
+  const cookieStore = cookies()
+  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+  const denied = await requirePermission(supabase, "properties.manage")
+  if (denied) return denied
+
   const { id: propertyId } = await context.params
   const body = (await request.json()) as { reorder?: Array<{ id: string; sort_order: number }>; setFeatured?: string }
 

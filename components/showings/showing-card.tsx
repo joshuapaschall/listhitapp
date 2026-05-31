@@ -3,6 +3,7 @@ import { format, parseISO } from "date-fns"
 import { MoreVertical } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Can } from "@/components/auth/Can"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -74,18 +75,20 @@ export default function ShowingCard({ showing, onEdit, onDelete, onBuyerClick }:
 
         <div className="flex items-center gap-1">
           <ShowingStatusBadge status={showing.status} />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <span className="sr-only">Actions</span>
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onEdit(showing)}>Edit</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onDelete(showing)}>Delete</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Can permission="showings.manage">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <span className="sr-only">Actions</span>
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => onEdit(showing)}>Edit</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onDelete(showing)}>Delete</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </Can>
         </div>
       </div>
     </Card>

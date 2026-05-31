@@ -1,5 +1,8 @@
+import { cookies } from "next/headers"
 import { NextRequest, NextResponse } from "next/server"
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { supabaseAdmin } from "@/lib/supabase/admin"
+import { requirePermission } from "@/lib/permissions/server"
 
 const BUCKET = "property-images"
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB per file
@@ -17,6 +20,11 @@ type SignedEntry = {
 }
 
 export async function POST(request: NextRequest, context: RouteContext) {
+  const cookieStore = cookies()
+  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+  const denied = await requirePermission(supabase, "properties.manage")
+  if (denied) return denied
+
   const { id: propertyId } = await context.params
 
   const { data: property, error: propErr } = await supabaseAdmin

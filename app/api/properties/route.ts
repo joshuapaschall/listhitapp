@@ -1,8 +1,16 @@
+import { cookies } from "next/headers"
 import { NextRequest, NextResponse } from "next/server"
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { supabaseAdmin } from "@/lib/supabase/admin"
+import { requirePermission } from "@/lib/permissions/server"
 
 export async function POST(request: NextRequest) {
   try {
+    const cookieStore = cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+    const denied = await requirePermission(supabase, "properties.manage")
+    if (denied) return denied
+
     const body = await request.json()
 
     let latitude = body.latitude

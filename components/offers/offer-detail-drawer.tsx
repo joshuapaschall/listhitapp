@@ -23,11 +23,12 @@ interface OfferDetailDrawerProps {
   onOpenChange: (open: boolean) => void
   offer: OfferWithRelations | null
   onSuccess?: () => void
+  canManage?: boolean
 }
 const currencyFormatter = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })
 const statuses = ["submitted", "accepted", "rejected", "withdrawn", "countered", "closed"]
 
-export default function OfferDetailDrawer({ open, onOpenChange, offer, onSuccess }: OfferDetailDrawerProps) {
+export default function OfferDetailDrawer({ open, onOpenChange, offer, onSuccess, canManage = false }: OfferDetailDrawerProps) {
   const [status, setStatus] = useState<string>(offer?.status || "submitted")
   const [notes, setNotes] = useState<string>(offer?.notes || "")
   const [isSavingStatus, setIsSavingStatus] = useState(false)
@@ -146,25 +147,35 @@ export default function OfferDetailDrawer({ open, onOpenChange, offer, onSuccess
           <div className="space-y-3 rounded-lg border p-4">
             <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-muted-foreground" /><p className="text-sm font-medium">Status</p></div>
             <Badge>{offer.status || "submitted"}</Badge>
-            <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select status" />
-              </SelectTrigger>
-              <SelectContent>
-                {statuses.map((item) => (
-                  <SelectItem key={item} value={item}>{item}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button onClick={handleUpdateStatus} disabled={isSavingStatus || status === offer.status}>
-              Update Status
-            </Button>
+            {canManage && (
+              <>
+                <Select value={status} onValueChange={setStatus}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {statuses.map((item) => (
+                      <SelectItem key={item} value={item}>{item}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button onClick={handleUpdateStatus} disabled={isSavingStatus || status === offer.status}>
+                  Update Status
+                </Button>
+              </>
+            )}
           </div>
 
           <div className="space-y-3 rounded-lg border p-4">
             <p className="text-sm font-medium">Notes</p>
-            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={5} placeholder="Add notes..." />
-            <Button onClick={handleSaveNotes} disabled={isSavingNotes || notes === (offer.notes || "")}>Save Notes</Button>
+            {canManage ? (
+              <>
+                <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={5} placeholder="Add notes..." />
+                <Button onClick={handleSaveNotes} disabled={isSavingNotes || notes === (offer.notes || "")}>Save Notes</Button>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground whitespace-pre-wrap">{offer.notes || "No notes."}</p>
+            )}
           </div>
 
           <div className="space-y-3 rounded-lg border p-4">
@@ -192,10 +203,12 @@ export default function OfferDetailDrawer({ open, onOpenChange, offer, onSuccess
               <div className="flex items-center gap-2"><User className="h-4 w-4" />{buyerName}</div>
               <div className="flex items-center gap-2"><Home className="h-4 w-4" />{offer.properties?.address || "No property"}</div>
             </div>
-            <Button variant="destructive" onClick={handleDelete}>
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete Offer
-            </Button>
+            {canManage && (
+              <Button variant="destructive" onClick={handleDelete}>
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete Offer
+              </Button>
+            )}
           </div>
         </div>
       </SheetContent>

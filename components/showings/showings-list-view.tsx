@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react"
 import { format, parseISO } from "date-fns"
 import { MoreVertical } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Can } from "@/components/auth/Can"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -130,18 +131,20 @@ export default function ShowingsListView({ showings, onEdit, onDelete, onBuyerCl
                   </TableCell>
                   <TableCell className="max-w-[200px] truncate">{showing.notes || "—"}</TableCell>
                   <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <span className="sr-only">Actions</span>
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => onEdit(showing)}>Edit</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => onDelete(showing)}>Delete</DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <Can permission="showings.manage">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <span className="sr-only">Actions</span>
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => onEdit(showing)}>Edit</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => onDelete(showing)}>Delete</DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </Can>
                   </TableCell>
                 </TableRow>
               )

@@ -12,6 +12,7 @@ import {
   XCircle,
 } from "lucide-react"
 import MainLayout from "@/components/layout/main-layout"
+import { Can } from "@/components/auth/Can"
 import OffersKanbanView from "@/components/offers/offers-kanban-view"
 import OffersListView from "@/components/offers/offers-list-view"
 import OfferDetailDrawer from "@/components/offers/offer-detail-drawer"
@@ -20,6 +21,7 @@ import { OfferService } from "@/services/offer-service"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { usePermissions } from "@/hooks/use-permissions"
 import type { OfferWithRelations } from "@/lib/supabase"
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
@@ -29,6 +31,7 @@ const currencyFormatter = new Intl.NumberFormat("en-US", {
 })
 
 export default function OffersPage() {
+  const { can, loading: permissionsLoading } = usePermissions()
   const [showCreate, setShowCreate] = useState(false)
   const [selectedOffer, setSelectedOffer] = useState<OfferWithRelations | null>(null)
   const [showDrawer, setShowDrawer] = useState(false)
@@ -36,6 +39,7 @@ export default function OffersPage() {
   const { data: offers = [], isLoading, refetch } = useQuery({
     queryKey: ["offers"],
     queryFn: () => OfferService.getOffers(),
+    enabled: !permissionsLoading && can("offers.view"),
   })
 
   const pipelineValue = offers
@@ -50,6 +54,25 @@ export default function OffersPage() {
     setShowDrawer(true)
   }
 
+  if (permissionsLoading) {
+    return (
+      <MainLayout>
+        <div className="p-4 text-sm text-muted-foreground">Checking offer permissions...</div>
+      </MainLayout>
+    )
+  }
+
+  if (!can("offers.view")) {
+    return (
+      <MainLayout>
+        <div className="space-y-2 p-4">
+          <h1 className="text-2xl font-bold tracking-tight">Offers</h1>
+          <p className="text-sm text-muted-foreground">You do not have permission to view offers.</p>
+        </div>
+      </MainLayout>
+    )
+  }
+
   return (
     <MainLayout>
       <div className="space-y-6 p-4 md:p-6">
@@ -58,10 +81,12 @@ export default function OffersPage() {
             <h1 className="text-2xl font-bold tracking-tight">Offers</h1>
             <p className="mt-1 text-sm text-muted-foreground">Track offer pipeline and buyer activity</p>
           </div>
-          <Button onClick={() => setShowCreate(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Offer
-          </Button>
+          <Can permission="offers.manage">
+            <Button onClick={() => setShowCreate(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Offer
+            </Button>
+          </Can>
         </div>
 
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -113,6 +138,7 @@ export default function OffersPage() {
               isLoading={isLoading}
               onRefetch={refetch}
               onOfferClick={handleOfferClick}
+              canManage={can("offers.manage")}
             />
           </TabsContent>
 
@@ -127,6 +153,7 @@ export default function OffersPage() {
           onOpenChange={setShowDrawer}
           offer={selectedOffer}
           onSuccess={refetch}
+          canManage={can("offers.manage")}
         />
       </div>
     </MainLayout>

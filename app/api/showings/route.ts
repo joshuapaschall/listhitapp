@@ -1,10 +1,18 @@
+import { cookies } from "next/headers"
 import { NextRequest, NextResponse } from "next/server"
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { supabaseAdmin } from "@/lib/supabase/admin"
+import { requirePermission } from "@/lib/permissions/server"
 import { sendShowingConfirmation } from "@/lib/showing-notifications"
 
 const SHOWING_SELECT = "*, buyers(id,fname,lname,full_name,phone,email,can_receive_sms,can_receive_email), properties(id,address,city,state,zip)"
 
 export async function GET(request: NextRequest) {
+  const cookieStore = cookies()
+  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+  const denied = await requirePermission(supabase, "showings.view")
+  if (denied) return denied
+
   const search = request.nextUrl.searchParams
   const status = search.get("status")
   const startDate = search.get("startDate")
@@ -26,6 +34,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const cookieStore = cookies()
+  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+  const denied = await requirePermission(supabase, "showings.manage")
+  if (denied) return denied
+
   const body = await request.json()
   if (!body?.scheduled_at) {
     return NextResponse.json({ error: "scheduled_at is required" }, { status: 400 })

@@ -1,5 +1,8 @@
+import { cookies } from "next/headers"
 import { NextRequest, NextResponse } from "next/server"
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { supabaseAdmin } from "@/lib/supabase/admin"
+import { requirePermission } from "@/lib/permissions/server"
 import { insertNotification } from "@/lib/notifications"
 import { sendShowingConfirmation } from "@/lib/showing-notifications"
 
@@ -7,6 +10,11 @@ type RouteContext = { params: Promise<{ id: string }> }
 const SHOWING_SELECT = "*, buyers(id,fname,lname,full_name,phone,email,can_receive_sms,can_receive_email), properties(id,address,city,state,zip)"
 
 export async function GET(_: NextRequest, context: RouteContext) {
+  const cookieStore = cookies()
+  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+  const denied = await requirePermission(supabase, "showings.view")
+  if (denied) return denied
+
   const { id } = await context.params
   const { data, error } = await supabaseAdmin.from("showings").select(SHOWING_SELECT).eq("id", id).maybeSingle()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -15,6 +23,11 @@ export async function GET(_: NextRequest, context: RouteContext) {
 }
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
+  const cookieStore = cookies()
+  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+  const denied = await requirePermission(supabase, "showings.manage")
+  if (denied) return denied
+
   const { id } = await context.params
   const updates = await request.json()
 
@@ -52,6 +65,11 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 }
 
 export async function DELETE(_: NextRequest, context: RouteContext) {
+  const cookieStore = cookies()
+  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+  const denied = await requirePermission(supabase, "showings.manage")
+  if (denied) return denied
+
   const { id } = await context.params
   const { data: showing } = await supabaseAdmin.from("showings").select("id,buyer_id,property_id").eq("id", id).maybeSingle()
   const { error } = await supabaseAdmin.from("showings").delete().eq("id", id)
