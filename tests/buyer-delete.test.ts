@@ -1,3 +1,5 @@
+import { BuyerService } from "../services/buyer-service"
+
 let buyers: any[] = []
 let buyerGroups: any[] = []
 let groups: any[] = []
@@ -57,8 +59,6 @@ vi.mock("../lib/supabase", () => {
   return { supabase: client }
 })
 
-
-const { BuyerService } = require("../services/buyer-service")
 
 describe("BuyerService deletions", () => {
   beforeEach(() => {

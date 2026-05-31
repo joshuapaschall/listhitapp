@@ -5,11 +5,11 @@ const fetchMock = vi.fn()
 global.fetch = fetchMock
 
 describe("openai-service", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     fetchMock.mockReset()
     process.env.OPENAI_API_KEY = "key"
     vi.resetModules()
-    const svc = require("../services/openai-service")
+    const svc = await import("../services/openai-service")
     generateCopy = svc.generateCopy
     chat = svc.chat
   })
