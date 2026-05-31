@@ -224,7 +224,9 @@ export async function POST(request: NextRequest) {
         } else if (data.error?.message) {
           msg = data.error.message
         }
-      } catch {}
+      } catch (err) {
+        console.error("messages/send: failed to parse Telnyx error response:", err)
+      }
       throw new Error(msg)
     }
     const json = text ? JSON.parse(text) : {}

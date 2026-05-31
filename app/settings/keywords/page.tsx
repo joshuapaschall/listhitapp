@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { KeywordService } from "@/services/keyword-service"
 import { Button } from "@/components/ui/button"
+import ConfirmDialog from "@/components/ui/confirm-dialog"
 import {
   Table,
   TableBody,
@@ -22,9 +23,9 @@ export default function KeywordsPage() {
   })
   const keywords = data || []
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [confirmId, setConfirmId] = useState<string | null>(null)
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this keyword?")) return
     setDeleting(id)
     try {
       await KeywordService.deleteKeyword(id)
@@ -71,7 +72,7 @@ export default function KeywordsPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handleDelete(k.id)}
+                    onClick={() => setConfirmId(k.id)}
                     disabled={deleting === k.id}
                   >
                     {deleting === k.id ? "Deleting..." : "Delete"}
@@ -82,6 +83,17 @@ export default function KeywordsPage() {
           </TableBody>
         </Table>
       </div>
+      <ConfirmDialog
+        open={confirmId !== null}
+        onOpenChange={(o) => !o && setConfirmId(null)}
+        destructive
+        title="Delete keyword?"
+        description="This can't be undone."
+        actionText="Delete"
+        onConfirm={async () => {
+          if (confirmId) await handleDelete(confirmId)
+        }}
+      />
     </div>
   )
 }

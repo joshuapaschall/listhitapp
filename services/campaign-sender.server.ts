@@ -105,7 +105,9 @@ export async function sendCampaignSMS({ buyerId, to, body, mediaUrls, dryRun, ca
         try {
           const err = JSON.parse(text)
           if (err.errors && err.errors[0]?.detail) msg = err.errors[0].detail
-        } catch {}
+        } catch (err) {
+          console.error("campaign-sender: failed to parse Telnyx error response:", err)
+        }
         throw new Error(msg)
       }
 

@@ -61,7 +61,9 @@ async function updateOpens() {
           .eq("id", r.id)
         count++
       }
-    } catch {}
+    } catch (err) {
+      console.error("email-metrics-service: failed to refresh recipient open metric:", err)
+    }
   }
   return count
 }

@@ -141,7 +141,9 @@ export class BuyerService {
             const json = await res.json()
             if (json?.listId) defaultListId = Number(json.listId)
           }
-        } catch {}
+        } catch (err) {
+          console.error("buyer-service: failed to fetch SendFox default list:", err)
+        }
       }
       const lists: number[] = []
       if (defaultListId) lists.push(defaultListId)
@@ -444,7 +446,9 @@ export class BuyerService {
       try {
         const data = await res.json()
         if (data?.error) msg = data.error
-      } catch {}
+      } catch (err) {
+        console.error("buyer-service: failed to parse unsubscribe error response:", err)
+      }
       throw new Error(msg)
     }
   }

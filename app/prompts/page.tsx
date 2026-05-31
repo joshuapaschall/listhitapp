@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query"
 import MainLayout from "@/components/layout/main-layout"
 import { PromptService } from "@/services/prompt-service"
 import { Button } from "@/components/ui/button"
+import ConfirmDialog from "@/components/ui/confirm-dialog"
 import {
   Table,
   TableBody,
@@ -23,9 +24,9 @@ export default function PromptsPage() {
   })
   const prompts = data || []
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [confirmId, setConfirmId] = useState<string | null>(null)
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this prompt?")) return
     setDeleting(id)
     try {
       await PromptService.deletePrompt(id)
@@ -75,7 +76,7 @@ export default function PromptsPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleDelete(p.id)}
+                      onClick={() => setConfirmId(p.id)}
                       disabled={deleting === p.id}
                     >
                       {deleting === p.id ? "Deleting..." : "Delete"}
@@ -87,6 +88,17 @@ export default function PromptsPage() {
           </Table>
         </div>
       </div>
+      <ConfirmDialog
+        open={confirmId !== null}
+        onOpenChange={(o) => !o && setConfirmId(null)}
+        destructive
+        title="Delete prompt?"
+        description="This can't be undone."
+        actionText="Delete"
+        onConfirm={async () => {
+          if (confirmId) await handleDelete(confirmId)
+        }}
+      />
     </MainLayout>
   )
 }
