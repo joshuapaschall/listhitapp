@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, vi } from "vitest"
+import { describe, test, expect, beforeEach, afterAll, vi } from "vitest"
 import { CampaignService } from "../services/campaign-service"
 
 let campaigns: any[] = []
@@ -7,8 +7,7 @@ let buyers: any[] = []
 let idCounter = 1
 
 const fetchMock = vi.fn()
-// @ts-ignore
-global.fetch = fetchMock
+vi.stubGlobal("fetch", fetchMock)
 
 
 vi.mock("@/lib/supabase", () => {
@@ -158,6 +157,13 @@ beforeEach(() => {
   buyers = []
   idCounter = 1
   fetchMock.mockReset()
+  // Re-apply after the MSW setup's beforeAll (tests/setup.ts) patches the
+  // global fetch, so this suite's fetchMock intercepts the relative-URL calls.
+  vi.stubGlobal("fetch", fetchMock)
+})
+
+afterAll(() => {
+  vi.unstubAllGlobals()
 })
 
 describe("CampaignService", () => {
@@ -268,14 +274,17 @@ describe("CampaignService", () => {
 
     const page1 = await CampaignService.listCampaigns(1)
     expect(page1.totalCount).toBe(25)
-    expect(page1.campaigns.length).toBe(20)
+    expect(page1.campaigns.length).toBe(10)
     expect(page1.campaigns[0]).toHaveProperty("sentCount")
     expect(page1.campaigns[0]).toHaveProperty("errorCount")
 
     const page2 = await CampaignService.listCampaigns(2)
-    expect(page2.campaigns.length).toBe(5)
+    expect(page2.campaigns.length).toBe(10)
     expect(page2.campaigns[0]).toHaveProperty("sentCount")
     expect(page2.campaigns[0]).toHaveProperty("errorCount")
+
+    const page3 = await CampaignService.listCampaigns(3)
+    expect(page3.campaigns.length).toBe(5)
   })
 
   test("listCampaigns includes buyer names", async () => {
