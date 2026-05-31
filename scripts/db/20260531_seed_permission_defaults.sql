@@ -26,7 +26,10 @@ cross join unnest(array[
   'inbox.view',
   'inbox.send',
   'calls.make_receive',
+  'properties.view',
+  'showings.view',
   'showings.manage',
+  'offers.view',
   'offers.manage',
   'campaigns.view'
 ]::text[]) as baseline(permission_key)
