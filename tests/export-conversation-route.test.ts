@@ -4,8 +4,10 @@ import { GET } from "../app/api/export-conversation/[buyerId]/route"
 let messages: any[] = []
 let supabase: any
 
-vi.mock("@supabase/supabase-js", () => ({
-  createClient: () => supabase,
+vi.mock("@/lib/supabase", () => ({
+  get supabaseAdmin() {
+    return supabase
+  },
 }))
 
 function buildSupabase() {
