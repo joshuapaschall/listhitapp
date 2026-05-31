@@ -1,10 +1,19 @@
 import { NextRequest, NextResponse } from "next/server"
+import { cookies } from "next/headers"
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { supabaseAdmin } from "@/lib/supabase"
+import { getUserRole } from "@/lib/get-user-role"
 
 export async function POST(request: NextRequest) {
-  const key = request.headers.get("SUPABASE_SERVICE_ROLE_KEY")
-  if (!key || key !== process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  const cookieStore = cookies()
+  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+  const role = await getUserRole(supabase)
+  if (role !== "admin") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
   const { userId, permissionKey, granted } = await request.json()
   if (!userId || !permissionKey || granted === undefined) {
