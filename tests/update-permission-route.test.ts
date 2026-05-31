@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server"
-import { POST } from "../app/api/admin/update-role/route"
+import { POST } from "../app/api/admin/update-permission/route"
 
 vi.mock("next/headers", () => ({
   cookies: () => ({ get: vi.fn(), set: vi.fn(), delete: vi.fn() }),
@@ -8,21 +8,27 @@ vi.mock("next/headers", () => ({
 const state = vi.hoisted(() => ({
   currentUser: { id: "admin-1" } as { id: string } | null,
   callerRole: "admin",
-  profiles: [] as any[],
+  permissions: [] as any[],
 }))
 
 vi.mock("@/lib/supabase", () => {
   const client = {
     from: (table: string) => {
-      if (table !== "profiles") throw new Error(`Unexpected table ${table}`)
+      if (table !== "permissions") throw new Error(`Unexpected table ${table}`)
       return {
-        update: (value: any) => ({
-          eq: async (_column: string, id: string) => {
-            const idx = state.profiles.findIndex((profile) => profile.id === id)
-            if (idx !== -1) state.profiles[idx] = { ...state.profiles[idx], ...value }
-            return { data: null, error: null }
-          },
-        }),
+        upsert: async (row: any) => {
+          const idx = state.permissions.findIndex(
+            (permission) =>
+              permission.user_id === row.user_id &&
+              permission.permission_key === row.permission_key,
+          )
+          if (idx === -1) {
+            state.permissions.push(row)
+          } else {
+            state.permissions[idx] = { ...state.permissions[idx], ...row }
+          }
+          return { data: null, error: null }
+        },
       }
     },
   }
@@ -54,52 +60,37 @@ vi.mock("@supabase/auth-helpers-nextjs", () => ({
   }),
 }))
 
-describe("update-role route", () => {
+describe("update-permission route", () => {
   beforeEach(() => {
     state.currentUser = { id: "admin-1" }
     state.callerRole = "admin"
-    state.profiles = [
-      { id: "admin-1", role: "admin" },
-      { id: "u1", role: "user" },
-    ]
+    state.permissions = []
   })
 
   test("rejects non-admin callers", async () => {
     state.callerRole = "user"
     const req = new NextRequest("http://test", {
       method: "POST",
-      body: JSON.stringify({ userId: "u1", role: "admin" }),
+      body: JSON.stringify({ userId: "u1", permissionKey: "buyers.export", granted: true }),
     })
 
     const res = await POST(req)
 
     expect(res.status).toBe(403)
-    expect(state.profiles.find((profile) => profile.id === "u1")?.role).toBe("user")
+    expect(state.permissions).toEqual([])
   })
 
-  test("allows admin callers to update roles", async () => {
+  test("allows admin callers to update permissions", async () => {
     const req = new NextRequest("http://test", {
       method: "POST",
-      body: JSON.stringify({ userId: "u1", role: "admin" }),
+      body: JSON.stringify({ userId: "u1", permissionKey: "buyers.export", granted: true }),
     })
 
     const res = await POST(req)
 
     expect(res.status).toBe(200)
-    expect(state.profiles.find((profile) => profile.id === "u1")?.role).toBe("admin")
-  })
-
-  test("prevents admins from demoting themselves", async () => {
-    const req = new NextRequest("http://test", {
-      method: "POST",
-      body: JSON.stringify({ userId: "admin-1", role: "user" }),
-    })
-
-    const res = await POST(req)
-    const body = await res.json()
-
-    expect(res.status).toBe(400)
-    expect(body.error).toBe("Admins cannot demote their own account")
-    expect(state.profiles.find((profile) => profile.id === "admin-1")?.role).toBe("admin")
+    expect(state.permissions).toEqual([
+      { user_id: "u1", permission_key: "buyers.export", granted: true },
+    ])
   })
 })
