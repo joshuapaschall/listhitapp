@@ -1,6 +1,7 @@
 /** @jest-environment jsdom */
 import { render, screen } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import DashboardPage from "../app/(dashboard)/dashboard/page"
 // Polyfill ResizeObserver for recharts
 global.ResizeObserver = class {
   observe() {}
@@ -32,6 +33,22 @@ vi.mock("../lib/supabase-browser", () => ({
 vi.mock("@/components/voice/CallProvider", () => ({
   CallProvider: ({ children }: any) => children,
   useCall: () => new Proxy({}, { get: () => () => {} }),
+}))
+
+vi.mock("@/hooks/use-notifications", () => ({
+  NotificationsProvider: ({ children }: any) => children,
+  useNotifications: () => ({
+    notifications: [],
+    unreadCount: 0,
+    isLoading: false,
+    markAsRead: vi.fn().mockResolvedValue(undefined),
+    dismiss: vi.fn().mockResolvedValue(undefined),
+  }),
+}))
+
+vi.mock("@/hooks/use-session", () => ({
+  SessionProvider: ({ children }: any) => children,
+  useSession: () => ({ session: null, user: null, loading: false }),
 }))
 
 vi.mock("../lib/supabase", () => {
@@ -106,14 +123,66 @@ vi.mock("../services/dashboard-service", () => ({
   fetchRecentActivity: vi.fn().mockResolvedValue([]),
 }))
 
+
+vi.mock("@/services/dashboard-service", () => ({
+  fetchKpis: vi.fn().mockResolvedValue({
+    buyersAdded: 1,
+    propertiesAdded: 1,
+    activeProperties: 1,
+    underContract: 0,
+    soldProperties: 0,
+    totalProperties: 1,
+    hotBuyers: 0,
+    followUpsDue: 0,
+    totalContacts: 10,
+    textsSent: 5,
+    textsSentDelta: 0,
+    textsReceived: 4,
+    textsReceivedDelta: 0,
+    callsMade: 2,
+    callsMadeDelta: 0,
+    callsReceived: 1,
+    callsReceivedDelta: 0,
+    voicemailsLeft: 0,
+    emailsSent: 3,
+    emailsSentDelta: 0,
+    emailsOpened: 1,
+    emailBounces: 0,
+    openRate: 0,
+    clickRate: 0,
+    bounceRate: 0,
+    smsUnsubscribes: 0,
+    emailUnsubscribes: 0,
+    unsubscribeRate: 0,
+    unsubscribeRateDelta: 0,
+    campaignsRunning: 1,
+    campaignRoi: 50,
+    offersCreated: 1,
+    offersCreatedDelta: 0,
+    offersAccepted: 0,
+    offersAcceptedDelta: 0,
+    offersDeclined: 0,
+    offersCountered: 0,
+    showingsScheduled: 0,
+    showingsScheduledDelta: 0,
+    showingsRescheduled: 0,
+    showingsCancelled: 0,
+    showingsCompleted: 0,
+    grossProfit: 0,
+    netProfit: 0,
+    avgAssignmentFee: 0,
+    closeRate: 0,
+  }),
+  fetchTextTrends: vi.fn().mockResolvedValue({ data: [], delta: 0 }),
+  fetchCallTrends: vi.fn().mockResolvedValue({ data: [], delta: 0 }),
+  fetchEmailTrends: vi.fn().mockResolvedValue({ data: [], delta: 0 }),
+  fetchOfferTrends: vi.fn().mockResolvedValue({ data: [], delta: 0 }),
+  fetchShowingTrends: vi.fn().mockResolvedValue({ data: [], delta: 0 }),
+  fetchUnsubscribeTrends: vi.fn().mockResolvedValue({ data: [], delta: 0 }),
+  fetchRecentActivity: vi.fn().mockResolvedValue([]),
+}))
+
 describe("DashboardPage", () => {
-  let DashboardPage: typeof import("../app/(dashboard)/dashboard/page").default
-
-  beforeAll(async () => {
-    const mod = await import("../app/(dashboard)/dashboard/page")
-    DashboardPage = mod.default
-  })
-
   function renderPage() {
     const qc = new QueryClient()
     render(
