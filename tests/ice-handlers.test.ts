@@ -12,10 +12,20 @@ describe("ice handlers", () => {
     expect(() => _onIce({ localDescription: null })).not.toThrow()
   })
 
-  test("_onIce forwards localDescription", () => {
-    const desc = { sdp: "s", type: "offer" }
-    const spy = vi.spyOn(require("../components/voice/ice-handlers"), "_onIceSdp")
-    _onIce({ localDescription: desc })
-    expect(spy).toHaveBeenCalledWith(desc)
+  test("_onIce with a valid localDescription dispatches no error", () => {
+    const spy = vi.fn()
+    window.addEventListener("telnyxCallError", spy)
+    _onIce({ localDescription: { sdp: "s", type: "offer" } as any })
+    expect(spy).not.toHaveBeenCalled()
+    window.removeEventListener("telnyxCallError", spy)
+  })
+
+  test("_onIce with an invalid localDescription dispatches telnyxCallError", () => {
+    const spy = vi.fn()
+    window.addEventListener("telnyxCallError", spy)
+    // localDescription present but missing sdp/type -> _onIceSdp dispatches the error
+    _onIce({ localDescription: { type: "offer" } as any })
+    expect(spy).toHaveBeenCalled()
+    window.removeEventListener("telnyxCallError", spy)
   })
 })
