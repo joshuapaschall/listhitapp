@@ -2,6 +2,7 @@
 import { render, screen } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import DashboardPage from "../app/(dashboard)/dashboard/page"
+
 // Polyfill ResizeObserver for recharts
 global.ResizeObserver = class {
   observe() {}
@@ -9,6 +10,63 @@ global.ResizeObserver = class {
   disconnect() {}
 }
 
+const dashboardPayload = {
+  kpis: {
+    buyersAdded: 1,
+    propertiesAdded: 1,
+    activeProperties: 1,
+    underContract: 0,
+    soldProperties: 0,
+    totalProperties: 1,
+    hotBuyers: 0,
+    followUpsDue: 0,
+    totalContacts: 10,
+    textsSent: 5,
+    textsSentDelta: 0,
+    textsReceived: 4,
+    textsReceivedDelta: 0,
+    callsMade: 2,
+    callsMadeDelta: 0,
+    callsReceived: 1,
+    callsReceivedDelta: 0,
+    voicemailsLeft: 0,
+    emailsSent: 3,
+    emailsSentDelta: 0,
+    emailsOpened: 1,
+    emailBounces: 0,
+    openRate: 0,
+    clickRate: 0,
+    bounceRate: 0,
+    smsUnsubscribes: 0,
+    emailUnsubscribes: 0,
+    unsubscribeRate: 0,
+    unsubscribeRateDelta: 0,
+    campaignsRunning: 1,
+    campaignRoi: 50,
+    offersCreated: 1,
+    offersCreatedDelta: 0,
+    offersAccepted: 0,
+    offersAcceptedDelta: 0,
+    offersDeclined: 0,
+    offersCountered: 0,
+    showingsScheduled: 0,
+    showingsScheduledDelta: 0,
+    showingsRescheduled: 0,
+    showingsCancelled: 0,
+    showingsCompleted: 0,
+    grossProfit: 0,
+    netProfit: 0,
+    avgAssignmentFee: 0,
+    closeRate: 0,
+  },
+  textTrends: { data: [], delta: 0 },
+  callTrends: { data: [], delta: 0 },
+  emailTrends: { data: [], delta: 0 },
+  offerTrends: { data: [], delta: 0 },
+  showingTrends: { data: [], delta: 0 },
+  unsubscribeTrends: { data: [], delta: 0 },
+  recentActivity: [],
+}
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard",
@@ -65,130 +123,27 @@ vi.mock("../lib/supabase", () => {
   return { __esModule: true, supabase: client, supabaseAdmin: client }
 })
 
-vi.mock("../services/dashboard-service", () => ({
-  fetchKpis: vi.fn().mockResolvedValue({
-    buyersAdded: 1,
-    propertiesAdded: 1,
-    activeProperties: 1,
-    underContract: 0,
-    soldProperties: 0,
-    totalProperties: 1,
-    hotBuyers: 0,
-    followUpsDue: 0,
-    totalContacts: 10,
-    textsSent: 5,
-    textsSentDelta: 0,
-    textsReceived: 4,
-    textsReceivedDelta: 0,
-    callsMade: 2,
-    callsMadeDelta: 0,
-    callsReceived: 1,
-    callsReceivedDelta: 0,
-    voicemailsLeft: 0,
-    emailsSent: 3,
-    emailsSentDelta: 0,
-    emailsOpened: 1,
-    emailBounces: 0,
-    openRate: 0,
-    clickRate: 0,
-    bounceRate: 0,
-    smsUnsubscribes: 0,
-    emailUnsubscribes: 0,
-    unsubscribeRate: 0,
-    unsubscribeRateDelta: 0,
-    campaignsRunning: 1,
-    campaignRoi: 50,
-    offersCreated: 1,
-    offersCreatedDelta: 0,
-    offersAccepted: 0,
-    offersAcceptedDelta: 0,
-    offersDeclined: 0,
-    offersCountered: 0,
-    showingsScheduled: 0,
-    showingsScheduledDelta: 0,
-    showingsRescheduled: 0,
-    showingsCancelled: 0,
-    showingsCompleted: 0,
-    grossProfit: 0,
-    netProfit: 0,
-    avgAssignmentFee: 0,
-    closeRate: 0,
-  }),
-  fetchTextTrends: vi.fn().mockResolvedValue({ data: [], delta: 0 }),
-  fetchCallTrends: vi.fn().mockResolvedValue({ data: [], delta: 0 }),
-  fetchEmailTrends: vi.fn().mockResolvedValue({ data: [], delta: 0 }),
-  fetchOfferTrends: vi.fn().mockResolvedValue({ data: [], delta: 0 }),
-  fetchShowingTrends: vi.fn().mockResolvedValue({ data: [], delta: 0 }),
-  fetchUnsubscribeTrends: vi.fn().mockResolvedValue({ data: [], delta: 0 }),
-  fetchRecentActivity: vi.fn().mockResolvedValue([]),
-}))
-
-
-vi.mock("@/services/dashboard-service", () => ({
-  fetchKpis: vi.fn().mockResolvedValue({
-    buyersAdded: 1,
-    propertiesAdded: 1,
-    activeProperties: 1,
-    underContract: 0,
-    soldProperties: 0,
-    totalProperties: 1,
-    hotBuyers: 0,
-    followUpsDue: 0,
-    totalContacts: 10,
-    textsSent: 5,
-    textsSentDelta: 0,
-    textsReceived: 4,
-    textsReceivedDelta: 0,
-    callsMade: 2,
-    callsMadeDelta: 0,
-    callsReceived: 1,
-    callsReceivedDelta: 0,
-    voicemailsLeft: 0,
-    emailsSent: 3,
-    emailsSentDelta: 0,
-    emailsOpened: 1,
-    emailBounces: 0,
-    openRate: 0,
-    clickRate: 0,
-    bounceRate: 0,
-    smsUnsubscribes: 0,
-    emailUnsubscribes: 0,
-    unsubscribeRate: 0,
-    unsubscribeRateDelta: 0,
-    campaignsRunning: 1,
-    campaignRoi: 50,
-    offersCreated: 1,
-    offersCreatedDelta: 0,
-    offersAccepted: 0,
-    offersAcceptedDelta: 0,
-    offersDeclined: 0,
-    offersCountered: 0,
-    showingsScheduled: 0,
-    showingsScheduledDelta: 0,
-    showingsRescheduled: 0,
-    showingsCancelled: 0,
-    showingsCompleted: 0,
-    grossProfit: 0,
-    netProfit: 0,
-    avgAssignmentFee: 0,
-    closeRate: 0,
-  }),
-  fetchTextTrends: vi.fn().mockResolvedValue({ data: [], delta: 0 }),
-  fetchCallTrends: vi.fn().mockResolvedValue({ data: [], delta: 0 }),
-  fetchEmailTrends: vi.fn().mockResolvedValue({ data: [], delta: 0 }),
-  fetchOfferTrends: vi.fn().mockResolvedValue({ data: [], delta: 0 }),
-  fetchShowingTrends: vi.fn().mockResolvedValue({ data: [], delta: 0 }),
-  fetchUnsubscribeTrends: vi.fn().mockResolvedValue({ data: [], delta: 0 }),
-  fetchRecentActivity: vi.fn().mockResolvedValue([]),
-}))
-
 describe("DashboardPage", () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue(dashboardPayload),
+      }),
+    )
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   function renderPage() {
     const qc = new QueryClient()
     render(
       <QueryClientProvider client={qc}>
         <DashboardPage />
-      </QueryClientProvider>
+      </QueryClientProvider>,
     )
   }
 
@@ -203,6 +158,7 @@ describe("DashboardPage", () => {
     expect(screen.getByText(/Showing Metrics/i)).toBeTruthy()
     expect(screen.getByText(/Offer Metrics/i)).toBeTruthy()
     expect(screen.getByText(/Profit & Performance/i)).toBeTruthy()
+    expect(fetch).toHaveBeenCalledWith("/api/dashboard?range=today")
   })
 
   test("renders charts", async () => {

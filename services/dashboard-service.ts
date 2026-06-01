@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase"
+import type { SupabaseClient } from "@supabase/supabase-js"
 
 export type TimeRange = "today" | "week" | "month"
 
@@ -173,7 +173,7 @@ function isoDate(timestamp: string | null | undefined) {
 function emptyBuckets<T>(days: number, fields: string[]): T[] {
   const today = new Date()
 
-  return Array.from({ length: days }).map((_, index) => {
+  return new Array(days).fill(null).map((_, index) => {
     const day = new Date(today)
     day.setDate(today.getDate() - (days - 1 - index))
 
@@ -195,12 +195,13 @@ function bucketRows<T extends { date: string }>(data: T[], rows: Array<Record<st
   }
 }
 
-async function countEmailCampaignRecipients(column: string, start: string, end: string) {
+async function countEmailCampaignRecipients(client: SupabaseClient, orgId: string, column: string, start: string, end: string) {
   return readCount(
     applyPeriod(
-      supabase
+      client
         .from("campaign_recipients")
         .select("id, campaigns!inner(channel)", { count: "exact", head: true })
+        .eq("org_id", orgId)
         .eq("campaigns.channel", "email")
         .not(column, "is", null),
       column,
@@ -210,7 +211,7 @@ async function countEmailCampaignRecipients(column: string, start: string, end: 
   )
 }
 
-export async function fetchKpis(range: TimeRange): Promise<DashboardKpis> {
+export async function fetchKpis(range: TimeRange, orgId: string, client: SupabaseClient): Promise<DashboardKpis> {
   const { periodStart, periodEnd, prevStart, prevEnd } = getPeriod(range)
 
   const [
@@ -254,45 +255,45 @@ export async function fetchKpis(range: TimeRange): Promise<DashboardKpis> {
     emailUnsubscribes,
     emailUnsubscribesPrev,
   ] = await Promise.all([
-    readCount(applyPeriod(supabase.from("buyers").select("*", { count: "exact", head: true }).is("deleted_at", null), "created_at", periodStart, periodEnd)),
-    readCount(applyPeriod(supabase.from("buyers").select("*", { count: "exact", head: true }).is("deleted_at", null), "created_at", prevStart, prevEnd)),
-    readCount(supabase.from("buyers").select("*", { count: "exact", head: true }).is("deleted_at", null)),
-    readCount(supabase.from("buyers").select("*", { count: "exact", head: true }).is("deleted_at", null).eq("vip", true)),
-    readCount(applyPeriod(supabase.from("properties").select("*", { count: "exact", head: true }), "created_at", periodStart, periodEnd)),
-    readCount(supabase.from("properties").select("*", { count: "exact", head: true }).eq("status", "available")),
-    readCount(supabase.from("properties").select("*", { count: "exact", head: true }).eq("status", "under_contract")),
-    readCount(supabase.from("properties").select("*", { count: "exact", head: true }).eq("status", "sold")),
-    readCount(supabase.from("properties").select("*", { count: "exact", head: true })),
-    readCount(supabase.from("campaigns").select("*", { count: "exact", head: true }).in("status", ["pending", "processing"])),
-    readCount(applyPeriod(supabase.from("messages").select("*", { count: "exact", head: true }).eq("direction", "outbound").is("deleted_at", null), "created_at", periodStart, periodEnd)),
-    readCount(applyPeriod(supabase.from("messages").select("*", { count: "exact", head: true }).eq("direction", "outbound").is("deleted_at", null), "created_at", prevStart, prevEnd)),
-    readCount(applyPeriod(supabase.from("messages").select("*", { count: "exact", head: true }).eq("direction", "inbound").is("deleted_at", null), "created_at", periodStart, periodEnd)),
-    readCount(applyPeriod(supabase.from("messages").select("*", { count: "exact", head: true }).eq("direction", "inbound").is("deleted_at", null), "created_at", prevStart, prevEnd)),
-    readCount(applyPeriod(supabase.from("calls").select("*", { count: "exact", head: true }).eq("direction", "outbound"), "started_at", periodStart, periodEnd)),
-    readCount(applyPeriod(supabase.from("calls").select("*", { count: "exact", head: true }).eq("direction", "outbound"), "started_at", prevStart, prevEnd)),
-    readCount(applyPeriod(supabase.from("calls").select("*", { count: "exact", head: true }).eq("direction", "inbound"), "started_at", periodStart, periodEnd)),
-    readCount(applyPeriod(supabase.from("calls").select("*", { count: "exact", head: true }).eq("direction", "inbound"), "started_at", prevStart, prevEnd)),
-    readCount(applyPeriod(supabase.from("calls").select("*", { count: "exact", head: true }).eq("voicemail", true), "started_at", periodStart, periodEnd)),
-    countEmailCampaignRecipients("sent_at", periodStart, periodEnd),
-    countEmailCampaignRecipients("sent_at", prevStart, prevEnd),
-    countEmailCampaignRecipients("opened_at", periodStart, periodEnd),
-    countEmailCampaignRecipients("clicked_at", periodStart, periodEnd),
-    countEmailCampaignRecipients("bounced_at", periodStart, periodEnd),
-    readCount(applyPeriod(supabase.from("offers").select("*", { count: "exact", head: true }), "created_at", periodStart, periodEnd)),
-    readCount(applyPeriod(supabase.from("offers").select("*", { count: "exact", head: true }), "created_at", prevStart, prevEnd)),
-    readCount(applyPeriod(supabase.from("offers").select("*", { count: "exact", head: true }).not("accepted_at", "is", null), "accepted_at", periodStart, periodEnd)),
-    readCount(applyPeriod(supabase.from("offers").select("*", { count: "exact", head: true }).not("accepted_at", "is", null), "accepted_at", prevStart, prevEnd)),
-    readCount(applyPeriod(supabase.from("offers").select("*", { count: "exact", head: true }).not("rejected_at", "is", null), "rejected_at", periodStart, periodEnd)),
-    readCount(applyPeriod(supabase.from("offers").select("*", { count: "exact", head: true }).not("countered_at", "is", null), "countered_at", periodStart, periodEnd)),
-    readCount(applyPeriod(supabase.from("showings").select("*", { count: "exact", head: true }), "created_at", periodStart, periodEnd)),
-    readCount(applyPeriod(supabase.from("showings").select("*", { count: "exact", head: true }), "created_at", prevStart, prevEnd)),
-    readCount(applyPeriod(supabase.from("showings").select("*", { count: "exact", head: true }).eq("status", "rescheduled"), "updated_at", periodStart, periodEnd)),
-    readCount(applyPeriod(supabase.from("showings").select("*", { count: "exact", head: true }).eq("status", "canceled"), "updated_at", periodStart, periodEnd)),
-    readCount(applyPeriod(supabase.from("showings").select("*", { count: "exact", head: true }).eq("status", "completed"), "updated_at", periodStart, periodEnd)),
-    readCount(applyPeriod(supabase.from("buyers").select("*", { count: "exact", head: true }).not("sms_suppressed_at", "is", null), "sms_suppressed_at", periodStart, periodEnd)),
-    readCount(applyPeriod(supabase.from("buyers").select("*", { count: "exact", head: true }).not("sms_suppressed_at", "is", null), "sms_suppressed_at", prevStart, prevEnd)),
-    readCount(applyPeriod(supabase.from("buyers").select("*", { count: "exact", head: true }).eq("is_unsubscribed", true).not("unsubscribed_at", "is", null), "unsubscribed_at", periodStart, periodEnd)),
-    readCount(applyPeriod(supabase.from("buyers").select("*", { count: "exact", head: true }).eq("is_unsubscribed", true).not("unsubscribed_at", "is", null), "unsubscribed_at", prevStart, prevEnd)),
+    readCount(applyPeriod(client.from("buyers").select("*", { count: "exact", head: true }).eq("org_id", orgId).is("deleted_at", null), "created_at", periodStart, periodEnd)),
+    readCount(applyPeriod(client.from("buyers").select("*", { count: "exact", head: true }).eq("org_id", orgId).is("deleted_at", null), "created_at", prevStart, prevEnd)),
+    readCount(client.from("buyers").select("*", { count: "exact", head: true }).eq("org_id", orgId).is("deleted_at", null)),
+    readCount(client.from("buyers").select("*", { count: "exact", head: true }).eq("org_id", orgId).is("deleted_at", null).eq("vip", true)),
+    readCount(applyPeriod(client.from("properties").select("*", { count: "exact", head: true }).eq("org_id", orgId), "created_at", periodStart, periodEnd)),
+    readCount(client.from("properties").select("*", { count: "exact", head: true }).eq("org_id", orgId).eq("status", "available")),
+    readCount(client.from("properties").select("*", { count: "exact", head: true }).eq("org_id", orgId).eq("status", "under_contract")),
+    readCount(client.from("properties").select("*", { count: "exact", head: true }).eq("org_id", orgId).eq("status", "sold")),
+    readCount(client.from("properties").select("*", { count: "exact", head: true }).eq("org_id", orgId)),
+    readCount(client.from("campaigns").select("*", { count: "exact", head: true }).eq("org_id", orgId).in("status", ["pending", "processing"])),
+    readCount(applyPeriod(client.from("messages").select("*", { count: "exact", head: true }).eq("org_id", orgId).eq("direction", "outbound").is("deleted_at", null), "created_at", periodStart, periodEnd)),
+    readCount(applyPeriod(client.from("messages").select("*", { count: "exact", head: true }).eq("org_id", orgId).eq("direction", "outbound").is("deleted_at", null), "created_at", prevStart, prevEnd)),
+    readCount(applyPeriod(client.from("messages").select("*", { count: "exact", head: true }).eq("org_id", orgId).eq("direction", "inbound").is("deleted_at", null), "created_at", periodStart, periodEnd)),
+    readCount(applyPeriod(client.from("messages").select("*", { count: "exact", head: true }).eq("org_id", orgId).eq("direction", "inbound").is("deleted_at", null), "created_at", prevStart, prevEnd)),
+    readCount(applyPeriod(client.from("calls").select("*", { count: "exact", head: true }).eq("org_id", orgId).eq("direction", "outbound"), "started_at", periodStart, periodEnd)),
+    readCount(applyPeriod(client.from("calls").select("*", { count: "exact", head: true }).eq("org_id", orgId).eq("direction", "outbound"), "started_at", prevStart, prevEnd)),
+    readCount(applyPeriod(client.from("calls").select("*", { count: "exact", head: true }).eq("org_id", orgId).eq("direction", "inbound"), "started_at", periodStart, periodEnd)),
+    readCount(applyPeriod(client.from("calls").select("*", { count: "exact", head: true }).eq("org_id", orgId).eq("direction", "inbound"), "started_at", prevStart, prevEnd)),
+    readCount(applyPeriod(client.from("calls").select("*", { count: "exact", head: true }).eq("org_id", orgId).eq("voicemail", true), "started_at", periodStart, periodEnd)),
+    countEmailCampaignRecipients(client, orgId, "sent_at", periodStart, periodEnd),
+    countEmailCampaignRecipients(client, orgId, "sent_at", prevStart, prevEnd),
+    countEmailCampaignRecipients(client, orgId, "opened_at", periodStart, periodEnd),
+    countEmailCampaignRecipients(client, orgId, "clicked_at", periodStart, periodEnd),
+    countEmailCampaignRecipients(client, orgId, "bounced_at", periodStart, periodEnd),
+    readCount(applyPeriod(client.from("offers").select("*", { count: "exact", head: true }).eq("org_id", orgId), "created_at", periodStart, periodEnd)),
+    readCount(applyPeriod(client.from("offers").select("*", { count: "exact", head: true }).eq("org_id", orgId), "created_at", prevStart, prevEnd)),
+    readCount(applyPeriod(client.from("offers").select("*", { count: "exact", head: true }).eq("org_id", orgId).not("accepted_at", "is", null), "accepted_at", periodStart, periodEnd)),
+    readCount(applyPeriod(client.from("offers").select("*", { count: "exact", head: true }).eq("org_id", orgId).not("accepted_at", "is", null), "accepted_at", prevStart, prevEnd)),
+    readCount(applyPeriod(client.from("offers").select("*", { count: "exact", head: true }).eq("org_id", orgId).not("rejected_at", "is", null), "rejected_at", periodStart, periodEnd)),
+    readCount(applyPeriod(client.from("offers").select("*", { count: "exact", head: true }).eq("org_id", orgId).not("countered_at", "is", null), "countered_at", periodStart, periodEnd)),
+    readCount(applyPeriod(client.from("showings").select("*", { count: "exact", head: true }).eq("org_id", orgId), "created_at", periodStart, periodEnd)),
+    readCount(applyPeriod(client.from("showings").select("*", { count: "exact", head: true }).eq("org_id", orgId), "created_at", prevStart, prevEnd)),
+    readCount(applyPeriod(client.from("showings").select("*", { count: "exact", head: true }).eq("org_id", orgId).eq("status", "rescheduled"), "updated_at", periodStart, periodEnd)),
+    readCount(applyPeriod(client.from("showings").select("*", { count: "exact", head: true }).eq("org_id", orgId).eq("status", "canceled"), "updated_at", periodStart, periodEnd)),
+    readCount(applyPeriod(client.from("showings").select("*", { count: "exact", head: true }).eq("org_id", orgId).eq("status", "completed"), "updated_at", periodStart, periodEnd)),
+    readCount(applyPeriod(client.from("buyers").select("*", { count: "exact", head: true }).eq("org_id", orgId).not("sms_suppressed_at", "is", null), "sms_suppressed_at", periodStart, periodEnd)),
+    readCount(applyPeriod(client.from("buyers").select("*", { count: "exact", head: true }).eq("org_id", orgId).not("sms_suppressed_at", "is", null), "sms_suppressed_at", prevStart, prevEnd)),
+    readCount(applyPeriod(client.from("buyers").select("*", { count: "exact", head: true }).eq("org_id", orgId).eq("is_unsubscribed", true).not("unsubscribed_at", "is", null), "unsubscribed_at", periodStart, periodEnd)),
+    readCount(applyPeriod(client.from("buyers").select("*", { count: "exact", head: true }).eq("org_id", orgId).eq("is_unsubscribed", true).not("unsubscribed_at", "is", null), "unsubscribed_at", prevStart, prevEnd)),
   ])
 
   const unsubscribeRate = rate(smsUnsubscribes + emailUnsubscribes, textsSent + emailsSent)
@@ -348,14 +349,14 @@ export async function fetchKpis(range: TimeRange): Promise<DashboardKpis> {
   }
 }
 
-export async function fetchTextTrends(range: TimeRange): Promise<TrendWithDelta<TextTrend>> {
+export async function fetchTextTrends(range: TimeRange, orgId: string, client: SupabaseClient): Promise<TrendWithDelta<TextTrend>> {
   const { days, periodStart, periodEnd, prevStart, prevEnd } = getPeriod(range)
   const data = emptyBuckets<TextTrend>(days, ["sent", "received"])
 
   const [sentRows, receivedRows, prevSent] = await Promise.all([
-    readRows<{ created_at: string }>(applyPeriod(supabase.from("messages").select("created_at").eq("direction", "outbound").is("deleted_at", null), "created_at", periodStart, periodEnd)),
-    readRows<{ created_at: string }>(applyPeriod(supabase.from("messages").select("created_at").eq("direction", "inbound").is("deleted_at", null), "created_at", periodStart, periodEnd)),
-    readCount(applyPeriod(supabase.from("messages").select("*", { count: "exact", head: true }).eq("direction", "outbound").is("deleted_at", null), "created_at", prevStart, prevEnd)),
+    readRows<{ created_at: string }>(applyPeriod(client.from("messages").select("created_at").eq("org_id", orgId).eq("direction", "outbound").is("deleted_at", null), "created_at", periodStart, periodEnd)),
+    readRows<{ created_at: string }>(applyPeriod(client.from("messages").select("created_at").eq("org_id", orgId).eq("direction", "inbound").is("deleted_at", null), "created_at", periodStart, periodEnd)),
+    readCount(applyPeriod(client.from("messages").select("*", { count: "exact", head: true }).eq("org_id", orgId).eq("direction", "outbound").is("deleted_at", null), "created_at", prevStart, prevEnd)),
   ])
 
   bucketRows(data, sentRows, "created_at", "sent")
@@ -364,14 +365,14 @@ export async function fetchTextTrends(range: TimeRange): Promise<TrendWithDelta<
   return { data, delta: percentDelta(sentRows.length, prevSent) }
 }
 
-export async function fetchCallTrends(range: TimeRange): Promise<TrendWithDelta<CallTrend>> {
+export async function fetchCallTrends(range: TimeRange, orgId: string, client: SupabaseClient): Promise<TrendWithDelta<CallTrend>> {
   const { days, periodStart, periodEnd, prevStart, prevEnd } = getPeriod(range)
   const data = emptyBuckets<CallTrend>(days, ["made", "received"])
 
   const [madeRows, receivedRows, prevMade] = await Promise.all([
-    readRows<{ started_at: string }>(applyPeriod(supabase.from("calls").select("started_at").eq("direction", "outbound"), "started_at", periodStart, periodEnd)),
-    readRows<{ started_at: string }>(applyPeriod(supabase.from("calls").select("started_at").eq("direction", "inbound"), "started_at", periodStart, periodEnd)),
-    readCount(applyPeriod(supabase.from("calls").select("*", { count: "exact", head: true }).eq("direction", "outbound"), "started_at", prevStart, prevEnd)),
+    readRows<{ started_at: string }>(applyPeriod(client.from("calls").select("started_at").eq("org_id", orgId).eq("direction", "outbound"), "started_at", periodStart, periodEnd)),
+    readRows<{ started_at: string }>(applyPeriod(client.from("calls").select("started_at").eq("org_id", orgId).eq("direction", "inbound"), "started_at", periodStart, periodEnd)),
+    readCount(applyPeriod(client.from("calls").select("*", { count: "exact", head: true }).eq("org_id", orgId).eq("direction", "outbound"), "started_at", prevStart, prevEnd)),
   ])
 
   bucketRows(data, madeRows, "started_at", "made")
@@ -380,16 +381,17 @@ export async function fetchCallTrends(range: TimeRange): Promise<TrendWithDelta<
   return { data, delta: percentDelta(madeRows.length, prevMade) }
 }
 
-export async function fetchEmailTrends(range: TimeRange): Promise<TrendWithDelta<EmailTrend>> {
+export async function fetchEmailTrends(range: TimeRange, orgId: string, client: SupabaseClient): Promise<TrendWithDelta<EmailTrend>> {
   const { days, periodStart, periodEnd, prevStart, prevEnd } = getPeriod(range)
   const data = emptyBuckets<EmailTrend>(days, ["sent"])
 
   const [sentRows, prevSent] = await Promise.all([
     readRows<{ sent_at: string }>(
       applyPeriod(
-        supabase
+        client
           .from("campaign_recipients")
           .select("sent_at, campaigns!inner(channel)")
+          .eq("org_id", orgId)
           .eq("campaigns.channel", "email")
           .not("sent_at", "is", null),
         "sent_at",
@@ -397,7 +399,7 @@ export async function fetchEmailTrends(range: TimeRange): Promise<TrendWithDelta
         periodEnd,
       ),
     ),
-    countEmailCampaignRecipients("sent_at", prevStart, prevEnd),
+    countEmailCampaignRecipients(client, orgId, "sent_at", prevStart, prevEnd),
   ])
 
   bucketRows(data, sentRows, "sent_at", "sent")
@@ -405,14 +407,14 @@ export async function fetchEmailTrends(range: TimeRange): Promise<TrendWithDelta
   return { data, delta: percentDelta(sentRows.length, prevSent) }
 }
 
-export async function fetchOfferTrends(range: TimeRange): Promise<TrendWithDelta<OfferTrend>> {
+export async function fetchOfferTrends(range: TimeRange, orgId: string, client: SupabaseClient): Promise<TrendWithDelta<OfferTrend>> {
   const { days, periodStart, periodEnd, prevStart, prevEnd } = getPeriod(range)
   const data = emptyBuckets<OfferTrend>(days, ["created", "accepted"])
 
   const [createdRows, acceptedRows, prevCreated] = await Promise.all([
-    readRows<{ created_at: string }>(applyPeriod(supabase.from("offers").select("created_at"), "created_at", periodStart, periodEnd)),
-    readRows<{ accepted_at: string }>(applyPeriod(supabase.from("offers").select("accepted_at").not("accepted_at", "is", null), "accepted_at", periodStart, periodEnd)),
-    readCount(applyPeriod(supabase.from("offers").select("*", { count: "exact", head: true }), "created_at", prevStart, prevEnd)),
+    readRows<{ created_at: string }>(applyPeriod(client.from("offers").select("created_at").eq("org_id", orgId), "created_at", periodStart, periodEnd)),
+    readRows<{ accepted_at: string }>(applyPeriod(client.from("offers").select("accepted_at").eq("org_id", orgId).not("accepted_at", "is", null), "accepted_at", periodStart, periodEnd)),
+    readCount(applyPeriod(client.from("offers").select("*", { count: "exact", head: true }).eq("org_id", orgId), "created_at", prevStart, prevEnd)),
   ])
 
   bucketRows(data, createdRows, "created_at", "created")
@@ -421,14 +423,14 @@ export async function fetchOfferTrends(range: TimeRange): Promise<TrendWithDelta
   return { data, delta: percentDelta(createdRows.length, prevCreated) }
 }
 
-export async function fetchShowingTrends(range: TimeRange): Promise<TrendWithDelta<ShowingTrend>> {
+export async function fetchShowingTrends(range: TimeRange, orgId: string, client: SupabaseClient): Promise<TrendWithDelta<ShowingTrend>> {
   const { days, periodStart, periodEnd, prevStart, prevEnd } = getPeriod(range)
   const data = emptyBuckets<ShowingTrend>(days, ["created", "scheduled"])
 
   const [createdRows, scheduledRows, prevCreated] = await Promise.all([
-    readRows<{ created_at: string }>(applyPeriod(supabase.from("showings").select("created_at"), "created_at", periodStart, periodEnd)),
-    readRows<{ scheduled_at: string }>(applyPeriod(supabase.from("showings").select("scheduled_at").not("scheduled_at", "is", null), "scheduled_at", periodStart, periodEnd)),
-    readCount(applyPeriod(supabase.from("showings").select("*", { count: "exact", head: true }), "created_at", prevStart, prevEnd)),
+    readRows<{ created_at: string }>(applyPeriod(client.from("showings").select("created_at").eq("org_id", orgId), "created_at", periodStart, periodEnd)),
+    readRows<{ scheduled_at: string }>(applyPeriod(client.from("showings").select("scheduled_at").eq("org_id", orgId).not("scheduled_at", "is", null), "scheduled_at", periodStart, periodEnd)),
+    readCount(applyPeriod(client.from("showings").select("*", { count: "exact", head: true }).eq("org_id", orgId), "created_at", prevStart, prevEnd)),
   ])
 
   bucketRows(data, createdRows, "created_at", "created")
@@ -437,20 +439,21 @@ export async function fetchShowingTrends(range: TimeRange): Promise<TrendWithDel
   return { data, delta: percentDelta(createdRows.length, prevCreated) }
 }
 
-export async function fetchUnsubscribeTrends(range: TimeRange): Promise<TrendWithDelta<UnsubscribeTrend>> {
+export async function fetchUnsubscribeTrends(range: TimeRange, orgId: string, client: SupabaseClient): Promise<TrendWithDelta<UnsubscribeTrend>> {
   const { days, periodStart, periodEnd, prevStart, prevEnd } = getPeriod(range)
   const data = emptyBuckets<UnsubscribeTrend>(days, ["rate"])
   const countsByDate = new Map(data.map((item) => [item.date, { unsubscribes: 0, sends: 0 }]))
 
   const [smsUnsubRows, emailUnsubRows, textSentRows, emailSentRows, prevSmsUnsubs, prevEmailUnsubs, prevTextsSent, prevEmailsSent] = await Promise.all([
-    readRows<{ sms_suppressed_at: string }>(applyPeriod(supabase.from("buyers").select("sms_suppressed_at").not("sms_suppressed_at", "is", null), "sms_suppressed_at", periodStart, periodEnd)),
-    readRows<{ unsubscribed_at: string }>(applyPeriod(supabase.from("buyers").select("unsubscribed_at").eq("is_unsubscribed", true).not("unsubscribed_at", "is", null), "unsubscribed_at", periodStart, periodEnd)),
-    readRows<{ created_at: string }>(applyPeriod(supabase.from("messages").select("created_at").eq("direction", "outbound").is("deleted_at", null), "created_at", periodStart, periodEnd)),
+    readRows<{ sms_suppressed_at: string }>(applyPeriod(client.from("buyers").select("sms_suppressed_at").eq("org_id", orgId).not("sms_suppressed_at", "is", null), "sms_suppressed_at", periodStart, periodEnd)),
+    readRows<{ unsubscribed_at: string }>(applyPeriod(client.from("buyers").select("unsubscribed_at").eq("org_id", orgId).eq("is_unsubscribed", true).not("unsubscribed_at", "is", null), "unsubscribed_at", periodStart, periodEnd)),
+    readRows<{ created_at: string }>(applyPeriod(client.from("messages").select("created_at").eq("org_id", orgId).eq("direction", "outbound").is("deleted_at", null), "created_at", periodStart, periodEnd)),
     readRows<{ sent_at: string }>(
       applyPeriod(
-        supabase
+        client
           .from("campaign_recipients")
           .select("sent_at, campaigns!inner(channel)")
+          .eq("org_id", orgId)
           .eq("campaigns.channel", "email")
           .not("sent_at", "is", null),
         "sent_at",
@@ -458,10 +461,10 @@ export async function fetchUnsubscribeTrends(range: TimeRange): Promise<TrendWit
         periodEnd,
       ),
     ),
-    readCount(applyPeriod(supabase.from("buyers").select("*", { count: "exact", head: true }).not("sms_suppressed_at", "is", null), "sms_suppressed_at", prevStart, prevEnd)),
-    readCount(applyPeriod(supabase.from("buyers").select("*", { count: "exact", head: true }).eq("is_unsubscribed", true).not("unsubscribed_at", "is", null), "unsubscribed_at", prevStart, prevEnd)),
-    readCount(applyPeriod(supabase.from("messages").select("*", { count: "exact", head: true }).eq("direction", "outbound").is("deleted_at", null), "created_at", prevStart, prevEnd)),
-    countEmailCampaignRecipients("sent_at", prevStart, prevEnd),
+    readCount(applyPeriod(client.from("buyers").select("*", { count: "exact", head: true }).eq("org_id", orgId).not("sms_suppressed_at", "is", null), "sms_suppressed_at", prevStart, prevEnd)),
+    readCount(applyPeriod(client.from("buyers").select("*", { count: "exact", head: true }).eq("org_id", orgId).eq("is_unsubscribed", true).not("unsubscribed_at", "is", null), "unsubscribed_at", prevStart, prevEnd)),
+    readCount(applyPeriod(client.from("messages").select("*", { count: "exact", head: true }).eq("org_id", orgId).eq("direction", "outbound").is("deleted_at", null), "created_at", prevStart, prevEnd)),
+    countEmailCampaignRecipients(client, orgId, "sent_at", prevStart, prevEnd),
   ])
 
   const addRows = (rows: Array<Record<string, any>>, column: string, field: "unsubscribes" | "sends") => {
@@ -490,19 +493,19 @@ export async function fetchUnsubscribeTrends(range: TimeRange): Promise<TrendWit
   return { data, delta: percentDelta(currentRate, previousRate) }
 }
 
-export async function fetchRecentActivity(_range: TimeRange): Promise<RecentActivityItem[]> {
+export async function fetchRecentActivity(_range: TimeRange, orgId: string, client: SupabaseClient): Promise<RecentActivityItem[]> {
   const [buyers, offers, messages, showings] = await Promise.all([
     readRows<{ id: string; full_name: string | null; created_at: string }>(
-      supabase.from("buyers").select("id, full_name, created_at").is("deleted_at", null).order("created_at", { ascending: false }).limit(10),
+      client.from("buyers").select("id, full_name, created_at").eq("org_id", orgId).is("deleted_at", null).order("created_at", { ascending: false }).limit(10),
     ),
     readRows<{ id: string; accepted_at: string | null; created_at: string }>(
-      supabase.from("offers").select("id, accepted_at, created_at").order("created_at", { ascending: false }).limit(10),
+      client.from("offers").select("id, accepted_at, created_at").eq("org_id", orgId).order("created_at", { ascending: false }).limit(10),
     ),
     readRows<{ id: string; created_at: string }>(
-      supabase.from("messages").select("id, created_at").eq("direction", "inbound").is("deleted_at", null).order("created_at", { ascending: false }).limit(10),
+      client.from("messages").select("id, created_at").eq("org_id", orgId).eq("direction", "inbound").is("deleted_at", null).order("created_at", { ascending: false }).limit(10),
     ),
     readRows<{ id: string; created_at: string }>(
-      supabase.from("showings").select("id, created_at").order("created_at", { ascending: false }).limit(10),
+      client.from("showings").select("id, created_at").eq("org_id", orgId).order("created_at", { ascending: false }).limit(10),
     ),
   ])
 
