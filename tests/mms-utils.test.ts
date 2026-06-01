@@ -11,7 +11,7 @@ const convertToMp4Mock = vi.fn(
   },
 )
 
-await vi.mock("../utils/audio-utils", () => ({
+vi.mock("../utils/audio-utils", () => ({
   __esModule: true,
   convertToMp3: vi.fn(async () => {
     await uploadMock("file.mp3", Buffer.from("mp3"), {
@@ -22,7 +22,7 @@ await vi.mock("../utils/audio-utils", () => ({
   }),
 }))
 
-await vi.mock("../utils/video-utils", () => ({
+vi.mock("../utils/video-utils", () => ({
   __esModule: true,
   convertToMp4: (...args: any[]) => convertToMp4Mock(...args),
 }))
@@ -32,7 +32,7 @@ let mms: typeof import("../utils/mms.server")
 // @ts-ignore
 global.fetch = fetchMock
 
-await vi.mock("@/lib/supabase", () => ({
+vi.mock("@/lib/supabase", () => ({
   __esModule: true,
   supabaseAdmin: {
     storage: {
@@ -255,9 +255,9 @@ describe("mirrorMediaUrl", () => {
     const out = await mms.mirrorMediaUrl(url, "incoming")
     expect(fetchMock).toHaveBeenCalled()
     expect(uploadMock).toHaveBeenCalled()
-    expect(convertToMp4Mock).toHaveBeenCalledWith(url, "incoming", expect.any(Buffer))
+    expect(convertToMp4Mock).toHaveBeenCalledWith(url, "incoming", expect.any(Buffer), expect.any(String), expect.anything())
     expect(out).toBe(
-      "https://cdn/storage/v1/object/public/public-media/file.mp4",
+      "https://cdn/storage/v1/object/public/public-media/incoming/file.mp4",
     )
   })
 
@@ -274,7 +274,7 @@ describe("mirrorMediaUrl", () => {
     const out = await mms.mirrorMediaUrl(url, "outgoing")
     expect(fetchMock).toHaveBeenCalled()
     expect(uploadMock).toHaveBeenCalled()
-    expect(convertToMp4Mock).toHaveBeenCalledWith(url, "outgoing", expect.any(Buffer))
+    expect(convertToMp4Mock).toHaveBeenCalledWith(url, "outgoing", expect.any(Buffer), expect.any(String), expect.anything())
     expect(out).toBe(
       "https://cdn/storage/v1/object/public/public-media/outgoing/file.mp4",
     )
@@ -291,13 +291,13 @@ describe("mirrorMediaUrl", () => {
     const url = "https://x.com/test.mov"
     const out = await mms.mirrorMediaUrl(url, "outgoing")
     expect(fetchMock).toHaveBeenCalled()
-    expect(convertToMp4Mock).toHaveBeenCalledWith(url, "outgoing", expect.any(Buffer))
+    expect(convertToMp4Mock).toHaveBeenCalledWith(url, "outgoing", expect.any(Buffer), expect.any(String), expect.anything())
     expect(uploadMock).toHaveBeenCalled()
     const args = uploadMock.mock.calls[0]
     expect(args[0]).toMatch(/\.mp4$/)
     expect(args[2].contentType).toBe("video/mp4")
     expect(out).toBe(
-      "https://cdn/storage/v1/object/public/public-media/file.mp4",
+      "https://cdn/storage/v1/object/public/public-media/outgoing/file.mp4",
     )
   })
 
@@ -315,7 +315,7 @@ describe("mirrorMediaUrl", () => {
     const url = "https://x.com/test.mp4"
     const out = await mms.mirrorMediaUrl(url, "incoming")
 
-    expect(convertToMp4Mock).toHaveBeenCalledWith(url, "incoming", expect.any(Buffer))
+    expect(convertToMp4Mock).toHaveBeenCalledWith(url, "incoming", expect.any(Buffer), expect.any(String), expect.anything())
     expect(uploadMock).toHaveBeenCalled()
     expect(out).toBe(
       "https://cdn/storage/v1/object/public/public-media/fallback.mp4",
@@ -461,7 +461,7 @@ describe("ensurePublicMediaUrls", () => {
     const out = await mms.ensurePublicMediaUrls([url], "outgoing")
     expect(convertToMp4Mock).toHaveBeenCalledWith(url, "outgoing")
     expect(out[0]).toBe(
-      "https://cdn/storage/v1/object/public/public-media/file.mp4",
+      "https://cdn/storage/v1/object/public/public-media/outgoing/file.mp4",
     )
   })
 })

@@ -8,11 +8,13 @@ describe("ffmpeg path resolution", () => {
   })
 
   test("prefers FFMPEG_PATH environment variable when executable", async () => {
+    vi.resetModules()
     process.env.FFMPEG_PATH = "/custom/ffmpeg"
 
     vi.doMock("fs", async () => {
       const actual = await vi.importActual<typeof import("fs")>("fs")
-      return { ...actual, existsSync: vi.fn(() => true) }
+      const existsSync = vi.fn(() => true)
+      return { ...actual, existsSync, default: { ...actual, existsSync } }
     })
 
     vi.doMock("child_process", async () => {
@@ -25,14 +27,15 @@ describe("ffmpeg path resolution", () => {
   })
 
   test("falls back to ffmpeg-static binary when env is missing", async () => {
-    const ffmpegStaticPath = await vi.importActual<string>("ffmpeg-static")
+    vi.resetModules()
+    delete process.env.FFMPEG_PATH
+    const m = await vi.importActual<any>("ffmpeg-static")
+    const ffmpegStaticPath = (m?.default ?? m) as string
 
     vi.doMock("fs", async () => {
       const actual = await vi.importActual<typeof import("fs")>("fs")
-      return {
-        ...actual,
-        existsSync: vi.fn((candidate: string) => candidate === ffmpegStaticPath),
-      }
+      const existsSync = vi.fn((candidate: string) => candidate === ffmpegStaticPath)
+      return { ...actual, existsSync, default: { ...actual, existsSync } }
     })
 
     vi.doMock("child_process", async () => {

@@ -4,20 +4,22 @@ import { GET } from "../app/api/calls/history/route"
 let selectColumns: string | null = null
 let orderColumn: string | null = null
 let rangeArgs: [number, number] | null = null
-const sampleCalls = [
-  {
-    id: "call-1",
-    call_sid: "CSID123",
-    from_agent_id: "agent-42",
-    recording_confidence: 0.82,
-    telnyx_recording_id: "rec-1",
-    status: "completed",
-    duration: 120,
-    started_at: new Date().toISOString(),
-    direction: "outbound",
-    buyer_id: null,
-  }
-]
+const { sampleCalls } = vi.hoisted(() => ({
+  sampleCalls: [
+    {
+      id: "call-1",
+      call_sid: "CSID123",
+      from_agent_id: "agent-42",
+      recording_confidence: 0.82,
+      telnyx_recording_id: "rec-1",
+      status: "completed",
+      duration: 120,
+      started_at: new Date().toISOString(),
+      direction: "outbound",
+      buyer_id: null,
+    },
+  ],
+}))
 
 const fetchMock = vi.fn().mockResolvedValue({ ok: true })
 // @ts-ignore
@@ -83,7 +85,7 @@ describe("/api/calls/history", () => {
 
     expect(response.status).toBe(200)
     expect(selectColumns).toContain("recording_confidence")
-    expect(selectColumns).toContain("from_agent:agents!calls_from_agent_id_fkey")
+    expect(selectColumns).toContain("user:profiles!calls_user_id_fkey")
     expect(orderColumn).toBe("started_at:desc")
     expect(rangeArgs).toEqual([0, 24])
     expect(payload.calls[0].from_agent_id).toBe("agent-42")
