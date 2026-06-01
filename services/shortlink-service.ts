@@ -205,8 +205,8 @@ export async function createShortLinksBulk(
  *
  * NOTE: This does NOT do per-recipient unique links — it creates one shared short link
  * per unique URL in the body. For per-recipient attribution, use createShortLinksBulk
- * directly with campaignRecipientId. The SMS send route uses bulk; the email flow uses
- * this (SendFox handles email click attribution separately).
+ * directly with campaignRecipientId. The SMS send route uses bulk; email senders can
+ * call the bulk helper when per-recipient attribution is required.
  */
 export async function replaceUrlsWithShortLinks(
   html: string,

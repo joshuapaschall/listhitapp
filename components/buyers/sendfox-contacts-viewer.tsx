@@ -1,9 +1,8 @@
 "use client"
 
-import React, { useEffect, useState } from "react"
+import React from "react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { toast } from "@/components/ui/use-toast"
 
 interface SendFoxContact {
   id: number
@@ -25,29 +24,8 @@ export default function SendFoxContactsViewer({
   open,
   onOpenChange,
 }: SendFoxContactsViewerProps) {
-  const [contacts, setContacts] = useState<SendFoxContact[]>([])
-  const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    if (open && listId) {
-      setLoading(true)
-      fetch(`/api/sendfox/lists/${listId}/contacts`)
-        .then(async (res) => {
-          if (!res.ok) throw new Error(await res.text())
-          return res.json()
-        })
-        .then((data) => setContacts(data || []))
-        .catch((err) => {
-          toast({
-            variant: "destructive",
-            title: "Failed to load SendFox contacts",
-            description: err instanceof Error ? err.message : "An unexpected error occurred",
-          })
-          setContacts([])
-        })
-        .finally(() => setLoading(false))
-    }
-  }, [open, listId])
+  const contacts: SendFoxContact[] = []
+  const loading = false
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -59,7 +37,7 @@ export default function SendFoxContactsViewer({
           <div className="p-6">
             {loading && <p className="text-sm text-muted-foreground">Loading...</p>}
             {!loading && contacts.length === 0 && (
-              <p className="text-sm text-muted-foreground">No contacts found.</p>
+              <p className="text-sm text-muted-foreground">No contacts available.</p>
             )}
             {!loading && contacts.length > 0 && (
               <table className="w-full text-sm">

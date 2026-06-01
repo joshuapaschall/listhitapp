@@ -24,27 +24,6 @@ export async function POST(req: NextRequest) {
 
     const changedRows = Number((rpcResult as any)?.changed_rows ?? 0)
 
-    const base = process.env.DISPOTOOL_BASE_URL || ""
-    for (const buyerId of buyerIds) {
-      const syncRes = await fetch(`${base}/api/sendfox/sync-buyer-lists`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ buyerId }),
-      })
-      if (!syncRes.ok) {
-        const body = await syncRes.json().catch(() => ({}))
-        console.error("replace-groups: sync-buyer-lists failed", {
-          buyerId,
-          targetGroupIds,
-          body,
-        })
-        return NextResponse.json(
-          { error: "sendfox sync failed", body },
-          { status: 502 },
-        )
-      }
-    }
-
     const toPlainJson = (obj: unknown) =>
       JSON.parse(
         JSON.stringify(obj, (_, v) => (typeof v === "bigint" ? Number(v) : v)),

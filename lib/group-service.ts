@@ -1,6 +1,5 @@
 import { supabase } from "@/lib/supabase"
 import { createLogger } from "@/lib/logger"
-import { toast } from "sonner"
 
 const log = createLogger("group")
 
@@ -31,29 +30,12 @@ export async function getGroups() {
 export async function createGroup(
   group: Omit<Group, "id" | "created_at" | "updated_at" | "sendfox_list_id">
 ) {
-  let listId: number | null = null
-  try {
-    const res = await fetch("/api/sendfox/lists", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: group.name }),
-    })
-    if (!res.ok) {
-      throw new Error(await res.text())
-    }
-    const data = await res.json()
-    listId = Number(data.id)
-  } catch (err) {
-    log("error", "List creation failed", { error: err })
-    toast.error("List sync failed")
-  }
   try {
     const { data, error } = await supabase
       .from("groups")
       .insert([
         {
           ...group,
-          sendfox_list_id: listId,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         },
@@ -87,39 +69,6 @@ export async function updateGroup(id: string, updates: Partial<Group>) {
     if (error) throw error
     const group = data?.[0] as Group
 
-    if (group?.sendfox_list_id) {
-      const { data: groupMembers, error: gmError } = await supabase
-        .from("buyer_groups")
-        .select("buyer_id")
-        .eq("group_id", id)
-
-      if (gmError) throw gmError
-
-      const buyerIds = (groupMembers || []).map((bg) => bg.buyer_id)
-      if (buyerIds.length) {
-        const { data: buyers, error: bError } = await supabase
-          .from("buyers")
-          .select("email,fname,lname")
-          .in("id", buyerIds)
-
-        if (bError) throw bError
-
-        for (const buyer of buyers || []) {
-          if (buyer.email) {
-            await fetch(`/api/sendfox/lists/${group.sendfox_list_id}/contacts`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                email: buyer.email,
-                first_name: buyer.fname || undefined,
-                last_name: buyer.lname || undefined,
-              }),
-            })
-          }
-        }
-      }
-    }
-
     log("info", "Group updated", { id })
     return group
   } catch (err) {
@@ -128,17 +77,8 @@ export async function updateGroup(id: string, updates: Partial<Group>) {
   }
 }
 
-export async function deleteGroup(id: string, removeSendFoxList = false) {
+export async function deleteGroup(id: string) {
   try {
-    let listId: number | null = null
-    const { data: groupData } = await supabase
-      .from("groups")
-      .select("sendfox_list_id")
-      .eq("id", id)
-      .single()
-
-    listId = groupData?.sendfox_list_id ?? null
-
     // First remove all buyer-group relationships
     await supabase.from("buyer_groups").delete().eq("group_id", id)
 
@@ -146,16 +86,6 @@ export async function deleteGroup(id: string, removeSendFoxList = false) {
     const { error } = await supabase.from("groups").delete().eq("id", id)
 
     if (error) throw error
-
-    if (removeSendFoxList && listId) {
-      try {
-        await fetch(`/api/sendfox/lists/${listId}`, {
-          method: "DELETE",
-        })
-      } catch (sfErr) {
-        log("error", "Failed to delete list", { error: sfErr })
-      }
-    }
   } catch (err) {
     log("error", "Failed to delete group", { error: err })
     throw err
@@ -195,13 +125,6 @@ export async function addBuyersToGroups(buyerIds: string[], groupIds: string[]) 
     if (entries.length) {
       const { error } = await supabase.from("buyer_groups").insert(entries)
       if (error) throw error
-    }
-    for (const buyerId of buyerIds) {
-      await fetch("/api/sendfox/sync-buyer-lists", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ buyerId }),
-      })
     }
   } catch (err) {
     log("error", "Failed to add buyers to groups", { error: err })
@@ -256,45 +179,6 @@ export async function clearAllGroupsForBuyers(
 
 export async function removeBuyerFromGroup(buyerId: string, groupId: string) {
   try {
-    const { data: group } = await supabase
-      .from("groups")
-      .select("sendfox_list_id")
-      .eq("id", groupId)
-      .single()
-    const { data: buyer } = await supabase
-      .from("buyers")
-      .select("email,sendfox_contact_id")
-      .eq("id", buyerId)
-      .single()
-    if (group?.sendfox_list_id) {
-      const contactId = buyer?.sendfox_contact_id
-      if (contactId) {
-        try {
-          await fetch(`/api/sendfox/lists/${group.sendfox_list_id}/contacts/${contactId}`, {
-            method: "DELETE",
-          })
-        } catch (err) {
-          log("error", "Failed to remove contact from list", { error: err })
-        }
-      } else if (buyer?.email) {
-        try {
-          const res = await fetch(
-            `/api/sendfox/lookup?email=${encodeURIComponent(buyer.email)}`,
-          )
-          const contact = await res.json()
-          if (contact?.id) {
-            await fetch(
-              `/api/sendfox/lists/${group.sendfox_list_id}/contacts/${contact.id}`,
-              { method: "DELETE" },
-            )
-          }
-        } catch (err) {
-          log("error", "Failed to remove contact from list", { error: err })
-        }
-      } else {
-        log("warn", "Missing contact ID for buyer", { buyerId })
-      }
-    }
     const { error } = await supabase
       .from("buyer_groups")
       .delete()
@@ -309,46 +193,6 @@ export async function removeBuyerFromGroup(buyerId: string, groupId: string) {
 
 export async function removeBuyersFromGroup(buyerIds: string[], groupId: string) {
   try {
-    const { data: group } = await supabase
-      .from("groups")
-      .select("sendfox_list_id")
-      .eq("id", groupId)
-      .single()
-    if (group?.sendfox_list_id) {
-      const { data: buyers } = await supabase
-        .from("buyers")
-        .select("id,email,sendfox_contact_id")
-        .in("id", buyerIds)
-      for (const buyer of buyers || []) {
-        if (buyer.sendfox_contact_id) {
-          try {
-            await fetch(
-              `/api/sendfox/lists/${group.sendfox_list_id}/contacts/${buyer.sendfox_contact_id}`,
-              { method: "DELETE" },
-            )
-          } catch (err) {
-            log("error", "Failed to remove contact from list", { error: err })
-          }
-        } else if (buyer.email) {
-          try {
-            const res = await fetch(
-              `/api/sendfox/lookup?email=${encodeURIComponent(buyer.email)}`,
-            )
-            const contact = await res.json()
-            if (contact?.id) {
-              await fetch(
-              `/api/sendfox/lists/${group.sendfox_list_id}/contacts/${contact.id}`,
-                { method: "DELETE" },
-              )
-            }
-          } catch (err) {
-            log("error", "Failed to remove contact from list", { error: err })
-          }
-        } else {
-          log("warn", "Missing contact ID for buyer", { buyerId: buyer.id })
-        }
-      }
-    }
     const { error } = await supabase
       .from("buyer_groups")
       .delete()

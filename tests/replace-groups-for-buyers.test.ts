@@ -50,7 +50,7 @@ describe("replace groups for buyers route", () => {
     ;(global.fetch as vi.Mock).mockReset().mockResolvedValue({ ok: true })
   })
 
-  test("replaces memberships and syncs", async () => {
+  test("replaces memberships without SendFox sync", async () => {
     const req = new NextRequest("http://localhost", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -69,7 +69,7 @@ describe("replace groups for buyers route", () => {
       ]),
     )
     expect(buyerGroups.length).toBe(4)
-    expect(global.fetch).toHaveBeenCalledTimes(2)
+    expect(global.fetch).not.toHaveBeenCalled()
   })
 
   test("replace with one group leaves only that group", async () => {
@@ -85,7 +85,7 @@ describe("replace groups for buyers route", () => {
     expect(buyerGroups.filter((bg) => bg.buyer_id === "1")).toEqual([
       { buyer_id: "1", group_id: "g2" },
     ])
-    expect(global.fetch).toHaveBeenCalledTimes(1)
+    expect(global.fetch).not.toHaveBeenCalled()
   })
 
   test("replace with empty array removes all memberships", async () => {
@@ -99,7 +99,7 @@ describe("replace groups for buyers route", () => {
     expect(res.status).toBe(200)
     expect(Number(body.changedRows)).toBe(1)
     expect(buyerGroups.filter((bg) => bg.buyer_id === "1")).toEqual([])
-    expect(global.fetch).toHaveBeenCalledTimes(1)
+    expect(global.fetch).not.toHaveBeenCalled()
   })
 
   test("keepDefault retains default group", async () => {

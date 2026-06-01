@@ -4,10 +4,6 @@ vi.mock("../services/gmail-metrics-service", () => ({
   getGmailMetrics: vi.fn()
 }))
 
-vi.mock("../services/sendfox-service", () => ({
-  fetchUnsubscribed: vi.fn().mockResolvedValue([]),
-  getEmail: vi.fn()
-}))
 
 vi.mock("../lib/supabase", () => ({
   supabaseAdmin: {

@@ -165,11 +165,6 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
   const [scheduleProperty, setScheduleProperty] = useState<Property | null>(null)
   const [scheduleShowing, setScheduleShowing] = useState(false)
   const [createdBuyerId, setCreatedBuyerId] = useState<string | null>(null)
-  const [defaultListId, setDefaultListId] = useState<number | null>(
-    process.env.NEXT_PUBLIC_SENDFOX_DEFAULT_LIST_ID
-      ? Number(process.env.NEXT_PUBLIC_SENDFOX_DEFAULT_LIST_ID)
-      : null,
-  )
   const [showScheduleModal, setShowScheduleModal] = useState(false)
   const queryClient = useQueryClient()
 
@@ -381,39 +376,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
         }
       }
 
-      let finalBuyerId: string | null = newBuyerId || existingBuyer?.id || null
-      let sendfoxContactId: number | null = null
-      const emailToSync = insertData.email || existingBuyer?.email
-      if (emailToSync) {
-        const lists: number[] = []
-        if (defaultListId) lists.push(defaultListId)
-        try {
-          const res = await fetch("/api/sendfox/contact", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              email: emailToSync,
-              first_name: insertData.fname || existingBuyer?.fname,
-              lists,
-            }),
-          })
-          const sendfoxRes = await res.json()
-          sendfoxContactId = sendfoxRes?.id ?? null
-        } catch (err) {
-          console.error("SendFox sync error", err)
-        }
-      }
-
-      if (finalBuyerId && sendfoxContactId) {
-        try {
-          await supabase
-            .from("buyers")
-            .update({ sendfox_contact_id: sendfoxContactId })
-            .eq("id", finalBuyerId)
-        } catch (err) {
-          console.error("Failed to save SendFox contact ID", err)
-        }
-      }
+      const finalBuyerId: string | null = newBuyerId || existingBuyer?.id || null
 
       if (existingBuyer) {
         toast.success("Buyer updated")
@@ -487,15 +450,6 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
     }
   }
 
-  useEffect(() => {
-    if (defaultListId !== null) return
-    fetch("/api/sendfox/default-list")
-      .then((r) => (r.ok ? r.json() : { listId: null }))
-      .then((d) => {
-        if (d?.listId) setDefaultListId(Number(d.listId))
-      })
-      .catch(() => {})
-  }, [defaultListId])
 
   const isLastTab = activeTab === "status"
   const isFirstTab = activeTab === "contact"

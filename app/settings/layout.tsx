@@ -46,7 +46,7 @@ const navItems: Array<{ href: string; label: string; description: string; permis
   {
     href: "/settings/integrations",
     label: "Integrations",
-    description: "SendFox, Telnyx, Gmail, and other connected services",
+    description: "Connected services and integration settings",
     permission: "settings.integrations",
   },
   {

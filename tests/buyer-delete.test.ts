@@ -69,35 +69,20 @@ describe("BuyerService deletions", () => {
     buyerGroups = []
     groups = []
     fetchMock.mockReset().mockResolvedValue({ ok: true })
-    process.env.SENDFOX_DELETED_LIST_ID = "9"
   })
 
-  test("deleteBuyer hides buyer and posts to SendFox", async () => {
+  test("deleteBuyer soft-deletes buyer and removes group links without SendFox", async () => {
     buyerGroups.push({ buyer_id: "1", group_id: "g1" })
     await BuyerService.deleteBuyer("1")
     const b = buyers.find((b) => b.id === "1")
     expect(b?.deleted_at).toEqual(expect.any(String))
     expect(buyerGroups.length).toBe(0)
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/sendfox/contact",
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({
-          email: "a@test.com",
-          first_name: "A",
-          lists: [9],
-        }),
-      }),
-    )
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   test("deleteBuyers handles multiple ids", async () => {
     await BuyerService.deleteBuyers(["1", "2"])
     expect(buyers.every((b) => typeof b.deleted_at === "string")).toBe(true)
-    expect(fetchMock).toHaveBeenCalledTimes(2)
-    for (const call of fetchMock.mock.calls) {
-      expect(call[0]).toBe("/api/sendfox/contact")
-      expect(JSON.parse(call[1].body).lists).toEqual([9])
-    }
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
