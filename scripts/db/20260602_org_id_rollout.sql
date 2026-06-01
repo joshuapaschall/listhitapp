@@ -29,7 +29,6 @@ DECLARE
     'email_messages',
     'gmail_threads',
     'campaign_recipients',
-    'campaign_event_metrics',
     'email_events',
     'email_campaign_content',
     'email_campaign_queue',
@@ -56,7 +55,13 @@ begin
 
   FOREACH target_table IN ARRAY bucket_tables
   LOOP
-    IF to_regclass(format('public.%I', target_table)) IS NULL THEN
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name = target_table
+        AND table_type = 'BASE TABLE'
+    ) THEN
       CONTINUE;
     END IF;
 

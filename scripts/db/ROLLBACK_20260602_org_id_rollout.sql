@@ -28,7 +28,6 @@ DECLARE
     'email_messages',
     'gmail_threads',
     'campaign_recipients',
-    'campaign_event_metrics',
     'email_events',
     'email_campaign_content',
     'email_campaign_queue',
