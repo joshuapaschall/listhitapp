@@ -2,6 +2,7 @@ import { NextRequest } from "next/server"
 
 let messages: any[] = []
 let threads: any[] = []
+let buyers: any[] = []
 let threadId = 1
 let threadError: any = null
 let messageError: any = null
@@ -213,6 +214,18 @@ const createSupabaseClient = () => ({
         }),
       }
     }
+    if (table === "buyers") {
+      return {
+        select: () => ({
+          eq: (_col: string, value: string) => ({
+            maybeSingle: async () => ({
+              data: buyers.find((buyer) => buyer.id === value) ?? null,
+              error: null,
+            }),
+          }),
+        }),
+      }
+    }
     throw new Error(`Unexpected table ${table}`)
   },
 })
@@ -224,14 +237,15 @@ vi.mock("@/lib/supabase", () => ({
   supabase: supabaseClient,
   supabaseAdmin: supabaseClient,
 }))
-
-// Cookie auth: messages/send gates on createRouteHandlerClient + requirePermission.
-vi.mock("next/headers", () => ({ cookies: () => ({}) }))
-vi.mock("@supabase/auth-helpers-nextjs", () => ({
-  createRouteHandlerClient: () => ({
-    auth: { getUser: async () => ({ data: { user: { id: "u1" } }, error: null }) },
+vi.mock("@/lib/auth/org-context", () => ({
+  requireOrgContext: async () => ({
+    user: { id: "u1" },
+    orgId: "org-1",
+    supabase: supabaseClient,
   }),
 }))
+
+// Cookie auth: messages/send gates on requireOrgContext + requirePermission.
 vi.mock("@/lib/permissions/server", () => ({
   requirePermission: async () => null,
 }))
@@ -246,6 +260,7 @@ describe("messages send route", () => {
   beforeEach(() => {
     messages = []
     threads = []
+    buyers = [{ id: "b1" }, { id: "b2" }, { id: "b3" }, { id: "b4" }]
     threadId = 1
     threadError = null
     messageError = null

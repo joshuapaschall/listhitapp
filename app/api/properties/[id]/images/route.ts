@@ -1,7 +1,5 @@
-import { cookies } from "next/headers"
 import { NextRequest, NextResponse } from "next/server"
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
-import { supabaseAdmin } from "@/lib/supabase/admin"
+import { requireOrgContext } from "@/lib/auth/org-context"
 import { requirePermission } from "@/lib/permissions/server"
 
 const BUCKET = "property-images"
@@ -11,14 +9,16 @@ const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic"]
 type RouteContext = { params: Promise<{ id: string }> }
 
 export async function POST(request: NextRequest, context: RouteContext) {
-  const cookieStore = cookies()
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+  const { user, orgId, supabase } = await requireOrgContext()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!orgId) return NextResponse.json({ error: "Missing org" }, { status: 400 })
+
   const denied = await requirePermission(supabase, "properties.manage")
   if (denied) return denied
 
   const { id: propertyId } = await context.params
 
-  const { data: property, error: propErr } = await supabaseAdmin
+  const { data: property, error: propErr } = await supabase
     .from("properties")
     .select("id")
     .eq("id", propertyId)
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "No paths provided" }, { status: 400 })
   }
 
-  const { data: existingImages } = await supabaseAdmin
+  const { data: existingImages } = await supabase
     .from("property_images")
     .select("id, sort_order")
     .eq("property_id", propertyId)
@@ -65,25 +65,26 @@ export async function POST(request: NextRequest, context: RouteContext) {
       continue
     }
 
-    const { data: urlData } = supabaseAdmin.storage
+    const { data: urlData } = supabase.storage
       .from(BUCKET)
       .getPublicUrl(storagePath)
     const shouldFeature = existingCount === 0 && uploaded.length === 0
 
-    const { data: imgRecord, error: dbErr } = await supabaseAdmin
+    const { data: imgRecord, error: dbErr } = await supabase
       .from("property_images")
       .insert({
         property_id: propertyId,
         image_url: urlData.publicUrl,
         sort_order: nextSortOrder,
         is_featured: shouldFeature,
+        org_id: orgId,
       })
       .select("id, image_url, sort_order, is_featured")
       .single()
 
     if (dbErr) {
       // Clean up the orphaned storage object if DB insert fails
-      await supabaseAdmin.storage.from(BUCKET).remove([storagePath])
+      await supabase.storage.from(BUCKET).remove([storagePath])
       errors.push(`${storagePath}: DB insert failed - ${dbErr.message}`)
       continue
     }
@@ -99,8 +100,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
 }
 
 export async function DELETE(request: NextRequest, context: RouteContext) {
-  const cookieStore = cookies()
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+  const { user, orgId, supabase } = await requireOrgContext()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!orgId) return NextResponse.json({ error: "Missing org" }, { status: 400 })
+
   const denied = await requirePermission(supabase, "properties.manage")
   if (denied) return denied
 
@@ -108,21 +111,23 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   const { imageId } = (await request.json()) as { imageId?: string }
   if (!imageId) return NextResponse.json({ error: "imageId required" }, { status: 400 })
 
-  const { data: img, error: fetchErr } = await supabaseAdmin.from("property_images").select("*").eq("id", imageId).eq("property_id", propertyId).maybeSingle()
+  const { data: img, error: fetchErr } = await supabase.from("property_images").select("*").eq("id", imageId).eq("property_id", propertyId).maybeSingle()
   if (fetchErr || !img) return NextResponse.json({ error: "Image not found" }, { status: 404 })
 
   const url = new URL(img.image_url)
   const pathParts = url.pathname.split(`/object/public/${BUCKET}/`)
   const storagePath = pathParts[1]
-  if (storagePath) await supabaseAdmin.storage.from(BUCKET).remove([storagePath])
+  if (storagePath) await supabase.storage.from(BUCKET).remove([storagePath])
 
-  await supabaseAdmin.from("property_images").delete().eq("id", imageId)
+  await supabase.from("property_images").delete().eq("id", imageId)
   return NextResponse.json({ success: true })
 }
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
-  const cookieStore = cookies()
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+  const { user, orgId, supabase } = await requireOrgContext()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!orgId) return NextResponse.json({ error: "Missing org" }, { status: 400 })
+
   const denied = await requirePermission(supabase, "properties.manage")
   if (denied) return denied
 
@@ -131,14 +136,14 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   if (body.reorder && Array.isArray(body.reorder)) {
     for (const item of body.reorder) {
-      await supabaseAdmin.from("property_images").update({ sort_order: item.sort_order }).eq("id", item.id).eq("property_id", propertyId)
+      await supabase.from("property_images").update({ sort_order: item.sort_order }).eq("id", item.id).eq("property_id", propertyId)
     }
     return NextResponse.json({ success: true })
   }
 
   if (body.setFeatured) {
-    await supabaseAdmin.from("property_images").update({ is_featured: false }).eq("property_id", propertyId)
-    await supabaseAdmin.from("property_images").update({ is_featured: true }).eq("id", body.setFeatured).eq("property_id", propertyId)
+    await supabase.from("property_images").update({ is_featured: false }).eq("property_id", propertyId)
+    await supabase.from("property_images").update({ is_featured: true }).eq("id", body.setFeatured).eq("property_id", propertyId)
     return NextResponse.json({ success: true })
   }
 

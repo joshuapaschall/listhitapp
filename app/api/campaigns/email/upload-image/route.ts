@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { supabaseAdmin } from "@/lib/supabase/admin"
+import { requireOrgContext } from "@/lib/auth/org-context"
 
 const BUCKET = "email-assets"
 const MAX_FILE_SIZE = 10 * 1024 * 1024
@@ -8,8 +8,12 @@ const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "i
 export const runtime = "nodejs"
 
 export async function POST(request: NextRequest) {
+  const { user, orgId, supabase } = await requireOrgContext()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!orgId) return NextResponse.json({ error: "Missing org" }, { status: 400 })
+
   try {
-    await supabaseAdmin.storage.createBucket(BUCKET, { public: true })
+    await supabase.storage.createBucket(BUCKET, { public: true })
   } catch (error) {
     const message = error instanceof Error ? error.message.toLowerCase() : ""
     if (!message.includes("already exists")) {
@@ -34,13 +38,13 @@ export async function POST(request: NextRequest) {
   const sanitized = body.name.replace(/[^a-zA-Z0-9._-]/g, "_")
   const path = `campaigns/email/${timestamp}-${rand}-${sanitized}`
 
-  const { data, error } = await supabaseAdmin.storage.from(BUCKET).createSignedUploadUrl(path)
+  const { data, error } = await supabase.storage.from(BUCKET).createSignedUploadUrl(path)
 
   if (error || !data) {
     return NextResponse.json({ error: error?.message || "Failed to sign upload URL" }, { status: 500 })
   }
 
-  const { data: urlData } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(path)
+  const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path)
 
   return NextResponse.json({ path: data.path, token: data.token, signedUrl: data.signedUrl, publicUrl: urlData.publicUrl })
 }

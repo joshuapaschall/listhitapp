@@ -1,13 +1,13 @@
-import { cookies } from "next/headers"
 import { NextRequest, NextResponse } from "next/server"
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
-import { supabaseAdmin } from "@/lib/supabase/admin"
+import { requireOrgContext } from "@/lib/auth/org-context"
 import { requirePermission } from "@/lib/permissions/server"
 
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+    const { user, orgId, supabase } = await requireOrgContext()
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!orgId) return NextResponse.json({ error: "Missing org" }, { status: 400 })
+
     const denied = await requirePermission(supabase, "properties.manage")
     if (denied) return denied
 
@@ -48,9 +48,10 @@ export async function POST(request: NextRequest) {
       tags: body.tags?.length ? body.tags : null,
       website_url: body.website_url || null,
       short_slug: body.short_slug || null,
+      org_id: orgId,
     }
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabase
       .from("properties")
       .insert([insertData])
       .select()

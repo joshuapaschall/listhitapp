@@ -1,15 +1,15 @@
-import { cookies } from "next/headers"
 import { NextRequest, NextResponse } from "next/server"
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
-import { supabaseAdmin } from "@/lib/supabase/admin"
+import { requireOrgContext } from "@/lib/auth/org-context"
 import { requirePermission } from "@/lib/permissions/server"
 
 type RouteContext = { params: Promise<{ id: string }> }
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
   try {
-    const cookieStore = cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+    const { user, orgId, supabase } = await requireOrgContext()
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!orgId) return NextResponse.json({ error: "Missing org" }, { status: 400 })
+
     const denied = await requirePermission(supabase, "properties.manage")
     if (denied) return denied
 
@@ -52,7 +52,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       }
     }
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabase
       .from("properties")
       .update(updateData)
       .eq("id", id)
@@ -76,14 +76,16 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
 export async function DELETE(_request: NextRequest, context: RouteContext) {
   try {
-    const cookieStore = cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+    const { user, orgId, supabase } = await requireOrgContext()
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!orgId) return NextResponse.json({ error: "Missing org" }, { status: 400 })
+
     const denied = await requirePermission(supabase, "properties.manage")
     if (denied) return denied
 
     const { id } = await context.params
 
-    const { data: images } = await supabaseAdmin
+    const { data: images } = await supabase
       .from("property_images")
       .select("image_url")
       .eq("property_id", id)
@@ -102,11 +104,11 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
         .filter((p): p is string => p !== null)
 
       if (storagePaths.length > 0) {
-        await supabaseAdmin.storage.from("property-images").remove(storagePaths)
+        await supabase.storage.from("property-images").remove(storagePaths)
       }
     }
 
-    const { error } = await supabaseAdmin.from("properties").delete().eq("id", id)
+    const { error } = await supabase.from("properties").delete().eq("id", id)
 
     if (error) {
       console.error("Property delete failed:", error)
