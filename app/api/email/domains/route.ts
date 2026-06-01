@@ -4,7 +4,6 @@ import { requirePermission } from "@/lib/permissions/server";
 import { requireOrgContext } from "@/lib/auth/org-context";
 import { createLogger } from "@/lib/logger";
 import { buildDnsRecords, createDomainIdentity, deriveDomainStatus } from "@/lib/ses-identities";
-import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -41,10 +40,10 @@ export async function GET() {
   if (denied) return denied;
   if (!orgId) return NextResponse.json({ ok: false, error: "Organization context missing" }, { status: 400 });
 
-  const { data: domains, error } = await supabaseAdmin.from("email_domains").select("*").eq("org_id", orgId).order("created_at", { ascending: false });
+  const { data: domains, error } = await supabase.from("email_domains").select("*").eq("org_id", orgId).order("created_at", { ascending: false });
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
-  const { data: senders, error: sendersError } = await supabaseAdmin.from("email_senders").select("*").eq("org_id", orgId);
+  const { data: senders, error: sendersError } = await supabase.from("email_senders").select("*").eq("org_id", orgId);
   if (sendersError) return NextResponse.json({ ok: false, error: sendersError.message }, { status: 500 });
 
   const enriched = (domains || []).map((domain) => ({
@@ -68,7 +67,7 @@ export async function POST(request: Request) {
   if (!DOMAIN_RE.test(normalizedDomain)) return NextResponse.json({ ok: false, error: "Invalid domain." }, { status: 400 });
   if (FREE_WEBMAIL_DOMAINS.has(normalizedDomain)) return NextResponse.json({ ok: false, error: FREE_WEBMAIL_ERROR }, { status: 422 });
 
-  const { data: existing } = await supabaseAdmin.from("email_domains").select("id").eq("domain", normalizedDomain).maybeSingle();
+  const { data: existing } = await supabase.from("email_domains").select("id").eq("domain", normalizedDomain).maybeSingle();
   if (existing) return NextResponse.json({ ok: false, error: "That domain is already registered." }, { status: 409 });
 
   const sesRegion = process.env.AWS_SES_REGION;
@@ -82,7 +81,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Couldn't create the domain identity in SES. Verify AWS SES IAM permissions (ses:CreateEmailIdentity, ses:PutEmailIdentityMailFromAttributes, ses:GetEmailIdentity) and region configuration." }, { status: 502 });
   }
 
-  const { data: domain, error } = await supabaseAdmin.from("email_domains").insert({
+  const { data: domain, error } = await supabase.from("email_domains").insert({
     org_id: orgId,
     domain: normalizedDomain,
     ses_region: sesRegion,

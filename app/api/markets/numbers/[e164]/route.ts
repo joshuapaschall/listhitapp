@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/permissions/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireOrgContext, validatePatchBody } from "../../_shared";
 
 export async function PATCH(request: Request, { params }: { params: { e164: string } }) {
@@ -14,7 +13,7 @@ export async function PATCH(request: Request, { params }: { params: { e164: stri
   const update = validation.update ?? {};
     if (body.config_override !== undefined) update.config_override = Boolean(body.config_override);
 
-  const { data: number, error: updateError } = await supabaseAdmin
+  const { data: number, error: updateError } = await supabase
     .from("inbound_numbers")
     .update(update)
     .eq("org_id", orgId)

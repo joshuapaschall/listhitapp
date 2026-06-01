@@ -29,7 +29,7 @@ vi.mock("@supabase/auth-helpers-nextjs", () => ({
         const query = { eq: () => query, then: (resolve: any) => resolve({ data: [], error: null }) }
         return { select: () => query }
       }
-      throw new Error(`Unexpected auth table ${table}`)
+      return supabase.from(table)
     },
   }),
 }))

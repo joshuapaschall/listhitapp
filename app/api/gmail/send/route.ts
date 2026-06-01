@@ -8,7 +8,6 @@ import {
 import { cookies } from "next/headers"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { normalizeEmail } from "@/lib/dedup-utils"
-import { supabaseAdmin } from "@/lib/supabase"
 import { assertServer } from "@/utils/assert-server"
 import { requirePermission } from "@/lib/permissions/server"
 
@@ -90,9 +89,9 @@ export async function POST(request: NextRequest) {
         await getThread(user.id, threadId)
         const emailNorm = normalizeEmail(to)
         if (emailNorm) {
-          const { data: buyer } = await supabaseAdmin.from("buyers").select("id").eq("email_norm", emailNorm).maybeSingle()
+          const { data: buyer } = await supabase.from("buyers").select("id").eq("email_norm", emailNorm).maybeSingle()
           if (buyer) {
-            await supabaseAdmin.from("email_messages").insert({ thread_id: threadId, buyer_id: buyer.id, subject, preview: text.slice(0, 200), sent_at: new Date().toISOString() })
+            await supabase.from("email_messages").insert({ thread_id: threadId, buyer_id: buyer.id, subject, preview: text.slice(0, 200), sent_at: new Date().toISOString() })
           }
         }
       } catch (err) {

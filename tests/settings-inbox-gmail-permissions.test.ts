@@ -36,7 +36,7 @@ function createPermissionClient() {
         }
       }
 
-      throw new Error(`Unexpected permission table ${table}`)
+      return createAdminQuery(table)
     },
   }
 }
