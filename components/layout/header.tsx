@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { useEffect, useState } from "react"
+import { useQuery } from "@tanstack/react-query"
 import { Bell, LogOut, Mail, Menu, MessageSquare, Phone, Search, Settings, User } from "lucide-react"
 
 import { LogoutButton } from "@/components/auth/LogoutButton"
@@ -29,6 +30,12 @@ interface HeaderProps {
   toggleSidebar: () => void
 }
 
+type CurrentProfile = {
+  email: string | null
+  full_name: string | null
+  display_name: string | null
+}
+
 function getUserInitials(name?: string | null, email?: string | null) {
   const source = name?.trim() || email?.trim() || "?"
   const parts = source.split(/\s+/).filter(Boolean)
@@ -42,13 +49,16 @@ export function Header({ toggleSidebar }: HeaderProps) {
   const { notifications, unreadCount, markAsRead } = useNotifications()
   const { user } = useSession()
   const { openDialer } = useCall()
-  const userName = typeof user?.user_metadata?.full_name === "string"
-    ? user.user_metadata.full_name
-    : typeof user?.user_metadata?.name === "string"
-      ? user.user_metadata.name
-      : null
-  const userEmail = user?.email ?? null
-  const initials = getUserInitials(userName, userEmail)
+  const { data: profile } = useQuery({
+    queryKey: ["me"],
+    queryFn: async () => {
+      const response = await fetch("/api/me")
+      return response.ok ? ((await response.json()) as CurrentProfile) : null
+    },
+  })
+  const profileName = profile?.display_name || profile?.full_name || null
+  const userEmail = profile?.email ?? user?.email ?? null
+  const initials = getUserInitials(profileName, userEmail)
 
   useEffect(() => {
     setMounted(true)
