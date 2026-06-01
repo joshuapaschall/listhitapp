@@ -29,9 +29,9 @@ function getInitials(buyer: Buyer) {
 }
 
 function getStatus(buyer: Buyer) {
-  if (buyer.sendfox_suppressed) return "suppressed"
-  if (buyer.sendfox_bounced_at) return "bounced"
-  if (buyer.sendfox_complained_at) return "complained"
+  if (buyer.email_suppressed) return "suppressed"
+  if (buyer.email_bounced_at) return "bounced"
+  if (buyer.email_complained_at) return "complained"
   if (buyer.status && buyer.status !== "active") return buyer.status
   return ""
 }

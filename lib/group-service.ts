@@ -10,7 +10,6 @@ export interface Group {
   type?: string
   criteria?: any
   color?: string
-  sendfox_list_id?: number | null
   created_at: string
   updated_at?: string
 }
@@ -28,7 +27,7 @@ export async function getGroups() {
 }
 
 export async function createGroup(
-  group: Omit<Group, "id" | "created_at" | "updated_at" | "sendfox_list_id">
+  group: Omit<Group, "id" | "created_at" | "updated_at">
 ) {
   try {
     const { data, error } = await supabase

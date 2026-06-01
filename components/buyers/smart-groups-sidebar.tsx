@@ -595,11 +595,6 @@ export default function SmartGroupsSidebar({
                       <div className="flex items-center space-x-2 flex-1">
                         {getGroupIcon(group)}
                         <span className="text-xs whitespace-nowrap">{group.name}</span>
-                        {Boolean(group.sendfox_list_id) && (
-                          <Badge variant="outline" className="text-[10px] whitespace-nowrap">
-                            🔗 Synced to SendFox ({group.name})
-                          </Badge>
-                        )}
                       </div>
                       <div className="flex items-center space-x-1">
                         <Badge variant="secondary" className="text-xs">
