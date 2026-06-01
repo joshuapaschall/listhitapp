@@ -1,26 +1,32 @@
 /** @jest-environment jsdom */
-import { render, fireEvent } from "@testing-library/react"
+import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { Header } from "../components/layout/header"
 
-var signOutMock: vi.Mock
-const pushMock = vi.fn()
+const { signOutMock } = vi.hoisted(() => ({
+  signOutMock: vi.fn().mockResolvedValue({ error: null }),
+}))
 
-vi.mock("../lib/supabase", () => {
-  signOutMock = vi.fn().mockResolvedValue({ error: null })
-  return { supabase: { auth: { signOut: (...args: any[]) => signOutMock(...args) } } }
-})
+// LogoutButton now signs out via supabaseBrowser() and navigates with
+// window.location.href (no router, no inline supabase.auth).
+vi.mock("@/lib/supabase-browser", () => ({
+  supabaseBrowser: () => ({ auth: { signOut: signOutMock } }),
+}))
 
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: pushMock })
+// Header consumes useCall(); return a no-op proxy.
+vi.mock("@/components/voice/CallProvider", () => ({
+  CallProvider: ({ children }: any) => children,
+  useCall: () => new Proxy({}, { get: () => () => {} }),
+}))
+
+// Header consumes useNotifications() (react-query + supabase realtime) — stub it.
+vi.mock("@/hooks/use-notifications", () => ({
+  useNotifications: () => ({ notifications: [], unreadCount: 0, markAsRead: vi.fn() }),
 }))
 
 describe("Header", () => {
-  test.skip("signs out on log out click", async () => {
-    const { getByTitle, findByText } = render(<Header toggleSidebar={() => {}} />)
-    fireEvent.click(getByTitle("User menu"))
-    const logout = await findByText(/log out/i)
-    fireEvent.click(logout)
-    expect(signOutMock).toHaveBeenCalled()
-    expect(pushMock).toHaveBeenCalledWith("/login")
+  test("signs out on log out click", async () => {
+    render(<Header toggleSidebar={() => {}} />)
+    fireEvent.click(screen.getAllByText(/log out/i)[0])
+    await waitFor(() => expect(signOutMock).toHaveBeenCalled())
   })
 })

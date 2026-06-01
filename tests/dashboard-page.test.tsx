@@ -29,6 +29,25 @@ vi.mock("../lib/supabase-browser", () => ({
   })),
 }))
 
+vi.mock("@/components/voice/CallProvider", () => ({
+  CallProvider: ({ children }: any) => children,
+  useCall: () => new Proxy({}, { get: () => () => {} }),
+}))
+
+vi.mock("../lib/supabase", () => {
+  const channel: any = { on: () => channel, subscribe: () => channel }
+  const client = {
+    channel: () => channel,
+    removeChannel: vi.fn(),
+    from: () => ({
+      select: () => ({
+        eq: () => ({ order: () => Promise.resolve({ data: [], error: null }) }),
+      }),
+    }),
+  }
+  return { __esModule: true, supabase: client, supabaseAdmin: client }
+})
+
 vi.mock("../services/dashboard-service", () => ({
   fetchKpis: vi.fn().mockResolvedValue({
     buyersAdded: 1,
@@ -87,7 +106,7 @@ vi.mock("../services/dashboard-service", () => ({
   fetchRecentActivity: vi.fn().mockResolvedValue([]),
 }))
 
-describe.skip("DashboardPage", () => {
+describe("DashboardPage", () => {
   let DashboardPage: typeof import("../app/(dashboard)/dashboard/page").default
 
   beforeAll(async () => {
@@ -122,7 +141,7 @@ describe.skip("DashboardPage", () => {
     expect(await screen.findByText(/Performance Trends/i)).toBeTruthy()
     expect(await screen.findByText(/Texts Sent vs. Received/i)).toBeTruthy()
     expect(screen.getByText(/Calls Made vs. Received/i)).toBeTruthy()
-    expect(screen.getByText(/Emails Sent/i)).toBeTruthy()
+    expect(screen.getAllByText(/Emails Sent/i).length).toBeGreaterThan(0)
     expect(screen.getByText(/Offers Created vs. Accepted/i)).toBeTruthy()
     expect(screen.getByText(/Showings Scheduled vs. Offers Created/i)).toBeTruthy()
     expect(screen.getAllByText(/Unsubscribe Rate/i).length).toBeGreaterThan(0)

@@ -224,21 +224,20 @@ describe("mirrorMediaUrl", () => {
     )
   })
 
-  test.skip("falls back to uploadOriginalToSupabase on failure", async () => {
-    fetchMock.mockRejectedValueOnce(new Error("fail"))
-    fetchMock.mockResolvedValueOnce({
+  test("uploads image files without conversion", async () => {
+    fetchMock.mockResolvedValue({
       ok: true,
       arrayBuffer: async () => Buffer.from("png"),
       headers: { get: () => "image/png" },
     })
+    uploadMock.mockResolvedValueOnce({ data: { path: "incoming/file.png" }, error: null })
     const url = "https://x.com/test.png"
-    const out = await mms.mirrorMediaUrl(url)
+    const out = await mms.mirrorMediaUrl(url, "incoming")
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(uploadMock).toHaveBeenCalledTimes(1)
-    const args = uploadMock.mock.calls[0]
-    expect(args[2].contentType).toBe("image/png")
+    expect(convertToMp4Mock).not.toHaveBeenCalled()
     expect(out).toBe(
-      "https://cdn/storage/v1/object/public/public-media/file.mp3",
+      "https://cdn/storage/v1/object/public/public-media/incoming/file.png",
     )
   })
 
