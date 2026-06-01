@@ -274,7 +274,7 @@ VOICE_SYNC_SECRET_KEY=
 ### Vercel Configuration
 - Environment variables in Build and Runtime
 - Static file optimization disabled
-- TypeScript and ESLint errors ignored during build
+- TypeScript and ESLint errors are enforced during build (next.config.mjs does not ignore them)
 
 ### Database Setup
 1. Run SQL scripts in order: `01-schema.sql`, `02-enable-security.sql`, `03-seed-data.sql`, `04-scheduler.sql`

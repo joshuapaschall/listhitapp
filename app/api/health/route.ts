@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 const REQUIRED_ENVS = [
   "SITE_URL",
   "CRON_SECRET",
-  "SUPABASE_URL",
+  "NEXT_PUBLIC_SUPABASE_URL",
   "SUPABASE_SERVICE_ROLE_KEY",
   "AWS_SES_REGION",
   "AWS_SES_FROM_EMAIL",

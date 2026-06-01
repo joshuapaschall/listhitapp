@@ -31,13 +31,13 @@ const getNowInTimezone = (tz: string) => {
 }
 
 export async function POST(request: NextRequest) {
-  const supabaseUrl = process.env.SUPABASE_URL
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const cronSecret = process.env.CRON_SECRET
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
   if (!supabaseUrl) {
     return NextResponse.json(
-      { error: "SUPABASE_URL env var is required" },
+      { error: "NEXT_PUBLIC_SUPABASE_URL env var is required" },
       { status: 500 },
     )
   }
