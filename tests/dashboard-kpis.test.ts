@@ -1,4 +1,4 @@
-import { fetchKpis } from "../services/dashboard-service"
+import { fetchFunnel, fetchKpis, fetchLiveDeals, fetchNeedsYouToday, fetchProfitMetrics } from "../services/dashboard-service"
 
 const orgId = "00000000-0000-0000-0000-000000000123"
 
@@ -25,9 +25,11 @@ function createMockClient() {
       }),
       is: vi.fn(() => builder),
       not: vi.fn(() => builder),
+      neq: vi.fn(() => builder),
       in: vi.fn(() => builder),
       gte: vi.fn(() => builder),
       lt: vi.fn(() => builder),
+      lte: vi.fn(() => builder),
       order: vi.fn(() => builder),
       limit: vi.fn(() => builder),
       then: (resolve: (value: { data: unknown[]; count: number; error: null }) => void) => {
@@ -49,12 +51,20 @@ function createMockClient() {
   return { client: client as any, records }
 }
 
+function expectEveryQueryScoped(records: QueryRecord[]) {
+  expect(records.length).toBeGreaterThan(0)
+  records.forEach((record) => {
+    expect(record.eq).toContainEqual(["org_id", orgId])
+  })
+}
+
 describe("dashboard kpis", () => {
   test("fetchKpis returns all metrics", async () => {
     const { client, records } = createMockClient()
     const res = await fetchKpis("week", orgId, client)
     const keys = [
       "buyersAdded",
+      "buyersAddedDelta",
       "propertiesAdded",
       "activeProperties",
       "underContract",
@@ -107,8 +117,39 @@ describe("dashboard kpis", () => {
       expect(typeof (res as any)[k]).toBe("number")
     })
     expect(records.length).toBeGreaterThanOrEqual(30)
-    records.forEach((record) => {
-      expect(record.eq).toContainEqual(["org_id", orgId])
+    expectEveryQueryScoped(records)
+  })
+
+  test("new dashboard data functions scope every query to the org", async () => {
+    const profitClient = createMockClient()
+    await fetchProfitMetrics("week", orgId, profitClient.client)
+    expectEveryQueryScoped(profitClient.records)
+
+    const liveDealsClient = createMockClient()
+    await fetchLiveDeals(orgId, liveDealsClient.client)
+    expectEveryQueryScoped(liveDealsClient.records)
+
+    const needsYouTodayClient = createMockClient()
+    await fetchNeedsYouToday(orgId, needsYouTodayClient.client)
+    expectEveryQueryScoped(needsYouTodayClient.records)
+
+    const funnelClient = createMockClient()
+    await fetchFunnel("week", orgId, funnelClient.client)
+    expectEveryQueryScoped(funnelClient.records)
+  })
+
+  test("fetchProfitMetrics returns empty-state values without fabricated ROI", async () => {
+    const { client } = createMockClient()
+    const res = await fetchProfitMetrics("week", orgId, client)
+
+    expect(res).toEqual({
+      grossProfit: 0,
+      closedCount: 0,
+      avgAssignmentFee: 0,
+      marketingSpend: 0,
+      netProfit: 0,
+      marketingRoi: null,
+      hasData: false,
     })
   })
 })

@@ -4,6 +4,7 @@ export type TimeRange = "today" | "week" | "month"
 
 export interface DashboardKpis {
   buyersAdded: number
+  buyersAddedDelta: number
   propertiesAdded: number
   activeProperties: number
   underContract: number
@@ -96,6 +97,41 @@ export interface RecentActivityItem {
   timestamp: string
 }
 
+export interface DashboardProfit {
+  grossProfit: number
+  closedCount: number
+  avgAssignmentFee: number
+  marketingSpend: number
+  netProfit: number
+  marketingRoi: number | null
+  hasData: boolean
+}
+
+export interface LiveDeal {
+  id: string
+  address: string | null
+  city: string | null
+  state: string | null
+  status: string | null
+  createdAt: string
+  daysOnMarket: number
+  offerCount: number
+}
+
+export interface NeedsYouToday {
+  unreadReplies: number
+  offersAwaiting: number
+  showingsToday: number
+  followUpsDue: number
+}
+
+export interface DealFunnel {
+  buyers: number
+  showings: number
+  offers: number
+  closed: number
+}
+
 type CountQuery = PromiseLike<{ count: number | null; error: unknown }>
 type RowQuery<T> = PromiseLike<{ data: T[] | null; error: unknown }>
 type BucketRecord = Record<string, number | string>
@@ -148,6 +184,65 @@ function percentDelta(curr: number, prev: number) {
 
 function rate(numerator: number, denominator: number) {
   return denominator === 0 ? 0 : roundOne((numerator / denominator) * 100)
+}
+
+function toNumber(value: number | string | null | undefined) {
+  return Number(value ?? 0)
+}
+
+function unique<T>(values: T[]) {
+  return [...new Set(values)]
+}
+
+function getDatePartsInTimeZone(date: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date)
+
+  const getPart = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? 0)
+
+  return {
+    year: getPart("year"),
+    month: getPart("month"),
+    day: getPart("day"),
+    hour: getPart("hour"),
+    minute: getPart("minute"),
+    second: getPart("second"),
+  }
+}
+
+function timeZoneOffsetMs(date: Date, timeZone: string) {
+  const parts = getDatePartsInTimeZone(date, timeZone)
+  const asUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second)
+  return asUtc - date.getTime()
+}
+
+function zonedDateTimeToUtc(year: number, month: number, day: number, timeZone: string) {
+  const utcGuess = new Date(Date.UTC(year, month - 1, day, 0, 0, 0))
+  const firstUtc = new Date(utcGuess.getTime() - timeZoneOffsetMs(utcGuess, timeZone))
+  const secondUtc = new Date(utcGuess.getTime() - timeZoneOffsetMs(firstUtc, timeZone))
+  return secondUtc
+}
+
+function getTodayBounds() {
+  const timeZone = process.env.APP_TIMEZONE || "America/New_York"
+  const today = getDatePartsInTimeZone(new Date(), timeZone)
+  const start = zonedDateTimeToUtc(today.year, today.month, today.day, timeZone)
+  const tomorrow = new Date(start)
+  tomorrow.setUTCDate(start.getUTCDate() + 1)
+
+  return {
+    startIso: start.toISOString(),
+    endIso: tomorrow.toISOString(),
+    todayDate: `${today.year}-${String(today.month).padStart(2, "0")}-${String(today.day).padStart(2, "0")}`,
+  }
 }
 
 async function readCount(query: CountQuery) {
@@ -301,6 +396,7 @@ export async function fetchKpis(range: TimeRange, orgId: string, client: Supabas
 
   return {
     buyersAdded,
+    buyersAddedDelta: percentDelta(buyersAdded, buyersAddedPrev),
     propertiesAdded,
     activeProperties,
     underContract,
@@ -347,6 +443,186 @@ export async function fetchKpis(range: TimeRange, orgId: string, client: Supabas
     avgAssignmentFee: 0, // No data source in current schema — returns 0
     closeRate: rate(offersAccepted, offersCreated),
   }
+}
+
+export async function fetchProfitMetrics(range: TimeRange, orgId: string, client: SupabaseClient): Promise<DashboardProfit> {
+  const { periodStart, periodEnd } = getPeriod(range)
+  const closingStart = periodStart.split("T")[0]
+  const closingEnd = periodEnd.split("T")[0]
+
+  const dispositions = await readRows<{
+    property_id: string | null
+    buy_price: number | string | null
+    sale_price: number | string | null
+    assignment_fee: number | string | null
+    rehab_budget: number | string | null
+    closing_expenses: number | string | null
+  }>(
+    applyPeriod(
+      client
+        .from("dispositions")
+        .select("property_id, buy_price, sale_price, assignment_fee, rehab_budget, closing_expenses")
+        .eq("org_id", orgId)
+        .eq("sale_status", "closed")
+        .not("closing_date", "is", null),
+      "closing_date",
+      closingStart,
+      closingEnd,
+    ),
+  )
+
+  const closedCount = dispositions.length
+  const grossProfit = dispositions.reduce((sum, disposition) => sum + toNumber(disposition.sale_price) - toNumber(disposition.buy_price), 0)
+  const assignmentFees = dispositions.reduce((sum, disposition) => sum + toNumber(disposition.assignment_fee), 0)
+  const dealCosts = dispositions.reduce((sum, disposition) => sum + toNumber(disposition.closing_expenses) + toNumber(disposition.rehab_budget), 0)
+
+  if (closedCount === 0) {
+    return {
+      grossProfit: 0,
+      closedCount: 0,
+      avgAssignmentFee: 0,
+      marketingSpend: 0,
+      netProfit: 0,
+      marketingRoi: null,
+      hasData: false,
+    }
+  }
+
+  const closedPropertyIds = unique(dispositions.map((disposition) => disposition.property_id).filter((propertyId): propertyId is string => Boolean(propertyId)))
+  let marketingSpend = 0
+
+  if (closedPropertyIds.length > 0) {
+    const campaigns = await readRows<{ id: string }>(
+      client
+        .from("campaigns")
+        .select("id")
+        .eq("org_id", orgId)
+        .in("property_id", closedPropertyIds),
+    )
+    const campaignIds = unique(campaigns.map((campaign) => campaign.id))
+
+    if (campaignIds.length > 0) {
+      const recipients = await readRows<{ actual_cost_usd: number | string | null }>(
+        client
+          .from("campaign_recipients")
+          .select("actual_cost_usd")
+          .eq("org_id", orgId)
+          .in("campaign_id", campaignIds),
+      )
+      marketingSpend = recipients.reduce((sum, recipient) => sum + toNumber(recipient.actual_cost_usd), 0)
+    }
+  }
+
+  return {
+    grossProfit,
+    closedCount,
+    avgAssignmentFee: assignmentFees / closedCount,
+    marketingSpend,
+    netProfit: grossProfit - dealCosts - marketingSpend,
+    marketingRoi: marketingSpend > 0 ? grossProfit / marketingSpend : null,
+    hasData: true,
+  }
+}
+
+export async function fetchLiveDeals(orgId: string, client: SupabaseClient, limit = 8): Promise<LiveDeal[]> {
+  const properties = await readRows<{
+    id: string
+    address: string | null
+    city: string | null
+    state: string | null
+    status: string | null
+    created_at: string
+  }>(
+    client
+      .from("properties")
+      .select("id, address, city, state, status, created_at")
+      .eq("org_id", orgId)
+      .in("status", ["available", "under_contract"])
+      .order("created_at", { ascending: true })
+      .limit(limit),
+  )
+
+  const propertyIds = properties.map((property) => property.id)
+  const offerCounts = new Map<string, number>()
+
+  if (propertyIds.length > 0) {
+    const offers = await readRows<{ property_id: string | null }>(
+      client
+        .from("offers")
+        .select("property_id")
+        .eq("org_id", orgId)
+        .in("property_id", propertyIds),
+    )
+
+    for (const offer of offers) {
+      if (!offer.property_id) continue
+      offerCounts.set(offer.property_id, (offerCounts.get(offer.property_id) ?? 0) + 1)
+    }
+  }
+
+  const now = Date.now()
+
+  return properties.map((property) => ({
+    id: property.id,
+    address: property.address,
+    city: property.city,
+    state: property.state,
+    status: property.status,
+    createdAt: property.created_at,
+    daysOnMarket: Math.max(0, Math.floor((now - new Date(property.created_at).getTime()) / 86400000)),
+    offerCount: offerCounts.get(property.id) ?? 0,
+  }))
+}
+
+export async function fetchNeedsYouToday(orgId: string, client: SupabaseClient): Promise<NeedsYouToday> {
+  const { startIso, endIso, todayDate } = getTodayBounds()
+
+  const [unreadReplies, offersAwaiting, showingsToday, followUpsDue] = await Promise.all([
+    readCount(client.from("message_threads").select("*", { count: "exact", head: true }).eq("org_id", orgId).eq("unread", true)),
+    readCount(client.from("offers").select("*", { count: "exact", head: true }).eq("org_id", orgId).eq("status", "submitted")),
+    readCount(
+      applyPeriod(
+        client
+          .from("showings")
+          .select("*", { count: "exact", head: true })
+          .eq("org_id", orgId)
+          .neq("status", "canceled"),
+        "scheduled_at",
+        startIso,
+        endIso,
+      ),
+    ),
+    readCount(client.from("tasks").select("*", { count: "exact", head: true }).eq("org_id", orgId).is("completed_at", null).lte("due_date", todayDate)),
+  ])
+
+  return { unreadReplies, offersAwaiting, showingsToday, followUpsDue }
+}
+
+export async function fetchFunnel(range: TimeRange, orgId: string, client: SupabaseClient): Promise<DealFunnel> {
+  const { periodStart, periodEnd } = getPeriod(range)
+  const closingStart = periodStart.split("T")[0]
+  const closingEnd = periodEnd.split("T")[0]
+
+  const [buyers, showings, offers, closed] = await Promise.all([
+    readCount(client.from("buyers").select("*", { count: "exact", head: true }).eq("org_id", orgId).is("deleted_at", null)),
+    readCount(applyPeriod(client.from("showings").select("*", { count: "exact", head: true }).eq("org_id", orgId), "created_at", periodStart, periodEnd)),
+    readCount(applyPeriod(client.from("offers").select("*", { count: "exact", head: true }).eq("org_id", orgId), "created_at", periodStart, periodEnd)),
+    readCount(
+      applyPeriod(
+        client
+          .from("dispositions")
+          .select("*", { count: "exact", head: true })
+          .eq("org_id", orgId)
+          .eq("sale_status", "closed")
+          .not("closing_date", "is", null),
+        "closing_date",
+        closingStart,
+        closingEnd,
+      ),
+    ),
+  ])
+
+  return { buyers, showings, offers, closed }
 }
 
 export async function fetchTextTrends(range: TimeRange, orgId: string, client: SupabaseClient): Promise<TrendWithDelta<TextTrend>> {
