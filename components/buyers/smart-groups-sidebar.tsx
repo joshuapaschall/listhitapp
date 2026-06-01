@@ -11,7 +11,6 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import ConfirmInputDialog from "@/components/ui/confirm-input-dialog"
-import SendFoxContactsViewer from "./sendfox-contacts-viewer" // Modal viewer for SendFox contacts
 import { createLogger } from "@/lib/logger"
 import { toast } from "sonner"
 import {
@@ -136,8 +135,6 @@ export default function SmartGroupsSidebar({
   const [dragGroup, setDragGroup] = useState<{ id: string; folderId: string } | null>(null)
   const [groupToDelete, setGroupToDelete] = useState<Group | null>(null)
   const [folderToDelete, setFolderToDelete] = useState<GroupFolder | null>(null)
-  const [viewListId, setViewListId] = useState<number | null>(null)
-  const [showContacts, setShowContacts] = useState(false)
 
   // Form states
   const [groupForm, setGroupForm] = useState({
@@ -608,22 +605,6 @@ export default function SmartGroupsSidebar({
                         <Badge variant="secondary" className="text-xs">
                           {buyerCounts[group.id] || 0}
                         </Badge>
-                        {/* Render the SendFox contacts viewer button only when this group has a linked SendFox list */}
-                        {Boolean(group.sendfox_list_id) && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 px-2 text-xs"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              // Open SendFoxContactsViewer for this list
-                              setViewListId(group.sendfox_list_id ?? null)
-                              setShowContacts(true)
-                            }}
-                          >
-                            👁 View Contacts
-                          </Button>
-                        )}
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon" className="h-6 w-6" title="Group options">
@@ -933,15 +914,6 @@ export default function SmartGroupsSidebar({
           </div>
         </DialogContent>
       </Dialog>
-
-      <SendFoxContactsViewer
-        listId={viewListId ?? undefined}
-        open={showContacts}
-        onOpenChange={(o) => {
-          setShowContacts(o)
-          if (!o) setViewListId(null)
-        }}
-      />
 
       <ConfirmInputDialog
         open={!!groupToDelete}
