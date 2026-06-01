@@ -1,5 +1,6 @@
 /** @jest-environment jsdom */
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { Header } from "../components/layout/header"
 
 const { signOutMock } = vi.hoisted(() => ({
@@ -23,9 +24,42 @@ vi.mock("@/hooks/use-notifications", () => ({
   useNotifications: () => ({ notifications: [], unreadCount: 0, markAsRead: vi.fn() }),
 }))
 
+function renderHeader() {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+    },
+  })
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <Header toggleSidebar={() => {}} />
+    </QueryClientProvider>,
+  )
+}
+
 describe("Header", () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          email: "jane@example.com",
+          full_name: "Jane Doe",
+          display_name: "Jane",
+        }),
+      }),
+    )
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
   test("signs out on log out click", async () => {
-    render(<Header toggleSidebar={() => {}} />)
+    renderHeader()
     fireEvent.click(screen.getAllByText(/log out/i)[0])
     await waitFor(() => expect(signOutMock).toHaveBeenCalled())
   })

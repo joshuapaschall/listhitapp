@@ -1,6 +1,7 @@
 "use client"
 
 import { FormEvent, useEffect, useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -45,6 +46,7 @@ export default function ProfileSettingsPage() {
   const [form, setForm] = useState<ProfileForm>(emptyForm)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const queryClient = useQueryClient()
 
   useEffect(() => {
     let active = true
@@ -89,6 +91,7 @@ export default function ProfileSettingsPage() {
       const updatedProfile = (await response.json()) as Profile
       setProfile(updatedProfile)
       setForm(formFromProfile(updatedProfile))
+      await queryClient.invalidateQueries({ queryKey: ["me"] })
       toast.success("Profile saved")
     } catch (error) {
       console.error("Profile save failed", error)
