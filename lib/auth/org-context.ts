@@ -1,7 +1,7 @@
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { cookies } from "next/headers"
 
-import { supabaseAdmin } from "@/lib/supabase/admin"
+import { supabaseAdmin } from "@/lib/supabase"
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -11,7 +11,18 @@ function resolveDefaultOrgId() {
 }
 
 export async function resolveOrgIdForUser(userId: string): Promise<string | null> {
-  void userId
+  try {
+    const { data: profile, error } = await supabaseAdmin
+      .from("profiles")
+      .select("org_id")
+      .eq("id", userId)
+      .maybeSingle()
+
+    if (error) throw error
+    if (profile?.org_id) return profile.org_id
+  } catch (error) {
+    console.warn("[org-context] Falling back after profiles.org_id lookup failed", error)
+  }
 
   const { data: row } = await supabaseAdmin
     .from("inbound_numbers")
