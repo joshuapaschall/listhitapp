@@ -6,7 +6,7 @@
 
 import { getCallControlAppId } from "./voice-env"
 
-// Full catalog of envs currently referenced by the app.
+// Subset of envs used for boot-time soft validation (NOT a complete catalog).
 export const ALL_ENV_VARS = [
   "NEXT_PUBLIC_SUPABASE_URL",
   "NEXT_PUBLIC_SUPABASE_ANON_KEY",

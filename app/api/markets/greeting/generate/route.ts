@@ -44,7 +44,7 @@ export async function POST(request: Request) {
   const voiceId = typeof body.voice_id === "string" ? body.voice_id : DEFAULT_VOICE_ID;
   const voiceConfig = POLLY_VOICES.find((voice) => voice.id === voiceId) ?? POLLY_VOICES[0];
   if (!scopeKey || !text) return NextResponse.json({ ok: false, error: "Missing scopeKey or text" }, { status: 400 });
-  const polly = new PollyClient({ region: process.env.AWS_REGION ?? "us-east-1", credentials: { accessKeyId: process.env.AWS_ACCESS_KEY_ID ?? "", secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? "" } });
+  const polly = new PollyClient({ region: process.env.AWS_SES_REGION ?? process.env.AWS_REGION ?? "us-east-1", credentials: { accessKeyId: process.env.AWS_SES_ACCESS_KEY_ID ?? process.env.AWS_ACCESS_KEY_ID ?? "", secretAccessKey: process.env.AWS_SES_SECRET_ACCESS_KEY ?? process.env.AWS_SECRET_ACCESS_KEY ?? "" } });
   const result = await polly.send(new SynthesizeSpeechCommand({ Text: text, OutputFormat: "mp3", VoiceId: voiceConfig.id as VoiceId, Engine: voiceConfig.engine, SampleRate: "24000" }));
   const chunks: Uint8Array[] = []; for await (const c of result.AudioStream as AsyncIterable<Uint8Array>) chunks.push(c);
   const path = `${scopeType === "market" ? "markets" : "numbers"}/${scopeKey}/preview-${ts}.mp3`;
