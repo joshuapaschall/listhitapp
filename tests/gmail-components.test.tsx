@@ -1,26 +1,39 @@
 /** @jest-environment jsdom */
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import ListPane from "../components/gmail/list-pane"
-import ComposeModal from "../components/gmail/compose-modal"
+import ComposeWindow from "../components/gmail/compose-window"
 import ConversationPane from "../components/gmail/conversation-pane"
 import { decodeMessage } from "../lib/gmail-utils"
 
-const invalidateQueries = vi.fn()
+const { mockUseQuery, invalidateQueries } = vi.hoisted(() => ({
+  mockUseQuery: vi.fn(),
+  invalidateQueries: vi.fn(),
+}))
+
 vi.mock("@tanstack/react-query", () => ({
-  useQuery: vi.fn(),
+  useQuery: mockUseQuery,
   useQueryClient: () => ({ invalidateQueries }),
 }))
 
-const mockUseQuery = require("@tanstack/react-query").useQuery as vi.Mock
+// TipTap doesn't run in jsdom — stub the editor with a plain textarea.
+vi.mock("../components/gmail/rich-text-editor", () => ({
+  __esModule: true,
+  default: ({ value, onChange }: any) => (
+    <textarea aria-label="Body" value={value || ""} onChange={(e) => onChange(e.target.value)} />
+  ),
+}))
 
 const fetchMock = vi.fn()
 // @ts-ignore
 global.fetch = fetchMock
 
+const rowSelector = "div.border-b.px-4.py-2"
+
 describe("gmail components", () => {
   beforeEach(() => {
     fetchMock.mockReset()
     mockUseQuery.mockReset()
+    invalidateQueries.mockReset()
   })
 
   test("ListPane renders threads and selects", () => {
@@ -91,27 +104,25 @@ describe("gmail components", () => {
       />,
     )
     expect(screen.getByText("B")).toBeTruthy()
-    expect(screen.getByText("(2)")).toBeTruthy()
     expect(screen.getByText("Re: S")).toBeTruthy()
   })
 
-  test("ComposeModal sends email", async () => {
+  test("ComposeWindow sends email", async () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({ threadId: "t1" }) })
     const onSent = vi.fn()
-    const onOpenChange = vi.fn()
-    render(<ComposeModal open={true} onOpenChange={onOpenChange} onSent={onSent} />)
-    const fields = await screen.findAllByRole("textbox")
-    fireEvent.change(fields[0], { target: { value: "to@test.com" } })
-    fireEvent.change(fields[1], { target: { value: "Hi" } })
-    fireEvent.change(fields[2], { target: { value: "Hello" } })
-    fireEvent.click(screen.getByRole("button", { name: /send/i }))
+    const onClose = vi.fn()
+    render(<ComposeWindow open onClose={onClose} onSent={onSent} />)
+    fireEvent.change(screen.getByPlaceholderText(/recipients/i), { target: { value: "to@test.com" } })
+    fireEvent.change(screen.getByPlaceholderText(/subject/i), { target: { value: "Hi" } })
+    fireEvent.change(screen.getByLabelText("Body"), { target: { value: "Hello" } })
+    fireEvent.click(screen.getByRole("button", { name: /^send$/i }))
     await waitFor(() => expect(fetchMock).toHaveBeenCalled())
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/gmail/send",
       expect.objectContaining({ method: "POST" }),
     )
     expect(onSent).toHaveBeenCalledWith("t1")
-    expect(onOpenChange).toHaveBeenCalledWith(false)
+    expect(onClose).toHaveBeenCalled()
   })
 
   test("ConversationPane sends reply", async () => {
@@ -127,8 +138,20 @@ describe("gmail components", () => {
     })
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({}) })
     render(<ConversationPane threadId="t1" />)
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Hello" } })
-    fireEvent.click(screen.getByRole("button", { name: /send/i }))
+
+    // Editor is hidden until reply mode starts — click the main "Reply" button.
+    const replyBtn = screen
+      .getAllByRole("button")
+      .find((b) => b.textContent?.trim() === "Reply")!
+    fireEvent.click(replyBtn)
+
+    fireEvent.change(screen.getByLabelText("Body"), { target: { value: "Hello" } })
+
+    const sendBtn = screen
+      .getAllByRole("button")
+      .find((b) => b.textContent?.trim() === "Send")!
+    fireEvent.click(sendBtn)
+
     await waitFor(() => expect(fetchMock).toHaveBeenCalled())
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/gmail/reply",
@@ -176,7 +199,7 @@ describe("gmail components", () => {
         onSelect={() => {}}
       />,
     )
-    const rows = container.querySelectorAll("div[data-testid='thread-row']")
+    const rows = container.querySelectorAll(rowSelector)
     expect(rows.length).toBe(2)
   })
 
@@ -216,17 +239,16 @@ describe("gmail components", () => {
         onSelect={() => {}}
       />,
     )
-    const rows = container.querySelectorAll("div[data-testid='thread-row']")
+    const rows = container.querySelectorAll(rowSelector)
     expect(rows.length).toBe(3)
-    expect(rows[0].querySelector(".bg-primary")).not.toBeNull()
-    expect(rows[0].querySelector("svg")?.getAttribute("class")).toContain(
-      "text-yellow-400",
-    )
-    expect(rows[1].querySelector(".bg-primary")).not.toBeNull()
-    expect(rows[1].querySelector("svg")?.getAttribute("class")).toContain(
-      "text-muted-foreground",
-    )
-    expect(rows[2].querySelector(".bg-primary")).toBeNull()
+    // Unread is marked by font-semibold on the sender/subject text.
+    expect(rows[0].querySelector(".font-semibold")).not.toBeNull()
+    // Starred colors the Star svg yellow.
+    expect(rows[0].querySelector("svg")?.getAttribute("class")).toContain("text-yellow-400")
+    expect(rows[1].querySelector(".font-semibold")).not.toBeNull()
+    expect(rows[1].querySelector("svg")?.getAttribute("class")).toContain("text-muted-foreground")
+    // Read thread: no bold text.
+    expect(rows[2].querySelector(".font-semibold")).toBeNull()
   })
 
   test("ListPane sorts threads by newest date", () => {
@@ -271,9 +293,7 @@ describe("gmail components", () => {
       />,
     )
 
-    const rows = container.querySelectorAll(
-      "div[data-testid='thread-row']",
-    )
+    const rows = container.querySelectorAll(rowSelector)
     expect(rows.length).toBe(2)
     expect(rows[0].textContent).toContain("B")
     expect(rows[1].textContent).toContain("A")

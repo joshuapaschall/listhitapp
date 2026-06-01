@@ -4,24 +4,25 @@ import { MEDIA_BUCKET } from "../utils/uploadMedia"
 
 vi.mock("fluent-ffmpeg", () => {
   const ffmpeg = vi.fn(() => {
-    const stream = new (require("stream")).PassThrough()
-    const callbacks: Record<string, () => void> = {}
+    const callbacks: Record<string, (...args: any[]) => void> = {}
     const instance: any = {
       inputFormat: () => instance,
       audioBitrate: () => instance,
       audioChannels: () => instance,
+      format: () => instance,
       toFormat: () => instance,
-      on: (e: string, cb: () => void) => {
+      on: (e: string, cb: (...args: any[]) => void) => {
         callbacks[e] = cb
         return instance
       },
-      pipe: () => {
+      // The code does `command.pipe(new PassThrough())` and listens on the
+      // OUTPUT stream — emit "data" then "end" on the passed-in output.
+      pipe: (output: any) => {
         process.nextTick(() => {
-          stream.emit("data", Buffer.from("mp3"))
-          stream.end()
-          callbacks["end"]?.()
+          output.emit("data", Buffer.from("mp3"))
+          output.emit("end")
         })
-        return stream
+        return output
       },
     }
     return instance
@@ -29,6 +30,20 @@ vi.mock("fluent-ffmpeg", () => {
   ffmpeg.setFfmpegPath = vi.fn()
   return { __esModule: true, default: ffmpeg }
 })
+
+const mirrorMediaUrlMock = vi.hoisted(() => vi.fn())
+const ensureFfmpegMock = vi.hoisted(() => vi.fn(async () => "/usr/bin/ffmpeg"))
+
+vi.mock("../utils/mms.server", async () => {
+  const actual = await vi.importActual<typeof import("../utils/mms.server")>("../utils/mms.server")
+  // Default to the real implementation; individual tests can override.
+  mirrorMediaUrlMock.mockImplementation((...args: any[]) =>
+    (actual.mirrorMediaUrl as any)(...args),
+  )
+  return { ...actual, mirrorMediaUrl: mirrorMediaUrlMock }
+})
+
+vi.mock("../utils/ffmpeg-path", () => ({ ensureFfmpegAvailable: ensureFfmpegMock }))
 
 const fetchMock = vi.fn()
 const uploadMock = vi.fn().mockResolvedValue({ data: { path: "file.mp3" }, error: null })
@@ -79,18 +94,19 @@ describe("media convert route", () => {
     expect(body.url).toBe("https://cdn/storage/v1/object/public/public-media/file.mp3")
   })
 
-  test("returns error when conversion fails", async () => {
-    const spy = jest
-      .spyOn(require("../utils/audio-utils"), "convertToMp3")
-      .mockRejectedValueOnce(new Error("Converted audio exceeds the 1MB MMS limit"))
+  test("falls back to the original url when conversion fails", async () => {
+    mirrorMediaUrlMock.mockRejectedValueOnce(
+      new Error("Converted audio exceeds the 1MB MMS limit"),
+    )
+    const url = "https://cdn/audio.weba"
     const req = new NextRequest("http://test", {
       method: "POST",
-      body: JSON.stringify({ url: "https://cdn/audio.weba" }),
+      body: JSON.stringify({ url }),
     })
     const res = await POST(req)
-    expect(res.status).toBe(500)
+    expect(res.status).toBe(200)
     const body = await res.json()
-    expect(body.error).toBe("Converted audio exceeds the 1MB MMS limit")
-    spy.mockRestore()
+    expect(body.converted).toBe(false)
+    expect(body.url).toBe(url)
   })
 })
