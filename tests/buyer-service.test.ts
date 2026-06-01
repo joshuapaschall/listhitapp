@@ -11,7 +11,7 @@ vi.mock("../lib/supabase", () => {
 
       return {
         insert: (rows: any[]) => {
-          const record = { id: String(idCounter++), sendfox_hidden: false, ...rows[0] }
+          const record = { id: String(idCounter++), deleted_at: null, ...rows[0] }
           buyers.push(record)
           return {
             select: () => ({ single: async () => ({ data: record, error: null }) })
@@ -32,6 +32,10 @@ vi.mock("../lib/supabase", () => {
               return query
             },
             eq: (column: string, value: any) => {
+              result = result.filter((r: any) => r[column] === value)
+              return query
+            },
+            is: (column: string, value: any) => {
               result = result.filter((r: any) => r[column] === value)
               return query
             },

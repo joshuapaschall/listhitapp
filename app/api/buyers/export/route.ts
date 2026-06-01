@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
       query = query.select("*")
     }
 
-    query = query.eq("sendfox_hidden", false).is("deleted_at", null)
+    query = query.is("deleted_at", null)
     query = applyBuyerFilters(query, filters, quickFilters)
 
     if (buyerIds && buyerIds.length > 0) {

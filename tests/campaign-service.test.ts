@@ -114,6 +114,10 @@ vi.mock("@/lib/supabase", () => {
                     result = result.filter((b: any) => b[column] === value)
                     return query
                   },
+                  is: (column: string, value: any) => {
+                    result = result.filter((b: any) => b[column] === value)
+                    return query
+                  },
                   in: (column: string, values: any[]) => {
                     result = result.filter((b: any) => values.includes(b[column]))
                     return query
@@ -168,7 +172,7 @@ afterAll(() => {
 
 describe("CampaignService", () => {
   test("createCampaign inserts campaign and recipients", async () => {
-    buyers.push({ id: "b1", phone: "+1000", email: "test@example.com", can_receive_sms: true, can_receive_email: true, sendfox_hidden: false })
+    buyers.push({ id: "b1", phone: "+1000", email: "test@example.com", can_receive_sms: true, can_receive_email: true, deleted_at: null })
     await CampaignService.createCampaign({
       userId: "u1",
       name: "Test",
@@ -182,7 +186,7 @@ describe("CampaignService", () => {
   })
 
   test("createCampaign ignores hidden buyers", async () => {
-    buyers.push({ id: "b1", phone: "+1000", sendfox_hidden: true })
+    buyers.push({ id: "b1", phone: "+1000", deleted_at: "2024-01-01" })
     await CampaignService.createCampaign({
       userId: "u1",
       name: "Test",
@@ -216,7 +220,7 @@ describe("CampaignService", () => {
   })
 
   test("sendNow posts to API route for email campaign", async () => {
-    buyers.push({ id: "b1", phone: "+1222", email: "a@test.com", can_receive_sms: true, can_receive_email: true, sendfox_hidden: false })
+    buyers.push({ id: "b1", phone: "+1222", email: "a@test.com", can_receive_sms: true, can_receive_email: true, deleted_at: null })
     const campaign = await CampaignService.createCampaign({
       userId: "u1",
       name: "Email Test",
@@ -238,14 +242,14 @@ describe("CampaignService", () => {
   })
 
   test("sendNow throws on failure", async () => {
-    buyers.push({ id: "b1", phone: "+1222", email: "a@test.com", can_receive_sms: true, can_receive_email: true, sendfox_hidden: false })
+    buyers.push({ id: "b1", phone: "+1222", email: "a@test.com", can_receive_sms: true, can_receive_email: true, deleted_at: null })
     const campaign = await CampaignService.createCampaign({ userId: "u1", name: "Test", channel: "sms", message: "fail", buyerIds: ["b1"], groupIds: [] })
     fetchMock.mockResolvedValue({ ok: false, json: async () => ({ error: "bad" }) })
     await expect(CampaignService.sendNow(campaign.id)).rejects.toThrow("bad")
   })
 
   test("schedule updates campaign fields", async () => {
-    buyers.push({ id: "b1", phone: "+1222", email: "a@test.com", can_receive_sms: true, can_receive_email: true, sendfox_hidden: false })
+    buyers.push({ id: "b1", phone: "+1222", email: "a@test.com", can_receive_sms: true, can_receive_email: true, deleted_at: null })
     const campaign = await CampaignService.createCampaign({ userId: "u1", name: "Test", channel: "sms", message: "hi", buyerIds: ["b1"], groupIds: [] })
     const updated = await CampaignService.schedule(campaign.id, "2024-01-01T12:00:00Z", {
       weekdayOnly: true,
@@ -259,7 +263,7 @@ describe("CampaignService", () => {
 
   test("listCampaigns paginates and returns metrics", async () => {
     for (let i = 1; i <= 25; i++) {
-      buyers.push({ id: `b${i}`, sendfox_hidden: false })
+      buyers.push({ id: `b${i}`, deleted_at: null })
       const camp = await CampaignService.createCampaign({
         userId: "u1",
         name: `C${i}`,
@@ -288,7 +292,7 @@ describe("CampaignService", () => {
   })
 
   test("listCampaigns includes buyer names", async () => {
-    buyers.push({ id: "b1", full_name: "John Doe", fname: "John", lname: "Doe", can_receive_sms: true, can_receive_email: true, sendfox_hidden: false })
+    buyers.push({ id: "b1", full_name: "John Doe", fname: "John", lname: "Doe", can_receive_sms: true, can_receive_email: true, deleted_at: null })
     await CampaignService.createCampaign({
       userId: "u1",
       name: "Test",

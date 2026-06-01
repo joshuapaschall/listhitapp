@@ -5,7 +5,7 @@ type Row = {
   id: string
   email: string | null
   can_receive_email: boolean | null
-  sendfox_hidden: boolean
+  deleted_at: string | null
 }
 
 export async function POST(req: NextRequest) {
@@ -18,12 +18,12 @@ export async function POST(req: NextRequest) {
 
     const { data: buyers, error } = await supabase
       .from("buyers")
-      .select("id,email,can_receive_email,sendfox_hidden,buyer_groups!inner(group_id)")
+      .select("id,email,can_receive_email,deleted_at,buyer_groups!inner(group_id)")
       .in("buyer_groups.group_id", groupIds as any)
     if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 })
 
     const recipients = (buyers as any as Row[])
-      .filter(b => !b.sendfox_hidden)
+      .filter(b => !b.deleted_at)
       .filter(b => !!b.email)
       .filter(b => (b.can_receive_email !== false)) // switch to === true if you want strict consent
 

@@ -172,7 +172,7 @@ describe("send route auth", () => {
 
   test("returns 404 when user not owner (ownership enforced by query scope)", async () => {
     h.state.campaigns.push({ id: "c1", user_id: "u1", channel: "sms", message: "Hi", buyer_ids: ["b1"] })
-    h.state.buyers.push({ id: "b1", phone: "+15125550111", can_receive_sms: true, sendfox_hidden: false, sendfox_suppressed: false })
+    h.state.buyers.push({ id: "b1", phone: "+15125550111", can_receive_sms: true, deleted_at: null, sendfox_suppressed: false })
     h.state.authUser = { id: "u2" }
     const req = new NextRequest("http://test", {
       method: "POST",
@@ -185,7 +185,7 @@ describe("send route auth", () => {
 
   test("allows owner token and queues the SMS campaign", async () => {
     h.state.campaigns.push({ id: "c2", user_id: "u2", channel: "sms", message: "Yo", buyer_ids: ["b2"] })
-    h.state.buyers.push({ id: "b2", phone: "+15125550123", can_receive_sms: true, sendfox_hidden: false, sendfox_suppressed: false })
+    h.state.buyers.push({ id: "b2", phone: "+15125550123", can_receive_sms: true, deleted_at: null, sendfox_suppressed: false })
     h.state.authUser = { id: "u2" }
     const req = new NextRequest("http://test", {
       method: "POST",

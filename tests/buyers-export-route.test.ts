@@ -29,7 +29,7 @@ const state = vi.hoisted(() => ({
       fname: "Hidden",
       email: "hidden@example.com",
       sendfox_hidden: true,
-      deleted_at: null,
+      deleted_at: "2024-01-01",
       vip: false,
       score: 10,
       tags: [],
@@ -44,7 +44,6 @@ function createBuyerQuery() {
   const filters = {
     groupId: "",
     ids: null as string[] | null,
-    sendfoxHidden: undefined as boolean | undefined,
     deletedAtNull: false,
     vip: undefined as boolean | undefined,
     minScore: undefined as number | undefined,
@@ -55,7 +54,6 @@ function createBuyerQuery() {
     select: () => query,
     eq: (column: string, value: any) => {
       if (column === "buyer_groups.group_id") filters.groupId = value
-      if (column === "sendfox_hidden") filters.sendfoxHidden = value
       if (column === "vip") filters.vip = value
       return query
     },
@@ -81,7 +79,6 @@ function createBuyerQuery() {
     },
     then: (resolve: any) => {
       const data = state.buyers.filter((buyer) => {
-        if (filters.sendfoxHidden !== undefined && buyer.sendfox_hidden !== filters.sendfoxHidden) return false
         if (filters.deletedAtNull && buyer.deleted_at !== null) return false
         if (filters.vip !== undefined && buyer.vip !== filters.vip) return false
         if (filters.minScore !== undefined && buyer.score < filters.minScore) return false

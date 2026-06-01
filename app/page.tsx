@@ -114,7 +114,6 @@ const fetchBuyers = async (
   }
 
   query = query
-    .eq("sendfox_hidden", false)
     .is("deleted_at", null)
     .range((page - 1) * perPage, page * perPage - 1)
     .order("created_at", { ascending: false })
@@ -254,7 +253,7 @@ const fetchBuyerIds = async (
     query = query.select("id")
   }
 
-  query = query.eq("sendfox_hidden", false).is("deleted_at", null)
+  query = query.is("deleted_at", null)
   // Apply same filters as fetchBuyers
   if (filters.search) {
     const encoded = encodeURIComponent(filters.search)

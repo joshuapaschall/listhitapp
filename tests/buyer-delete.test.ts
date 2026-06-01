@@ -63,8 +63,8 @@ vi.mock("../lib/supabase", () => {
 describe("BuyerService deletions", () => {
   beforeEach(() => {
     buyers = [
-      { id: "1", email: "a@test.com", fname: "A", sendfox_hidden: false },
-      { id: "2", email: "b@test.com", fname: "B", sendfox_hidden: false },
+      { id: "1", email: "a@test.com", fname: "A", deleted_at: null },
+      { id: "2", email: "b@test.com", fname: "B", deleted_at: null },
     ]
     buyerGroups = []
     groups = []
@@ -76,7 +76,7 @@ describe("BuyerService deletions", () => {
     buyerGroups.push({ buyer_id: "1", group_id: "g1" })
     await BuyerService.deleteBuyer("1")
     const b = buyers.find((b) => b.id === "1")
-    expect(b?.sendfox_hidden).toBe(true)
+    expect(b?.deleted_at).toEqual(expect.any(String))
     expect(buyerGroups.length).toBe(0)
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/sendfox/contact",
@@ -93,7 +93,7 @@ describe("BuyerService deletions", () => {
 
   test("deleteBuyers handles multiple ids", async () => {
     await BuyerService.deleteBuyers(["1", "2"])
-    expect(buyers.every((b) => b.sendfox_hidden)).toBe(true)
+    expect(buyers.every((b) => typeof b.deleted_at === "string")).toBe(true)
     expect(fetchMock).toHaveBeenCalledTimes(2)
     for (const call of fetchMock.mock.calls) {
       expect(call[0]).toBe("/api/sendfox/contact")

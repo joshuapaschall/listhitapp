@@ -17,7 +17,7 @@ export class BuyerService {
     let query = supabase
       .from("buyers")
       .select("*")
-      .eq("sendfox_hidden", false)
+      .is("deleted_at", null)
       .order("created_at", { ascending: false })
 
     // Apply filters
@@ -66,7 +66,7 @@ export class BuyerService {
     minPrice?: number
     maxPrice?: number
   }) {
-    let query = supabase.from("buyers").select("*").eq("sendfox_hidden", false)
+    let query = supabase.from("buyers").select("*").is("deleted_at", null)
 
     if (filters.city && filters.state) {
       query = query.overlaps("locations", [`${filters.city}, ${filters.state}`])
@@ -205,7 +205,6 @@ export class BuyerService {
       supabase
         .from("buyers")
         .update({
-          sendfox_hidden: true,
           deleted_at: new Date().toISOString(),
         })
         .eq("id", id),
@@ -318,7 +317,6 @@ export class BuyerService {
       .from("buyer_groups")
       .select("buyer_id, buyers!inner(id)", { count: "exact", head: true })
       .eq("group_id", groupId)
-       .eq("buyers.sendfox_hidden", false)
       .is("buyers.deleted_at", null)
 
     if (error) {
@@ -334,7 +332,6 @@ export class BuyerService {
     const { data, error } = await supabase
       .from("buyer_groups")
       .select("group_id, buyers!inner(id)")
-       .eq("buyers.sendfox_hidden", false)
       .is("buyers.deleted_at", null)
 
     if (error) {
@@ -354,7 +351,6 @@ export class BuyerService {
     const { count, error } = await supabase
       .from("buyers")
       .select("*", { count: "exact", head: true })
-      .eq("sendfox_hidden", false)
       .is("deleted_at", null)
 
     if (error) {
@@ -371,7 +367,7 @@ export class BuyerService {
       const { data, error } = await supabase
       .from("buyers")
       .select("id, fname, lname, full_name, email, phone")
-      .eq("sendfox_hidden", false)
+      .is("deleted_at", null)
       .or(
         `fname.ilike.%${encoded}%,lname.ilike.%${encoded}%,full_name.ilike.%${encoded}%,email.ilike.%${encoded}%,phone.ilike.%${encoded}%`,
       )
@@ -391,7 +387,7 @@ export class BuyerService {
     const { data, error } = await supabase
       .from("buyers")
       .select("id, fname, lname, full_name, email, phone")
-      .eq("sendfox_hidden", false)
+      .is("deleted_at", null)
       .order("full_name", { ascending: true })
       .limit(limit)
 
@@ -409,7 +405,7 @@ export class BuyerService {
       .from("buyers")
       .select("id, fname, lname, full_name, email, phone")
       .in("id", ids)
-      .eq("sendfox_hidden", false)
+      .is("deleted_at", null)
 
     if (error) {
       log("error", "Failed to fetch buyers by ids", { error })
@@ -426,7 +422,7 @@ export class BuyerService {
       .from("buyer_groups")
       .select("buyer_id, buyers!inner(id)")
       .in("group_id", groupIds)
-      .eq("buyers.sendfox_hidden", false)
+      .is("buyers.deleted_at", null)
 
     if (error) {
       log("error", "Failed to fetch group buyers", { error })

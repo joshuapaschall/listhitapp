@@ -14,11 +14,11 @@ export async function POST(req: NextRequest) {
     const { ids } = await req.json()
     if (!Array.isArray(ids) || ids.length === 0) return new Response(JSON.stringify({ error: "ids required" }), { status: 400 })
 
-    // mark hidden + deleted_at, remove group links
+    // mark deleted_at and remove group links
     await supabase.from("buyer_groups").delete().in("buyer_id", ids)
     await supabase
       .from("buyers")
-      .update({ sendfox_hidden: true, deleted_at: new Date().toISOString() })
+      .update({ deleted_at: new Date().toISOString() })
       .in("id", ids)
 
     // move each to Deleted list in SendFox
