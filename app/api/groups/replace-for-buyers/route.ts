@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
-import { supabase, supabaseAdmin } from "@/lib/supabase"
+import { requireOrgContext } from "@/lib/auth/org-context"
 
 export async function POST(req: NextRequest) {
   try {
+    const { user, orgId, supabase } = await requireOrgContext()
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!orgId) return NextResponse.json({ error: "Missing org" }, { status: 400 })
+
     const { buyerIds, targetGroupIds, keepDefault } = await req.json()
     if (!Array.isArray(buyerIds) || !Array.isArray(targetGroupIds)) {
       return NextResponse.json(
@@ -11,8 +15,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const db = supabaseAdmin ?? supabase
-    const { data: rpcResult, error } = await db.rpc("replace_groups_for_buyers", {
+    const { data: rpcResult, error } = await supabase.rpc("replace_groups_for_buyers", {
       buyer_ids: buyerIds,
       target_group_ids: targetGroupIds,
       keep_default: !!keepDefault,

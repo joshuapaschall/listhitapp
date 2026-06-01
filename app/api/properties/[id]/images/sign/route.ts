@@ -1,7 +1,5 @@
-import { cookies } from "next/headers"
 import { NextRequest, NextResponse } from "next/server"
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
-import { supabaseAdmin } from "@/lib/supabase/admin"
+import { requireOrgContext } from "@/lib/auth/org-context"
 import { requirePermission } from "@/lib/permissions/server"
 
 const BUCKET = "property-images"
@@ -20,14 +18,16 @@ type SignedEntry = {
 }
 
 export async function POST(request: NextRequest, context: RouteContext) {
-  const cookieStore = cookies()
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+  const { user, orgId, supabase } = await requireOrgContext()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!orgId) return NextResponse.json({ error: "Missing org" }, { status: 400 })
+
   const denied = await requirePermission(supabase, "properties.manage")
   if (denied) return denied
 
   const { id: propertyId } = await context.params
 
-  const { data: property, error: propErr } = await supabaseAdmin
+  const { data: property, error: propErr } = await supabase
     .from("properties")
     .select("id")
     .eq("id", propertyId)
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const sanitized = file.name.replace(/[^a-zA-Z0-9._-]/g, "_")
     const storagePath = `${propertyId}/${timestamp}-${rand}-${sanitized}`
 
-    const { data, error: signErr } = await supabaseAdmin.storage
+    const { data, error: signErr } = await supabase.storage
       .from(BUCKET)
       .createSignedUploadUrl(storagePath)
 

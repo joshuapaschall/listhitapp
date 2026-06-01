@@ -1,19 +1,18 @@
 import { NextRequest } from "next/server"
-import { cookies } from "next/headers"
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
+import { requireOrgContext } from "@/lib/auth/org-context"
 import { requirePermission } from "@/lib/permissions/server"
-import { supabase, supabaseAdmin } from "@/lib/supabase"
 import { scheduleSMS, lookupCarrier } from "@/lib/sms-rate-limiter"
 import { normalizePhone, formatPhoneE164 } from "@/lib/dedup-utils"
-import { upsertAnonThread } from "@/services/thread-utils"
 import { ensurePublicMediaUrls } from "@/utils/mms.server"
 import { TELNYX_API_URL, telnyxHeaders } from "@/lib/telnyx"
 import { getTelnyxApiKey } from "@/lib/voice-env"
 
 export async function POST(request: NextRequest) {
-  const cookieStore = cookies()
-  const routeSupabase = createRouteHandlerClient({ cookies: () => cookieStore })
-  const denied = await requirePermission(routeSupabase, "inbox.send")
+  const { user, orgId, supabase } = await requireOrgContext()
+  if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 })
+  if (!orgId) return new Response(JSON.stringify({ error: "Missing org" }), { status: 400 })
+
+  const denied = await requirePermission(supabase, "inbox.send")
   if (denied) return denied
 
   const { buyerId, threadId, to, body, mediaUrls, from: overrideFrom } =
@@ -69,6 +68,25 @@ export async function POST(request: NextRequest) {
     })
   }
 
+  if (buyerId != null) {
+    const { data, error } = await supabase
+      .from("buyers")
+      .select("id")
+      .eq("id", buyerId)
+      .maybeSingle()
+    if (error) {
+      console.error("Failed to fetch buyer", error)
+      return new Response(JSON.stringify({ error: "Database error" }), {
+        status: 500,
+      })
+    }
+    if (!data) {
+      return new Response(JSON.stringify({ error: "Buyer not found" }), {
+        status: 404,
+      })
+    }
+  }
+
   let thread: { id: string; preferred_from_number: string | null } | null =
     null
   if (threadId) {
@@ -110,36 +128,33 @@ export async function POST(request: NextRequest) {
   if (overrideFrom) {
     const owned = normalizePhone(overrideFrom)
     if (owned) {
-      let ok = true
-      if (supabaseAdmin) {
-        ok = false
-        const formattedOwned = formatPhoneE164(owned)
-        if (formattedOwned) {
-          const { data: inbound, error: inboundErr } = await supabaseAdmin
-            .from("inbound_numbers")
-            .select("e164")
-            .eq("enabled", true)
-            .in("e164", [formattedOwned])
-          if (!inboundErr && inbound && inbound.length) {
-            ok = true
-          }
+      let ok = false
+      const formattedOwned = formatPhoneE164(owned)
+      if (formattedOwned) {
+        const { data: inbound, error: inboundErr } = await supabase
+          .from("inbound_numbers")
+          .select("e164")
+          .eq("enabled", true)
+          .in("e164", [formattedOwned])
+        if (!inboundErr && inbound && inbound.length) {
+          ok = true
         }
-        if (!ok) {
-          const matchValues = Array.from(
-            new Set(
-              [owned, formattedOwned].filter(
-                (num): num is string => typeof num === "string",
-              ),
+      }
+      if (!ok) {
+        const matchValues = Array.from(
+          new Set(
+            [owned, formattedOwned].filter(
+              (num): num is string => typeof num === "string",
             ),
-          )
-          if (matchValues.length) {
-            const { data: voice, error: voiceErr } = await supabaseAdmin
-              .from("voice_numbers")
-              .select("phone_number")
-              .in("phone_number", matchValues)
-            if (!voiceErr && voice && voice.length) {
-              ok = true
-            }
+          ),
+        )
+        if (matchValues.length) {
+          const { data: voice, error: voiceErr } = await supabase
+            .from("voice_numbers")
+            .select("phone_number")
+            .in("phone_number", matchValues)
+          if (!voiceErr && voice && voice.length) {
+            ok = true
           }
         }
       }
@@ -268,7 +283,23 @@ export async function POST(request: NextRequest) {
       }
 
       if (buyerId == null) {
-        const res = await upsertAnonThread(digits, replyFrom)
+        const res = await supabase
+          .from("message_threads")
+          .upsert(
+            {
+              buyer_id: null,
+              phone_number: digits,
+              campaign_id: null,
+              unread: true,
+              updated_at: new Date().toISOString(),
+              deleted_at: null,
+              preferred_from_number: replyFrom,
+              org_id: orgId,
+            },
+            { onConflict: "phone_number" },
+          )
+          .select("id, preferred_from_number")
+          .single()
         if (res.error || !res.data)
           throw res.error || new Error("Thread upsert failed")
         thread = {
@@ -287,6 +318,7 @@ export async function POST(request: NextRequest) {
             campaign_id: null,
             updated_at: new Date().toISOString(),
             preferred_from_number: replyFrom,
+            org_id: orgId,
           },
           { onConflict: "buyer_id,phone_number" },
         )
@@ -312,6 +344,7 @@ export async function POST(request: NextRequest) {
       provider_id: data.id,
       is_bulk: false,
       media_urls: finalMediaUrls && finalMediaUrls.length ? finalMediaUrls : null,
+      org_id: orgId,
     })
     if (insertErr) {
       console.error("Failed to record message", insertErr)

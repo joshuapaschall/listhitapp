@@ -6,7 +6,7 @@ let buyerGroups: any[] = []
 
 global.fetch = vi.fn()
 
-vi.mock("../lib/supabase", () => {
+vi.mock("../lib/auth/org-context", () => {
   const client = {
     rpc: (_fn: string, args: any) => {
       const { buyer_ids, target_group_ids, keep_default } = args
@@ -37,7 +37,13 @@ vi.mock("../lib/supabase", () => {
       return Promise.resolve({ error: null, data: { changed_rows } })
     },
   }
-  return { supabase: client, supabaseAdmin: client }
+  return {
+    requireOrgContext: async () => ({
+      user: { id: "u1" },
+      orgId: "org-1",
+      supabase: client,
+    }),
+  }
 })
 
 describe("replace groups for buyers route", () => {
