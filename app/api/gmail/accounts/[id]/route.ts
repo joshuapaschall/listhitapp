@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
-import { supabaseAdmin } from "@/lib/supabase"
 import { assertServer } from "@/utils/assert-server"
 import { requirePermission } from "@/lib/permissions/server"
 
@@ -20,7 +19,7 @@ export async function DELETE(_: NextRequest, context: RouteContext) {
   const denied = await requirePermission(supabase, "gmail.access")
   if (denied) return denied
 
-  const { data: row } = await supabaseAdmin
+  const { data: row } = await supabase
     .from("gmail_tokens")
     .select("id, user_id, is_active, refresh_token")
     .eq("id", id)
@@ -40,11 +39,11 @@ export async function DELETE(_: NextRequest, context: RouteContext) {
     }
   }
 
-  const { error } = await supabaseAdmin.from("gmail_tokens").delete().eq("id", id)
+  const { error } = await supabase.from("gmail_tokens").delete().eq("id", id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   if (row.is_active) {
-    const { data: next } = await supabaseAdmin
+    const { data: next } = await supabase
       .from("gmail_tokens")
       .select("id")
       .eq("user_id", user.id)
@@ -52,7 +51,7 @@ export async function DELETE(_: NextRequest, context: RouteContext) {
       .limit(1)
       .maybeSingle()
     if (next) {
-      await supabaseAdmin.from("gmail_tokens").update({ is_active: true }).eq("id", next.id)
+      await supabase.from("gmail_tokens").update({ is_active: true }).eq("id", next.id)
     }
   }
 

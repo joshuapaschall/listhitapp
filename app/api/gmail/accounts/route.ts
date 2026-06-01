@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
-import { supabaseAdmin } from "@/lib/supabase"
 import { assertServer } from "@/utils/assert-server"
 import { requirePermission } from "@/lib/permissions/server"
 
@@ -17,7 +16,7 @@ export async function GET() {
   const denied = await requirePermission(supabase, "gmail.access")
   if (denied) return denied
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await supabase
     .from("gmail_tokens")
     .select("id, email, is_active, updated_at, last_synced_at")
     .eq("user_id", user.id)

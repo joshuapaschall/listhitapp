@@ -9,8 +9,6 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   const campaignId = (params.id ?? "").trim().replace(/^<+/, "").replace(/>+$/, "")
   const cookieStore = cookies()
   const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
-  const { supabaseAdmin } = await import("@/lib/supabase")
-  if (!supabaseAdmin) return NextResponse.json({ error: "Server not configured" }, { status: 500 })
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -21,16 +19,16 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   const recipientsBaseSelect = "id,buyer_id,status,sent_at,delivered_at,opened_at,clicked_at,replied_at,bounced_at,complained_at,unsubscribed_at,error,actual_cost_usd,actual_segments,recipient_carrier"
   const recipientsBuyerSelect = "buyer:buyers(id,email,phone,fname,lname,full_name,company)"
   const recipientsLegacyBuyerSelect = "buyer:buyers(id,email_address,phone_number,first_name,last_name,full_name,company)"
-  const recipientsRes = await supabaseAdmin.from("campaign_recipients").select(`${recipientsBaseSelect},${recipientsBuyerSelect}`).eq("campaign_id", campaignId).order("id", { ascending: true })
-  const recipientsFinal = recipientsRes.error ? await supabaseAdmin.from("campaign_recipients").select(`${recipientsBaseSelect},${recipientsLegacyBuyerSelect}`).eq("campaign_id", campaignId).order("id", { ascending: true }) : recipientsRes
+  const recipientsRes = await supabase.from("campaign_recipients").select(`${recipientsBaseSelect},${recipientsBuyerSelect}`).eq("campaign_id", campaignId).order("id", { ascending: true })
+  const recipientsFinal = recipientsRes.error ? await supabase.from("campaign_recipients").select(`${recipientsBaseSelect},${recipientsLegacyBuyerSelect}`).eq("campaign_id", campaignId).order("id", { ascending: true }) : recipientsRes
 
   const recipients = (recipientsFinal.error ? [] : recipientsFinal.data || []).map((row: any) => ({ ...row, email: row?.buyer?.email ?? row?.buyer?.email_address ?? null }))
 
   if (campaign.channel === "sms") {
     const [sumRes, linksRes, timelineRes] = await Promise.all([
-      supabaseAdmin.rpc("campaign_sms_summary", { p_campaign_id: campaignId }),
-      supabaseAdmin.rpc("campaign_sms_top_links", { p_campaign_id: campaignId }),
-      supabaseAdmin.rpc("campaign_sms_timeline", { p_campaign_id: campaignId }),
+      supabase.rpc("campaign_sms_summary", { p_campaign_id: campaignId }),
+      supabase.rpc("campaign_sms_top_links", { p_campaign_id: campaignId }),
+      supabase.rpc("campaign_sms_timeline", { p_campaign_id: campaignId }),
     ])
     ;[sumRes, linksRes, timelineRes].forEach((r: any, i) => r.error && console.error("Analytics RPC failed", { rpc: i, error: r.error }))
     const summary = (sumRes.data || [])[0] || { total: 0, sent: 0, delivered: 0, clicked: 0, replied: 0, failed: 0, undelivered: 0, opted_out: 0, total_cost_usd: 0, total_segments: 0, avg_segments: 0 }
@@ -49,12 +47,12 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   }
 
   const [summaryRes, recipientSummaryRes, linksRes, timelineRes, recentRes, bounceBreakdownRes] = await Promise.all([
-    supabaseAdmin.rpc("campaign_event_summary", { p_campaign_id: campaignId }),
-    supabaseAdmin.rpc("campaign_recipient_summary", { p_campaign_id: campaignId }),
-    supabaseAdmin.rpc("campaign_top_links", { p_campaign_id: campaignId }),
-    supabaseAdmin.rpc("campaign_event_timeline", { p_campaign_id: campaignId }),
-    supabaseAdmin.rpc("campaign_recent_events", { p_campaign_id: campaignId }),
-    supabaseAdmin.from("email_events").select("payload").eq("campaign_id", campaignId).eq("event_type", "bounce"),
+    supabase.rpc("campaign_event_summary", { p_campaign_id: campaignId }),
+    supabase.rpc("campaign_recipient_summary", { p_campaign_id: campaignId }),
+    supabase.rpc("campaign_top_links", { p_campaign_id: campaignId }),
+    supabase.rpc("campaign_event_timeline", { p_campaign_id: campaignId }),
+    supabase.rpc("campaign_recent_events", { p_campaign_id: campaignId }),
+    supabase.from("email_events").select("payload").eq("campaign_id", campaignId).eq("event_type", "bounce"),
   ])
   const summary = buildSummary(summaryRes.data || [], (recipientSummaryRes.data || [])[0] || {}, buildBounceBreakdown(bounceBreakdownRes.data || []))
   return NextResponse.json({ channel: "email", summary, rates: buildRates(summary), timeline: (timelineRes.data || []).map((row: any) => ({ bucket: row.bucket, opens: Number(row.opens) || 0, clicks: Number(row.clicks) || 0 })), topLinks: (linksRes.data || []).map((row: any) => ({ url: row.url, totalClicks: Number(row.total_clicks) || 0, uniqueClickers: Number(row.unique_clickers) || 0 })), recentEvents: (recentRes.data || []).map((row: any) => ({ eventTime: row.event_time, type: row.type, recipientId: row.recipient_id, buyerId: row.buyer_id, payload: row.payload || {} })), recipients })

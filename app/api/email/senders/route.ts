@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/permissions/server";
 import { requireOrgContext } from "@/lib/auth/org-context";
-import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +26,7 @@ export async function GET(request: Request) {
   if (!orgId) return NextResponse.json({ ok: false, error: "Organization context missing" }, { status: 400 });
   const { searchParams } = new URL(request.url);
   const domainId = searchParams.get("domain_id");
-  let query = supabaseAdmin.from("email_senders").select("*").eq("org_id", orgId).order("created_at", { ascending: false });
+  let query = supabase.from("email_senders").select("*").eq("org_id", orgId).order("created_at", { ascending: false });
   if (domainId) query = query.eq("domain_id", domainId);
   const { data, error } = await query;
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
@@ -53,14 +52,14 @@ export async function POST(request: Request) {
   if (fromName && fromName.length > MAX_FROM_NAME_LENGTH) return NextResponse.json({ ok: false, error: "Display name must be 100 characters or fewer." }, { status: 422 });
   if (replyTo && !validateEmail(replyTo)) return NextResponse.json({ ok: false, error: "Enter a valid Reply-to email address." }, { status: 422 });
 
-  const { data: domain, error: domainError } = await supabaseAdmin.from("email_domains").select("*").eq("org_id", orgId).eq("id", domainId).maybeSingle();
+  const { data: domain, error: domainError } = await supabase.from("email_domains").select("*").eq("org_id", orgId).eq("id", domainId).maybeSingle();
   if (domainError) return NextResponse.json({ ok: false, error: domainError.message }, { status: 500 });
   if (!domain) return NextResponse.json({ ok: false, error: "Domain not found" }, { status: 404 });
   if (domain.status !== "verified") return NextResponse.json({ ok: false, error: "Verify this domain before adding a from-address." }, { status: 422 });
   const emailDomain = fromEmail.split("@")[1] || "";
   if (emailDomain !== domain.domain) return NextResponse.json({ ok: false, error: "From email must match the verified domain." }, { status: 422 });
-  if (isDefault) await supabaseAdmin.from("email_senders").update({ is_default: false }).eq("org_id", orgId).eq("is_default", true);
-  const { data: sender, error } = await supabaseAdmin.from("email_senders").insert({ org_id: orgId, domain_id: domain.id, from_email: fromEmail, from_name: fromName, reply_to: replyTo, is_default: isDefault }).select("*").maybeSingle();
+  if (isDefault) await supabase.from("email_senders").update({ is_default: false }).eq("org_id", orgId).eq("is_default", true);
+  const { data: sender, error } = await supabase.from("email_senders").insert({ org_id: orgId, domain_id: domain.id, from_email: fromEmail, from_name: fromName, reply_to: replyTo, is_default: isDefault }).select("*").maybeSingle();
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true, sender });
 }

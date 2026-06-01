@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
-import { supabaseAdmin } from "@/lib/supabase"
 import { assertServer } from "@/utils/assert-server"
 import { requirePermission } from "@/lib/permissions/server"
 
@@ -20,7 +19,7 @@ export async function POST(_: NextRequest, context: RouteContext) {
   const denied = await requirePermission(supabase, "gmail.access")
   if (denied) return denied
 
-  const { data: row } = await supabaseAdmin
+  const { data: row } = await supabase
     .from("gmail_tokens")
     .select("id, user_id")
     .eq("id", id)
@@ -29,8 +28,8 @@ export async function POST(_: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "Account not found" }, { status: 404 })
   }
 
-  await supabaseAdmin.from("gmail_tokens").update({ is_active: false }).eq("user_id", user.id)
-  const { error } = await supabaseAdmin.from("gmail_tokens").update({ is_active: true }).eq("id", id)
+  await supabase.from("gmail_tokens").update({ is_active: false }).eq("user_id", user.id)
+  const { error } = await supabase.from("gmail_tokens").update({ is_active: true }).eq("id", id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   return NextResponse.json({ ok: true })
