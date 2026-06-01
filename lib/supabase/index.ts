@@ -84,7 +84,6 @@ export interface Buyer {
   source?: string | null
   status?: string | null
   created_at?: string
-  sendfox_hidden?: boolean | null
   website?: string | null
   property_interest?: string | null
   year_built_min?: number | null
@@ -106,14 +105,11 @@ export interface Buyer {
   owner_financing?: boolean | null
   first_time_buyer?: boolean | null
   can_receive_calls?: boolean | null
+  email_suppressed?: boolean | null
+  email_bounced_at?: string | null
+  email_complained_at?: string | null
   deleted_at?: string | null
   updated_at?: string
-  sendfox_contact_id?: number | null
-  sendfox_suppressed?: boolean | null
-  sendfox_bounced_at?: string | null
-  sendfox_complained_at?: string | null
-  sendfox_double_opt_in?: boolean | null
-  sendfox_double_opt_in_at?: string | null
 }
 
 export interface Tag {
@@ -133,7 +129,6 @@ export interface Group {
   type?: string
   criteria?: Record<string, unknown> | null
   color?: string | null
-  sendfox_list_id?: number | null
   created_at?: string
   updated_at?: string
 }
