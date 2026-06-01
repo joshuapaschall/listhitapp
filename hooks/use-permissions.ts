@@ -77,7 +77,7 @@ export function usePermissions() {
   }, [sessionLoading, user])
 
   const loading = sessionLoading || permissionsLoading
-  const isAdmin = role === "admin"
+  const isAdmin = role === "admin" || role === "owner"
 
   const can = useCallback(
     (key: PermissionKey) => {

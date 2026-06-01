@@ -10,6 +10,17 @@ import { cn } from "@/lib/utils"
 
 const navItems: Array<{ href: string; label: string; description: string; permission?: PermissionKey }> = [
   {
+    href: "/settings/profile",
+    label: "My Profile",
+    description: "Your name, phone, and personal details",
+  },
+  {
+    href: "/settings/organization",
+    label: "Organization",
+    description: "Business name, address, and website",
+    permission: "settings.organization",
+  },
+  {
     href: "/settings/markets",
     label: "Markets",
     description: "Group your numbers and configure routing & voicemail",

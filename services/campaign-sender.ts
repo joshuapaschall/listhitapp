@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase"
+import { resolveOrgIdForUser } from "@/lib/auth/org-context"
 import { createLogger } from "@/lib/logger"
 import { renderTemplate } from "@/lib/utils"
 import { getUserMergeContext, type UserMergeContext } from "@/lib/user-context"
@@ -34,7 +35,71 @@ const SITE_URL =
   process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_BASE_URL || process.env.DISPOTOOL_BASE_URL
 const EMAIL_PHYSICAL_ADDRESS = process.env.EMAIL_PHYSICAL_ADDRESS || "ListHit CRM · 123 Main St · Anytown, USA"
 
+const BUSINESS_ADDRESS_PLACEHOLDER = "[Your business address]"
+
 const emailShortlinksDisabled = () => (process.env.EMAIL_DISABLE_SHORTLINKS ?? "1") !== "0"
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+}
+
+function compactParts(parts: Array<string | null | undefined>) {
+  return parts.map((part) => part?.trim()).filter((part): part is string => Boolean(part))
+}
+
+async function stampBusinessAddressForCampaign(html: string, campaignId?: string | null) {
+  if (!campaignId || !html.includes(BUSINESS_ADDRESS_PLACEHOLDER)) return html
+
+  const supabase = requireAdmin()
+  const { data: campaign, error: campaignError } = await supabase
+    .from("campaigns")
+    .select("user_id")
+    .eq("id", campaignId)
+    .maybeSingle()
+
+  if (campaignError || !campaign?.user_id) {
+    if (campaignError) console.error("Failed to load campaign owner for email footer stamping", campaignError)
+    return html
+  }
+
+  const orgId = await resolveOrgIdForUser(campaign.user_id)
+  if (!orgId) return html
+
+  const { data: organization, error: organizationError } = await supabase
+    .from("organizations")
+    .select("name,business_name,address_line1,address_line2,city,state,zip")
+    .eq("id", orgId)
+    .maybeSingle()
+
+  if (organizationError || !organization) {
+    if (organizationError) console.error("Failed to load organization for email footer stamping", organizationError)
+    return html
+  }
+
+  const locality = compactParts([organization.city, organization.state, organization.zip]).join(", ")
+  const addressLines = compactParts([
+    organization.address_line1,
+    organization.address_line2,
+    locality,
+  ])
+
+  if (!addressLines.length) return html
+
+  const stampedAddress = compactParts([
+    organization.business_name ?? organization.name,
+    ...addressLines,
+  ])
+    .map(escapeHtml)
+    .join("<br/>")
+
+  // Build-time stamping keeps DEFAULT_BRAND generic while persisting campaign-specific org footer text.
+  return html.split(BUSINESS_ADDRESS_PLACEHOLDER).join(stampedAddress)
+}
 
 export interface EmailOptions {
   to: string | string[]
@@ -190,13 +255,14 @@ export async function queueEmailCampaign(
   })
 
   if (payload.campaignId) {
+    const stampedHtml = await stampBusinessAddressForCampaign(payload.html ?? "", payload.campaignId)
     const { error: contentError } = await supabase
       .from("email_campaign_content")
       .upsert(
         {
           campaign_id: payload.campaignId,
           subject: payload.subject ?? "",
-          html: payload.html ?? "",
+          html: stampedHtml,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "campaign_id" },
