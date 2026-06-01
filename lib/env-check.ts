@@ -24,7 +24,6 @@ export const ALL_ENV_VARS = [
   "GOOGLE_CLIENT_SECRET",
   "GMAIL_FROM",
   "NEXT_PUBLIC_GOOGLE_REDIRECT_URI",
-  "SENDFOX_API_TOKEN",
 ] as const
 
 // Minimal env to let the UI render and Supabase client hydrate.
@@ -73,10 +72,6 @@ export function logStartupWarnings() {
     console.warn(
       `[env] Missing optional/feature env vars: ${nonCoreMissing.join(", ")}`
     )
-  }
-
-  if (!process.env.SENDFOX_API_TOKEN && !process.env.SENDFOX_API_KEY) {
-    console.warn("[env] Optional: SENDFOX_API_TOKEN not set — SendFox features will be unavailable until configured. Verify at /settings/integrations.")
   }
 }
 

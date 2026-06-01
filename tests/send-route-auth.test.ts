@@ -1,6 +1,5 @@
 import { NextRequest } from "next/server"
 import { POST } from "../app/api/campaigns/send/route"
-import { POST as SendfoxPOST } from "../app/api/sendfox/contact/route"
 
 // Shared, mutable state the mocked modules read. Defined via vi.hoisted so the
 // hoisted vi.mock factories can reference it, while test bodies mutate it.
@@ -11,7 +10,6 @@ const h = vi.hoisted(() => {
     buyers: [] as any[],
     buyerGroups: [] as any[],
     authUser: null as any,
-    sfUser: null as any,
     recipientCounter: 1,
   }
 
@@ -128,28 +126,6 @@ vi.mock("@/services/shortlink-service", () => ({
   createShortLink: vi.fn(async () => null),
 }))
 
-// Sendfox-contact dependencies (cookie auth + sendfox context).
-vi.mock("next/headers", () => ({ cookies: () => ({}) }))
-vi.mock("@supabase/auth-helpers-nextjs", () => ({
-  createRouteHandlerClient: () => ({
-    auth: { getUser: async () => ({ data: { user: h.state.sfUser }, error: null }) },
-  }),
-}))
-vi.mock("@/lib/permissions/server", () => ({
-  requirePermission: async () => null,
-}))
-vi.mock("@/services/sendfox-auth", () => ({
-  getDefaultSendfoxContext: () =>
-    process.env.SENDFOX_API_TOKEN || process.env.SENDFOX_API_KEY
-      ? { accessToken: "x", source: "env" }
-      : null,
-  getSendfoxIntegration: async () => null,
-  buildSendfoxContextFromIntegration: (i: any) => i,
-  withSendfoxAuth: async (_ctx: any, fn: any) => fn(),
-}))
-vi.mock("@/services/sendfox-service", () => ({
-  upsertContact: vi.fn(async () => ({ id: 1 })),
-}))
 
 let smsSender: any
 
@@ -195,36 +171,5 @@ describe("send route auth", () => {
     const res = await POST(req)
     expect(res.status).toBe(200)
     expect(smsSender.queueSmsCampaign).toHaveBeenCalled()
-  })
-})
-
-describe("sendfox contact auth", () => {
-  beforeEach(() => {
-    h.state.buyers = []
-    h.state.sfUser = null
-  })
-
-  test("returns 401 when unauthenticated", async () => {
-    h.state.sfUser = null
-    delete process.env.SENDFOX_API_TOKEN
-    delete process.env.SENDFOX_API_KEY
-    const req = new NextRequest("http://test", {
-      method: "POST",
-      body: JSON.stringify({ email: "x@test.com", lists: [] }),
-    })
-    const res = await SendfoxPOST(req)
-    expect(res.status).toBe(401)
-  })
-
-  test("accepts fallback key", async () => {
-    h.state.sfUser = { id: "u1" }
-    delete process.env.SENDFOX_API_TOKEN
-    process.env.SENDFOX_API_KEY = "old"
-    const req = new NextRequest("http://test", {
-      method: "POST",
-      body: JSON.stringify({ email: "x@test.com", lists: [] }),
-    })
-    const res = await SendfoxPOST(req)
-    expect(res.status).toBe(200)
   })
 })
