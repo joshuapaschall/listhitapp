@@ -17,7 +17,6 @@ async function handler(req: NextRequest) {
       !SUPABASE_SERVICE_ROLE_KEY ||
       !ADMIN_EMAIL ||
       !ADMIN_PASSWORD ||
-      !ADMIN_NAME ||
       !ADMIN_SEED_TOKEN
     ) {
       return NextResponse.json(
@@ -38,6 +37,8 @@ async function handler(req: NextRequest) {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false },
     })
+    const adminName = ADMIN_NAME ?? "Admin User"
+    const orgName = ADMIN_NAME ?? "Default Organization"
 
     // Lookup existing user
     const { data: list } = await supabase.auth.admin.listUsers({
@@ -54,20 +55,47 @@ async function handler(req: NextRequest) {
         email: ADMIN_EMAIL,
         password: ADMIN_PASSWORD,
         email_confirm: true,
-        user_metadata: { name: ADMIN_NAME },
+        user_metadata: { name: adminName },
       })
       if (error) throw error
       user = data.user
+    }
+
+    let orgId: string | null = null
+    const { data: existingOrg, error: existingOrgErr } = await supabase
+      .from("organizations")
+      .select("id")
+      .limit(1)
+      .maybeSingle()
+    if (existingOrgErr) throw existingOrgErr
+
+    if (existingOrg?.id) {
+      orgId = existingOrg.id
+    } else {
+      const { data: createdOrg, error: createOrgErr } = await supabase
+        .from("organizations")
+        .insert({ name: orgName })
+        .select("id")
+        .single()
+      if (createOrgErr) throw createOrgErr
+      orgId = createdOrg.id
     }
 
     // Ensure profile row
     const { error: upsertErr } = await supabase
       .from("profiles")
       .upsert(
-        { id: user.id, email: ADMIN_EMAIL, name: ADMIN_NAME, role: "admin" },
+        { id: user.id, email: ADMIN_EMAIL, name: adminName, role: "owner", org_id: orgId },
         { onConflict: "id" }
       )
     if (upsertErr) throw upsertErr
+
+    const { error: ownerErr } = await supabase
+      .from("organizations")
+      .update({ owner_id: user.id })
+      .eq("id", orgId)
+      .is("owner_id", null)
+    if (ownerErr) throw ownerErr
 
     return NextResponse.json({
       ok: true,

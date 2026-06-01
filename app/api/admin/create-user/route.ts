@@ -3,6 +3,7 @@ import { cookies } from "next/headers"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { supabaseAdmin } from "@/lib/supabase"
 import { requirePermission } from "@/lib/permissions/server"
+import { resolveOrgIdForUser } from "@/lib/auth/org-context"
 import { ensureUserTelephonyCredential } from "@/lib/telnyx/credentials"
 
 /**
@@ -32,6 +33,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid role" }, { status: 400 })
   }
 
+  const { data: currentUserData } = await supabase.auth.getUser()
+  let orgId: string | null = null
+  if (currentUserData.user?.id) {
+    try {
+      orgId = await resolveOrgIdForUser(currentUserData.user.id)
+    } catch (orgError) {
+      console.error("[create-user] Failed to resolve creator org", orgError)
+    }
+  }
+
   const { data, error } = await supabaseAdmin.auth.admin.createUser({
     email,
     email_confirm: true,
@@ -44,10 +55,22 @@ export async function POST(request: NextRequest) {
   if (id) {
     // A DB trigger upserts the profile row on auth-user creation, so upsert here
     // to set the role + display name without colliding on the primary key.
+    const profilePayload = { id, email, role, display_name: fullName ?? null, org_id: orgId }
     const { error: pErr } = await supabaseAdmin
       .from("profiles")
-      .upsert({ id, email, role, display_name: fullName ?? null })
-    if (pErr) return NextResponse.json({ error: "Profile insert failed" }, { status: 500 })
+      .upsert(profilePayload)
+
+    if (pErr) {
+      const missingOrgColumn = String(pErr.message ?? "").includes("org_id")
+      if (!missingOrgColumn) {
+        return NextResponse.json({ error: "Profile insert failed" }, { status: 500 })
+      }
+
+      const { error: retryErr } = await supabaseAdmin
+        .from("profiles")
+        .upsert({ id, email, role, display_name: fullName ?? null })
+      if (retryErr) return NextResponse.json({ error: "Profile insert failed" }, { status: 500 })
+    }
 
     // Send a "set your password" email so the invited user chooses their own
     // password — no password is ever returned to the admin.
