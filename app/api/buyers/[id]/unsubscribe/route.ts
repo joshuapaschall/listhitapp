@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server"
-import { supabaseAdmin } from "@/lib/supabase"
+import { getOrgScopedClient } from "@/lib/auth/scoped-db"
 import {
   unsubscribe as sendfoxUnsubscribe,
   findContactByEmail,
@@ -14,18 +14,31 @@ const log = createLogger("unsubscribe-buyer-route")
 export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
   const id = params.id
   try {
-    const { data: buyer, error } = await supabaseAdmin
+    const { user, orgId, supabase } = await getOrgScopedClient()
+    if (!user || !orgId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+      })
+    }
+
+    const { data: buyer, error } = await supabase
       .from("buyers")
       .select("email")
       .eq("id", id)
-      .single()
+      .maybeSingle()
     if (error) throw error
+
+    if (!buyer) {
+      return new Response(JSON.stringify({ error: "Buyer not found" }), {
+        status: 404,
+      })
+    }
 
     if (buyer?.email) {
       try {
         const contact = await findContactByEmail(buyer.email)
         if (contact?.id) {
-          const { data: groups } = await supabaseAdmin
+          const { data: groups } = await supabase
             .from("buyer_groups")
             .select("groups(sendfox_list_id)")
             .eq("buyer_id", id)
@@ -49,7 +62,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
       }
     }
 
-    const { error: upd } = await supabaseAdmin
+    const { error: upd } = await supabase
       .from("buyers")
       .update({ can_receive_sms: false, can_receive_email: false })
       .eq("id", id)
@@ -66,6 +79,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   }
 }
 
+// TODO: Revisit GET-triggering-unsubscribe because it performs a state-changing action.
 export async function GET(req: NextRequest, ctx: { params: { id: string } }) {
   return POST(req, ctx)
 }
