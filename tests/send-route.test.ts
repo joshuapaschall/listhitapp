@@ -173,7 +173,7 @@ describe("send route templates", () => {
 
   test("queues SMS with the raw template + recipients (rendering deferred)", async () => {
     h.state.campaigns.push({ id: "c1", channel: "sms", message: "Hi {{first_name}}", buyer_ids: ["b1"] })
-    h.state.buyers.push({ id: "b1", fname: "John", lname: "Doe", phone: "+15125550111", can_receive_sms: true, sendfox_hidden: false, sendfox_suppressed: false })
+    h.state.buyers.push({ id: "b1", fname: "John", lname: "Doe", phone: "+15125550111", can_receive_sms: true, deleted_at: null, sendfox_suppressed: false })
     const res = await POST(req("c1"))
     expect(res.status).toBe(200)
     expect(smsSender.queueSmsCampaign).toHaveBeenCalledWith(
@@ -188,7 +188,7 @@ describe("send route templates", () => {
 
   test("queues email with the raw subject/html (rendering deferred)", async () => {
     h.state.campaigns.push({ id: "c2", channel: "email", subject: "Hey {{first_name}}", message: "Dear {{last_name}}", buyer_ids: ["b2"] })
-    h.state.buyers.push({ id: "b2", fname: "Jane", lname: "Smith", email: "a@test.com", can_receive_email: true, sendfox_hidden: false, sendfox_suppressed: false })
+    h.state.buyers.push({ id: "b2", fname: "Jane", lname: "Smith", email: "a@test.com", can_receive_email: true, deleted_at: null, sendfox_suppressed: false })
     const res = await POST(req("c2"))
     expect(res.status).toBe(200)
     expect(emailSender.queueEmailCampaign).toHaveBeenCalledWith(
@@ -203,7 +203,7 @@ describe("send route templates", () => {
 
   test("replaces SMS URLs with per-recipient short links before queueing", async () => {
     h.state.campaigns.push({ id: "c5", channel: "sms", message: "See https://example.com now", buyer_ids: ["b5"] })
-    h.state.buyers.push({ id: "b5", fname: "Alex", phone: "+15125550155", can_receive_sms: true, sendfox_hidden: false, sendfox_suppressed: false })
+    h.state.buyers.push({ id: "b5", fname: "Alex", phone: "+15125550155", can_receive_sms: true, deleted_at: null, sendfox_suppressed: false })
     const res = await POST(req("c5"))
     expect(res.status).toBe(200)
     const arg = (smsSender.queueSmsCampaign as any).mock.calls[0][0]
@@ -213,7 +213,7 @@ describe("send route templates", () => {
   test("queues the full SMS body without trimming", async () => {
     const msg = "x".repeat(170)
     h.state.campaigns.push({ id: "c3", channel: "sms", message: msg, buyer_ids: ["b3"] })
-    h.state.buyers.push({ id: "b3", phone: "+15125550133", can_receive_sms: true, sendfox_hidden: false, sendfox_suppressed: false })
+    h.state.buyers.push({ id: "b3", phone: "+15125550133", can_receive_sms: true, deleted_at: null, sendfox_suppressed: false })
     const res = await POST(req("c3"))
     expect(res.status).toBe(200)
     expect(smsSender.queueSmsCampaign).toHaveBeenCalledWith(
@@ -225,7 +225,7 @@ describe("send route templates", () => {
 
   test("skips hidden buyers (no recipients -> 400, queue untouched)", async () => {
     h.state.campaigns.push({ id: "c4", channel: "sms", message: "Hi", buyer_ids: ["b4"] })
-    h.state.buyers.push({ id: "b4", phone: "+15125550144", can_receive_sms: true, sendfox_hidden: true, sendfox_suppressed: false })
+    h.state.buyers.push({ id: "b4", phone: "+15125550144", can_receive_sms: true, deleted_at: "2024-01-01", sendfox_suppressed: false })
     const res = await POST(req("c4"))
     expect(res.status).toBe(400)
     expect(smsSender.queueSmsCampaign).not.toHaveBeenCalled()
@@ -239,7 +239,7 @@ describe("send route templates", () => {
 
   test("returns 200 when recipients exist", async () => {
     h.state.campaigns.push({ id: "c7", channel: "email", message: "Hello", buyer_ids: ["b7"] })
-    h.state.buyers.push({ id: "b7", email: "a@test.com", can_receive_email: true, sendfox_hidden: false, sendfox_suppressed: false })
+    h.state.buyers.push({ id: "b7", email: "a@test.com", can_receive_email: true, deleted_at: null, sendfox_suppressed: false })
     const res = await POST(req("c7"))
     expect(res.status).toBe(200)
     const body = await res.json()
@@ -249,8 +249,8 @@ describe("send route templates", () => {
   test("merges buyer_ids and group_ids into ONE batched queue call", async () => {
     h.state.campaigns.push({ id: "c8", channel: "sms", message: "Hi", buyer_ids: ["b1"], group_ids: ["g1"] })
     h.state.buyers.push(
-      { id: "b1", phone: "+15125550101", can_receive_sms: true, sendfox_hidden: false, sendfox_suppressed: false },
-      { id: "b2", phone: "+15125550102", can_receive_sms: true, sendfox_hidden: false, sendfox_suppressed: false },
+      { id: "b1", phone: "+15125550101", can_receive_sms: true, deleted_at: null, sendfox_suppressed: false },
+      { id: "b2", phone: "+15125550102", can_receive_sms: true, deleted_at: null, sendfox_suppressed: false },
     )
     h.state.buyerGroups.push({ buyer_id: "b2", group_id: "g1" })
     const res = await POST(req("c8"))

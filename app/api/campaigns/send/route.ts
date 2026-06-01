@@ -163,7 +163,7 @@ export async function POST(request: NextRequest) {
       .from("buyer_groups")
       .select("buyer_id, buyers!inner(id)")
       .in("group_id", groupIds)
-      .eq("buyers.sendfox_hidden", false)
+      .is("buyers.deleted_at", null)
       .eq("buyers.sendfox_suppressed", false)
     if (groupErr) {
       console.error("Error fetching group buyers", groupErr)
@@ -179,7 +179,7 @@ export async function POST(request: NextRequest) {
     .from("buyers")
     .select("id")
     .in("id", finalIds)
-    .eq("sendfox_hidden", false)
+    .is("deleted_at", null)
     .eq("sendfox_suppressed", false)
   if (campaign.channel === "email") {
     allowedQuery = allowedQuery.eq("can_receive_email", true)
@@ -233,10 +233,10 @@ export async function POST(request: NextRequest) {
   let recipientsQuery = supabase
     .from("campaign_recipients")
     .select(
-      "id,buyer_id,status,buyers!inner(id,fname,lname,email,phone,phone2,phone3,can_receive_sms,can_receive_email,sendfox_hidden)"
+      "id,buyer_id,status,buyers!inner(id,fname,lname,email,phone,phone2,phone3,can_receive_sms,can_receive_email,deleted_at)"
     )
     .eq("campaign_id", campaignId)
-    .eq("buyers.sendfox_hidden", false)
+    .is("buyers.deleted_at", null)
     .eq("buyers.sendfox_suppressed", false)
   if (campaign.channel === "email") {
     recipientsQuery = recipientsQuery.eq("buyers.can_receive_email", true)
@@ -343,7 +343,7 @@ export async function POST(request: NextRequest) {
     let emailContacts: EmailContactPayload[] = (recipients || [])
       .map((row: any) => {
         const buyer: any = (row as any).buyers || {}
-        if (!buyer.email || !buyer.can_receive_email || buyer.sendfox_hidden) {
+        if (!buyer.email || !buyer.can_receive_email || buyer.deleted_at) {
           return null
         }
         return {
@@ -514,7 +514,7 @@ export async function POST(request: NextRequest) {
         }
 
         const buyer: any = (row as any).buyers || {}
-        if (buyer.sendfox_hidden || !buyer.can_receive_sms) {
+        if (buyer.deleted_at || !buyer.can_receive_sms) {
           continue
         }
 

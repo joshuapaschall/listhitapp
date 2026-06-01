@@ -64,7 +64,7 @@ export class CampaignService {
         .from("buyer_groups")
         .select("buyer_id, buyers!inner(id)")
         .in("group_id", groupIds)
-        .eq("buyers.sendfox_hidden", false)
+        .is("buyers.deleted_at", null)
       if (groupErr) {
         console.error("Error fetching group buyers:", groupErr)
         throw groupErr
@@ -78,7 +78,7 @@ export class CampaignService {
       let query = supabase
         .from("buyers")
         .select("id")
-        .eq("sendfox_hidden", false)
+        .is("deleted_at", null)
       if (filters.tags && filters.tags.length) {
         query = query.overlaps("tags", filters.tags)
       }
@@ -106,7 +106,7 @@ export class CampaignService {
         .from("buyers")
         .select("id")
         .in("id", finalIds)
-        .eq("sendfox_hidden", false)
+        .is("deleted_at", null)
       finalIds = (allowed || []).map((r) => r.id)
     }
     const insertPayload: Record<string, any> = {
