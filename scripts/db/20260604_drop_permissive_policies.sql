@@ -63,6 +63,8 @@ DROP POLICY IF EXISTS "message_threads select active" ON public.message_threads;
 DROP POLICY IF EXISTS "message_threads update authenticated" ON public.message_threads;
 DROP POLICY IF EXISTS "message_threads_select" ON public.message_threads;
 DROP POLICY IF EXISTS "message_threads_write" ON public.message_threads;
+DROP POLICY IF EXISTS "voice_numbers read" ON public.voice_numbers;
+DROP POLICY IF EXISTS "Read voice numbers" ON public.voice_numbers;
 
 DROP POLICY IF EXISTS "messages_org_select" ON public.messages;
 CREATE POLICY "messages_org_select" ON public.messages FOR SELECT TO authenticated USING (org_id = auth_org_id() AND deleted_at IS NULL);

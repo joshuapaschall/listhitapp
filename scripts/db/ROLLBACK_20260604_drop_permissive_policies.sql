@@ -41,6 +41,9 @@ begin
   END LOOP;
 END $$;
 
+DROP POLICY IF EXISTS "voice_numbers read" ON public.voice_numbers;
+CREATE POLICY "voice_numbers read" ON public.voice_numbers FOR SELECT TO authenticated USING (true);
+
 DROP POLICY IF EXISTS "messages_org_select" ON public.messages;
 CREATE POLICY "messages_org_select" ON public.messages FOR SELECT TO authenticated USING (org_id = auth_org_id());
 
