@@ -7,6 +7,22 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 // jsdom doesn't implement createObjectURL
 // @ts-ignore
 global.URL.createObjectURL = vi.fn(() => "blob:url")
+;(global as any).fetch = vi.fn(async () => ({
+  ok: true,
+  json: async () => ({ numbers: ["+19998887777"] }),
+}))
+
+vi.mock("@/components/voice/CallButton", () => ({ CallButton: () => null }))
+vi.mock("@/components/auth/Can", () => ({ Can: ({ children }: any) => children }))
+vi.mock("@/components/ui/dropdown-menu", () => ({
+  DropdownMenu: ({ children }: any) => <div>{children}</div>,
+  DropdownMenuTrigger: ({ children }: any) => <div>{children}</div>,
+  DropdownMenuContent: ({ children }: any) => <div>{children}</div>,
+  DropdownMenuItem: ({ children, onSelect }: any) => (
+    <div role="menuitem" onClick={() => onSelect?.({})}>{children}</div>
+  ),
+  DropdownMenuSeparator: () => null,
+}))
 
 vi.mock("../components/inbox/upload-modal", () => ({
   __esModule: true,
@@ -57,8 +73,7 @@ describe("ConversationPane upload modal", () => {
         </NowProvider>
       </QueryClientProvider>
     )
-    const btn = screen.getByRole("button", { name: /upload files/i })
-    fireEvent.click(btn)
+    fireEvent.click(screen.getByText("Photo"))
     fireEvent.click(screen.getByText("AddFile"))
     expect(document.querySelectorAll("img").length).toBe(1)
   })

@@ -9,6 +9,15 @@ const fetchMock = vi.fn()
 global.fetch = fetchMock
 Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { value: vi.fn(), writable: true })
 
+vi.mock("@/components/voice/CallButton", () => ({ CallButton: () => null }))
+vi.mock("@/components/auth/Can", () => ({ Can: ({ children }: any) => children }))
+// Radix popover doesn't open via fireEvent in jsdom — render it inline.
+vi.mock("@/components/ui/popover", () => ({
+  Popover: ({ children }: any) => <div>{children}</div>,
+  PopoverTrigger: ({ children }: any) => <div>{children}</div>,
+  PopoverContent: ({ children }: any) => <div>{children}</div>,
+}))
+
 vi.mock("../services/template-service", () => ({
   TemplateService: { listTemplates: vi.fn().mockResolvedValue([]), addTemplate: vi.fn() }
 }))
@@ -62,7 +71,7 @@ describe("MessageComposer", () => {
         return Promise.resolve({ ok: true, json: async () => ({}) })
       }
       if (url === "/api/voice-numbers") {
-        return Promise.resolve({ ok: true, json: async () => ({ numbers: [] }) })
+        return Promise.resolve({ ok: true, json: async () => ({ numbers: ["+19998887777"] }) })
       }
       return Promise.resolve({ ok: true, json: async () => ({}) })
     })
@@ -106,7 +115,11 @@ describe("MessageComposer", () => {
 
     fireEvent.click(screen.getByTitle("Schedule message"))
     const today = new Date().getDate().toString()
-    const dayButton = screen.getAllByRole("button", { name: new RegExp(`^${today}$`) })[0]
+    // react-day-picker day cells are buttons whose accessible name is the full
+    // date; query by exact text content (the day number) instead.
+    const dayButton = Array.from(
+      document.querySelectorAll<HTMLButtonElement>("button"),
+    ).find((b) => b.textContent?.trim() === today)!
     fireEvent.click(dayButton)
     const timeInput = document.querySelector("input[type='time']") as HTMLInputElement
     fireEvent.change(timeInput, { target: { value: "12:30" } })
