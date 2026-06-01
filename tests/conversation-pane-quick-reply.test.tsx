@@ -9,9 +9,21 @@ const fetchMock = vi.fn()
 global.fetch = fetchMock
 Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { value: vi.fn(), writable: true })
 
-const listTemplatesMock = jest
-  .fn()
-  .mockResolvedValue([{ id: "qr1", name: "Quick 1", message: "Quick message" }] as any)
+const { listTemplatesMock } = vi.hoisted(() => ({
+  listTemplatesMock: vi.fn().mockResolvedValue([{ id: "qr1", name: "Quick 1", message: "Quick message" }]),
+}))
+
+vi.mock("@/components/voice/CallButton", () => ({ CallButton: () => null }))
+vi.mock("@/components/auth/Can", () => ({ Can: ({ children }: any) => children }))
+vi.mock("@/components/ui/dropdown-menu", () => ({
+  DropdownMenu: ({ children }: any) => <div>{children}</div>,
+  DropdownMenuTrigger: ({ children }: any) => <div>{children}</div>,
+  DropdownMenuContent: ({ children }: any) => <div>{children}</div>,
+  DropdownMenuItem: ({ children, onSelect }: any) => (
+    <div role="menuitem" onClick={() => onSelect?.({})}>{children}</div>
+  ),
+  DropdownMenuSeparator: () => null,
+}))
 
 vi.mock("../services/template-service", () => {
   return { TemplateService: { listTemplates: listTemplatesMock, addTemplate: vi.fn() } }
@@ -86,6 +98,6 @@ describe("ConversationPane quick replies", () => {
 
     fireEvent.click(screen.getByLabelText("Insert template"))
     const manageLink = screen.getByText("Manage templates…").closest("a")
-    expect(manageLink).toHaveAttribute("href", "/settings/templates/quick_reply")
+    expect(manageLink).toHaveAttribute("href", "/settings/templates/quick-reply")
   })
 })

@@ -11,9 +11,21 @@ global.fetch = fetchMock
 
 const uploadMock = vi.fn()
 
+vi.mock("@/components/voice/CallButton", () => ({ CallButton: () => null }))
+vi.mock("@/components/auth/Can", () => ({ Can: ({ children }: any) => children }))
+vi.mock("@/components/ui/dropdown-menu", () => ({
+  DropdownMenu: ({ children }: any) => <div>{children}</div>,
+  DropdownMenuTrigger: ({ children }: any) => <div>{children}</div>,
+  DropdownMenuContent: ({ children }: any) => <div>{children}</div>,
+  DropdownMenuItem: ({ children, onSelect }: any) => (
+    <div role="menuitem" onClick={() => onSelect?.({})}>{children}</div>
+  ),
+  DropdownMenuSeparator: () => null,
+}))
+
 vi.mock("../utils/uploadMedia", async () => {
   const actual = await vi.importActual<typeof import("../utils/uploadMedia")>("../utils/uploadMedia")
-  return { ...actual, uploadMediaFile: (...args: any[]) => uploadMock(...args) }
+  return { ...actual, uploadMediaFileWithMeta: (...args: any[]) => uploadMock(...args) }
 })
 
 let mockRecorderFile: File | null = null
@@ -114,7 +126,7 @@ describe("ConversationPane media attachments", () => {
     fetchMock.mockImplementation(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ numbers: [] }),
+        json: async () => ({ numbers: ["+19998887777"] }),
         headers: { get: () => null },
       }),
     )
@@ -181,11 +193,19 @@ describe("ConversationPane media attachments", () => {
 
   test("shows error indicator when convert fails", async () => {
     message.media_urls = ["http://x.com/test.weba"]
-    ;(global.fetch as vi.Mock).mockResolvedValueOnce({
-      ok: false,
-      json: async () => ({ error: "convert failed" }),
-      headers: { get: () => null },
-    })
+    fetchMock.mockImplementation((url: string) =>
+      url === "/api/media/convert"
+        ? Promise.resolve({
+            ok: false,
+            json: async () => ({ error: "convert failed" }),
+            headers: { get: () => null },
+          })
+        : Promise.resolve({
+            ok: true,
+            json: async () => ({ numbers: ["+19998887777"] }),
+            headers: { get: () => null },
+          }),
+    )
     const thread = { id: "t1", buyer_id: "b1", phone_number: "+1222", campaign_id: null } as any
     const qc = new QueryClient()
     render(
@@ -214,27 +234,24 @@ describe("ConversationPane media attachments", () => {
     await waitFor(() => expect(document.querySelectorAll("audio").length).toBe(0))
   })
 
-  test("converts webm recording before sending", async () => {
+  test("sends webm recording as the uploaded url (server converts)", async () => {
     mockRecorderFile = new File(["audio"], "recording-123.webm", {
       type: "audio/webm",
     })
-    uploadMock.mockResolvedValueOnce("https://cdn/outgoing/recording-123.webm")
+    uploadMock.mockResolvedValueOnce({
+      url: "https://cdn/outgoing/recording-123.webm",
+      storagePath: "outgoing/recording-123.webm",
+      contentType: "audio/webm",
+    })
     const sentBodies: any[] = []
     fetchMock.mockImplementation((url: string, options?: any) => {
-      if (url === "/api/media/convert") {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({ url: "https://cdn/outgoing/recording-123.mp3" }),
-          headers: { get: () => "application/json" },
-        })
-      }
       if (url === "/api/messages/send") {
         sentBodies.push(JSON.parse(options?.body || "{}"))
         return Promise.resolve({ ok: true, json: async () => ({ sid: "msg_1" }) })
       }
       return Promise.resolve({
         ok: true,
-        json: async () => ({ numbers: [] }),
+        json: async () => ({ numbers: ["+19998887777"] }),
         headers: { get: () => null },
       })
     })
@@ -254,23 +271,21 @@ describe("ConversationPane media attachments", () => {
     fireEvent.click(screen.getByRole("button", { name: /send/i }))
 
     await waitFor(() => expect(sentBodies.length).toBe(1))
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/media/convert",
-      expect.objectContaining({
-        body: JSON.stringify({
-          url: "https://cdn/outgoing/recording-123.webm",
-          direction: "outgoing",
-        }),
-      }),
-    )
+    // The client no longer pre-converts to mp3 — it sends the uploaded webm URL
+    // and the server handles conversion. (Display-side MediaAttachment may still
+    // request conversion to render the sent bubble; that's not the send path.)
     expect(sentBodies[0].mediaUrls).toEqual([
-      "https://cdn/outgoing/recording-123.mp3",
+      "https://cdn/outgoing/recording-123.webm",
     ])
   })
 
   test("sends small mp4 as MMS media", async () => {
     mockUploadFiles = [new File(["video"], "clip.mp4", { type: "video/mp4" })]
-    uploadMock.mockResolvedValueOnce("https://cdn/outgoing/clip.mp4")
+    uploadMock.mockResolvedValueOnce({
+      url: "https://cdn/outgoing/clip.mp4",
+      storagePath: "outgoing/clip.mp4",
+      contentType: "video/mp4",
+    })
     const sentBodies: any[] = []
     fetchMock.mockImplementation((url: string, options?: any) => {
       if (url === "/api/messages/send") {
@@ -279,7 +294,7 @@ describe("ConversationPane media attachments", () => {
       }
       return Promise.resolve({
         ok: true,
-        json: async () => ({ numbers: [] }),
+        json: async () => ({ numbers: ["+19998887777"] }),
         headers: { get: () => null },
       })
     })
@@ -294,7 +309,7 @@ describe("ConversationPane media attachments", () => {
       </QueryClientProvider>,
     )
 
-    fireEvent.click(screen.getByRole("button", { name: /upload files/i }))
+    fireEvent.click(screen.getByText("Video"))
     fireEvent.click(screen.getByText("AddFiles"))
     fireEvent.click(screen.getByRole("button", { name: /send/i }))
 
@@ -306,16 +321,23 @@ describe("ConversationPane media attachments", () => {
     mockUploadFiles = [
       new File([new Uint8Array(MAX_MMS_SIZE + 10)], "big.mp4", { type: "video/mp4" }),
     ]
-    uploadMock.mockResolvedValueOnce("https://cdn/outgoing/big.mp4")
+    uploadMock.mockResolvedValueOnce({
+      url: "https://cdn/outgoing/big.mp4",
+      storagePath: "outgoing/big.mp4",
+      contentType: "video/mp4",
+    })
     const sentBodies: any[] = []
     fetchMock.mockImplementation((url: string, options?: any) => {
       if (url === "/api/messages/send") {
         sentBodies.push(JSON.parse(options?.body || "{}"))
         return Promise.resolve({ ok: true, json: async () => ({ sid: "msg_3" }) })
       }
+      if (url === "/api/media-links") {
+        return Promise.resolve({ ok: true, json: async () => ({ shortUrl: "https://s.io/big" }) })
+      }
       return Promise.resolve({
         ok: true,
-        json: async () => ({ numbers: [] }),
+        json: async () => ({ numbers: ["+19998887777"] }),
         headers: { get: () => null },
       })
     })
@@ -330,14 +352,14 @@ describe("ConversationPane media attachments", () => {
       </QueryClientProvider>,
     )
 
-    fireEvent.click(screen.getByRole("button", { name: /upload files/i }))
+    fireEvent.click(screen.getByText("Video"))
     fireEvent.click(screen.getByText("AddFiles"))
     fireEvent.click(screen.getByRole("button", { name: /send/i }))
 
     await waitFor(() => expect(sentBodies.length).toBe(1))
     expect(sentBodies[0].mediaUrls).toEqual([])
-    expect(sentBodies[0].body).toContain("Download link (over 1MB):")
+    expect(sentBodies[0].body).toContain("Attached file:")
     expect(sentBodies[0].body).toContain("big.mp4")
-    expect(sentBodies[0].body).toContain("https://cdn/outgoing/big.mp4")
+    expect(sentBodies[0].body).toContain("https://s.io/big")
   })
 })
