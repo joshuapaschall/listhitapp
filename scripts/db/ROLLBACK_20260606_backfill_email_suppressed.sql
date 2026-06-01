@@ -1,0 +1,6 @@
+-- Rollback intentionally left as a documented no-op.
+--
+-- This migration only carries historical suppression state forward from
+-- sendfox_suppressed into email_suppressed. Because email suppression is
+-- safety-critical, rolling this back must not un-suppress buyers who were
+-- previously marked as suppressed.
