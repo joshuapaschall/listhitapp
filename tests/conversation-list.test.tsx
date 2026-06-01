@@ -61,7 +61,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { NowProvider } from "../hooks/use-now"
 import ListPane from "../components/inbox/list-pane"
 
-describe.skip("ConversationList", () => {
+describe("ConversationList", () => {
   beforeEach(() => {
     listInboxThreads.mockClear()
     listSentThreads.mockClear()

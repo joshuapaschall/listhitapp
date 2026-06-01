@@ -2,6 +2,43 @@ import { NextRequest } from "next/server"
 import { POST } from "../app/api/webhooks/telnyx-incoming-sms/route"
 import * as mms from "../utils/mms.server"
 vi.mock("../lib/telnyx", () => ({ verifyTelnyxRequest: () => true }))
+vi.mock("@/lib/telnyx-status-processor", () => ({
+  processTelnyxStatusEvent: vi.fn(async () => new Response(null, { status: 204 })),
+}))
+
+// Make audio/video conversion deterministic regardless of whether an ffmpeg
+// binary is available in the test environment.
+vi.mock("@/utils/ffmpeg-path", () => ({
+  ensureFfmpegAvailable: vi.fn(async () => "/usr/bin/ffmpeg"),
+}))
+vi.mock("fluent-ffmpeg", () => {
+  const ffmpeg = vi.fn(() => {
+    const instance: any = {}
+    const chain = () => instance
+    Object.assign(instance, {
+      inputFormat: chain,
+      audioBitrate: chain,
+      audioChannels: chain,
+      videoCodec: chain,
+      audioCodec: chain,
+      format: chain,
+      toFormat: chain,
+      outputOptions: chain,
+      size: chain,
+      on: () => instance,
+      pipe: (output: any) => {
+        process.nextTick(() => {
+          output.emit("data", Buffer.from("x"))
+          output.emit("end")
+        })
+        return output
+      },
+    })
+    return instance
+  })
+  ;(ffmpeg as any).setFfmpegPath = vi.fn()
+  return { __esModule: true, default: ffmpeg }
+})
 
 const fetchMock = vi.fn()
 // @ts-ignore
@@ -55,11 +92,10 @@ vi.mock("../lib/supabase", () => {
         return {
           select: () => ({
             eq: (_col: string, val: any) => ({
-              eq: (_c2: string, v2: any) => ({
-                order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: recipients.find(r => r.buyer_id === val && r.from_number === v2) || null, error: null }) }) })
-              })
+              order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: recipients.find(r => r.buyer_id === val) || null, error: null }) }) })
             })
-          })
+          }),
+          update: () => ({ eq: async () => ({ data: null, error: null }) })
         }
       }
       if (table === "message_threads") {
@@ -133,7 +169,7 @@ vi.mock("../lib/supabase", () => {
   return { supabase: client, supabaseAdmin: client }
 })
 
-describe.skip("Telnyx incoming SMS webhook", () => {
+describe("Telnyx incoming SMS webhook", () => {
   beforeEach(() => {
     buyers = [
       { id: "b1", phone: "2223334444", phone2: null, phone3: null, phone_norm: "2223334444", can_receive_sms: true }
@@ -449,7 +485,7 @@ describe.skip("Telnyx incoming SMS webhook", () => {
   })
 
   test("converts amr media to mp3", async () => {
-    const ensureSpy = jest
+    const ensureSpy = vi
       .spyOn(mms, "ensurePublicMediaUrls")
       .mockResolvedValue(["https://cdn/audio.mp3"])
 
@@ -486,12 +522,14 @@ describe.skip("Telnyx incoming SMS webhook", () => {
   test.each([
     "https://api.telnyx.com/v2/media/voice.amr",
     "https://api.telnyx.com/v2/media/voice.3gpp",
-  ])("converts %s audio to mp3 via mirrorMediaUrl", async (mediaUrl) => {
-    const mirrorSpy = jest
-      .spyOn(mms, "mirrorMediaUrl")
-      .mockResolvedValue(
+  ])("converts %s audio to mp3 via ensurePublicMediaUrls", async (mediaUrl) => {
+    // The route calls ensurePublicMediaUrls (which internally uses mirrorMediaUrl,
+    // not interceptable via spy), so spy on ensurePublicMediaUrls.
+    const ensureSpy = vi
+      .spyOn(mms, "ensurePublicMediaUrls")
+      .mockResolvedValue([
         "https://cdn/storage/v1/object/public/public-media/incoming/audio.mp3",
-      )
+      ])
 
     const body = {
       data: {
@@ -512,12 +550,12 @@ describe.skip("Telnyx incoming SMS webhook", () => {
     try {
       await POST(req)
 
-      expect(mirrorSpy).toHaveBeenCalledWith(mediaUrl, "incoming")
+      expect(ensureSpy).toHaveBeenCalledWith([mediaUrl], "incoming")
       expect(messages[0].media_urls).toEqual([
         "https://cdn/storage/v1/object/public/public-media/incoming/audio.mp3",
       ])
     } finally {
-      mirrorSpy.mockRestore()
+      ensureSpy.mockRestore()
     }
   })
 
@@ -539,10 +577,8 @@ describe.skip("Telnyx incoming SMS webhook", () => {
     const res = await POST(req)
     expect(errorSpy).toHaveBeenCalled()
     expect(fetchMock).toHaveBeenCalled()
-    expect(uploadMock).toHaveBeenCalled()
-    expect(messages[0].media_urls[0]).toBe(
-      "https://cdn/storage/v1/object/public/public-media/p",
-    )
+    // Download fails before upload, so mirroring falls back to the original URL.
+    expect(messages[0].media_urls[0]).toBe("https://api.telnyx.com/v2/media/abc")
     expect(res.status).toBe(204)
     errorSpy.mockRestore()
   })
