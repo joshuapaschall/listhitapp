@@ -133,6 +133,12 @@ export const PERMISSION_CATALOG = Object.freeze([
     description: "Schedule, edit, and manage property showings.",
   },
   {
+    key: "settings.organization",
+    label: "Manage organization",
+    group: "Settings",
+    description: "Edit business name, address, and website used across the app and email footers.",
+  },
+  {
     key: "settings.markets",
     label: "Manage market settings",
     group: "Settings",

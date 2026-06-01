@@ -55,7 +55,7 @@ export async function hasPermission(
   if (!user) return false
 
   const permissions = await getUserPermissions(client, user.id)
-  return permissions.role === "admin" || permissions.granted.has(key)
+  return (permissions.role === "admin" || permissions.role === "owner") || permissions.granted.has(key)
 }
 
 export async function requirePermission(
@@ -69,7 +69,7 @@ export async function requirePermission(
   }
 
   const permissions = await getUserPermissions(client, user.id)
-  if (permissions.role === "admin" || permissions.granted.has(key)) {
+  if ((permissions.role === "admin" || permissions.role === "owner") || permissions.granted.has(key)) {
     return null
   }
 

@@ -7,7 +7,7 @@ import { Bell, LogOut, Mail, Menu, MessageSquare, Phone, Search, Settings, User 
 import { LogoutButton } from "@/components/auth/LogoutButton"
 import { NotificationItem } from "@/components/notifications/notification-item"
 import ThemeToggle from "@/components/theme-toggle"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -22,17 +22,33 @@ import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useNotifications } from "@/hooks/use-notifications"
+import { useSession } from "@/hooks/use-session"
 import { useCall } from "@/components/voice/CallProvider"
 
 interface HeaderProps {
   toggleSidebar: () => void
 }
 
+function getUserInitials(name?: string | null, email?: string | null) {
+  const source = name?.trim() || email?.trim() || "?"
+  const parts = source.split(/\s+/).filter(Boolean)
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase()
+  return source.slice(0, 2).toUpperCase()
+}
+
 export function Header({ toggleSidebar }: HeaderProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [mounted, setMounted] = useState(false)
   const { notifications, unreadCount, markAsRead } = useNotifications()
+  const { user } = useSession()
   const { openDialer } = useCall()
+  const userName = typeof user?.user_metadata?.full_name === "string"
+    ? user.user_metadata.full_name
+    : typeof user?.user_metadata?.name === "string"
+      ? user.user_metadata.name
+      : null
+  const userEmail = user?.email ?? null
+  const initials = getUserInitials(userName, userEmail)
 
   useEffect(() => {
     setMounted(true)
@@ -116,17 +132,23 @@ export function Header({ toggleSidebar }: HeaderProps) {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="ml-2" title="User menu">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src="/placeholder.svg?height=32&width=32" />
-                  <AvatarFallback>JD</AvatarFallback>
+                  <AvatarFallback>{initials}</AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>My Account</DropdownMenuLabel>
+              <DropdownMenuLabel>
+                <div className="flex flex-col">
+                  <span>My Account</span>
+                  {userEmail ? <span className="text-xs font-normal text-muted-foreground">{userEmail}</span> : null}
+                </div>
+              </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>
-                <User className="mr-2 h-4 w-4" />
-                Profile
+              <DropdownMenuItem asChild>
+                <Link href="/settings/profile" className="flex items-center">
+                  <User className="mr-2 h-4 w-4" />
+                  Profile
+                </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link href="/settings" className="flex items-center">
