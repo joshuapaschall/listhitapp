@@ -1,10 +1,5 @@
 import { NextRequest } from "next/server"
 import { getOrgScopedClient } from "@/lib/auth/scoped-db"
-import {
-  unsubscribe as sendfoxUnsubscribe,
-  findContactByEmail,
-  removeContactFromList,
-} from "@/services/sendfox-service"
 import { createLogger } from "@/lib/logger"
 
 export const dynamic = "force-dynamic"
@@ -34,37 +29,14 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
       })
     }
 
-    if (buyer?.email) {
-      try {
-        const contact = await findContactByEmail(buyer.email)
-        if (contact?.id) {
-          const { data: groups } = await supabase
-            .from("buyer_groups")
-            .select("groups(sendfox_list_id)")
-            .eq("buyer_id", id)
-          const listIds = Array.from(
-            new Set(
-              (groups || [])
-                .map((g: any) => g.groups?.sendfox_list_id)
-                .filter(Boolean),
-            ),
-          )
-          for (const listId of listIds) {
-            await removeContactFromList(listId, contact.id)
-          }
-        }
-        const resp = await sendfoxUnsubscribe(buyer.email)
-        console.log("SendFox unsubscribe", { id, email: buyer.email, resp })
-        log("info", "sendfox unsubscribe", { id, email: buyer.email, resp })
-      } catch (err) {
-        console.error("SendFox unsubscribe failed", { id, email: buyer.email, err })
-        log("error", "sendfox unsubscribe failed", { id, email: buyer.email, err })
-      }
-    }
 
     const { error: upd } = await supabase
       .from("buyers")
-      .update({ can_receive_sms: false, can_receive_email: false })
+      .update({
+        can_receive_sms: false,
+        can_receive_email: false,
+        email_suppressed: true,
+      })
       .eq("id", id)
     console.log("Supabase unsubscribe update", { id, error: upd })
     if (upd) throw upd

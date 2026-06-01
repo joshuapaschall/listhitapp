@@ -1,4 +1,3 @@
-import { toast } from "sonner"
 import { createGroup, updateGroup, deleteGroup } from "../lib/group-service"
 
 let groups: any[] = []
@@ -6,7 +5,6 @@ let buyers: any[] = []
 let buyerGroups: any[] = []
 let idCounter = 1
 
-vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 
 vi.mock("../lib/supabase", () => {
   const client = {
@@ -94,21 +92,16 @@ describe("group service", () => {
       ok: true,
       json: () => Promise.resolve({ id: 1 }),
     })
-    ;(toast.error as vi.Mock).mockClear()
   })
 
-  test("createGroup creates SendFox list and stores id", async () => {
+  test("createGroup inserts Supabase group without SendFox calls", async () => {
     const group = await createGroup({ name: "Test Group" })
-    expect(global.fetch).toHaveBeenCalledWith("/api/sendfox/lists", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "Test Group" }),
-    })
-    expect(group.sendfox_list_id).toBe(1)
-    expect(groups[0].sendfox_list_id).toBe(1)
+    expect(global.fetch).not.toHaveBeenCalled()
+    expect(group.name).toBe("Test Group")
+    expect(groups[0].sendfox_list_id).toBeUndefined()
   })
 
-  test("updateGroup resyncs members to SendFox", async () => {
+  test("updateGroup updates Supabase group without SendFox member sync", async () => {
     groups = [{ id: "1", name: "G", sendfox_list_id: 1, created_at: "", updated_at: "" }]
     buyers = [
       { id: "b1", email: "a@example.com", fname: "A", lname: "A" },
@@ -119,38 +112,17 @@ describe("group service", () => {
       { buyer_id: "b2", group_id: "1" },
     ]
 
-    await updateGroup("1", { name: "G2" })
-    expect(global.fetch).toHaveBeenCalledTimes(2)
-    expect(global.fetch).toHaveBeenNthCalledWith(
-      1,
-      "/api/sendfox/lists/1/contacts",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: "a@example.com",
-          first_name: "A",
-          last_name: "A",
-        }),
-      },
-    )
+    const group = await updateGroup("1", { name: "G2" })
+    expect(group.name).toBe("G2")
+    expect(global.fetch).not.toHaveBeenCalled()
   })
 
-  test("deleteGroup can remove SendFox list", async () => {
+  test("deleteGroup removes Supabase group and memberships without SendFox calls", async () => {
     groups = [{ id: "1", name: "G", sendfox_list_id: 1, created_at: "", updated_at: "" }]
     buyerGroups = [{ buyer_id: "b1", group_id: "1" }]
-    await deleteGroup("1", true)
-    expect(global.fetch).toHaveBeenCalledWith("/api/sendfox/lists/1", {
-      method: "DELETE",
-    })
+    await deleteGroup("1")
+    expect(global.fetch).not.toHaveBeenCalled()
     expect(groups.length).toBe(0)
     expect(buyerGroups.length).toBe(0)
-  })
-
-  test("shows toast on SendFox sync failure", async () => {
-    ;(global.fetch as any).mockRejectedValueOnce(new Error("fail"))
-    const group = await createGroup({ name: "Bad" })
-    expect(group.sendfox_list_id).toBeNull()
-    expect(toast.error).toHaveBeenCalled()
   })
 })

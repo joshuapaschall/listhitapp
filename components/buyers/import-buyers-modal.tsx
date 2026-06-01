@@ -90,7 +90,6 @@ export async function importBuyersFromCsv(
   extraLocations: string[],
   extraPropertyTypes: string[],
   groupIds: string[],
-  defaultListId: number | null,
   onProgress?: (pct: number) => void,
 ): Promise<{ inserted: number; updated: number }> {
   log("import", "Starting import with mapping:", mapping)
@@ -258,34 +257,7 @@ export async function importBuyersFromCsv(
       const ids = (result?.insertedIds || result?.ids || []) as string[]
       insertedIds.push(...ids)
       totalInserted += ids.length
-      for (let i = 0; i < inserts.length; i++) {
-        const b = inserts[i]
-        const id = ids[i]
-        if (b.email && id) {
-          const lists: number[] = []
-          if (defaultListId) lists.push(defaultListId)
-          try {
-            const res = await fetch("/api/sendfox/contact", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                email: b.email,
-                first_name: b.fname,
-                lists,
-              }),
-            })
-            const sf = await res.json()
-            if (sf?.id) {
-              await supabase
-                .from("buyers")
-                .update({ sendfox_contact_id: sf.id })
-                .eq("id", id)
-            }
-          } catch (err) {
-            console.error("SendFox sync error", err)
-          }
-        }
-      }
+
     }
 
     for (const u of updates) {
@@ -306,32 +278,7 @@ export async function importBuyersFromCsv(
 
       insertedIds.push(u.id)
       totalUpdated += 1
-      const email = u.existing.email || u.buyer.email
-      if (email) {
-        const lists: number[] = []
-        if (defaultListId) lists.push(defaultListId)
-        try {
-          const res = await fetch("/api/sendfox/contact", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              email,
-              first_name:
-                u.data.fname || u.existing.fname || u.buyer.fname,
-              lists,
-            }),
-          })
-          const sf = await res.json()
-          if (sf?.id) {
-            await supabase
-              .from("buyers")
-              .update({ sendfox_contact_id: sf.id })
-              .eq("id", u.id)
-          }
-        } catch (err) {
-          console.error("SendFox sync error", err)
-        }
-      }
+
     }
 
     processedCount += batch.length
@@ -366,22 +313,8 @@ export default function ImportBuyersModal({ onSuccess }: ImportBuyersModalProps)
   const [importProgress, setImportProgress] = useState(0)
   const [error, setError] = useState("")
   const [importResult, setImportResult] = useState<{ inserted: number; updated: number }>({ inserted: 0, updated: 0 })
-  const [defaultListId, setDefaultListId] = useState<number | null>(
-    process.env.NEXT_PUBLIC_SENDFOX_DEFAULT_LIST_ID
-      ? Number(process.env.NEXT_PUBLIC_SENDFOX_DEFAULT_LIST_ID)
-      : null,
-  )
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    if (defaultListId !== null) return
-    fetch("/api/sendfox/default-list")
-      .then((r) => (r.ok ? r.json() : { listId: null }))
-      .then((d) => {
-        if (d?.listId) setDefaultListId(Number(d.listId))
-      })
-      .catch(() => {})
-  }, [defaultListId])
 
   useEffect(() => {
     const stored = localStorage.getItem("buyerImportTemplates")
@@ -476,7 +409,6 @@ export default function ImportBuyersModal({ onSuccess }: ImportBuyersModalProps)
         extraLocations,
         extraPropertyTypes,
         groupIds,
-        defaultListId,
         (p) => setImportProgress(p),
       )
 

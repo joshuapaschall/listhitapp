@@ -41,7 +41,7 @@ describe("addBuyersToGroups", () => {
     global.fetch = vi.fn(async () => new Response("{}", { status: 200 })) as any
   })
 
-  test("avoids duplicates and syncs buyers", async () => {
+  test("avoids duplicates without SendFox sync", async () => {
     await addBuyersToGroups(["1", "2"], ["g1", "g2"])
 
     expect(buyerGroups).toEqual(
@@ -53,14 +53,6 @@ describe("addBuyersToGroups", () => {
       ]),
     )
     expect(buyerGroups.length).toBe(4)
-    expect(global.fetch).toHaveBeenCalledTimes(2)
-    expect(global.fetch).toHaveBeenCalledWith(
-      "/api/sendfox/sync-buyer-lists",
-      expect.objectContaining({
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ buyerId: "1" }),
-      }),
-    )
+    expect(global.fetch).not.toHaveBeenCalled()
   })
 })

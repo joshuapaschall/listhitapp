@@ -13,13 +13,13 @@ const log = createLogger("campaign-sender")
 
 const EMAIL_QUEUE_CONCURRENCY = Number(process.env.EMAIL_QUEUE_CONCURRENCY || 50)
 const EMAIL_SEND_DELAY_MS = Number(
-  process.env.EMAIL_SEND_DELAY_MS ?? process.env.SENDFOX_SEND_DELAY_MS ?? 0,
+  process.env.EMAIL_SEND_DELAY_MS ?? 0,
 )
 const EMAIL_RETRY_BACKOFF_MS = Number(
-  process.env.EMAIL_RETRY_BACKOFF_MS ?? process.env.SENDFOX_RATE_BACKOFF_MS ?? 2000,
+  process.env.EMAIL_RETRY_BACKOFF_MS ?? 2000,
 )
 const EMAIL_RATE_MAX_RETRY = Number(
-  process.env.EMAIL_RATE_MAX_RETRY ?? process.env.SENDFOX_RATE_MAX_RETRY ?? 3,
+  process.env.EMAIL_RATE_MAX_RETRY ?? 3,
 )
 const EMAIL_RATE_HEADROOM = Number(process.env.EMAIL_RATE_HEADROOM ?? 0.8)
 const EMAIL_SPACING_MS_MIN = Number(process.env.EMAIL_SPACING_MS_MIN ?? 0)

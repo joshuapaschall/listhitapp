@@ -122,27 +122,17 @@ describe("BuyerService.addBuyer", () => {
     idCounter = 1
     fetchMock.mockReset().mockResolvedValue({ ok: true, json: () => Promise.resolve({ id: 1 }) })
     ;(global as any).fetch = fetchMock
-    delete process.env.NEXT_PUBLIC_SENDFOX_DEFAULT_LIST_ID
   })
 
-  test("adds contact to default SendFox list", async () => {
-    process.env.NEXT_PUBLIC_SENDFOX_DEFAULT_LIST_ID = "1"
-    await BuyerService.addBuyer({ email: "test@example.com" })
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/sendfox/contact",
-      expect.objectContaining({ method: "POST" }),
-    )
-    const sent = JSON.parse((fetchMock.mock.calls[0][1] as any).body)
-    expect(sent).toEqual({ email: "test@example.com", lists: [1] })
+  test("adds buyer in Supabase without SendFox contact sync", async () => {
+    const buyer = await BuyerService.addBuyer({ email: "test@example.com" })
+    expect(buyer.email).toBe("test@example.com")
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  test("re-adding buyer overwrites lists", async () => {
-    process.env.NEXT_PUBLIC_SENDFOX_DEFAULT_LIST_ID = "1"
+  test("re-adding buyer does not call SendFox", async () => {
     await BuyerService.addBuyer({ email: "test@example.com" })
-    process.env.NEXT_PUBLIC_SENDFOX_DEFAULT_LIST_ID = "2"
     await BuyerService.addBuyer({ email: "test@example.com" })
-    const bodies = fetchMock.mock.calls.map((c: any) => JSON.parse(c[1].body))
-    expect(bodies[0]).toEqual({ email: "test@example.com", lists: [1] })
-    expect(bodies[1]).toEqual({ email: "test@example.com", lists: [2] })
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
