@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
+import { requireOrgContext } from "@/lib/auth/org-context";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,9 +34,13 @@ function getTodayRange(timeZone: string): { startIso: string; endIso: string } {
 
 export async function GET() {
   try {
+    const { user, orgId, supabase } = await requireOrgContext();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!orgId) return NextResponse.json({ error: "Missing org" }, { status: 400 });
+
     const { startIso, endIso } = getTodayRange(APP_TIMEZONE);
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabase
       .from("calls")
       .select("started_at,status,duration_seconds,voicemail,voicemail_storage_path")
       .gte("started_at", startIso)

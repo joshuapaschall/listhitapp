@@ -1,15 +1,15 @@
-import { cookies } from "next/headers"
 import { NextRequest, NextResponse } from "next/server"
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
-import { supabaseAdmin } from "@/lib/supabase/admin"
+import { requireOrgContext } from "@/lib/auth/org-context"
 import { requirePermission } from "@/lib/permissions/server"
 import { sendShowingConfirmation } from "@/lib/showing-notifications"
 
 const SHOWING_SELECT = "*, buyers(id,fname,lname,full_name,phone,email,can_receive_sms,can_receive_email), properties(id,address,city,state,zip)"
 
 export async function GET(request: NextRequest) {
-  const cookieStore = cookies()
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+  const { user, orgId, supabase } = await requireOrgContext()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!orgId) return NextResponse.json({ error: "Missing org" }, { status: 400 })
+
   const denied = await requirePermission(supabase, "showings.view")
   if (denied) return denied
 
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
   const buyerId = search.get("buyerId")
   const propertyId = search.get("propertyId")
 
-  let query = supabaseAdmin.from("showings").select(SHOWING_SELECT).order("scheduled_at", { ascending: false })
+  let query = supabase.from("showings").select(SHOWING_SELECT).order("scheduled_at", { ascending: false })
 
   if (buyerId) query = query.eq("buyer_id", buyerId)
   if (propertyId) query = query.eq("property_id", propertyId)
@@ -34,8 +34,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const cookieStore = cookies()
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+  const { user, orgId, supabase } = await requireOrgContext()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!orgId) return NextResponse.json({ error: "Missing org" }, { status: 400 })
+
   const denied = await requirePermission(supabase, "showings.manage")
   if (denied) return denied
 
@@ -44,9 +46,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "scheduled_at is required" }, { status: 400 })
   }
 
-  const { data: created, error } = await supabaseAdmin
+  const { data: created, error } = await supabase
     .from("showings")
     .insert({
+      org_id: orgId,
       buyer_id: body.buyer_id || null,
       property_id: body.property_id || null,
       scheduled_at: body.scheduled_at,
@@ -58,7 +61,7 @@ export async function POST(request: NextRequest) {
 
   if (error || !created) return NextResponse.json({ error: error?.message || "Failed to create showing" }, { status: 500 })
 
-  const { data: showing, error: fetchError } = await supabaseAdmin
+  const { data: showing, error: fetchError } = await supabase
     .from("showings")
     .select(SHOWING_SELECT)
     .eq("id", created.id)

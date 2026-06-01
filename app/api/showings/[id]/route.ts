@@ -1,7 +1,5 @@
-import { cookies } from "next/headers"
 import { NextRequest, NextResponse } from "next/server"
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
-import { supabaseAdmin } from "@/lib/supabase/admin"
+import { requireOrgContext } from "@/lib/auth/org-context"
 import { requirePermission } from "@/lib/permissions/server"
 import { insertNotification } from "@/lib/notifications"
 import { sendShowingConfirmation } from "@/lib/showing-notifications"
@@ -10,31 +8,35 @@ type RouteContext = { params: Promise<{ id: string }> }
 const SHOWING_SELECT = "*, buyers(id,fname,lname,full_name,phone,email,can_receive_sms,can_receive_email), properties(id,address,city,state,zip)"
 
 export async function GET(_: NextRequest, context: RouteContext) {
-  const cookieStore = cookies()
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+  const { user, orgId, supabase } = await requireOrgContext()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!orgId) return NextResponse.json({ error: "Missing org" }, { status: 400 })
+
   const denied = await requirePermission(supabase, "showings.view")
   if (denied) return denied
 
   const { id } = await context.params
-  const { data, error } = await supabaseAdmin.from("showings").select(SHOWING_SELECT).eq("id", id).maybeSingle()
+  const { data, error } = await supabase.from("showings").select(SHOWING_SELECT).eq("id", id).maybeSingle()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!data) return NextResponse.json({ error: "Showing not found" }, { status: 404 })
   return NextResponse.json(data)
 }
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
-  const cookieStore = cookies()
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+  const { user, orgId, supabase } = await requireOrgContext()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!orgId) return NextResponse.json({ error: "Missing org" }, { status: 400 })
+
   const denied = await requirePermission(supabase, "showings.manage")
   if (denied) return denied
 
   const { id } = await context.params
   const updates = await request.json()
 
-  const { data: current } = await supabaseAdmin.from("showings").select(SHOWING_SELECT).eq("id", id).maybeSingle()
+  const { data: current } = await supabase.from("showings").select(SHOWING_SELECT).eq("id", id).maybeSingle()
   if (!current) return NextResponse.json({ error: "Showing not found" }, { status: 404 })
 
-  const { data: updated, error } = await supabaseAdmin
+  const { data: updated, error } = await supabase
     .from("showings")
     .update(updates)
     .eq("id", id)
@@ -65,14 +67,16 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 }
 
 export async function DELETE(_: NextRequest, context: RouteContext) {
-  const cookieStore = cookies()
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+  const { user, orgId, supabase } = await requireOrgContext()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!orgId) return NextResponse.json({ error: "Missing org" }, { status: 400 })
+
   const denied = await requirePermission(supabase, "showings.manage")
   if (denied) return denied
 
   const { id } = await context.params
-  const { data: showing } = await supabaseAdmin.from("showings").select("id,buyer_id,property_id").eq("id", id).maybeSingle()
-  const { error } = await supabaseAdmin.from("showings").delete().eq("id", id)
+  const { data: showing } = await supabase.from("showings").select("id,buyer_id,property_id").eq("id", id).maybeSingle()
+  const { error } = await supabase.from("showings").delete().eq("id", id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   await insertNotification({

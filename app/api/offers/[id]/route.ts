@@ -1,7 +1,5 @@
-import { cookies } from "next/headers"
 import { NextRequest, NextResponse } from "next/server"
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
-import { supabaseAdmin } from "@/lib/supabase/admin"
+import { requireOrgContext } from "@/lib/auth/org-context"
 import { requirePermission } from "@/lib/permissions/server"
 import { insertNotification } from "@/lib/notifications"
 import { sendOfferStatusNotification } from "@/lib/offer-notifications"
@@ -19,28 +17,32 @@ const statusTimestampMap: Record<string, string> = {
 }
 
 export async function GET(_: NextRequest, context: RouteContext) {
-  const cookieStore = cookies()
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+  const { user, orgId, supabase } = await requireOrgContext()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!orgId) return NextResponse.json({ error: "Missing org" }, { status: 400 })
+
   const denied = await requirePermission(supabase, "offers.view")
   if (denied) return denied
 
   const { id } = await context.params
-  const { data, error } = await supabaseAdmin.from("offers").select(OFFER_SELECT).eq("id", id).maybeSingle()
+  const { data, error } = await supabase.from("offers").select(OFFER_SELECT).eq("id", id).maybeSingle()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!data) return NextResponse.json({ error: "Offer not found" }, { status: 404 })
   return NextResponse.json(data)
 }
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
-  const cookieStore = cookies()
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+  const { user, orgId, supabase } = await requireOrgContext()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!orgId) return NextResponse.json({ error: "Missing org" }, { status: 400 })
+
   const denied = await requirePermission(supabase, "offers.manage")
   if (denied) return denied
 
   const { id } = await context.params
   const updates = await request.json()
 
-  const { data: current } = await supabaseAdmin.from("offers").select(OFFER_SELECT).eq("id", id).maybeSingle()
+  const { data: current } = await supabase.from("offers").select(OFFER_SELECT).eq("id", id).maybeSingle()
   if (!current) return NextResponse.json({ error: "Offer not found" }, { status: 404 })
 
   const newStatus = typeof updates.status === "string" ? updates.status : null
@@ -51,7 +53,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     updatePayload[statusTimestampMap[newStatus]] = new Date().toISOString()
   }
 
-  const { data: updated, error } = await supabaseAdmin
+  const { data: updated, error } = await supabase
     .from("offers")
     .update(updatePayload)
     .eq("id", id)
@@ -70,14 +72,16 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 }
 
 export async function DELETE(_: NextRequest, context: RouteContext) {
-  const cookieStore = cookies()
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+  const { user, orgId, supabase } = await requireOrgContext()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!orgId) return NextResponse.json({ error: "Missing org" }, { status: 400 })
+
   const denied = await requirePermission(supabase, "offers.manage")
   if (denied) return denied
 
   const { id } = await context.params
-  const { data: offer } = await supabaseAdmin.from("offers").select("id,buyer_id,property_id").eq("id", id).maybeSingle()
-  const { error } = await supabaseAdmin.from("offers").delete().eq("id", id)
+  const { data: offer } = await supabase.from("offers").select("id,buyer_id,property_id").eq("id", id).maybeSingle()
+  const { error } = await supabase.from("offers").delete().eq("id", id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   await insertNotification({

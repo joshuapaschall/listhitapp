@@ -1,16 +1,13 @@
 import { NextResponse } from "next/server"
-import { supabaseAdmin } from "@/lib/supabase"
+import { requireOrgContext } from "@/lib/auth/org-context"
 
 export async function GET() {
-  if (!supabaseAdmin) {
-    return NextResponse.json(
-      { error: "Supabase admin client unavailable" },
-      { status: 500 },
-    )
-  }
+  const { user, orgId, supabase } = await requireOrgContext()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!orgId) return NextResponse.json({ error: "Missing org" }, { status: 400 })
 
   let numbers: string[] = []
-  const inboundRes = await supabaseAdmin
+  const inboundRes = await supabase
     .from("inbound_numbers")
     .select("e164, enabled")
     .eq("enabled", true)
@@ -24,7 +21,7 @@ export async function GET() {
   }
 
   if (!numbers.length) {
-    const voiceRes = await supabaseAdmin
+    const voiceRes = await supabase
       .from("voice_numbers")
       .select("phone_number")
     if (voiceRes.error) {
