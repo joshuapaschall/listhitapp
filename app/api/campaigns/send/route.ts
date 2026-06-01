@@ -164,7 +164,7 @@ export async function POST(request: NextRequest) {
       .select("buyer_id, buyers!inner(id)")
       .in("group_id", groupIds)
       .is("buyers.deleted_at", null)
-      .eq("buyers.sendfox_suppressed", false)
+      .eq("buyers.email_suppressed", false)
     if (groupErr) {
       console.error("Error fetching group buyers", groupErr)
       return new Response(JSON.stringify({ error: "Failed to fetch recipients" }), { status: 500 })
@@ -180,7 +180,7 @@ export async function POST(request: NextRequest) {
     .select("id")
     .in("id", finalIds)
     .is("deleted_at", null)
-    .eq("sendfox_suppressed", false)
+    .eq("email_suppressed", false)
   if (campaign.channel === "email") {
     allowedQuery = allowedQuery.eq("can_receive_email", true)
   }
@@ -237,7 +237,7 @@ export async function POST(request: NextRequest) {
     )
     .eq("campaign_id", campaignId)
     .is("buyers.deleted_at", null)
-    .eq("buyers.sendfox_suppressed", false)
+    .eq("buyers.email_suppressed", false)
   if (campaign.channel === "email") {
     recipientsQuery = recipientsQuery.eq("buyers.can_receive_email", true)
   }
