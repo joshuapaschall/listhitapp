@@ -44,7 +44,7 @@ function createRouteClient() {
         }
       }
 
-      throw new Error(`Unexpected route-client table ${table}`)
+      return createAdminQuery(table)
     },
   }
 }
@@ -81,6 +81,14 @@ function createAdminQuery(table: string) {
 
 vi.mock("@supabase/auth-helpers-nextjs", () => ({
   createRouteHandlerClient: () => createRouteClient(),
+}))
+
+vi.mock("@/lib/auth/org-context", () => ({
+  requireOrgContext: async () => ({
+    user: state.currentUser,
+    orgId: state.currentUser ? "org-1" : null,
+    supabase: createRouteClient(),
+  }),
 }))
 
 vi.mock("@/lib/supabase/admin", () => ({

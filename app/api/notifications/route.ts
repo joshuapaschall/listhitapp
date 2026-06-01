@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server"
 
-import { supabaseAdmin } from "@/lib/supabase/admin"
+import { requireOrgContext } from "@/lib/auth/org-context"
 
 export async function GET() {
+  const { user, orgId, supabase } = await requireOrgContext()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!orgId) return NextResponse.json({ error: "Missing org" }, { status: 400 })
+
   // If this returns "relation does not exist" error, run the migration in supabase/migrations/20260516_create_notifications.sql
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await supabase
     .from("notifications")
     .select("*")
     .order("created_at", { ascending: false })
@@ -19,6 +23,10 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
+  const { user, orgId, supabase } = await requireOrgContext()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!orgId) return NextResponse.json({ error: "Missing org" }, { status: 400 })
+
   const body = (await request.json()) as { ids?: string[] }
   const ids = Array.isArray(body.ids) ? body.ids.filter(Boolean) : []
 
@@ -26,7 +34,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ updated: 0 })
   }
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await supabase
     .from("notifications")
     .update({ read_at: new Date().toISOString() })
     .in("id", ids)

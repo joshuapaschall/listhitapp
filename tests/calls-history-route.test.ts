@@ -25,7 +25,7 @@ const fetchMock = vi.fn().mockResolvedValue({ ok: true })
 // @ts-ignore
 global.fetch = fetchMock
 
-vi.mock("../lib/supabase", () => {
+vi.mock("@/lib/auth/org-context", () => {
   const result = { data: sampleCalls, error: null, count: sampleCalls.length }
   const builder: any = {
     select: (columns: string, _options?: any) => {
@@ -56,16 +56,21 @@ vi.mock("../lib/supabase", () => {
     }
   }
 
-  return {
-    supabase: null,
-    supabaseAdmin: {
-      from: (table: string) => {
-        if (table !== "calls") {
-          throw new Error(`Unexpected table ${table}`)
-        }
-        return builder
+  const supabase = {
+    from: (table: string) => {
+      if (table !== "calls") {
+        throw new Error(`Unexpected table ${table}`)
       }
+      return builder
     }
+  }
+
+  return {
+    requireOrgContext: async () => ({
+      user: { id: "user-1" },
+      orgId: "org-1",
+      supabase,
+    }),
   }
 })
 

@@ -1,43 +1,57 @@
 import { NextRequest } from "next/server"
 import { GET } from "../app/api/export-conversation/[buyerId]/route"
 
-let messages: any[] = []
-let supabase: any
-
-vi.mock("@/lib/supabase", () => ({
-  get supabaseAdmin() {
-    return supabase
-  },
+const state = vi.hoisted(() => ({
+  user: { id: "user-1" } as { id: string } | null,
+  orgId: "org-1" as string | null,
+  messages: [] as any[],
 }))
 
 function buildSupabase() {
   return {
     from: (table: string) => {
-      if (table !== "messages") throw new Error(`Unexpected table ${table}`)
-      return {
-        select: () => ({
-          eq: () => ({
-            is: () => ({
-              order: async () => ({ data: messages, error: null }),
+      if (table === "buyers") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: { id: "b1" }, error: null }),
             }),
           }),
-        }),
+        }
       }
+
+      if (table === "messages") {
+        return {
+          select: () => ({
+            eq: () => ({
+              is: () => ({
+                order: async () => ({ data: state.messages, error: null }),
+              }),
+            }),
+          }),
+        }
+      }
+
+      throw new Error(`Unexpected table ${table}`)
     },
   }
 }
 
+vi.mock("@/lib/auth/org-context", () => ({
+  requireOrgContext: async () => ({
+    user: state.user,
+    orgId: state.orgId,
+    supabase: buildSupabase(),
+  }),
+}))
+
 describe("export conversation route", () => {
   beforeEach(() => {
-    process.env.SUPABASE_SERVICE_ROLE_KEY = "key"
-    messages = [
+    state.user = { id: "user-1" }
+    state.orgId = "org-1"
+    state.messages = [
       { id: "m1", buyer_id: "b1", created_at: "2025", direction: "outbound" },
     ]
-    supabase = buildSupabase()
-  })
-
-  afterEach(() => {
-    delete process.env.SUPABASE_SERVICE_ROLE_KEY
   })
 
   test("returns csv", async () => {
@@ -56,11 +70,11 @@ describe("export conversation route", () => {
     expect(res.headers.get("Content-Type")).toBe("application/json")
   })
 
-  test("throws if service role key missing", async () => {
-    delete process.env.SUPABASE_SERVICE_ROLE_KEY
+  test("returns 401 without a session", async () => {
+    state.user = null
+    state.orgId = null
     const req = new NextRequest("http://test")
-    await expect(
-      GET(req, { params: { buyerId: "b1" } })
-    ).rejects.toThrow("SUPABASE_SERVICE_ROLE_KEY is required")
+    const res = await GET(req, { params: { buyerId: "b1" } })
+    expect(res.status).toBe(401)
   })
 })

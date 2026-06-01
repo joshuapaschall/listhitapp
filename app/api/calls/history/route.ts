@@ -2,10 +2,14 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
+import { requireOrgContext } from "@/lib/auth/org-context";
 
 export async function GET(request: NextRequest) {
   try {
+    const { user, orgId, supabase } = await requireOrgContext();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!orgId) return NextResponse.json({ error: "Missing org" }, { status: 400 });
+
     const searchParams = request.nextUrl.searchParams;
     
     // Parse query parameters
@@ -23,7 +27,7 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status') || '';
 
     // Build query
-    let query = supabaseAdmin
+    let query = supabase
       .from('calls')
       .select(`
         *,

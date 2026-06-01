@@ -27,9 +27,12 @@ const mockClient = {
   },
 }
 
-vi.mock("@/lib/supabase", () => ({
-  supabase: mockClient,
-  supabaseAdmin: mockClient,
+vi.mock("@/lib/auth/org-context", () => ({
+  requireOrgContext: async () => ({
+    user: { id: "user-1" },
+    orgId: "org-1",
+    supabase: mockClient,
+  }),
 }))
 
 const mod = await import("../app/api/voice-numbers/route")

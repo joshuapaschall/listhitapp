@@ -1,17 +1,31 @@
 import { NextRequest } from "next/server"
+import { requireOrgContext } from "@/lib/auth/org-context"
 import { formatConversationAsCSV, formatConversationAsJSON } from "@/lib/conversation-export"
 import { assertServer } from "@/utils/assert-server"
 
 assertServer()
 
 export async function GET(request: NextRequest, { params }: { params: { buyerId: string } }) {
+  const { user, orgId, supabase } = await requireOrgContext()
+  if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 })
+  if (!orgId) return new Response(JSON.stringify({ error: "Missing org" }), { status: 400 })
+
   const format = request.nextUrl.searchParams.get("format") || "json"
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!key) {
-    throw new Error("SUPABASE_SERVICE_ROLE_KEY is required")
+
+  const { data: buyer, error: buyerError } = await supabase
+    .from("buyers")
+    .select("id")
+    .eq("id", params.buyerId)
+    .maybeSingle()
+
+  if (buyerError) {
+    console.error("Error fetching buyer", buyerError)
+    return new Response(JSON.stringify({ error: "fetch failed" }), { status: 500 })
   }
-  const { supabaseAdmin } = await import("@/lib/supabase")
-  const supabase = supabaseAdmin
+
+  if (!buyer) {
+    return new Response(JSON.stringify({ error: "Buyer not found" }), { status: 404 })
+  }
 
   const { data, error } = await supabase
     .from("messages")

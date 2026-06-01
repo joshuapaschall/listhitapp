@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+import { requireOrgContext } from '@/lib/auth/org-context';
 
 export async function GET(request: NextRequest) {
   try {
+    const { user, orgId, supabase } = await requireOrgContext();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!orgId) return NextResponse.json({ error: 'Missing org' }, { status: 400 });
+
     const searchParams = request.nextUrl.searchParams;
     const status = searchParams.get('status');
     const agentId = searchParams.get('agent_id');
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
 
-    let query = supabaseAdmin
+    let query = supabase
       .from('voicemails')
       .select(`
         *,
@@ -45,7 +49,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get statistics
-    const { data: stats } = await supabaseAdmin
+    const { data: stats } = await supabase
       .rpc('get_voicemail_stats', { p_agent_id: agentId });
 
     return NextResponse.json({
@@ -72,6 +76,10 @@ export async function GET(request: NextRequest) {
 // Update voicemail status/assignment
 export async function PATCH(request: NextRequest) {
   try {
+    const { user, orgId, supabase } = await requireOrgContext();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!orgId) return NextResponse.json({ error: 'Missing org' }, { status: 400 });
+
     const body = await request.json();
     const { voicemailId, status, assignedTo, notes, priority, tags } = body;
 
@@ -92,7 +100,7 @@ export async function PATCH(request: NextRequest) {
     if (priority) updates.priority = priority;
     if (tags) updates.tags = tags;
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabase
       .from('voicemails')
       .update(updates)
       .eq('id', voicemailId)
@@ -121,6 +129,10 @@ export async function PATCH(request: NextRequest) {
 // Soft delete voicemail
 export async function DELETE(request: NextRequest) {
   try {
+    const { user, orgId, supabase } = await requireOrgContext();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!orgId) return NextResponse.json({ error: 'Missing org' }, { status: 400 });
+
     const searchParams = request.nextUrl.searchParams;
     const voicemailId = searchParams.get('id');
 
@@ -132,7 +144,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Soft delete
-    const { error } = await supabaseAdmin
+    const { error } = await supabase
       .from('voicemails')
       .update({
         deleted_at: new Date().toISOString(),
