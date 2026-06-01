@@ -19,16 +19,17 @@ import {
   Handshake,
   PiggyBank,
 } from "lucide-react"
-import {
-  fetchKpis,
-  fetchTextTrends,
-  fetchCallTrends,
-  fetchEmailTrends,
-  fetchOfferTrends,
-  fetchShowingTrends,
-  fetchUnsubscribeTrends,
-  fetchRecentActivity,
-  type TimeRange,
+import type {
+  CallTrend,
+  DashboardKpis,
+  EmailTrend,
+  OfferTrend,
+  RecentActivityItem,
+  ShowingTrend,
+  TextTrend,
+  TimeRange,
+  TrendWithDelta,
+  UnsubscribeTrend,
 } from "@/services/dashboard-service"
 import { useQuery } from "@tanstack/react-query"
 import BuyersAddedCard from "@/components/dashboard/kpi-cards/BuyersAddedCard"
@@ -64,6 +65,27 @@ import SpamComplaintRateCard from "@/components/dashboard/kpi-cards/SpamComplain
 import OpenRateCard from "@/components/dashboard/kpi-cards/OpenRateCard"
 import ClickRateCard from "@/components/dashboard/kpi-cards/ClickRateCard"
 
+type DashboardPayload = {
+  kpis: DashboardKpis
+  textTrends: TrendWithDelta<TextTrend>
+  callTrends: TrendWithDelta<CallTrend>
+  emailTrends: TrendWithDelta<EmailTrend>
+  offerTrends: TrendWithDelta<OfferTrend>
+  showingTrends: TrendWithDelta<ShowingTrend>
+  unsubscribeTrends: TrendWithDelta<UnsubscribeTrend>
+  recentActivity: RecentActivityItem[]
+}
+
+async function fetchDashboard(range: TimeRange): Promise<DashboardPayload> {
+  const response = await fetch(`/api/dashboard?range=${range}`)
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    throw new Error(payload?.error || "Failed to load dashboard")
+  }
+
+  return response.json()
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -80,45 +102,19 @@ export default function DashboardPage() {
     router.replace(`?${params.toString()}`)
   }
 
-  const { data: kpis = null } = useQuery({
-    queryKey: ["dashboard-kpis", range],
-    queryFn: () => fetchKpis(range),
+  const { data: dashboardData = null } = useQuery({
+    queryKey: ["dashboard", range],
+    queryFn: () => fetchDashboard(range),
   })
 
-  const { data: textTrends = { data: [], delta: 0 } } = useQuery({
-    queryKey: ["text-trends", range],
-    queryFn: () => fetchTextTrends(range),
-  })
-
-  const { data: callTrends = { data: [], delta: 0 } } = useQuery({
-    queryKey: ["call-trends", range],
-    queryFn: () => fetchCallTrends(range),
-  })
-
-  const { data: emailTrends = { data: [], delta: 0 } } = useQuery({
-    queryKey: ["email-trends", range],
-    queryFn: () => fetchEmailTrends(range),
-  })
-
-  const { data: offerTrends = { data: [], delta: 0 } } = useQuery({
-    queryKey: ["offer-trends", range],
-    queryFn: () => fetchOfferTrends(range),
-  })
-
-  const { data: showingTrends = { data: [], delta: 0 } } = useQuery({
-    queryKey: ["showing-trends", range],
-    queryFn: () => fetchShowingTrends(range),
-  })
-
-  const { data: unsubscribeTrends = { data: [], delta: 0 } } = useQuery({
-    queryKey: ["unsubscribe-trends", range],
-    queryFn: () => fetchUnsubscribeTrends(range),
-  })
-
-  const { data: activity = [] } = useQuery({
-    queryKey: ["recent-activity", range],
-    queryFn: () => fetchRecentActivity(range),
-  })
+  const kpis = dashboardData?.kpis ?? null
+  const textTrends = dashboardData?.textTrends ?? { data: [], delta: 0 }
+  const callTrends = dashboardData?.callTrends ?? { data: [], delta: 0 }
+  const emailTrends = dashboardData?.emailTrends ?? { data: [], delta: 0 }
+  const offerTrends = dashboardData?.offerTrends ?? { data: [], delta: 0 }
+  const showingTrends = dashboardData?.showingTrends ?? { data: [], delta: 0 }
+  const unsubscribeTrends = dashboardData?.unsubscribeTrends ?? { data: [], delta: 0 }
+  const activity = dashboardData?.recentActivity ?? []
 
   return (
     <MainLayout>
