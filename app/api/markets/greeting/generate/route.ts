@@ -41,11 +41,40 @@ export async function POST(request: Request) {
   const scopeType = body.scopeType === "number" ? "number" : "market";
   const text = typeof body.text === "string" ? body.text.trim() : "";
   const voiceId = typeof body.voice_id === "string" ? body.voice_id : DEFAULT_VOICE_ID;
-  const voiceConfig = POLLY_VOICES.find((voice) => voice.id === voiceId) ?? POLLY_VOICES[0];
+  const voiceConfig = POLLY_VOICES.find((voice) => voice.id === voiceId)
+    ?? POLLY_VOICES.find((voice) => voice.id === DEFAULT_VOICE_ID)
+    ?? POLLY_VOICES[0];
   if (!scopeKey || !text) return NextResponse.json({ ok: false, error: "Missing scopeKey or text" }, { status: 400 });
-  const polly = new PollyClient({ region: process.env.AWS_SES_REGION ?? process.env.AWS_REGION ?? "us-east-1", credentials: { accessKeyId: process.env.AWS_SES_ACCESS_KEY_ID ?? process.env.AWS_ACCESS_KEY_ID ?? "", secretAccessKey: process.env.AWS_SES_SECRET_ACCESS_KEY ?? process.env.AWS_SECRET_ACCESS_KEY ?? "" } });
-  const result = await polly.send(new SynthesizeSpeechCommand({ Text: text, OutputFormat: "mp3", VoiceId: voiceConfig.id as VoiceId, Engine: voiceConfig.engine, SampleRate: "24000" }));
-  const chunks: Uint8Array[] = []; for await (const c of result.AudioStream as AsyncIterable<Uint8Array>) chunks.push(c);
+  const pollyRegion = process.env.AWS_POLLY_REGION ?? process.env.AWS_REGION ?? process.env.AWS_SES_REGION ?? "us-east-1";
+  const pollyAccessKeyId = process.env.AWS_POLLY_ACCESS_KEY_ID ?? process.env.AWS_ACCESS_KEY_ID ?? process.env.AWS_SES_ACCESS_KEY_ID ?? "";
+  const pollySecretAccessKey = process.env.AWS_POLLY_SECRET_ACCESS_KEY ?? process.env.AWS_SECRET_ACCESS_KEY ?? process.env.AWS_SES_SECRET_ACCESS_KEY ?? "";
+  if (!pollyAccessKeyId || !pollySecretAccessKey) {
+    return NextResponse.json({ ok: false, error: "Polly AWS credentials are not configured (set AWS_POLLY_ACCESS_KEY_ID / AWS_POLLY_SECRET_ACCESS_KEY)." }, { status: 500 });
+  }
+
+  const polly = new PollyClient({
+    region: pollyRegion,
+    credentials: {
+      accessKeyId: pollyAccessKeyId,
+      secretAccessKey: pollySecretAccessKey,
+    },
+  });
+  const isSsml = text.trim().startsWith("<speak");
+  const chunks: Uint8Array[] = [];
+  try {
+    const result = await polly.send(new SynthesizeSpeechCommand({
+      Text: text,
+      TextType: isSsml ? "ssml" : "text",
+      OutputFormat: "mp3",
+      VoiceId: voiceConfig.id as VoiceId,
+      Engine: voiceConfig.engine,
+      SampleRate: "24000",
+    }));
+    for await (const c of result.AudioStream as AsyncIterable<Uint8Array>) chunks.push(c);
+  } catch (err) {
+    console.error("[polly greeting] synth failed", err);
+    return NextResponse.json({ ok: false, error: err instanceof Error ? err.message : "Polly synthesis failed" }, { status: 500 });
+  }
   const path = `${scopeType === "market" ? "markets" : "numbers"}/${scopeKey}/preview-${ts}.mp3`;
   const { error } = await supabase.storage.from(GREETING_BUCKET).upload(path, Buffer.concat(chunks), { contentType: "audio/mpeg", upsert: true });
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
