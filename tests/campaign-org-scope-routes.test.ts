@@ -57,7 +57,7 @@ const h = vi.hoisted(() => {
           delete: () => chainable(() => []),
         }
       }
-      if (table === "email_campaign_queue") {
+      if (table === "email_campaign_queue" || table === "sms_campaign_queue") {
         return { delete: () => chainable(() => []) }
       }
       if (table === "email_events") {

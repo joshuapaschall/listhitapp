@@ -100,7 +100,7 @@ function createRouteClient() {
         }
       }
 
-      if (table === "campaign_recipients" || table === "email_campaign_queue") {
+      if (table === "campaign_recipients" || table === "email_campaign_queue" || table === "sms_campaign_queue") {
         return {
           delete: () => createDeleteQuery(table),
         }
@@ -299,6 +299,7 @@ describe("campaign permission gates", () => {
       expect(res.status).toBe(200)
       expect(state.deleted.map((entry) => entry.table)).toEqual([
         "email_campaign_queue",
+        "sms_campaign_queue",
         "campaign_recipients",
         "campaigns",
       ])

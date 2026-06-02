@@ -53,7 +53,6 @@ export async function GET(request: Request) {
         .from("campaigns")
         .select("id, name, channel, scheduled_at, created_at")
         .eq("org_id", orgId)
-        .is("deleted_at", null)
         .order("created_at", { ascending: false })
         .limit(OPTION_LIMIT)
       if (error) throw error

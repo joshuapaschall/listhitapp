@@ -328,7 +328,6 @@ async function lastNCampaignIds(
     .from("campaigns")
     .select("id")
     .eq("org_id", ctx.orgId)
-    .is("deleted_at", null)
     .not("sent_at", "is", null)
   if (ctx.contextCampaignId) q = q.neq("id", ctx.contextCampaignId)
   if (chans.length === 1) q = q.eq("channel", chans[0])
@@ -344,9 +343,8 @@ async function lastNCampaignIds(
 function recipientsBase(ctx: ResolveContext, chans: ("email" | "sms")[]): any {
   const q = ctx.supabase
     .from("campaign_recipients")
-    .select("buyer_id, campaigns!inner(org_id,deleted_at,channel)")
+    .select("buyer_id, campaigns!inner(org_id,channel)")
     .eq("campaigns.org_id", ctx.orgId)
-    .is("campaigns.deleted_at", null)
   if (chans.length === 1) return q.eq("campaigns.channel", chans[0])
   return q.in("campaigns.channel", chans)
 }

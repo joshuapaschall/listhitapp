@@ -76,6 +76,18 @@ export async function POST(request: NextRequest) {
     })
   }
 
+  const { error: smsQueueError } = await supabase
+    .from("sms_campaign_queue")
+    .delete()
+    .eq("campaign_id", campaignId)
+  if (smsQueueError) {
+    console.error("Error deleting campaign SMS queue rows:", smsQueueError)
+    return new Response(JSON.stringify({ error: smsQueueError.message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    })
+  }
+
   const { error: recipientError } = await supabase
     .from("campaign_recipients")
     .delete()
