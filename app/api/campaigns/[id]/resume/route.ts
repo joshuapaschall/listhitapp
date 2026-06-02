@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { processEmailQueue } from "@/services/campaign-sender"
 import { processSmsQueue } from "@/services/sms-campaign-sender"
 import { assertServer } from "@/utils/assert-server"
+import { resolveOrgIdForUser } from "@/lib/auth/org-context"
 
 assertServer()
 
@@ -35,6 +36,7 @@ export async function POST(
   }
 
   let userId: string | null = null
+  let orgId: string | null = null
   let authSource: "cron_secret" | "service_role" | "user_jwt"
   if (requestToken === cronSecret) {
     authSource = "cron_secret"
@@ -49,6 +51,10 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
     userId = user.id
+    orgId = await resolveOrgIdForUser(userId)
+    if (!orgId) {
+      return NextResponse.json({ error: "Organization context required" }, { status: 403 })
+    }
     authSource = "user_jwt"
   } else {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -58,8 +64,8 @@ export async function POST(
     .from("campaigns")
     .select("id,status,user_id,channel")
     .eq("id", params.id)
-  if (authSource === "user_jwt" && userId) {
-    campaignQuery = campaignQuery.eq("user_id", userId)
+  if (authSource === "user_jwt" && orgId) {
+    campaignQuery = campaignQuery.eq("org_id", orgId)
   }
 
   const { data: campaign, error: campaignError } = await campaignQuery.maybeSingle()

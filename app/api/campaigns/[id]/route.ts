@@ -1,8 +1,7 @@
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 import { createLogger } from "@/lib/logger"
 import { hasPermission } from "@/lib/permissions/server"
+import { requireOrgContext } from "@/lib/auth/org-context"
 
 const log = createLogger("api:campaigns:patch")
 
@@ -19,15 +18,15 @@ const allowed = new Set([
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   try {
-    const supabase = createRouteHandlerClient({ cookies })
-    const { data: { user } } = await supabase.auth.getUser()
+    const { user, orgId, supabase } = await requireOrgContext()
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!orgId) return NextResponse.json({ error: "Organization context required" }, { status: 400 })
 
     const { data: campaign } = await supabase
       .from("campaigns")
-      .select("id,status,user_id")
+      .select("id,status,user_id,org_id")
       .eq("id", params.id)
-      .eq("user_id", user.id)
+      .eq("org_id", orgId)
       .maybeSingle()
 
     if (!campaign) return NextResponse.json({ error: "Campaign not found" }, { status: 404 })

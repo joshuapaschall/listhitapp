@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
   fetchMock: vi.fn(),
   smsMock: vi.fn(),
   emailMock: vi.fn(),
+  orgId: "org-1" as string | null,
 }))
 
 vi.mock("@/services/campaign-sender.server", () => ({
@@ -114,6 +115,15 @@ vi.mock("@supabase/auth-helpers-nextjs", () => ({
   createRouteHandlerClient: () => createRouteClient(),
 }))
 
+vi.mock("@/lib/auth/org-context", () => ({
+  requireOrgContext: async () => ({
+    user: state.currentUser,
+    orgId: state.orgId,
+    supabase: createRouteClient(),
+  }),
+  resolveOrgIdForUser: async () => state.orgId,
+}))
+
 describe("campaign permission gates", () => {
   beforeEach(() => {
     vi.resetModules()
@@ -130,6 +140,7 @@ describe("campaign permission gates", () => {
     })
     state.smsMock.mockReset().mockResolvedValue([{ to: "+17705550123", sid: "dry-run", from: "+15555550100" }])
     state.emailMock.mockReset().mockResolvedValue(undefined)
+    state.orgId = "org-1"
     ;(global as any).fetch = state.fetchMock
     process.env.CRON_SECRET = "cron-secret"
     process.env.DISPOTOOL_BASE_URL = ""
@@ -239,7 +250,7 @@ describe("campaign permission gates", () => {
   })
 
   test("gates SMS test sends on campaigns.send_sms", async () => {
-    state.campaigns = [{ id: "sms-1", user_id: "user-1", channel: "sms", status: "draft", message: "Hi {{fname}}" }]
+    state.campaigns = [{ id: "sms-1", org_id: "org-1", user_id: "user-1", channel: "sms", status: "draft", message: "Hi {{fname}}" }]
 
     const denied = await postSmsTest()
     expect(denied.status).toBe(403)
