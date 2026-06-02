@@ -20,6 +20,7 @@ import {
   ChevronRight,
   Phone,
   Target,
+  Filter,
 } from "lucide-react"
 import {
   Accordion,
@@ -61,6 +62,12 @@ const navigation = [
     title: "Campaigns",
     icon: Target,
     href: "/campaigns",
+    badge: null,
+  },
+  {
+    title: "Segments",
+    icon: Filter,
+    href: "/segments",
     badge: null,
   },
   {
