@@ -11,6 +11,9 @@ import {
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import type { OfferWithRelations } from "@/lib/supabase"
@@ -27,12 +30,23 @@ interface OfferDetailDrawerProps {
 }
 const currencyFormatter = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })
 const statuses = ["submitted", "accepted", "rejected", "withdrawn", "countered", "closed"]
+const moneyToNumber = (value: string) => {
+  if (!value.trim()) return null
+  const numeric = Number(value.replace(/[^\d.-]/g, ""))
+  return Number.isFinite(numeric) ? numeric : null
+}
+const formatMoneyInput = (value: number | null | undefined) =>
+  value == null ? "" : String(Math.round(value)).replace(/\B(?=(\d{3})+(?!\d))/g, ",")
 
 export default function OfferDetailDrawer({ open, onOpenChange, offer, onSuccess, canManage = false }: OfferDetailDrawerProps) {
   const [status, setStatus] = useState<string>(offer?.status || "submitted")
   const [notes, setNotes] = useState<string>(offer?.notes || "")
   const [isSavingStatus, setIsSavingStatus] = useState(false)
   const [isSavingNotes, setIsSavingNotes] = useState(false)
+  const [economicsOpen, setEconomicsOpen] = useState(false)
+  const [acceptedPrice, setAcceptedPrice] = useState("")
+  const [assignmentFee, setAssignmentFee] = useState("")
+  const [dealExpenses, setDealExpenses] = useState("0")
 
   useEffect(() => {
     setStatus(offer?.status || "submitted")
@@ -59,7 +73,25 @@ export default function OfferDetailDrawer({ open, onOpenChange, offer, onSuccess
   const initials = `${offer.buyers?.fname?.[0] || ""}${offer.buyers?.lname?.[0] || ""}`.toUpperCase() || "?"
   const offerType = (offer.offer_type || "financing").toLowerCase()
 
+  const openEconomicsDialog = () => {
+    const defaultAcceptedPrice = offer.accepted_price ?? offer.offer_price ?? null
+    const defaultAssignmentFee =
+      defaultAcceptedPrice != null && offer.properties?.buy_price != null
+        ? defaultAcceptedPrice - offer.properties.buy_price
+        : offer.assignment_fee ?? null
+
+    setAcceptedPrice(formatMoneyInput(defaultAcceptedPrice))
+    setAssignmentFee(formatMoneyInput(defaultAssignmentFee))
+    setDealExpenses(formatMoneyInput(offer.deal_expenses ?? 0))
+    setEconomicsOpen(true)
+  }
+
   const handleUpdateStatus = async () => {
+    if (status === "accepted" && offer.status !== "accepted") {
+      openEconomicsDialog()
+      return
+    }
+
     try {
       setIsSavingStatus(true)
       await OfferService.updateOffer(offer.id, { status })
@@ -67,6 +99,29 @@ export default function OfferDetailDrawer({ open, onOpenChange, offer, onSuccess
       onSuccess?.()
     } catch {
       toast.error("Failed to update status")
+    } finally {
+      setIsSavingStatus(false)
+    }
+  }
+
+  const confirmAcceptedEconomics = async () => {
+    const accepted_price = moneyToNumber(acceptedPrice)
+    const assignment_fee = moneyToNumber(assignmentFee)
+    const deal_expenses = moneyToNumber(dealExpenses) ?? 0
+
+    try {
+      setIsSavingStatus(true)
+      await OfferService.updateOffer(offer.id, {
+        status: "accepted",
+        accepted_price,
+        assignment_fee,
+        deal_expenses,
+      })
+      toast.success("Offer accepted")
+      setEconomicsOpen(false)
+      onSuccess?.()
+    } catch {
+      toast.error("Failed to accept offer")
     } finally {
       setIsSavingStatus(false)
     }
@@ -98,6 +153,7 @@ export default function OfferDetailDrawer({ open, onOpenChange, offer, onSuccess
   }
 
   return (
+    <>
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
         <SheetHeader>
@@ -213,5 +269,32 @@ export default function OfferDetailDrawer({ open, onOpenChange, offer, onSuccess
         </div>
       </SheetContent>
     </Sheet>
+    <Dialog open={economicsOpen} onOpenChange={setEconomicsOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Accept offer economics</DialogTitle>
+          <DialogDescription>Capture the deal economics used to power disposition profit metrics.</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-2">
+          <div className="space-y-2">
+            <Label>Accepted price</Label>
+            <div className="relative"><DollarSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" value={acceptedPrice} onChange={(e) => setAcceptedPrice(e.target.value)} /></div>
+          </div>
+          <div className="space-y-2">
+            <Label>Assignment fee</Label>
+            <div className="relative"><DollarSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" value={assignmentFee} onChange={(e) => setAssignmentFee(e.target.value)} /></div>
+          </div>
+          <div className="space-y-2">
+            <Label>Deal expenses</Label>
+            <div className="relative"><DollarSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" value={dealExpenses} onChange={(e) => setDealExpenses(e.target.value)} /></div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setEconomicsOpen(false)} disabled={isSavingStatus}>Cancel</Button>
+          <Button onClick={confirmAcceptedEconomics} disabled={isSavingStatus}>Accept offer</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }

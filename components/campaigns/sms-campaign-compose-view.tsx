@@ -12,6 +12,7 @@ import SmsComposerPanel from "@/components/campaigns/sms-composer-panel"
 import SmsFromCard from "@/components/campaigns/sms-from-card"
 import SmsMediaCard from "@/components/campaigns/sms-media-card"
 import SmsSendTimeCard from "@/components/campaigns/sms-send-time-card"
+import CampaignPropertySelector from "@/components/campaigns/campaign-property-selector"
 import { readAudienceSnapshot, clearAudienceSnapshot, type CampaignAudienceSnapshot } from "@/lib/campaign-audience"
 import { calculateSmsSegments } from "@/lib/sms-utils"
 import { formatPhoneE164 } from "@/lib/dedup-utils"
@@ -52,7 +53,7 @@ export default function SmsCampaignComposeView({ initialCampaign }: { initialCam
   const router = useRouter()
   const searchParams = useSearchParams()
   const [campaign, setCampaign] = useState<any>(initialCampaign)
-  const [expandedCard, setExpandedCard] = useState<"to"|"from"|"content"|"media"|"sendTime"|null>(null)
+  const [expandedCard, setExpandedCard] = useState<"to"|"from"|"content"|"media"|"sendTime"|"property"|null>(null)
   const [autosaveState, setAutosaveState] = useState<"idle"|"saving"|"saved"|"failed">("idle")
   const [hasEdited, setHasEdited] = useState(false)
   const [hasPrefillSnapshot, setHasPrefillSnapshot] = useState<CampaignAudienceSnapshot | null>(null)
@@ -66,9 +67,10 @@ export default function SmsCampaignComposeView({ initialCampaign }: { initialCam
     return formatPhoneE164(testPhone)
   }, [testPhone])
   const isTestPhoneInvalid = testPhone.trim().length > 0 && !parsedTestPhone
+  const campaignGroupIdsKey = useMemo(() => JSON.stringify(campaign.group_ids || []), [campaign.group_ids])
 
   useEffect(() => {
-    const groupIds = campaign.group_ids || []
+    const groupIds = JSON.parse(campaignGroupIdsKey) as string[]
     if (!groupIds.length) {
       setResolvedGroupBuyerIds([])
       return
@@ -78,7 +80,7 @@ export default function SmsCampaignComposeView({ initialCampaign }: { initialCam
       .then((ids) => { if (alive) setResolvedGroupBuyerIds(ids) })
       .catch(() => { if (alive) setResolvedGroupBuyerIds([]) })
     return () => { alive = false }
-  }, [JSON.stringify(campaign.group_ids || [])])
+  }, [campaignGroupIdsKey])
 
   const allRecipientIds = useMemo(() => {
     const direct = campaign.buyer_ids || []
@@ -176,6 +178,7 @@ export default function SmsCampaignComposeView({ initialCampaign }: { initialCam
       <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="from" title="From" valid={fromValid} ctaText="View sender" summary="Per-recipient routing with fallback"><SmsFromCard buyerIds={allRecipientIds} /></CardRow>
       <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="content" title="Content" valid={contentValid} ctaText="Compose SMS" summary={campaign.message?.trim() ? `Message ready — ${segmentInfo.segments} segments` : "Write your message"}><SmsComposerPanel message={campaign.message || ""} onMessageChange={(value) => update({ message: value })} buyerIds={allRecipientIds} recipientCount={recipientCount} mediaUrls={mediaUrls} /></CardRow>
       <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="media" title="Media" valid={true} ctaText="Add media" summary={mediaUrls.length ? `${mediaUrls.length} attachment(s)` : "Optional MMS attachments"}><SmsMediaCard mediaUrls={mediaUrls} onChange={(urls) => update({ media_url: JSON.stringify(urls) })} subject={campaign.subject} onSubjectChange={(value) => update({ subject: value })} /></CardRow>
+      <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="property" title="Property" valid={true} ctaText="Attribute property" summary={campaign.property_id ? "Campaign cost attributed to a property" : "Optional property attribution"}><CampaignPropertySelector value={campaign.property_id ?? null} onChange={(property_id) => update({ property_id })} /></CardRow>
       <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="sendTime" title="Send time" valid={sendTimeValid} ctaText="Set send time" summary={campaign.scheduled_at ? `Scheduled for ${new Date(campaign.scheduled_at).toLocaleString()}` : "Send immediately when you click Send"}><SmsSendTimeCard scheduledAt={campaign.scheduled_at} onScheduledAtChange={(value) => update({ scheduled_at: value })} weekdayOnly={campaign.weekday_only} onWeekdayOnlyChange={(value) => update({ weekday_only: value })} runFrom={campaign.run_from} onRunFromChange={(value) => update({ run_from: value })} runUntil={campaign.run_until} onRunUntilChange={(value) => update({ run_until: value })} /></CardRow>
     </main>
     <AlertDialog open={sendConfirmOpen} onOpenChange={setSendConfirmOpen}>

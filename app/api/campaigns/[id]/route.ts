@@ -14,7 +14,7 @@ async function hasAnyCampaignSendPermission(supabase: any) {
 }
 
 const allowed = new Set([
-  "name", "subject", "message", "group_ids", "buyer_ids", "scheduled_at", "timezone", "run_from", "run_until", "weekday_only", "media_url", "send_to_all_numbers", "from_name", "from_email", "preview_text", "status", "design_json", "mjml",
+  "name", "subject", "message", "group_ids", "buyer_ids", "scheduled_at", "timezone", "run_from", "run_until", "weekday_only", "media_url", "send_to_all_numbers", "from_name", "from_email", "preview_text", "status", "design_json", "mjml", "property_id",
 ])
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
