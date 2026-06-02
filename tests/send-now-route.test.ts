@@ -5,8 +5,8 @@ vi.mock("next/headers", () => ({
 }))
 
 const state = vi.hoisted(() => ({
-  campaigns: [{ id: "c1", user_id: "user-1", channel: "sms" }] as any[],
-  permissions: [{ permission_key: "campaigns.send_sms", granted: true }] as any[],
+  campaigns: [{ id: "c1", org_id: "org-1", user_id: "user-1", channel: "sms" }] as any[],
+  permissions: [{ user_id: "user-1", permission_key: "campaigns.send_sms", granted: true }] as any[],
   fetchMock: vi.fn(),
 }))
 
@@ -32,11 +32,17 @@ function createRouteClient() {
       }
       if (table === "campaigns") {
         return {
-          select: () => ({
-            eq: (_column: string, id: string) => ({
-              maybeSingle: async () => ({ data: state.campaigns.find((campaign) => campaign.id === id) ?? null, error: null }),
-            }),
-          }),
+          select: () => {
+            let rows = state.campaigns
+            const query = {
+              eq: (column: string, value: string) => {
+                rows = rows.filter((campaign) => campaign[column] === value)
+                return query
+              },
+              maybeSingle: async () => ({ data: rows[0] ?? null, error: null }),
+            }
+            return query
+          },
         }
       }
       throw new Error(`Unexpected table ${table}`)
@@ -46,6 +52,14 @@ function createRouteClient() {
 
 vi.mock("@supabase/auth-helpers-nextjs", () => ({
   createRouteHandlerClient: () => createRouteClient(),
+}))
+
+vi.mock("@/lib/auth/org-context", () => ({
+  requireOrgContext: async () => ({
+    user: { id: "user-1" },
+    orgId: "org-1",
+    supabase: createRouteClient(),
+  }),
 }))
 
 describe("send-now route", () => {

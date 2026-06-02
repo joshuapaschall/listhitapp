@@ -1,6 +1,5 @@
 import { NextRequest } from "next/server"
-import { cookies } from "next/headers"
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
+import { requireOrgContext } from "@/lib/auth/org-context"
 import { hasPermission } from "@/lib/permissions/server"
 
 async function hasAnyCampaignSendPermission(supabase: any) {
@@ -20,16 +19,18 @@ export async function POST(request: NextRequest) {
     })
   }
 
-  const cookieStore = cookies()
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
+  const { user, orgId, supabase } = await requireOrgContext()
 
-  if (authError || !user) {
+  if (!user) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
+      headers: { "Content-Type": "application/json" },
+    })
+  }
+
+  if (!orgId) {
+    return new Response(JSON.stringify({ error: "Organization context required" }), {
+      status: 400,
       headers: { "Content-Type": "application/json" },
     })
   }
@@ -38,6 +39,7 @@ export async function POST(request: NextRequest) {
     .from("campaigns")
     .select("*")
     .eq("id", campaignId)
+    .eq("org_id", orgId)
     .maybeSingle()
 
   if (campaignError) {
@@ -51,14 +53,6 @@ export async function POST(request: NextRequest) {
   if (!campaign) {
     return new Response(JSON.stringify({ error: "Campaign not found" }), {
       status: 404,
-      headers: { "Content-Type": "application/json" },
-    })
-  }
-
-  const ownerId = campaign.user_id ?? campaign.created_by
-  if (!ownerId || ownerId !== user.id) {
-    return new Response(JSON.stringify({ error: "Forbidden" }), {
-      status: 403,
       headers: { "Content-Type": "application/json" },
     })
   }
