@@ -62,9 +62,9 @@ export function filterStateToDefinition(f: BuyersFilterState): FilterMappingResu
   }
   // VIP / vetted booleans.
   if (f.vip === "vip") conditions.push({ kind: "attribute", field: "vip", operator: "is", value: true })
-  else if (f.vip === "not-vip") conditions.push({ kind: "attribute", field: "vip", operator: "is", value: false })
+  else if (f.vip === "not-vip") conditions.push({ kind: "attribute", field: "vip", operator: "is_not", value: true })
   if (f.vetted === "vetted") conditions.push({ kind: "attribute", field: "vetted", operator: "is", value: true })
-  else if (f.vetted === "not-vetted") conditions.push({ kind: "attribute", field: "vetted", operator: "is", value: false })
+  else if (f.vetted === "not-vetted") conditions.push({ kind: "attribute", field: "vetted", operator: "is_not", value: true })
 
   // Created range → ONE inclusive between (gte/lte), matching the page.
   if (f.createdAfter || f.createdBefore) {

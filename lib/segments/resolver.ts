@@ -64,6 +64,27 @@ export function combineSets(match: SegmentMatch, sets: Set<string>[]): Set<strin
 // Validation
 // ---------------------------------------------------------------------------
 
+export class SegmentContextError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "SegmentContextError"
+  }
+}
+
+export function definitionNeedsCampaignContext(def: SegmentDefinition): boolean {
+  return Array.isArray(def?.conditions)
+    ? def.conditions.some((c) => c.kind === "behavioral" && c.scope?.type === "this_campaign")
+    : false
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value)
+}
+
+function isNumberOrUndefined(value: unknown): boolean {
+  return value === undefined || isFiniteNumber(value)
+}
+
 export function validateDefinition(def: SegmentDefinition): void {
   if (!def || (def.match !== "all" && def.match !== "any")) {
     throw new Error(`Invalid segment definition: match must be "all" or "any"`)
@@ -77,6 +98,18 @@ export function validateDefinition(def: SegmentDefinition): void {
       if (!spec) throw new Error(`Unknown attribute field: ${String(cond.field)}`)
       if (!spec.operators.includes(cond.operator)) {
         throw new Error(`Operator "${cond.operator}" is not supported for field "${cond.field}"`)
+      }
+      if (spec.valueType === "date" && cond.operator === "within_days") {
+        const days = (cond.value as any)?.days
+        if (!isFiniteNumber(days) || days < 0) {
+          throw new Error(`Invalid within_days value for field "${cond.field}": days must be a finite number >= 0`)
+        }
+      }
+      if (spec.valueType === "number" && cond.operator === "between") {
+        const { min, max } = asRange(cond.value)
+        if (!isNumberOrUndefined(min) || !isNumberOrUndefined(max)) {
+          throw new Error(`Invalid between value for field "${cond.field}": min and max must be numbers when provided`)
+        }
       }
     } else if (cond.kind === "behavioral") {
       const spec = BEHAVIORAL_BY_METRIC[cond.metric]
@@ -93,6 +126,18 @@ export function validateDefinition(def: SegmentDefinition): void {
         scopeType !== "last_n_campaigns"
       ) {
         throw new Error(`Unknown behavioral scope: ${String(scopeType)}`)
+      }
+      if (scopeType === "within_days") {
+        const days = (cond.scope as any).days
+        if (!isFiniteNumber(days) || days < 0) {
+          throw new Error("Invalid behavioral within_days scope: days must be a finite number >= 0")
+        }
+      }
+      if (scopeType === "last_n_campaigns") {
+        const n = (cond.scope as any).n
+        if (!isFiniteNumber(n) || n < 1) {
+          throw new Error("Invalid behavioral last_n_campaigns scope: n must be a finite number >= 1")
+        }
       }
     } else {
       throw new Error(`Unknown condition kind: ${String((cond as SegmentCondition as any).kind)}`)
@@ -116,7 +161,9 @@ async function collectColumn(
   const ids = new Set<string>()
   let from = 0
   for (;;) {
-    const { data, error } = await buildQuery().range(from, from + PAGE_SIZE - 1)
+    const { data, error } = await buildQuery()
+      .order(column, { ascending: true })
+      .range(from, from + PAGE_SIZE - 1)
     if (error) {
       throw new Error(`Segment resolve query failed: ${error.message ?? String(error)}`)
     }
@@ -132,7 +179,8 @@ async function collectColumn(
 }
 
 function daysAgoIso(days: number): string {
-  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+  const safeDays = Number.isFinite(days) ? Math.max(0, days) : 0
+  return new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000).toISOString()
 }
 
 function asStringArray(value: unknown): string[] {
@@ -149,11 +197,10 @@ function asRange(value: unknown): { min?: number | string; max?: number | string
 }
 
 function asDays(value: unknown): number {
-  if (typeof value === "number") return value
-  if (value && typeof value === "object" && "days" in (value as any)) {
-    return Number((value as any).days)
-  }
-  return Number(value)
+  const raw = value && typeof value === "object" && "days" in (value as any)
+    ? Number((value as any).days)
+    : Number(value)
+  return Number.isFinite(raw) ? Math.max(0, raw) : 0
 }
 
 // Escape + wrap a text[] element list into a Postgres array literal: {"a","b"}.
@@ -219,7 +266,7 @@ export function applyAttributeFilter(query: any, cond: AttributeCondition, spec:
     case "boolean": {
       const truthy = Boolean(cond.value)
       if (op === "is") return query.eq(col, truthy)
-      if (op === "is_not") return query.eq(col, !truthy)
+      if (op === "is_not") return query.not(col, "is", truthy)
       return query
     }
     case "date": {
@@ -279,15 +326,15 @@ async function lastNCampaignIds(
 ): Promise<string[]> {
   let q = ctx.supabase
     .from("campaigns")
-    .select("id, scheduled_at, created_at")
+    .select("id")
     .eq("org_id", ctx.orgId)
     .is("deleted_at", null)
+    .not("sent_at", "is", null)
+  if (ctx.contextCampaignId) q = q.neq("id", ctx.contextCampaignId)
   if (chans.length === 1) q = q.eq("channel", chans[0])
   else q = q.in("channel", chans)
-  // most-recent first; coalesce scheduled_at → created_at
   const { data } = await q
-    .order("scheduled_at", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false })
+    .order("sent_at", { ascending: false })
     .limit(Math.max(1, n))
   return (data ?? []).map((r: any) => r.id)
 }
@@ -420,6 +467,9 @@ export async function resolveSegment(
   ctx: ResolveContext,
 ): Promise<Set<string>> {
   validateDefinition(def)
+  if (definitionNeedsCampaignContext(def) && !ctx.contextCampaignId) {
+    throw new SegmentContextError("This segment targets the current campaign and can only be previewed inside a campaign.")
+  }
 
   // No conditions = the whole eligible audience.
   if (def.conditions.length === 0) {

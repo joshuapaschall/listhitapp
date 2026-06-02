@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { requireOrgContext } from "@/lib/auth/org-context"
 import { hasPermission } from "@/lib/permissions/server"
 import { createLogger } from "@/lib/logger"
-import { countSegment, resolveSegment, validateDefinition } from "@/lib/segments/resolver"
+import { SegmentContextError, countSegment, resolveSegment, validateDefinition } from "@/lib/segments/resolver"
 import type { ResolveContext, SegmentDefinition } from "@/lib/segments/types"
 
 const log = createLogger("api:segments:preview")
@@ -76,6 +76,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ count, sample })
   } catch (err: any) {
+    if (err instanceof SegmentContextError) {
+      return NextResponse.json({ error: err.message }, { status: 400 })
+    }
     log.error("preview failed", err)
     return NextResponse.json({ error: err?.message || "error" }, { status: 500 })
   }

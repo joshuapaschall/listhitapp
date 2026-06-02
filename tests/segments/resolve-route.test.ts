@@ -7,6 +7,7 @@ const h = vi.hoisted(() => ({
   permission: true,
   ids: new Set<string>(),
   validateThrows: false,
+  contextThrows: false,
 }))
 
 vi.mock("../../lib/auth/org-context", () => ({
@@ -15,12 +16,19 @@ vi.mock("../../lib/auth/org-context", () => ({
 vi.mock("../../lib/permissions/server", () => ({
   hasPermission: async () => h.permission,
 }))
-vi.mock("../../lib/segments/resolver", () => ({
-  resolveSegment: async () => h.ids,
-  validateDefinition: () => {
-    if (h.validateThrows) throw new Error("Unknown attribute field: bogus")
-  },
-}))
+vi.mock("../../lib/segments/resolver", () => {
+  class SegmentContextError extends Error {}
+  return {
+    SegmentContextError,
+    resolveSegment: async () => {
+      if (h.contextThrows) throw new SegmentContextError("This segment targets the current campaign and can only be previewed inside a campaign.")
+      return h.ids
+    },
+    validateDefinition: () => {
+      if (h.validateThrows) throw new Error("Unknown attribute field: bogus")
+    },
+  }
+})
 
 const DEF: SegmentDefinition = { match: "all", conditions: [] }
 
@@ -39,6 +47,7 @@ describe("/api/segments/resolve", () => {
     h.permission = true
     h.ids = new Set<string>()
     h.validateThrows = false
+    h.contextThrows = false
   })
 
   test("valid definition returns buyerIds and a matching count", async () => {
@@ -55,6 +64,13 @@ describe("/api/segments/resolve", () => {
     h.validateThrows = true
     const res = await POST(req({ definition: { match: "all", conditions: [{ kind: "attribute", field: "bogus" }] }, channel: "sms" }))
     expect(res.status).toBe(400)
+  })
+
+  test("this_campaign context errors return 400 instead of 500", async () => {
+    h.contextThrows = true
+    const res = await POST(req({ definition: DEF, channel: "sms" }))
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toMatch(/current campaign/)
   })
 
   test("unauthorized returns 401", async () => {

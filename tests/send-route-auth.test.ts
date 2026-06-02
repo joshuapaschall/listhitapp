@@ -62,7 +62,15 @@ const h = vi.hoisted(() => {
       if (table === "campaigns") {
         return {
           select: () => chainable(() => state.campaigns),
-          update: () => ({ eq: async () => ({ error: null }), in: async () => ({ error: null }) }),
+          update: () => {
+            const q: any = {
+              eq: () => q,
+              in: () => q,
+              is: async () => ({ error: null }),
+              then: (resolve: any) => resolve({ error: null }),
+            }
+            return q
+          },
         }
       }
       if (table === "buyer_groups") {

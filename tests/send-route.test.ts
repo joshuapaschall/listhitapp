@@ -71,7 +71,13 @@ const h = vi.hoisted(() => {
           select: () => chainable(() => state.campaigns),
           update: (patch: any) => {
             state.campaignUpdates.push(patch)
-            return { eq: async () => ({ error: null }), in: async () => ({ error: null }) }
+            const q: any = {
+              eq: () => q,
+              in: () => q,
+              is: async () => ({ error: null }),
+              then: (resolve: any) => resolve({ error: null }),
+            }
+            return q
           },
         }
       }
@@ -377,23 +383,63 @@ describe("send route templates", () => {
     expect(smsSender.queueSmsCampaign).not.toHaveBeenCalled()
   })
 
+  test("does not pause dynamic sends when preview count is zero or absent", async () => {
+    h.state.campaigns.push({
+      id: "d-zero", channel: "sms", message: "Hi", org_id: "org-1",
+      audience_definition: { match: "all", conditions: [] }, buyer_ids: ["snap1"], audience_preview_count: 0,
+    })
+    h.state.buyers.push(smsBuyer("r1", "+15125550001"))
+    h.state.resolveImpl = async () => new Set(["r1", ...Array.from({ length: 4999 }, (_, i) => `zr${i}`)])
+
+    const zeroRes = await POST(req("d-zero"))
+    expect(zeroRes.status).toBe(200)
+    expect((await zeroRes.json()).paused).toBeUndefined()
+
+    h.state.campaigns = [{
+      id: "d-null", channel: "sms", message: "Hi", org_id: "org-1",
+      audience_definition: { match: "all", conditions: [] }, buyer_ids: ["snap1"], audience_preview_count: null,
+    }]
+    h.state.resolveCalls = []
+    h.state.campaignUpdates = []
+    h.state.resolveImpl = async () => new Set(["r1", ...Array.from({ length: 4999 }, (_, i) => `nr${i}`)])
+
+    const nullRes = await POST(req("d-null"))
+    expect(nullRes.status).toBe(200)
+    expect((await nullRes.json()).paused).toBeUndefined()
+  })
+
   test("drift guard pauses (status error, no send) when resolution expands past the ceiling", async () => {
     h.state.campaigns.push({
       id: "d5", channel: "sms", message: "Hi", org_id: "org-1",
-      audience_definition: { match: "all", conditions: [] }, buyer_ids: ["snap1"], audience_preview_count: 1,
+      audience_definition: { match: "all", conditions: [] }, buyer_ids: ["snap1"], audience_preview_count: 100,
     })
     h.state.buyers.push(smsBuyer("snap1", "+15125557040"))
-    // preview 1 → ceiling max(2, 251) = 251; resolve to 300 → over the ceiling
-    h.state.resolveImpl = async () => new Set(Array.from({ length: 300 }, (_, i) => `x${i}`))
+    // preview 100 → ceiling max(200, 350) = 350; resolve to 351 → over the ceiling.
+    h.state.resolveImpl = async () => new Set(Array.from({ length: 351 }, (_, i) => `x${i}`))
 
     const res = await POST(req("d5"))
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.paused).toBe(true)
     expect(body.reason).toBe("audience_drift_guard")
+    expect(body.ceiling).toBe(350)
     expect(smsSender.queueSmsCampaign).not.toHaveBeenCalled()
     const errUpdate = h.state.campaignUpdates.find((u: any) => u.status === "error")
     expect(errUpdate?.error).toMatch(/audience_drift_guard/)
+  })
+
+  test("shrinkage never pauses dynamic sends", async () => {
+    h.state.campaigns.push({
+      id: "d-shrink", channel: "sms", message: "Hi", org_id: "org-1",
+      audience_definition: { match: "all", conditions: [] }, buyer_ids: ["snap1"], audience_preview_count: 100,
+    })
+    h.state.buyers.push({ id: "b1", phone: "+15125550001", can_receive_sms: true, sms_suppressed: false, deleted_at: null })
+    h.state.resolveImpl = async () => new Set(["b1"])
+
+    const res = await POST(req("d-shrink"))
+    expect(res.status).toBe(200)
+    expect((await res.json()).paused).toBeUndefined()
+    expect(h.state.campaignUpdates.find((u: any) => u.status === "error")).toBeUndefined()
   })
 
   test("legacy campaign (no segment fields) never calls resolveSegment", async () => {
