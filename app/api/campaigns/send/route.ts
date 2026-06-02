@@ -195,7 +195,9 @@ export async function POST(request: NextRequest) {
 
         // Drift guard: only ever fires on unexpected EXPANSION. Shrinkage is safe.
         const preview =
-          typeof campaign.audience_preview_count === "number" ? campaign.audience_preview_count : null
+          typeof campaign.audience_preview_count === "number" && campaign.audience_preview_count > 0
+            ? campaign.audience_preview_count
+            : null
         const ceiling = preview === null ? null : Math.max(preview * 2, preview + 250)
         if (ceiling !== null && resolvedIds.length > ceiling) {
           await supabase
@@ -537,6 +539,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    await supabase
+      .from("campaigns")
+      .update({ sent_at: new Date().toISOString() })
+      .eq("id", campaignId)
+      .is("sent_at", null)
+
     const dispatched = await processEmailQueue(3)
     return new Response(
       JSON.stringify({ ok: true, queued: emailContacts.length, dispatched }),
@@ -672,6 +680,12 @@ export async function POST(request: NextRequest) {
       if (statusErr) {
         console.error("Error updating campaign status", statusErr)
       }
+
+      await supabase
+        .from("campaigns")
+        .update({ sent_at: new Date().toISOString() })
+        .eq("id", campaignId)
+        .is("sent_at", null)
 
       const dispatched = await smsCampaignSender.processSmsQueue(5)
       return new Response(

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { requireOrgContext } from "@/lib/auth/org-context"
 import { hasPermission } from "@/lib/permissions/server"
 import { createLogger } from "@/lib/logger"
-import { resolveSegment, validateDefinition } from "@/lib/segments/resolver"
+import { SegmentContextError, resolveSegment, validateDefinition } from "@/lib/segments/resolver"
 import type { ResolveContext, SegmentDefinition } from "@/lib/segments/types"
 
 const log = createLogger("api:segments:resolve")
@@ -40,6 +40,9 @@ export async function POST(request: Request) {
     const buyerIds = Array.from(ids)
     return NextResponse.json({ buyerIds, count: buyerIds.length })
   } catch (err: any) {
+    if (err instanceof SegmentContextError) {
+      return NextResponse.json({ error: err.message }, { status: 400 })
+    }
     log.error("resolve failed", err)
     return NextResponse.json({ error: err?.message || "error" }, { status: 500 })
   }

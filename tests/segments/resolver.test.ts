@@ -6,6 +6,8 @@ import {
   resolveAttributeCondition,
   resolveBehavioralCondition,
   resolveEligibleUniverse,
+  SegmentContextError,
+  definitionNeedsCampaignContext,
   resolveSegment,
   validateDefinition,
 } from "@/lib/segments/resolver"
@@ -51,9 +53,9 @@ function makeClient(resolve: (state: QueryState) => any[]) {
     }
     q.range = (from: number, to: number) => {
       record("range", [from, to])
-      return Promise.resolve({ data: resolve(state), error: null })
+      return Promise.resolve({ data: resolve(state).slice(from, to + 1), error: null })
     }
-    // Terminal for the lastNCampaignIds lookup (`await q.order().order().limit()`).
+    // Terminal for the lastNCampaignIds lookup (`await q.order().limit()`).
     q.limit = (n: number) => {
       record("limit", [n])
       return Promise.resolve({ data: resolve(state), error: null })
@@ -139,6 +141,45 @@ describe("validateDefinition", () => {
     ).toThrow(/Unknown behavioral metric/)
   })
 
+  test("rejects malformed numeric scope/operator values cleanly", () => {
+    expect(() =>
+      validateDefinition({
+        match: "all",
+        conditions: [{ kind: "behavioral", metric: "sent", operator: "did", scope: { type: "within_days", days: Number.NaN } }],
+      }),
+    ).toThrow(/within_days scope/)
+    expect(() =>
+      validateDefinition({
+        match: "all",
+        conditions: [{ kind: "behavioral", metric: "sent", operator: "did", scope: { type: "within_days" } as any }],
+      }),
+    ).toThrow(/within_days scope/)
+    expect(() =>
+      validateDefinition({
+        match: "all",
+        conditions: [{ kind: "behavioral", metric: "sent", operator: "did", scope: { type: "last_n_campaigns", n: 0 } }],
+      }),
+    ).toThrow(/last_n_campaigns scope/)
+    expect(() =>
+      validateDefinition({
+        match: "all",
+        conditions: [{ kind: "behavioral", metric: "sent", operator: "did", scope: { type: "last_n_campaigns", n: Number.NaN } }],
+      }),
+    ).toThrow(/last_n_campaigns scope/)
+    expect(() =>
+      validateDefinition({
+        match: "all",
+        conditions: [{ kind: "attribute", field: "created_at", operator: "within_days", value: { days: Number.NaN } }],
+      }),
+    ).toThrow(/within_days value/)
+    expect(() =>
+      validateDefinition({
+        match: "all",
+        conditions: [{ kind: "attribute", field: "score", operator: "between", value: { min: "bad", max: 10 } as any }],
+      }),
+    ).toThrow(/between value/)
+  })
+
   test("accepts a valid definition", () => {
     expect(() =>
       validateDefinition({
@@ -203,6 +244,39 @@ describe("resolveAttributeCondition", () => {
     await resolveAttributeCondition(cond, baseCtx({ supabase: client }))
 
     expect(allCalls).toContainEqual({ m: "buyers.eq", args: ["vip", true] })
+  })
+
+  test("boolean is_not uses IS NOT true so null/blank rows are included", async () => {
+    const pool = [
+      { id: "explicit-false", vip: false, cash_buyer: false },
+      { id: "blank-vip", vip: null, cash_buyer: null },
+      { id: "explicit-true", vip: true, cash_buyer: true },
+    ]
+    const applyFilters = (s: QueryState) => {
+      let out = pool
+      for (const c of s.calls) {
+        if (c.m === "eq" && c.args[0] === "vip") out = out.filter((r) => r.vip === c.args[1])
+        if (c.m === "not" && c.args[0] === "cash_buyer" && c.args[1] === "is") {
+          out = out.filter((r) => r.cash_buyer !== c.args[2])
+        }
+      }
+      return out.map((r) => ({ id: r.id }))
+    }
+
+    const notCash = makeClient((s) => (s.table === "buyers" ? applyFilters(s) : []))
+    const notCashResult = await resolveAttributeCondition(
+      { kind: "attribute", field: "cash_buyer", operator: "is_not", value: true },
+      baseCtx({ supabase: notCash.client }),
+    )
+    expect([...notCashResult].sort()).toEqual(["blank-vip", "explicit-false"])
+    expect(notCash.allCalls).toContainEqual({ m: "buyers.not", args: ["cash_buyer", "is", true] })
+
+    const vip = makeClient((s) => (s.table === "buyers" ? applyFilters(s) : []))
+    const vipResult = await resolveAttributeCondition(
+      { kind: "attribute", field: "vip", operator: "is", value: true },
+      baseCtx({ supabase: vip.client }),
+    )
+    expect([...vipResult]).toEqual(["explicit-true"])
   })
 
   test("date within_days issues gte(created_at, <iso>)", async () => {
@@ -329,11 +403,38 @@ describe("behavioral last_n_campaigns scope", () => {
 
     // didn't open any of the last N = sent(last_n) − opened(last_n) = {a,b} − {b} = {a}
     expect([...result].sort()).toEqual(["a"])
-    // campaign-id lookup ran with the channel filter + limit
+    // campaign-id lookup ran against actual sends only with the channel filter + limit.
     expect(allCalls).toContainEqual({ m: "campaigns.eq", args: ["channel", "email"] })
+    expect(allCalls).toContainEqual({ m: "campaigns.not", args: ["sent_at", "is", null] })
+    expect(allCalls).toContainEqual({ m: "campaigns.order", args: ["sent_at", { ascending: false }] })
     expect(allCalls).toContainEqual({ m: "campaigns.limit", args: [5] })
     // recipients scoped to those ids
     expect(allCalls).toContainEqual({ m: "campaign_recipients.in", args: ["campaign_id", ["c1", "c2"]] })
+  })
+
+  test("excludes the context campaign and uses prior sent campaign for resend/compose contexts", async () => {
+    const resolve = (s: QueryState) => {
+      if (s.table === "campaigns") return [{ id: "real-sent" }]
+      if (s.table === "campaign_recipients" && notCols(s).includes("sent_at")) return [{ buyer_id: "non-opener" }]
+      if (s.table === "campaign_recipients" && notCols(s).includes("opened_at")) return []
+      return []
+    }
+    const { client, allCalls } = makeClient(resolve)
+    const cond: BehavioralCondition = { kind: "behavioral", metric: "opened", operator: "did_not", scope: { type: "last_n_campaigns", n: 1 } }
+    const result = await resolveBehavioralCondition(cond, baseCtx({ supabase: client, channel: "email", contextCampaignId: "draft-newer" }))
+
+    expect([...result]).toEqual(["non-opener"])
+    expect(allCalls).toContainEqual({ m: "campaigns.neq", args: ["id", "draft-newer"] })
+    expect(allCalls).toContainEqual({ m: "campaign_recipients.in", args: ["campaign_id", ["real-sent"]] })
+  })
+
+  test('channel "any" scopes last campaigns across email and sms', async () => {
+    const resolve = (s: QueryState) => (s.table === "campaigns" ? [{ id: "email-sent" }, { id: "sms-sent" }] : [])
+    const { client, allCalls } = makeClient(resolve)
+    const cond: BehavioralCondition = { kind: "behavioral", metric: "sent", operator: "did", scope: { type: "last_n_campaigns", n: 2 }, channel: "any" }
+    await resolveBehavioralCondition(cond, baseCtx({ supabase: client, channel: "email" }))
+
+    expect(allCalls).toContainEqual({ m: "campaigns.in", args: ["channel", ["email", "sms"]] })
   })
 
   test("zero campaigns on the channel → empty set, no .in([]) recipient query", async () => {
@@ -388,6 +489,32 @@ describe("resolveSegment", () => {
     const def: SegmentDefinition = { match: "all", conditions: [] }
     const result = await resolveSegment(def, baseCtx({ supabase: client }))
     expect([...result].sort()).toEqual(["b", "c", "d"])
+  })
+
+  test("this_campaign without context throws SegmentContextError and is detectable", async () => {
+    const { client } = makeClient(segmentResolve)
+    const def: SegmentDefinition = {
+      match: "all",
+      conditions: [{ kind: "behavioral", metric: "sent", operator: "did", scope: { type: "this_campaign" } }],
+    }
+
+    expect(definitionNeedsCampaignContext(def)).toBe(true)
+    await expect(resolveSegment(def, baseCtx({ supabase: client }))).rejects.toThrow(SegmentContextError)
+  })
+
+  test("collectColumn orders before range and paginates a full >1000-row set", async () => {
+    const rows = Array.from({ length: 2500 }, (_, i) => ({ id: `buyer-${String(i).padStart(4, "0")}` }))
+    const { client, allCalls } = makeClient((s) => (s.table === "buyers" ? rows : []))
+    const result = await resolveAttributeCondition(
+      { kind: "attribute", field: "vip", operator: "is", value: true },
+      baseCtx({ supabase: client }),
+    )
+    const orderIndex = allCalls.findIndex((c) => c.m === "buyers.order" && c.args[0] === "id")
+    const firstRangeIndex = allCalls.findIndex((c) => c.m === "buyers.range")
+
+    expect(result.size).toBe(2500)
+    expect(orderIndex).toBeGreaterThanOrEqual(0)
+    expect(firstRangeIndex).toBeGreaterThan(orderIndex)
   })
 })
 

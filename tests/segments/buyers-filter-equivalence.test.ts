@@ -1,6 +1,7 @@
 // HARD GATE: the unified Buyers-page attribute filtering must apply the IDENTICAL
 // Supabase predicates as the pre-refactor fetchBuyers. We replicate the exact old
 // attribute block here and assert the recorded calls match the new unified path
+// except the deliberate Not VIP/Not vetted semantics change: blanks now count as "not".
 // (filterStateToDefinition → applyAttributeConditions) for a representative matrix.
 import { filterStateToDefinition, type BuyersFilterState } from "@/lib/segments/filter-mapping"
 import { applyAttributeConditions } from "@/lib/segments/apply-filters"
@@ -28,10 +29,10 @@ function recorder() {
 function oldAttributeBlock(query: any, filters: BuyersFilterState) {
   let q = query
   if (filters.vip === "vip") q = q.eq("vip", true)
-  else if (filters.vip === "not-vip") q = q.eq("vip", false)
+  else if (filters.vip === "not-vip") q = q.not("vip", "is", true)
 
   if (filters.vetted === "vetted") q = q.eq("vetted", true)
-  else if (filters.vetted === "not-vetted") q = q.eq("vetted", false)
+  else if (filters.vetted === "not-vetted") q = q.not("vetted", "is", true)
 
   if (filters.minScore) q = q.gte("score", Number.parseInt(filters.minScore))
   if (filters.maxScore) q = q.lte("score", Number.parseInt(filters.maxScore))
@@ -98,6 +99,16 @@ describe("Buyers filter equivalence (unified == old fetchBuyers)", () => {
     newAttributeBlock(q, f({ selectedTags: ["a", "b"] }))
     expect(q.calls).toContainEqual({ m: "contains", args: ["tags", ["a", "b"]] })
     expect(q.calls.find((c: Call) => c.m === "overlaps" && c.args[0] === "tags")).toBeUndefined()
+  })
+
+  test("not-vip and not-vetted include blank flags via IS NOT true", () => {
+    const vipQ = recorder()
+    newAttributeBlock(vipQ, f({ vip: "not-vip" }))
+    expect(vipQ.calls).toContainEqual({ m: "not", args: ["vip", "is", true] })
+
+    const vettedQ = recorder()
+    newAttributeBlock(vettedQ, f({ vetted: "not-vetted" }))
+    expect(vettedQ.calls).toContainEqual({ m: "not", args: ["vetted", "is", true] })
   })
 
   test("created range maps to inclusive gte + lte", () => {

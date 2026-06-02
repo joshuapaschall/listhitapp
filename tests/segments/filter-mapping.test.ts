@@ -44,8 +44,9 @@ describe("filterStateToDefinition", () => {
 
   test("vip / vetted booleans", () => {
     expect(filterStateToDefinition(f({ vip: "vip" })).definition.conditions).toContainEqual({ kind: "attribute", field: "vip", operator: "is", value: true })
-    expect(filterStateToDefinition(f({ vip: "not-vip" })).definition.conditions).toContainEqual({ kind: "attribute", field: "vip", operator: "is", value: false })
+    expect(filterStateToDefinition(f({ vip: "not-vip" })).definition.conditions).toContainEqual({ kind: "attribute", field: "vip", operator: "is_not", value: true })
     expect(filterStateToDefinition(f({ vetted: "vetted" })).definition.conditions).toContainEqual({ kind: "attribute", field: "vetted", operator: "is", value: true })
+    expect(filterStateToDefinition(f({ vetted: "not-vetted" })).definition.conditions).toContainEqual({ kind: "attribute", field: "vetted", operator: "is_not", value: true })
   })
 
   test("created range → one inclusive between", () => {

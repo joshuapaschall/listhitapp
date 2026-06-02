@@ -39,7 +39,7 @@ import SegmentBuilder from "@/components/segments/segment-builder"
 import SegmentSummaryPills from "@/components/segments/segment-summary-pills"
 import SegmentCountBadge from "@/components/segments/segment-count-badge"
 import { SegmentService, type Segment } from "@/services/segment-service"
-import { validateDefinition } from "@/lib/segments/resolver"
+import { definitionNeedsCampaignContext, validateDefinition } from "@/lib/segments/resolver"
 import { isConditionComplete } from "@/lib/segments/condition-utils"
 import { usePermissions } from "@/hooks/use-permissions"
 import type { SegmentDefinition } from "@/lib/segments/types"
@@ -337,11 +337,24 @@ function SegmentCard({
   onDuplicate: () => void
   onDelete: () => void
 }) {
+  const definition = segment.definition ?? EMPTY_DEFINITION
+  const campaignSpecific = definitionNeedsCampaignContext(definition)
+
   return (
     <Card className="flex flex-col rounded-xl">
       <CardHeader className="flex-row items-start justify-between gap-2 space-y-0 pb-2">
         <div className="space-y-1">
-          {channelBadge(segment.channel)}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {channelBadge(segment.channel)}
+            {campaignSpecific && (
+              <Badge
+                variant="outline"
+                className="border-emerald-100 bg-emerald-50/60 text-xs text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"
+              >
+                Campaign-specific
+              </Badge>
+            )}
+          </div>
           <h3 className="font-semibold leading-tight">{segment.name}</h3>
         </div>
         {canEdit && (
@@ -367,12 +380,19 @@ function SegmentCard({
         )}
       </CardHeader>
       <CardContent className="flex flex-1 flex-col justify-between gap-3">
-        <SegmentSummaryPills definition={segment.definition ?? EMPTY_DEFINITION} />
+        <SegmentSummaryPills definition={definition} />
         <div className="flex items-center justify-between gap-2">
-          <SegmentCountBadge
-            definition={segment.definition ?? EMPTY_DEFINITION}
-            channel={previewChannel(segment.channel)}
-          />
+          {campaignSpecific ? (
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50/60 px-3 py-1 text-sm font-medium text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
+              <span className="tabular-nums">—</span>
+              <span>Counts inside a campaign</span>
+            </div>
+          ) : (
+            <SegmentCountBadge
+              definition={definition}
+              channel={previewChannel(segment.channel)}
+            />
+          )}
           <span className="text-xs text-muted-foreground">
             Updated {formatDistanceToNow(new Date(segment.updated_at), { addSuffix: true })}
           </span>
