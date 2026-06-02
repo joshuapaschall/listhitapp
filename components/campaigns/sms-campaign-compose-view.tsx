@@ -8,6 +8,8 @@ import CampaignStatusBadge from "@/components/campaigns/campaign-status-badge"
 import AudienceFilterSummaryCard from "@/components/campaigns/audience-filter-summary-card"
 import RecipientsPreviewSheet from "@/components/campaigns/recipients-preview-sheet"
 import GroupTreeSelector from "@/components/buyers/group-tree-selector"
+import AudiencePicker from "@/components/segments/audience-picker"
+import { useCampaignAudience } from "@/components/segments/use-campaign-audience"
 import SmsComposerPanel from "@/components/campaigns/sms-composer-panel"
 import SmsFromCard from "@/components/campaigns/sms-from-card"
 import SmsMediaCard from "@/components/campaigns/sms-media-card"
@@ -90,7 +92,10 @@ export default function SmsCampaignComposeView({ initialCampaign }: { initialCam
   useEffect(() => setTestPhone(localStorage.getItem("listhit:smsTestNumber") ?? ""), [])
   const mediaUrls = parseMediaUrls(campaign.media_url)
   const segmentInfo = calculateSmsSegments(campaign.message ?? "")
-  const recipientCount = hasPrefillSnapshot?.recipientCount ?? allRecipientIds.length
+  // Prefer the resolved audience count; fall back to a prefill snapshot, then to
+  // legacy buyer_ids/group_ids for campaigns created before the picker.
+  const recipientCount =
+    campaign.audience_preview_count ?? hasPrefillSnapshot?.recipientCount ?? allRecipientIds.length
   const toValid = recipientCount > 0 || !!hasPrefillSnapshot
   const fromValid = true
   const contentValid = (!!campaign.message?.trim() || mediaUrls.length > 0) && segmentInfo.segments <= 10
@@ -122,6 +127,8 @@ export default function SmsCampaignComposeView({ initialCampaign }: { initialCam
   }, [campaign, hasEdited, router])
 
   const update = (patch: any) => { setCampaign((p: any) => ({ ...p, ...patch })); setHasEdited(true) }
+  const { audienceSelection, handleAudienceChange } = useCampaignAudience(campaign, "sms", update)
+  const [showGroups, setShowGroups] = useState(false)
   const sendNow = async () => {
     // Confirm the user still has a browser session before calling the
     // permission-gated send-now route.
@@ -174,7 +181,21 @@ export default function SmsCampaignComposeView({ initialCampaign }: { initialCam
   return <div className="min-h-screen bg-background">
     <div className="sticky top-0 bg-background/80 backdrop-blur z-10 border-b border-border py-4 px-6"><div className="max-w-4xl mx-auto flex items-center justify-between"><div className="flex items-center gap-2"><Button variant="ghost" size="icon" onClick={() => router.push("/campaigns")}><ArrowLeft className="h-4 w-4" /></Button><Input className="w-auto min-w-[200px] max-w-[400px]" value={campaign.name || "Untitled campaign"} onChange={(e) => update({ name: e.target.value })} /><CampaignStatusBadge status={campaign.status} />{hasEdited && <span className="text-xs text-muted-foreground">{autosaveState === "saving" ? "Saving…" : autosaveState === "failed" ? "Save failed" : "Saved"}</span>}</div><div className="flex items-start gap-2"><div><Input className="h-9 w-[130px]" value={testPhone} onChange={(e) => setTestPhone(e.target.value)} placeholder="+1 (770) 555-0123" />{isTestPhoneInvalid && <p className="mt-1 text-xs text-red-500">Enter a valid US phone number</p>}</div><Can permission="campaigns.send_sms"><Button variant="outline" size="sm" disabled={!testPhone.trim() || isTestPhoneInvalid || sendingTest || !campaign.message?.trim()} onClick={sendTest}><TestTube2 className="h-4 w-4" />Send test</Button></Can><Can permission="campaigns.send_sms"><Button variant="brand" disabled={!canSend || !!campaign.scheduled_at} onClick={() => setSendConfirmOpen(true)}>Send</Button></Can></div></div></div>
     <main className="max-w-4xl mx-auto px-6 py-8 space-y-3">
-      <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="to" title="To" valid={toValid} ctaText="Add recipients" summary={toValid ? `${recipientCount} recipients` : "Who are you sending this to?"}>{hasPrefillSnapshot ? <AudienceFilterSummaryCard snapshot={hasPrefillSnapshot} onPreview={() => setPreviewOpen(true)} onAdjust={() => router.push("/buyers")} onClear={() => { setHasPrefillSnapshot(null); update({ buyer_ids: [] }) }} /> : <GroupTreeSelector value={campaign.group_ids || []} onChange={(ids) => update({ group_ids: ids })} />}</CardRow>
+      <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="to" title="To" valid={toValid} ctaText="Add recipients" summary={toValid ? `${recipientCount} recipients` : "Who are you sending this to?"}>{hasPrefillSnapshot ? <AudienceFilterSummaryCard snapshot={hasPrefillSnapshot} onPreview={() => setPreviewOpen(true)} onAdjust={() => router.push("/buyers")} onClear={() => { setHasPrefillSnapshot(null); update({ buyer_ids: [] }) }} /> : (
+        <div className="space-y-4">
+          <AudiencePicker channel="sms" value={audienceSelection} contextCampaignId={campaign.id} onChange={handleAudienceChange} />
+          <div className="border-t pt-3">
+            <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setShowGroups((v) => !v)}>
+              {showGroups ? "Hide saved groups" : "Send to a saved group instead"}
+            </Button>
+            {showGroups && (
+              <div className="mt-3">
+                <GroupTreeSelector value={campaign.group_ids || []} onChange={(ids) => update({ group_ids: ids })} />
+              </div>
+            )}
+          </div>
+        </div>
+      )}</CardRow>
       <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="from" title="From" valid={fromValid} ctaText="View sender" summary="Per-recipient routing with fallback"><SmsFromCard buyerIds={allRecipientIds} /></CardRow>
       <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="content" title="Content" valid={contentValid} ctaText="Compose SMS" summary={campaign.message?.trim() ? `Message ready — ${segmentInfo.segments} segments` : "Write your message"}><SmsComposerPanel message={campaign.message || ""} onMessageChange={(value) => update({ message: value })} buyerIds={allRecipientIds} recipientCount={recipientCount} mediaUrls={mediaUrls} /></CardRow>
       <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="media" title="Media" valid={true} ctaText="Add media" summary={mediaUrls.length ? `${mediaUrls.length} attachment(s)` : "Optional MMS attachments"}><SmsMediaCard mediaUrls={mediaUrls} onChange={(urls) => update({ media_url: JSON.stringify(urls) })} subject={campaign.subject} onSubjectChange={(value) => update({ subject: value })} /></CardRow>

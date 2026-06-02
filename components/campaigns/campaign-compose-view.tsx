@@ -14,6 +14,8 @@ import dynamic from "next/dynamic"
 import type { TemplaticalEditor } from "@/components/campaigns/email/templatical-email-editor"
 import EmailTemplatePicker, { type EmailPickResult } from "@/components/campaigns/email/email-template-picker"
 import GroupTreeSelector from "@/components/buyers/group-tree-selector"
+import AudiencePicker from "@/components/segments/audience-picker"
+import { useCampaignAudience } from "@/components/segments/use-campaign-audience"
 import { readAudienceSnapshot, clearAudienceSnapshot, type CampaignAudienceSnapshot } from "@/lib/campaign-audience"
 import { emptyEmailTemplate } from "@/lib/email-templates"
 import { supabaseBrowser } from "@/lib/supabase-browser"
@@ -120,7 +122,14 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
     [campaign.from_email, emailSenders],
   )
   const hasLegacySender = sendersLoaded && !!campaign.from_email && !selectedSender
-  const toValid = ((campaign.group_ids?.length || 0) + (campaign.buyer_ids?.length || 0)) > 0 || !!hasPrefillSnapshot
+  // Prefer the resolved audience count; fall back to a prefill snapshot, then to
+  // legacy buyer_ids/group_ids for campaigns created before the picker.
+  const recipientCount =
+    campaign.audience_preview_count ?? hasPrefillSnapshot?.recipientCount ?? allRecipientIds.length
+  const toValid =
+    recipientCount > 0 ||
+    ((campaign.group_ids?.length || 0) + (campaign.buyer_ids?.length || 0)) > 0 ||
+    !!hasPrefillSnapshot
   const fromValid = !!selectedSender
   const subjectValid = !!campaign.subject?.trim()
   const sendTimeValid = !campaign.scheduled_at || new Date(campaign.scheduled_at).getTime() > Date.now()
@@ -160,6 +169,8 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
   }, [campaign, hasEdited, router])
 
   const update = (patch: any) => { setCampaign((p: any) => ({ ...p, ...patch })); setHasEdited(true) }
+  const { audienceSelection, handleAudienceChange } = useCampaignAudience(campaign, "email", update)
+  const [showGroups, setShowGroups] = useState(false)
 
   useEffect(() => {
     if (campaign.channel !== "email") return
@@ -365,7 +376,21 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
       </div>
     </div>
     <main className="max-w-4xl mx-auto px-6 py-8 space-y-3">
-      <CardRow id="to" title="To" valid={toValid} ctaText="Add recipients" summary={toValid ? `${hasPrefillSnapshot?.recipientCount ?? allRecipientIds.length} recipients` : "Who are you sending this to?"} expandedCard={expandedCard} setExpandedCard={setExpandedCard}>{hasPrefillSnapshot ? <AudienceFilterSummaryCard snapshot={hasPrefillSnapshot} onPreview={() => setPreviewOpen(true)} onAdjust={() => router.push("/buyers")} onClear={() => { setHasPrefillSnapshot(null); update({ buyer_ids: [] }) }} /> : <GroupTreeSelector value={campaign.group_ids || []} onChange={(ids) => update({ group_ids: ids })} />}</CardRow>
+      <CardRow id="to" title="To" valid={toValid} ctaText="Add recipients" summary={toValid ? `${recipientCount} recipients` : "Who are you sending this to?"} expandedCard={expandedCard} setExpandedCard={setExpandedCard}>{hasPrefillSnapshot ? <AudienceFilterSummaryCard snapshot={hasPrefillSnapshot} onPreview={() => setPreviewOpen(true)} onAdjust={() => router.push("/buyers")} onClear={() => { setHasPrefillSnapshot(null); update({ buyer_ids: [] }) }} /> : (
+        <div className="space-y-4">
+          <AudiencePicker channel="email" value={audienceSelection} contextCampaignId={campaign.id} onChange={handleAudienceChange} />
+          <div className="border-t pt-3">
+            <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setShowGroups((v) => !v)}>
+              {showGroups ? "Hide saved groups" : "Send to a saved group instead"}
+            </Button>
+            {showGroups && (
+              <div className="mt-3">
+                <GroupTreeSelector value={campaign.group_ids || []} onChange={(ids) => update({ group_ids: ids })} />
+              </div>
+            )}
+          </div>
+        </div>
+      )}</CardRow>
       <CardRow id="from" title="From" valid={fromValid} ctaText="Add sender" summary={fromValid && selectedSender ? `${selectedSender.from_name || selectedSender.from_email} <${selectedSender.from_email}>` : "Who is sending this campaign?"} expandedCard={expandedCard} setExpandedCard={setExpandedCard}>
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">Choose a verified sender for this campaign.</p>
