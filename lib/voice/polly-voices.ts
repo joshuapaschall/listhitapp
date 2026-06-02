@@ -9,6 +9,6 @@ export const POLLY_VOICES = [
   { id: "Gregory", label: "Gregory (Male)", engine: "long-form" },
 ] as const;
 
-export const DEFAULT_VOICE_ID = "Danielle";
+export const DEFAULT_VOICE_ID = "Joanna";
 
 export type PollyVoice = (typeof POLLY_VOICES)[number];
