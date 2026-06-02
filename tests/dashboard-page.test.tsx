@@ -59,11 +59,33 @@ const dashboardPayload = {
     avgAssignmentFee: 0,
     closeRate: 0,
   },
-  textTrends: { data: [], delta: 0 },
-  callTrends: { data: [], delta: 0 },
-  emailTrends: { data: [], delta: 0 },
-  offerTrends: { data: [], delta: 0 },
-  showingTrends: { data: [], delta: 0 },
+  profit: {
+    grossProfit: 0,
+    closedCount: 0,
+    avgAssignmentFee: 0,
+    marketingSpend: 0,
+    netProfit: 0,
+    marketingRoi: null,
+    hasData: false,
+  },
+  liveDeals: [],
+  needsYouToday: {
+    unreadReplies: 0,
+    offersAwaiting: 0,
+    showingsToday: 0,
+    followUpsDue: 0,
+  },
+  funnel: {
+    buyers: 10,
+    showings: 2,
+    offers: 1,
+    closed: 0,
+  },
+  textTrends: { data: [{ date: "2026-06-02", sent: 5, received: 4 }], delta: 0 },
+  callTrends: { data: [{ date: "2026-06-02", made: 2, received: 1 }], delta: 0 },
+  emailTrends: { data: [{ date: "2026-06-02", sent: 3 }], delta: 0 },
+  offerTrends: { data: [{ date: "2026-06-02", created: 1, accepted: 0 }], delta: 0 },
+  showingTrends: { data: [{ date: "2026-06-02", scheduled: 0, created: 0 }], delta: 0 },
   unsubscribeTrends: { data: [], delta: 0 },
   recentActivity: [],
 }
@@ -106,7 +128,14 @@ vi.mock("@/hooks/use-notifications", () => ({
 
 vi.mock("@/hooks/use-session", () => ({
   SessionProvider: ({ children }: any) => children,
-  useSession: () => ({ session: null, user: null, loading: false }),
+  useSession: () => ({
+    session: null,
+    user: {
+      email: "josh@example.com",
+      user_metadata: { full_name: "Josh Buyer" },
+    },
+    loading: false,
+  }),
 }))
 
 vi.mock("../lib/supabase", () => {
@@ -147,28 +176,27 @@ describe("DashboardPage", () => {
     )
   }
 
-  test("renders KPI sections", async () => {
+  test("renders the dashboard cockpit", async () => {
     renderPage()
-    expect(await screen.findByText(/High Level Metrics/i)).toBeTruthy()
-    expect(screen.getByText(/Email Metrics/i)).toBeTruthy()
-    expect(screen.getByText(/SMS Metrics/i)).toBeTruthy()
-    expect(screen.getByText(/Call Metrics/i)).toBeTruthy()
-    expect(screen.getByText(/Campaign Metrics/i)).toBeTruthy()
-    expect(screen.getByText(/Property Metrics/i)).toBeTruthy()
-    expect(screen.getByText(/Showing Metrics/i)).toBeTruthy()
-    expect(screen.getByText(/Offer Metrics/i)).toBeTruthy()
-    expect(screen.getByText(/Profit & Performance/i)).toBeTruthy()
+
+    expect(await screen.findByText(/Good .*Josh/i)).toBeTruthy()
+    expect(screen.getByText(/Live deals/i)).toBeTruthy()
+    expect(screen.getByText(/Needs you today/i)).toBeTruthy()
+    expect(screen.getByText(/Deal pipeline/i)).toBeTruthy()
+    expect(screen.getByText(/Activity over time/i)).toBeTruthy()
+    expect(screen.getByText(/Profit & performance/i)).toBeTruthy()
+    expect(await screen.findByText(/All metrics/i)).toBeTruthy()
     expect(fetch).toHaveBeenCalledWith("/api/dashboard?range=today")
   })
 
-  test("renders charts", async () => {
+  test("renders channel cards", async () => {
     renderPage()
-    expect(await screen.findByText(/Performance Trends/i)).toBeTruthy()
-    expect(await screen.findByText(/Texts Sent vs. Received/i)).toBeTruthy()
-    expect(screen.getByText(/Calls Made vs. Received/i)).toBeTruthy()
-    expect(screen.getAllByText(/Emails Sent/i).length).toBeGreaterThan(0)
-    expect(screen.getByText(/Offers Created vs. Accepted/i)).toBeTruthy()
-    expect(screen.getByText(/Showings Scheduled vs. Offers Created/i)).toBeTruthy()
-    expect(screen.getAllByText(/Unsubscribe Rate/i).length).toBeGreaterThan(0)
+
+    expect((await screen.findAllByText(/Email/i)).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/SMS/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Calls/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Sent/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Replies/i).length).toBeGreaterThan(0)
+    expect(screen.getByText(/Voicemails/i)).toBeTruthy()
   })
 })

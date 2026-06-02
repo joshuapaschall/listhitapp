@@ -3,26 +3,27 @@
 import { useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import MainLayout from "@/components/layout/main-layout"
-import DashboardHeader from "@/components/dashboard/DashboardHeader"
 import QuickActionButtons from "@/components/dashboard/QuickActionButtons"
-import KPISection from "@/components/dashboard/KPISection"
-import ChartsSection from "@/components/dashboard/ChartsSection"
 import RecentActivity from "@/components/dashboard/RecentActivity"
-import {
-  Gauge,
-  Mail,
-  MessageCircle,
-  Phone,
-  LineChart,
-  Home as HomeIcon,
-  Calendar,
-  Handshake,
-  PiggyBank,
-} from "lucide-react"
+import ToggleTimeRange from "@/components/dashboard/ToggleTimeRange"
+import ActivityTrend from "@/components/dashboard/cockpit/ActivityTrend"
+import AllMetricsDrawer from "@/components/dashboard/cockpit/AllMetricsDrawer"
+import ChannelCard from "@/components/dashboard/cockpit/ChannelCard"
+import DashboardFunnel from "@/components/dashboard/cockpit/DashboardFunnel"
+import DashboardGreeting from "@/components/dashboard/cockpit/DashboardGreeting"
+import KpiStat from "@/components/dashboard/cockpit/KpiStat"
+import LiveDealsPanel from "@/components/dashboard/cockpit/LiveDealsPanel"
+import NeedsYouToday from "@/components/dashboard/cockpit/NeedsYouToday"
+import ProfitZone from "@/components/dashboard/cockpit/ProfitZone"
+import { Mail, MessageCircle, Phone } from "lucide-react"
 import type {
   CallTrend,
   DashboardKpis,
+  DashboardProfit,
+  DealFunnel,
   EmailTrend,
+  LiveDeal,
+  NeedsYouToday as NeedsYouTodayData,
   OfferTrend,
   RecentActivityItem,
   ShowingTrend,
@@ -32,41 +33,14 @@ import type {
   UnsubscribeTrend,
 } from "@/services/dashboard-service"
 import { useQuery } from "@tanstack/react-query"
-import BuyersAddedCard from "@/components/dashboard/kpi-cards/BuyersAddedCard"
-import PropertiesAddedCard from "@/components/dashboard/kpi-cards/PropertiesAddedCard"
-import ActivePropertiesCard from "@/components/dashboard/kpi-cards/ActivePropertiesCard"
-import UnderContractCard from "@/components/dashboard/kpi-cards/UnderContractCard"
-import SoldPropertiesCard from "@/components/dashboard/kpi-cards/SoldPropertiesCard"
-import TotalPropertiesCard from "@/components/dashboard/kpi-cards/TotalPropertiesCard"
-import TextsSentCard from "@/components/dashboard/kpi-cards/TextsSentCard"
-import TextsReceivedCard from "@/components/dashboard/kpi-cards/TextsReceivedCard"
-import CallsMadeCard from "@/components/dashboard/kpi-cards/CallsMadeCard"
-import CallsReceivedCard from "@/components/dashboard/kpi-cards/CallsReceivedCard"
-import EmailsSentCard from "@/components/dashboard/kpi-cards/EmailsSentCard"
-import CampaignsRunningCard from "@/components/dashboard/kpi-cards/CampaignsRunningCard"
-import TotalContactsCard from "@/components/dashboard/kpi-cards/TotalContactsCard"
-import OffersCreatedCard from "@/components/dashboard/kpi-cards/OffersCreatedCard"
-import OffersAcceptedCard from "@/components/dashboard/kpi-cards/OffersAcceptedCard"
-import OffersDeclinedCard from "@/components/dashboard/kpi-cards/OffersDeclinedCard"
-import OffersCounteredCard from "@/components/dashboard/kpi-cards/OffersCounteredCard"
-import ShowingsScheduledCard from "@/components/dashboard/kpi-cards/ShowingsScheduledCard"
-import OffersReceivedCard from "@/components/dashboard/kpi-cards/OffersReceivedCard"
-import ShowingsRescheduledCard from "@/components/dashboard/kpi-cards/ShowingsRescheduledCard"
-import ShowingsCancelledCard from "@/components/dashboard/kpi-cards/ShowingsCancelledCard"
-import ShowingsCompletedCard from "@/components/dashboard/kpi-cards/ShowingsCompletedCard"
-import GrossProfitCard from "@/components/dashboard/kpi-cards/GrossProfitCard"
-import CloseRateCard from "@/components/dashboard/kpi-cards/CloseRateCard"
-import NetProfitCard from "@/components/dashboard/kpi-cards/NetProfitCard"
-import AvgAssignmentFeeCard from "@/components/dashboard/kpi-cards/AvgAssignmentFeeCard"
-import CampaignRoiCard from "@/components/dashboard/kpi-cards/CampaignRoiCard"
-import BounceRateCard from "@/components/dashboard/kpi-cards/BounceRateCard"
-import UnsubscribeRateCard from "@/components/dashboard/kpi-cards/UnsubscribeRateCard"
-import SpamComplaintRateCard from "@/components/dashboard/kpi-cards/SpamComplaintRateCard"
-import OpenRateCard from "@/components/dashboard/kpi-cards/OpenRateCard"
-import ClickRateCard from "@/components/dashboard/kpi-cards/ClickRateCard"
+import { useSession } from "@/hooks/use-session"
 
 type DashboardPayload = {
   kpis: DashboardKpis
+  profit: DashboardProfit
+  liveDeals: LiveDeal[]
+  needsYouToday: NeedsYouTodayData
+  funnel: DealFunnel
   textTrends: TrendWithDelta<TextTrend>
   callTrends: TrendWithDelta<CallTrend>
   emailTrends: TrendWithDelta<EmailTrend>
@@ -74,6 +48,80 @@ type DashboardPayload = {
   showingTrends: TrendWithDelta<ShowingTrend>
   unsubscribeTrends: TrendWithDelta<UnsubscribeTrend>
   recentActivity: RecentActivityItem[]
+}
+
+const EMPTY_KPIS: DashboardKpis = {
+  buyersAdded: 0,
+  buyersAddedDelta: 0,
+  propertiesAdded: 0,
+  activeProperties: 0,
+  underContract: 0,
+  soldProperties: 0,
+  totalProperties: 0,
+  hotBuyers: 0,
+  followUpsDue: 0,
+  totalContacts: 0,
+  textsSent: 0,
+  textsSentDelta: 0,
+  textsReceived: 0,
+  textsReceivedDelta: 0,
+  callsMade: 0,
+  callsMadeDelta: 0,
+  callsReceived: 0,
+  callsReceivedDelta: 0,
+  voicemailsLeft: 0,
+  emailsSent: 0,
+  emailsSentDelta: 0,
+  emailsOpened: 0,
+  emailBounces: 0,
+  openRate: 0,
+  clickRate: 0,
+  bounceRate: 0,
+  smsUnsubscribes: 0,
+  emailUnsubscribes: 0,
+  unsubscribeRate: 0,
+  unsubscribeRateDelta: 0,
+  campaignsRunning: 0,
+  campaignRoi: 0,
+  offersCreated: 0,
+  offersCreatedDelta: 0,
+  offersAccepted: 0,
+  offersAcceptedDelta: 0,
+  offersDeclined: 0,
+  offersCountered: 0,
+  showingsScheduled: 0,
+  showingsScheduledDelta: 0,
+  showingsRescheduled: 0,
+  showingsCancelled: 0,
+  showingsCompleted: 0,
+  grossProfit: 0,
+  netProfit: 0,
+  avgAssignmentFee: 0,
+  closeRate: 0,
+}
+
+const EMPTY_PROFIT: DashboardProfit = {
+  grossProfit: 0,
+  closedCount: 0,
+  avgAssignmentFee: 0,
+  marketingSpend: 0,
+  netProfit: 0,
+  marketingRoi: null,
+  hasData: false,
+}
+
+const EMPTY_NEEDS_YOU_TODAY: NeedsYouTodayData = {
+  unreadReplies: 0,
+  offersAwaiting: 0,
+  showingsToday: 0,
+  followUpsDue: 0,
+}
+
+const EMPTY_FUNNEL: DealFunnel = {
+  buyers: 0,
+  showings: 0,
+  offers: 0,
+  closed: 0,
 }
 
 async function fetchDashboard(range: TimeRange): Promise<DashboardPayload> {
@@ -89,6 +137,7 @@ async function fetchDashboard(range: TimeRange): Promise<DashboardPayload> {
 export default function DashboardPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { user } = useSession()
   const [range, setRange] = useState<TimeRange>(() => {
     const param = searchParams.get("range") as TimeRange | null
     if (param === "week" || param === "month" || param === "today") return param
@@ -107,90 +156,95 @@ export default function DashboardPage() {
     queryFn: () => fetchDashboard(range),
   })
 
-  const kpis = dashboardData?.kpis ?? null
+  const kpis = dashboardData?.kpis ?? EMPTY_KPIS
+  const profit = dashboardData?.profit ?? EMPTY_PROFIT
+  const liveDeals = dashboardData?.liveDeals ?? []
+  const needsYouToday = dashboardData?.needsYouToday ?? EMPTY_NEEDS_YOU_TODAY
+  const funnel = dashboardData?.funnel ?? EMPTY_FUNNEL
   const textTrends = dashboardData?.textTrends ?? { data: [], delta: 0 }
   const callTrends = dashboardData?.callTrends ?? { data: [], delta: 0 }
   const emailTrends = dashboardData?.emailTrends ?? { data: [], delta: 0 }
   const offerTrends = dashboardData?.offerTrends ?? { data: [], delta: 0 }
   const showingTrends = dashboardData?.showingTrends ?? { data: [], delta: 0 }
-  const unsubscribeTrends = dashboardData?.unsubscribeTrends ?? { data: [], delta: 0 }
   const activity = dashboardData?.recentActivity ?? []
+  const firstName = (
+    user?.user_metadata?.full_name
+    || user?.user_metadata?.name
+    || user?.email?.split("@")[0]
+    || ""
+  ).split(" ")[0]
+  const briefing = `${kpis.activeProperties} active properties · ${needsYouToday.offersAwaiting} offers awaiting your response · ${needsYouToday.showingsToday} showings today`
 
   return (
     <MainLayout>
-      <div className="p-4 space-y-6">
-        <DashboardHeader range={range} onRangeChange={handleRangeChange} />
+      <div className="min-h-full bg-muted/40 p-4 sm:p-6 space-y-5">
+        <DashboardGreeting briefing={briefing} name={firstName}>
+          <ToggleTimeRange value={range} onChange={handleRangeChange} />
+        </DashboardGreeting>
         <QuickActionButtons />
-        {kpis && (
-          <div className="space-y-4">
-            <KPISection title="High Level Metrics" icon={Gauge} shade="odd">
-              <TotalContactsCard value={kpis.totalContacts} />
-              <BuyersAddedCard value={kpis.buyersAdded} />
-              <PropertiesAddedCard value={kpis.propertiesAdded} />
-              <ShowingsScheduledCard value={kpis.showingsScheduled} />
-              <OffersReceivedCard value={kpis.offersCreated} />
-            </KPISection>
-            <KPISection title="Email Metrics" icon={Mail} shade="even">
-              <EmailsSentCard value={kpis.emailsSent} />
-              <OpenRateCard value={kpis.openRate} />
-              <ClickRateCard value={kpis.clickRate} />
-              <BounceRateCard value={kpis.bounceRate} />
-              <UnsubscribeRateCard value={kpis.unsubscribeRate} />
-              <SpamComplaintRateCard value={0} />
-            </KPISection>
-            <KPISection title="SMS Metrics" icon={MessageCircle} shade="odd">
-              <TextsSentCard value={kpis.textsSent} />
-              <TextsReceivedCard value={kpis.textsReceived} />
-              <ClickRateCard value={kpis.clickRate} />
-              <UnsubscribeRateCard value={kpis.unsubscribeRate} />
-            </KPISection>
-            <KPISection title="Call Metrics" icon={Phone} shade="even">
-              <CallsMadeCard value={kpis.callsMade} />
-              <CallsReceivedCard value={kpis.callsReceived} />
-            </KPISection>
-            <KPISection title="Campaign Metrics" icon={LineChart} shade="odd">
-              <CampaignsRunningCard value={kpis.campaignsRunning} />
-            </KPISection>
-            <KPISection title="Property Metrics" icon={HomeIcon} shade="even">
-              <TotalPropertiesCard value={kpis.totalProperties} />
-              <ActivePropertiesCard value={kpis.activeProperties} />
-              <UnderContractCard value={kpis.underContract} />
-              <SoldPropertiesCard value={kpis.soldProperties} />
-              <PropertiesAddedCard value={kpis.propertiesAdded} />
-            </KPISection>
-            <KPISection title="Showing Metrics" icon={Calendar} shade="odd">
-              <ShowingsScheduledCard value={kpis.showingsScheduled} />
-              <ShowingsRescheduledCard value={kpis.showingsRescheduled} />
-              <ShowingsCancelledCard value={kpis.showingsCancelled} />
-              <ShowingsCompletedCard value={kpis.showingsCompleted} />
-            </KPISection>
-            <KPISection title="Offer Metrics" icon={Handshake} shade="even">
-              <OffersCreatedCard value={kpis.offersCreated} />
-              <OffersAcceptedCard value={kpis.offersAccepted} />
-              <OffersCounteredCard value={kpis.offersCountered} />
-              <OffersDeclinedCard value={kpis.offersDeclined} />
-            </KPISection>
-            <KPISection title="Profit & Performance" icon={PiggyBank} shade="odd">
-              <CloseRateCard value={kpis.closeRate} />
-              <GrossProfitCard value={kpis.grossProfit} />
-              <NetProfitCard value={kpis.netProfit} />
-              <AvgAssignmentFeeCard value={kpis.avgAssignmentFee} />
-              <CampaignRoiCard value={kpis.campaignRoi} />
-            </KPISection>
-          </div>
-        )}
-        <div>
-          <h2 className="text-lg font-semibold mb-2">Performance Trends</h2>
-          <ChartsSection
-            textTrends={textTrends}
-            callTrends={callTrends}
-            emailTrends={emailTrends}
-            offerTrends={offerTrends}
-            showingTrends={showingTrends}
-            unsubscribeTrends={unsubscribeTrends}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <KpiStat label="Active properties" value={kpis.activeProperties} sublabel="live inventory" />
+          <KpiStat
+            label="Buyers added"
+            value={kpis.buyersAdded}
+            delta={kpis.buyersAddedDelta}
+            sublabel="this period"
+          />
+          <KpiStat
+            label="Showings"
+            value={kpis.showingsScheduled}
+            delta={kpis.showingsScheduledDelta}
+            spark={showingTrends.data.map((trend) => trend.scheduled ?? 0)}
+          />
+          <KpiStat
+            label="Offers accepted"
+            value={kpis.offersAccepted}
+            delta={kpis.offersAcceptedDelta}
+            spark={offerTrends.data.map((trend) => trend.accepted ?? 0)}
+          />
+          <KpiStat label="Close rate" value={`${Math.round(kpis.closeRate)}%`} sublabel="accepted / created" />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
+          <LiveDealsPanel deals={liveDeals} />
+          <NeedsYouToday data={needsYouToday} />
+        </div>
+        <DashboardFunnel data={funnel} />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <ChannelCard
+            title="Email"
+            icon={Mail}
+            href="/campaigns"
+            rows={[
+              { label: "Sent", value: kpis.emailsSent },
+              { label: "Open rate", value: `${kpis.openRate}%` },
+              { label: "Click rate", value: `${kpis.clickRate}%` },
+            ]}
+          />
+          <ChannelCard
+            title="SMS"
+            icon={MessageCircle}
+            href="/campaigns"
+            rows={[
+              { label: "Sent", value: kpis.textsSent },
+              { label: "Replies", value: kpis.textsReceived },
+              { label: "Opt-outs", value: kpis.smsUnsubscribes },
+            ]}
+          />
+          <ChannelCard
+            title="Calls"
+            icon={Phone}
+            href="/calls"
+            rows={[
+              { label: "Made", value: kpis.callsMade },
+              { label: "Received", value: kpis.callsReceived },
+              { label: "Voicemails", value: kpis.voicemailsLeft },
+            ]}
           />
         </div>
+        <ActivityTrend textTrends={textTrends} callTrends={callTrends} emailTrends={emailTrends} />
+        <ProfitZone data={profit} />
         <RecentActivity items={activity} />
+        {dashboardData?.kpis ? <AllMetricsDrawer kpis={kpis} /> : null}
       </div>
     </MainLayout>
   )
