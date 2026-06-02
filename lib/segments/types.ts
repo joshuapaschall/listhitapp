@@ -7,6 +7,7 @@ export type SegmentMatch = "all" | "any"
 export type AttributeOperator =
   | "is" | "is_not"
   | "contains" | "not_contains"        // text[] overlap / not-overlap, or text ilike
+  | "contains_all"                     // text[] @> (has ALL of the given values)
   | "gte" | "lte" | "eq"
   | "between"
   | "before" | "after" | "within_days"

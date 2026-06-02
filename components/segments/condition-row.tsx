@@ -51,6 +51,7 @@ const OPERATOR_LABELS: Record<AttributeOperator, string> = {
   is: "is",
   is_not: "is not",
   contains: "includes any of",
+  contains_all: "has all of",
   not_contains: "excludes",
   gte: "at least",
   lte: "at most",

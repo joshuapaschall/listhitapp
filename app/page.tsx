@@ -9,9 +9,15 @@ import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Textarea } from "@/components/ui/textarea"
 import { supabase } from "@/lib/supabase"
 import type { Buyer, Tag } from "@/lib/supabase"
 import { createLogger } from "@/lib/logger"
+import { filterStateToDefinition } from "@/lib/segments/filter-mapping"
+import { encodeAudienceParam } from "@/lib/segments/audience-handoff"
+import { applyAttributeConditions } from "@/lib/segments/apply-filters"
+import type { AttributeCondition } from "@/lib/segments/types"
 import { BuyerService } from "@/services/buyer-service"
 import { toast } from "sonner"
 import ImportBuyersModal from "@/components/buyers/import-buyers-modal"
@@ -126,52 +132,12 @@ const fetchBuyers = async (
     )
   }
 
-  if (filters.vip === "vip") {
-    query = query.eq("vip", true)
-  } else if (filters.vip === "not-vip") {
-    query = query.eq("vip", false)
-  }
-
-  if (filters.vetted === "vetted") {
-    query = query.eq("vetted", true)
-  } else if (filters.vetted === "not-vetted") {
-    query = query.eq("vetted", false)
-  }
-
-  if (filters.minScore) {
-    query = query.gte("score", Number.parseInt(filters.minScore))
-  }
-
-  if (filters.maxScore) {
-    query = query.lte("score", Number.parseInt(filters.maxScore))
-  }
-
-  if (filters.createdAfter) {
-    query = query.gte("created_at", filters.createdAfter)
-  }
-
-  if (filters.createdBefore) {
-    query = query.lte("created_at", filters.createdBefore)
-  }
-
-  if (filters.selectedTags && filters.selectedTags.length > 0) {
-    query = query.contains("tags", filters.selectedTags)
-  }
-
-  if (filters.excludeTags && filters.excludeTags.length > 0) {
-    const exclude = `{${filters.excludeTags
-      .map((tag) => `"${tag}"`)
-      .join(",")}}`
-    query = query.not("tags", "ov", exclude)
-  }
-
-  if (filters.selectedLocations && filters.selectedLocations.length > 0) {
-    query = query.overlaps("locations", filters.selectedLocations)
-  }
-
-  if (filters.propertyType && filters.propertyType !== "any") {
-    query = query.overlaps("property_type", [filters.propertyType])
-  }
+  // Attribute predicates flow through the one shared engine primitive
+  // (filterStateToDefinition → applyAttributeConditions) so the Buyers list, the
+  // segment engine, and the campaign/buyer services apply IDENTICAL filters.
+  // Tags → contains_all (has ALL), created range → inclusive between (gte+lte).
+  const { conditions: attributeConditions } = filterStateToDefinition(filters).definition
+  query = applyAttributeConditions(query, attributeConditions as AttributeCondition[])
 
   if (filters.canReceiveEmail === "yes") {
     query = query.eq("can_receive_email", true)
@@ -262,52 +228,12 @@ const fetchBuyerIds = async (
     )
   }
 
-  if (filters.vip === "vip") {
-    query = query.eq("vip", true)
-  } else if (filters.vip === "not-vip") {
-    query = query.eq("vip", false)
-  }
-
-  if (filters.vetted === "vetted") {
-    query = query.eq("vetted", true)
-  } else if (filters.vetted === "not-vetted") {
-    query = query.eq("vetted", false)
-  }
-
-  if (filters.minScore) {
-    query = query.gte("score", Number.parseInt(filters.minScore))
-  }
-
-  if (filters.maxScore) {
-    query = query.lte("score", Number.parseInt(filters.maxScore))
-  }
-
-  if (filters.createdAfter) {
-    query = query.gte("created_at", filters.createdAfter)
-  }
-
-  if (filters.createdBefore) {
-    query = query.lte("created_at", filters.createdBefore)
-  }
-
-  if (filters.selectedTags && filters.selectedTags.length > 0) {
-    query = query.contains("tags", filters.selectedTags)
-  }
-
-  if (filters.excludeTags && filters.excludeTags.length > 0) {
-    const exclude = `{${filters.excludeTags
-      .map((tag) => `"${tag}"`)
-      .join(",")}}`
-    query = query.not("tags", "ov", exclude)
-  }
-
-  if (filters.selectedLocations && filters.selectedLocations.length > 0) {
-    query = query.overlaps("locations", filters.selectedLocations)
-  }
-
-  if (filters.propertyType && filters.propertyType !== "any") {
-    query = query.overlaps("property_type", [filters.propertyType])
-  }
+  // Attribute predicates flow through the one shared engine primitive
+  // (filterStateToDefinition → applyAttributeConditions) so the Buyers list, the
+  // segment engine, and the campaign/buyer services apply IDENTICAL filters.
+  // Tags → contains_all (has ALL), created range → inclusive between (gte+lte).
+  const { conditions: attributeConditions } = filterStateToDefinition(filters).definition
+  query = applyAttributeConditions(query, attributeConditions as AttributeCondition[])
 
   if (filters.canReceiveEmail === "yes") {
     query = query.eq("can_receive_email", true)
@@ -960,6 +886,47 @@ function BuyersPageContent() {
     router.push(`/campaigns?prefill=${channel}`)
   }
 
+  // Save-as-segment door: maps the CURRENT filter to a reusable segment.
+  const [saveSegmentOpen, setSaveSegmentOpen] = useState(false)
+  const [segmentName, setSegmentName] = useState("")
+  const [segmentDescription, setSegmentDescription] = useState("")
+  const [savingSegment, setSavingSegment] = useState(false)
+  const filterMapping = useMemo(() => filterStateToDefinition(filters as any), [filters])
+
+  const handleSaveAsSegment = async () => {
+    if (!segmentName.trim()) return
+    setSavingSegment(true)
+    try {
+      const res = await fetch("/api/segments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: segmentName.trim(),
+          description: segmentDescription.trim() || undefined,
+          definition: filterMapping.definition,
+        }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.error || "Failed to save segment")
+      }
+      toast.success("Saved to your library", {
+        action: { label: "View segments", onClick: () => router.push("/segments") },
+      })
+      setSaveSegmentOpen(false)
+      setSegmentName("")
+      setSegmentDescription("")
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to save segment")
+    } finally {
+      setSavingSegment(false)
+    }
+  }
+
+  const handleUseInNewCampaign = () => {
+    router.push(`/campaigns/new?audience=${encodeAudienceParam(filterMapping.definition)}`)
+  }
+
   const getScoreColor = (score: number) => {
     if (score >= 90) return "text-green-600 bg-green-50"
     if (score >= 70) return "text-blue-600 bg-blue-50"
@@ -1110,6 +1077,24 @@ function BuyersPageContent() {
                     >
                       <MessageSquare className="h-4 w-4" />
                       Text these {totalCount}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-9"
+                      onClick={() => setSaveSegmentOpen(true)}
+                      aria-label="Save current filter as a reusable segment"
+                    >
+                      Save as segment
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-9"
+                      onClick={handleUseInNewCampaign}
+                      aria-label="Use current filter as the audience for a new campaign"
+                    >
+                      Use in new campaign
                     </Button>
                   </div>
                 )}
@@ -1871,6 +1856,51 @@ function BuyersPageContent() {
           queryClient.invalidateQueries({ queryKey: ["totalBuyersCount"] })
         }}
       />
+      <Dialog open={saveSegmentOpen} onOpenChange={setSaveSegmentOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Save as segment</DialogTitle>
+            <DialogDescription>
+              Save the current filter as a reusable audience in your library.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Name</label>
+              <Input
+                value={segmentName}
+                onChange={(e) => setSegmentName(e.target.value)}
+                placeholder="e.g. Cash buyers in Texas"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Description</label>
+              <Textarea
+                value={segmentDescription}
+                onChange={(e) => setSegmentDescription(e.target.value)}
+                placeholder="Optional"
+                rows={2}
+              />
+            </div>
+            {(filterMapping.droppedSearch || filterMapping.droppedReachability) && (
+              <p className="text-xs text-muted-foreground">
+                {filterMapping.droppedSearch && "Your typed search isn’t part of a saved segment. "}
+                {filterMapping.droppedReachability &&
+                  "Reachability toggles aren’t saved — channel reachability is applied automatically when you send."}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSaveSegmentOpen(false)}>
+              Cancel
+            </Button>
+            <Button disabled={!segmentName.trim() || savingSegment} onClick={handleSaveAsSegment}>
+              {savingSegment ? "Saving…" : "Save segment"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <BulkTagsDialog
         open={showTagDialog}
         onOpenChange={setShowTagDialog}

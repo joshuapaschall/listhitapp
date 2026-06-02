@@ -1,6 +1,8 @@
 import { supabase } from "@/lib/supabase"
 import type { Buyer, Tag, Group } from "@/lib/supabase"
 import { createLogger } from "@/lib/logger"
+import { applyAttributeConditions } from "@/lib/segments/apply-filters"
+import type { AttributeCondition } from "@/lib/segments/types"
 
 const log = createLogger("buyer")
 
@@ -28,25 +30,17 @@ export class BuyerService {
       )
     }
 
-    if (filters?.vip !== undefined) {
-      query = query.eq("vip", filters.vip)
-    }
-
-    if (filters?.vetted !== undefined) {
-      query = query.eq("vetted", filters.vetted)
-    }
-
-    if (filters?.minScore) {
-      query = query.gte("score", filters.minScore)
-    }
-
-    if (filters?.maxScore) {
-      query = query.lte("score", filters.maxScore)
-    }
-
-    if (filters?.tags && filters.tags.length > 0) {
-      query = query.overlaps("tags", filters.tags)
-    }
+    // Attribute predicates flow through the one shared engine primitive so this
+    // service applies the same filters as the Buyers list and the engine. Note
+    // this service's tag filter is has-ANY (overlaps → operator "contains"),
+    // preserving its existing behavior.
+    const attributeConditions: AttributeCondition[] = []
+    if (filters?.vip !== undefined) attributeConditions.push({ kind: "attribute", field: "vip", operator: "is", value: filters.vip })
+    if (filters?.vetted !== undefined) attributeConditions.push({ kind: "attribute", field: "vetted", operator: "is", value: filters.vetted })
+    if (filters?.minScore) attributeConditions.push({ kind: "attribute", field: "score", operator: "gte", value: filters.minScore })
+    if (filters?.maxScore) attributeConditions.push({ kind: "attribute", field: "score", operator: "lte", value: filters.maxScore })
+    if (filters?.tags && filters.tags.length > 0) attributeConditions.push({ kind: "attribute", field: "tags", operator: "contains", value: filters.tags })
+    query = applyAttributeConditions(query, attributeConditions)
 
     const { data, error } = await query
 

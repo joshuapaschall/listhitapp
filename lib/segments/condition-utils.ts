@@ -94,6 +94,7 @@ const OPERATOR_WORDS: Partial<Record<AttributeOperator, string>> = {
   is: "is",
   is_not: "is not",
   contains: "includes",
+  contains_all: "has all of",
   not_contains: "excludes",
   gte: "≥",
   lte: "≤",

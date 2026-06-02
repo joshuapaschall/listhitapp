@@ -85,11 +85,24 @@ export const CORE_PRESETS: SegmentPreset[] = [
       conditions: [{ kind: "attribute", field: "created_at", operator: "within_days", value: { days: 30 } }],
     }),
   },
-]
-
-// Defined but NOT surfaced yet — moving an entry into CORE_PRESETS is a one-line
-// change to enable it in the picker.
-export const OPTIONAL_PRESETS: SegmentPreset[] = [
+  {
+    id: "vip_buyers",
+    label: "VIP buyers",
+    channels: ["email", "sms"],
+    build: () => ({
+      match: "all",
+      conditions: [{ kind: "attribute", field: "vip", operator: "is", value: true }],
+    }),
+  },
+  {
+    id: "cash_buyers",
+    label: "Cash buyers",
+    channels: ["email", "sms"],
+    build: () => ({
+      match: "all",
+      conditions: [{ kind: "attribute", field: "cash_buyer", operator: "is", value: true }],
+    }),
+  },
   {
     id: "engaged_90d",
     label: "Engaged · 90 days",
@@ -117,6 +130,11 @@ export const OPTIONAL_PRESETS: SegmentPreset[] = [
       ],
     }),
   },
+]
+
+// Defined but NOT surfaced yet — moving an entry into CORE_PRESETS is a one-line
+// change to enable it in the picker.
+export const OPTIONAL_PRESETS: SegmentPreset[] = [
   {
     id: "never_engaged",
     label: "Never engaged",
@@ -135,24 +153,6 @@ export const OPTIONAL_PRESETS: SegmentPreset[] = [
     build: () => ({
       match: "all",
       conditions: [{ kind: "behavioral", metric: "sent", operator: "did_not", scope: lastN(1) }],
-    }),
-  },
-  {
-    id: "vip_buyers",
-    label: "VIP buyers",
-    channels: ["email", "sms"],
-    build: () => ({
-      match: "all",
-      conditions: [{ kind: "attribute", field: "vip", operator: "is", value: true }],
-    }),
-  },
-  {
-    id: "cash_buyers",
-    label: "Cash buyers",
-    channels: ["email", "sms"],
-    build: () => ({
-      match: "all",
-      conditions: [{ kind: "attribute", field: "cash_buyer", operator: "is", value: true }],
     }),
   },
   {
