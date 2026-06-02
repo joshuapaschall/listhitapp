@@ -154,6 +154,7 @@ describe("send route auth", () => {
     h.state.authOrgId = "org-1"
     h.state.recipientCounter = 1
     process.env.SUPABASE_URL = "http://local"
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "http://local"
     process.env.SUPABASE_SERVICE_ROLE_KEY = "svc"
     process.env.CRON_SECRET = "cron"
     process.env.TELNYX_MESSAGING_PROFILE_ID = "mp1"
