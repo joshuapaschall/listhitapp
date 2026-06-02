@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { cookies } from "next/headers"
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { requirePermission } from "@/lib/permissions/server"
+import { requireOrgContext } from "@/lib/auth/org-context"
 
 type ImportUpdate = {
   id: string
@@ -9,8 +8,9 @@ type ImportUpdate = {
 }
 
 export async function POST(req: NextRequest) {
-  const cookieStore = cookies()
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+  const { user, orgId, supabase } = await requireOrgContext()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!orgId) return NextResponse.json({ error: "Organization context required" }, { status: 400 })
   const denied = await requirePermission(supabase, "buyers.import")
   if (denied) return denied
 
@@ -27,9 +27,14 @@ export async function POST(req: NextRequest) {
       }
 
       if (buyers.length) {
+        // Strip any client-supplied org_id and stamp the server-resolved org on every row.
+        const rows = buyers.map((buyer: Record<string, any>) => {
+          const { org_id: _ignoredOrgId, ...rest } = buyer ?? {}
+          return { ...rest, org_id: orgId }
+        })
         const { data, error } = await supabase
           .from("buyers")
-          .insert(buyers)
+          .insert(rows)
           .select("id")
 
         if (error) {
@@ -45,9 +50,11 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "valid updates required" }, { status: 400 })
       }
 
+      // Never let an update relocate a buyer to another org.
+      const { org_id: _ignoredOrgId, ...updateData } = update.data
       const { data, error } = await supabase
         .from("buyers")
-        .update(update.data)
+        .update(updateData)
         .eq("id", update.id)
         .select("id")
         .single()

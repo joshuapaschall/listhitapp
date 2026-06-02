@@ -210,7 +210,7 @@ export async function POST(request: NextRequest) {
     const existingBuyerIds = new Set((existingRows || []).map((row: any) => row.buyer_id))
     const rows = finalIds
       .filter((id) => !existingBuyerIds.has(id))
-      .map((id) => ({ campaign_id: campaignId, buyer_id: id, status: "pending" }))
+      .map((id) => ({ campaign_id: campaignId, buyer_id: id, status: "pending", org_id: campaign.org_id }))
 
     if (rows.length) {
       const { error: insErr } = await supabase
@@ -224,7 +224,7 @@ export async function POST(request: NextRequest) {
   } else {
     await supabase.from("campaign_recipients").delete().eq("campaign_id", campaignId)
     if (finalIds.length) {
-      const rows = finalIds.map((id) => ({ campaign_id: campaignId, buyer_id: id }))
+      const rows = finalIds.map((id) => ({ campaign_id: campaignId, buyer_id: id, org_id: campaign.org_id }))
       const { error: insErr } = await supabase
         .from("campaign_recipients")
         .insert(rows)

@@ -1,6 +1,7 @@
 import { PollyClient, SynthesizeSpeechCommand, type VoiceId } from "@aws-sdk/client-polly";
 import { requirePermission } from "@/lib/permissions/server";
 import { NextResponse } from "next/server";
+import { supabaseAdmin } from "@/lib/supabase";
 import { requireOrgContext } from "../../_shared";
 import { DEFAULT_VOICE_ID, POLLY_VOICES } from "@/lib/voice/polly-voices";
 
@@ -30,9 +31,9 @@ export async function POST(request: Request) {
     if (!file || !scopeKey) return NextResponse.json({ ok: false, error: "Missing audio file or scopeKey" }, { status: 400 });
     const ext = file.type.includes("wav") ? "wav" : file.type.includes("mp3") || file.type.includes("mpeg") ? "mp3" : "webm";
     const path = `${scopeType === "market" ? "markets" : "numbers"}/${scopeKey}/preview-${ts}.${ext}`;
-    const { error } = await supabase.storage.from(GREETING_BUCKET).upload(path, Buffer.from(await file.arrayBuffer()), { contentType: file.type || "audio/webm", upsert: true });
+    const { error } = await supabaseAdmin.storage.from(GREETING_BUCKET).upload(path, Buffer.from(await file.arrayBuffer()), { contentType: file.type || "audio/webm", upsert: true });
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-    const url = `${supabase.storage.from(GREETING_BUCKET).getPublicUrl(path).data.publicUrl}?v=${ts}`;
+    const url = `${supabaseAdmin.storage.from(GREETING_BUCKET).getPublicUrl(path).data.publicUrl}?v=${ts}`;
     return NextResponse.json({ ok: true, url, source: "recorded" });
   }
 
@@ -76,8 +77,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: err instanceof Error ? err.message : "Polly synthesis failed" }, { status: 500 });
   }
   const path = `${scopeType === "market" ? "markets" : "numbers"}/${scopeKey}/preview-${ts}.mp3`;
-  const { error } = await supabase.storage.from(GREETING_BUCKET).upload(path, Buffer.concat(chunks), { contentType: "audio/mpeg", upsert: true });
+  const { error } = await supabaseAdmin.storage.from(GREETING_BUCKET).upload(path, Buffer.concat(chunks), { contentType: "audio/mpeg", upsert: true });
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-  const url = `${supabase.storage.from(GREETING_BUCKET).getPublicUrl(path).data.publicUrl}?v=${ts}`;
+  const url = `${supabaseAdmin.storage.from(GREETING_BUCKET).getPublicUrl(path).data.publicUrl}?v=${ts}`;
   return NextResponse.json({ ok: true, url, source: "polly", voice_id: voiceConfig.id });
 }

@@ -6,6 +6,7 @@ vi.mock("next/headers", () => ({
 
 const state = vi.hoisted(() => ({
   currentUser: { id: "user-1" } as { id: string } | null,
+  orgId: "org-1" as string | null,
   callerRole: "user",
   permissions: [] as any[],
   insertedBuyers: [] as any[],
@@ -87,10 +88,22 @@ vi.mock("@supabase/auth-helpers-nextjs", () => ({
   createRouteHandlerClient: () => createPermissionClient(),
 }))
 
+// POST /api/buyers and /api/buyers/import resolve the org via requireOrgContext.
+// Return the same permission client so requirePermission still gates on role/permissions.
+vi.mock("@/lib/auth/org-context", () => ({
+  requireOrgContext: async () => ({
+    user: state.currentUser,
+    orgId: state.currentUser ? state.orgId : null,
+    supabase: createPermissionClient(),
+  }),
+  resolveOrgIdForUser: async () => state.orgId,
+}))
+
 describe("buyers write permission gates", () => {
   beforeEach(() => {
     vi.resetModules()
     state.currentUser = { id: "user-1" }
+    state.orgId = "org-1"
     state.callerRole = "user"
     state.permissions = []
     state.insertedBuyers = []
@@ -123,7 +136,9 @@ describe("buyers write permission gates", () => {
 
       expect(res.status).toBe(201)
       expect(body.buyer.id).toBe("buyer-1")
-      expect(state.insertedBuyers).toEqual([{ id: "buyer-1", fname: "Jane", email: "jane@example.com" }])
+      expect(state.insertedBuyers).toEqual([
+        { id: "buyer-1", fname: "Jane", email: "jane@example.com", org_id: "org-1" },
+      ])
     })
 
     test("allows users granted buyers.edit to create buyers", async () => {
@@ -133,6 +148,22 @@ describe("buyers write permission gates", () => {
 
       expect(res.status).toBe(201)
       expect(state.insertedBuyers).toHaveLength(1)
+      expect(state.insertedBuyers[0].org_id).toBe("org-1")
+    })
+
+    test("stamps the resolved org and overrides a client-supplied org_id", async () => {
+      state.callerRole = "admin"
+
+      const { POST } = await import("../app/api/buyers/route")
+      const req = new NextRequest("http://test/api/buyers", {
+        method: "POST",
+        body: JSON.stringify({ fname: "Jane", org_id: "attacker-org" }),
+      })
+      const res = await POST(req)
+
+      expect(res.status).toBe(201)
+      expect(state.insertedBuyers).toHaveLength(1)
+      expect(state.insertedBuyers[0].org_id).toBe("org-1")
     })
   })
 
@@ -233,7 +264,7 @@ describe("buyers write permission gates", () => {
 
       expect(res.status).toBe(200)
       expect(body.insertedIds).toEqual(["buyer-1"])
-      expect(state.insertedBuyers).toEqual([{ id: "buyer-1", fname: "Imported" }])
+      expect(state.insertedBuyers).toEqual([{ id: "buyer-1", fname: "Imported", org_id: "org-1" }])
     })
 
     test("allows users granted buyers.import to import buyers", async () => {
@@ -243,6 +274,27 @@ describe("buyers write permission gates", () => {
 
       expect(res.status).toBe(200)
       expect(state.insertedBuyers).toHaveLength(1)
+      expect(state.insertedBuyers[0].org_id).toBe("org-1")
+    })
+
+    test("stamps the resolved org on every imported row, overriding client org_id", async () => {
+      state.callerRole = "admin"
+
+      const { POST } = await import("../app/api/buyers/import/route")
+      const req = new NextRequest("http://test/api/buyers/import", {
+        method: "POST",
+        body: JSON.stringify({
+          buyers: [
+            { fname: "A", org_id: "attacker-org" },
+            { fname: "B" },
+          ],
+        }),
+      })
+      const res = await POST(req)
+
+      expect(res.status).toBe(200)
+      expect(state.insertedBuyers).toHaveLength(2)
+      expect(state.insertedBuyers.every((b) => b.org_id === "org-1")).toBe(true)
     })
   })
 })

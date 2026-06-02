@@ -1,18 +1,21 @@
 import { NextRequest } from "next/server"
-import { cookies } from "next/headers"
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 
 import { formatPhoneE164 } from "@/lib/dedup-utils"
 import { requirePermission } from "@/lib/permissions/server"
-import { supabase } from "@/lib/supabase"
+import { requireOrgContext } from "@/lib/auth/org-context"
 import { TELNYX_API_URL, telnyxHeaders } from "@/lib/telnyx"
 import { getTelnyxApiKey } from "@/lib/voice-env"
 import { ensurePublicMediaUrls } from "@/utils/mms.server"
 
 export async function POST(request: NextRequest) {
-  const cookieStore = cookies()
-  const routeSupabase = createRouteHandlerClient({ cookies: () => cookieStore })
-  const denied = await requirePermission(routeSupabase, "inbox.send")
+  const { user, orgId, supabase } = await requireOrgContext()
+  if (!user) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 })
+  }
+  if (!orgId) {
+    return new Response(JSON.stringify({ error: "Organization context required" }), { status: 400 })
+  }
+  const denied = await requirePermission(supabase, "inbox.send")
   if (denied) return denied
 
   const {
@@ -131,6 +134,7 @@ export async function POST(request: NextRequest) {
         is_bulk: false,
         media_urls: finalMediaUrls.length ? finalMediaUrls : null,
         status: "scheduled",
+        org_id: orgId,
         created_at: new Date().toISOString(),
       })
       .select("id, created_at")
