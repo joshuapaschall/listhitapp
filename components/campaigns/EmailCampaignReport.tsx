@@ -4,13 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { Area, AreaChart, CartesianGrid, Legend, XAxis, YAxis } from "recharts"
-import { AlertTriangle, Eye, Link2, MailCheck, MousePointerClick, ShieldAlert, TrendingUp, Unplug } from "lucide-react"
+import { AlertTriangle, DollarSign, Eye, Link2, MailCheck, MousePointerClick, ShieldAlert, TrendingUp, Unplug } from "lucide-react"
 import { useState } from "react"
 import CampaignRecipientsTable from "./CampaignRecipientsTable"
 import RecipientDrilldownSheet from "./RecipientDrilldownSheet"
 
 const num = (n: number) => new Intl.NumberFormat().format(n || 0)
 const pct = (n: number) => `${(n || 0).toFixed(1)}%`
+const usd = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(n || 0)
 
 export default function EmailCampaignReport({ campaign, analytics }: any) {
   const s = analytics?.summary || {}
@@ -41,6 +42,7 @@ export default function EmailCampaignReport({ campaign, analytics }: any) {
           { label: "Opens", value: `${num(s.uniqueOpens)} / ${num(s.totalOpens)}`, detail: null, icon: Eye, tone: "text-emerald-600 dark:text-emerald-400" },
           { label: "Clicks", value: `${num(s.uniqueClicks)} / ${num(s.totalClicks)}`, detail: pct(r.ctr), icon: MousePointerClick, tone: "text-emerald-600 dark:text-emerald-400" },
           { label: "Click-to-open", value: pct(r.clickToOpen), detail: null, icon: TrendingUp, tone: "text-emerald-600 dark:text-emerald-400" },
+          { label: "Email cost", value: usd(s.totalCostUsd), detail: "Marketing spend", icon: DollarSign, tone: "text-muted-foreground" },
           { label: "Bounces", value: num(s.bounces), detail: `${pct(r.bounceRate)} • P:${num(s.permanentBounces)} T:${num(s.transientBounces)}`, icon: AlertTriangle, tone: "text-amber-600 dark:text-amber-400" },
           { label: "Unsubscribes", value: num(s.unsubscribes), detail: pct(r.unsubRate), icon: Unplug, tone: "text-amber-600 dark:text-amber-400" },
           { label: "Complaints", value: num(s.complaints), detail: pct(r.complaintRate), icon: ShieldAlert, tone: "text-red-600 dark:text-red-400" },
