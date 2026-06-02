@@ -35,6 +35,13 @@ const SITE_URL =
   process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_BASE_URL || process.env.DISPOTOOL_BASE_URL
 const EMAIL_PHYSICAL_ADDRESS = process.env.EMAIL_PHYSICAL_ADDRESS || "ListHit CRM · 123 Main St · Anytown, USA"
 
+const DEFAULT_SES_COST_PER_EMAIL_USD = 0.0001
+const parsedSesCostPerEmailUsd = Number(process.env.SES_COST_PER_EMAIL_USD ?? "0.0001")
+const SES_COST_PER_EMAIL_USD =
+  Number.isFinite(parsedSesCostPerEmailUsd) && parsedSesCostPerEmailUsd >= 0
+    ? parsedSesCostPerEmailUsd
+    : DEFAULT_SES_COST_PER_EMAIL_USD
+
 const BUSINESS_ADDRESS_PLACEHOLDER = "[Your business address]"
 
 const emailShortlinksDisabled = () => (process.env.EMAIL_DISABLE_SHORTLINKS ?? "1") !== "0"
@@ -133,6 +140,12 @@ export interface EmailQueuePayload {
   replyTo?: string
   templateId?: string
   listIds?: number[]
+}
+
+type EmailRecipientCostUpdate = { actual_cost_usd: number }
+
+function successfulEmailRecipientCostUpdate(): EmailRecipientCostUpdate {
+  return { actual_cost_usd: SES_COST_PER_EMAIL_USD }
 }
 
 function requireAdmin() {
@@ -658,6 +671,7 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
         status: "sent",
         sent_at: sentAt,
         provider_id: providerId,
+        ...successfulEmailRecipientCostUpdate(),
       })
       if (job.campaign_id && !pausedCampaignIds.has(job.campaign_id)) {
         await refreshCampaignStatus(job.campaign_id)
