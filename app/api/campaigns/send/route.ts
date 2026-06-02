@@ -16,6 +16,8 @@ import { resolveCampaignSender, SenderNotVerifiedError } from "@/lib/email-sende
 import { isValidEmailSyntax } from "@/lib/email/validate-syntax"
 import { insertNotification } from "@/lib/notifications"
 import { applyChannelEligibility } from "@/lib/segments/eligibility"
+import { resolveSegment } from "@/lib/segments/resolver"
+import type { SegmentDefinition } from "@/lib/segments/types"
 
 assertServer()
 
@@ -157,11 +159,69 @@ export async function POST(request: NextRequest) {
     : campaign.group_ids
       ? JSON.parse(campaign.group_ids)
       : []
-  const buyerIds: string[] = Array.isArray(campaign.buyer_ids)
+  let buyerIds: string[] = Array.isArray(campaign.buyer_ids)
     ? campaign.buyer_ids
     : campaign.buyer_ids
       ? JSON.parse(campaign.buyer_ids)
       : []
+
+  // Dynamic resolve-at-dispatch: if this campaign carries a segment/definition,
+  // re-resolve the audience fresh now so opt-outs since compose are honored. The
+  // engine's final eligibility gate (3c-i shared predicate) re-checks suppression.
+  const hasDynamicAudience = !!campaign.segment_id || !!campaign.audience_definition
+  if (hasDynamicAudience) {
+    try {
+      let definition: SegmentDefinition | null = null
+      if (campaign.segment_id) {
+        const { data: seg } = await supabase
+          .from("segments")
+          .select("definition, deleted_at")
+          .eq("id", campaign.segment_id)
+          .eq("org_id", campaign.org_id) // tenant scope — never another org's segment
+          .maybeSingle()
+        if (seg && !seg.deleted_at) definition = seg.definition as SegmentDefinition
+      } else if (campaign.audience_definition) {
+        definition = campaign.audience_definition as SegmentDefinition
+      }
+
+      if (definition) {
+        const resolved = await resolveSegment(definition, {
+          supabase,
+          orgId: campaign.org_id, // resolution is scoped to THIS campaign's org
+          channel: campaign.channel,
+          contextCampaignId: campaign.id,
+        })
+        const resolvedIds = Array.from(resolved)
+
+        // Drift guard: only ever fires on unexpected EXPANSION. Shrinkage is safe.
+        const preview =
+          typeof campaign.audience_preview_count === "number" ? campaign.audience_preview_count : null
+        const ceiling = preview === null ? null : Math.max(preview * 2, preview + 250)
+        if (ceiling !== null && resolvedIds.length > ceiling) {
+          await supabase
+            .from("campaigns")
+            .update({
+              status: "error",
+              error: `audience_drift_guard: resolved ${resolvedIds.length} exceeds ceiling ${ceiling} (preview ${preview})`,
+            })
+            .eq("id", campaignId)
+          return NextResponse.json(
+            { ok: false, paused: true, reason: "audience_drift_guard", resolved: resolvedIds.length, ceiling },
+            { status: 200 },
+          )
+        }
+
+        // Fresh resolution becomes the recipient source. A successful empty set is
+        // respected — those people no longer qualify / opted out — so we send to nobody.
+        buyerIds = resolvedIds
+      }
+      // definition null (e.g. saved segment deleted) → fall through to the stored snapshot.
+    } catch (e) {
+      // Throw only → keep the stored buyer_ids snapshot. Never fail the dispatch,
+      // never send to empty by accident, falling back to snapshot buyer_ids.
+      console.error("dynamic audience resolve failed; falling back to snapshot buyer_ids", e)
+    }
+  }
 
   const idSet = new Set<string>(buyerIds)
   if (groupIds.length) {
