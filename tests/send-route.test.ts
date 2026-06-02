@@ -9,7 +9,11 @@ const h = vi.hoisted(() => {
     recipients: [] as any[],
     buyers: [] as any[],
     buyerGroups: [] as any[],
+    segments: [] as any[],
     recipientCounter: 1,
+    campaignUpdates: [] as any[],
+    resolveCalls: [] as any[],
+    resolveImpl: async (_def: any, _ctx: any) => new Set<string>(),
   }
 
   const nested = (row: any, col: string) => {
@@ -65,8 +69,14 @@ const h = vi.hoisted(() => {
       if (table === "campaigns") {
         return {
           select: () => chainable(() => state.campaigns),
-          update: () => ({ eq: async () => ({ error: null }), in: async () => ({ error: null }) }),
+          update: (patch: any) => {
+            state.campaignUpdates.push(patch)
+            return { eq: async () => ({ error: null }), in: async () => ({ error: null }) }
+          },
         }
+      }
+      if (table === "segments") {
+        return { select: () => chainable(() => state.segments) }
       }
       if (table === "buyer_groups") {
         return { select: () => chainable(groupsWithBuyers) }
@@ -145,6 +155,13 @@ vi.mock("@/lib/email-sender-resolver", () => ({
 vi.mock("@/lib/notifications", () => ({
   insertNotification: vi.fn(async () => ({})),
 }))
+// Dynamic resolve-at-dispatch: record calls and return the per-test set.
+vi.mock("@/lib/segments/resolver", () => ({
+  resolveSegment: async (def: any, ctx: any) => {
+    h.state.resolveCalls.push({ def, ctx })
+    return h.state.resolveImpl(def, ctx)
+  },
+}))
 
 let smsSender: any
 let emailSender: any
@@ -155,7 +172,11 @@ describe("send route templates", () => {
     h.state.recipients = []
     h.state.buyers = []
     h.state.buyerGroups = []
+    h.state.segments = []
     h.state.recipientCounter = 1
+    h.state.campaignUpdates = []
+    h.state.resolveCalls = []
+    h.state.resolveImpl = async () => new Set<string>()
     process.env.SUPABASE_URL = "http://local"
     process.env.NEXT_PUBLIC_SUPABASE_URL = "http://local"
     process.env.SUPABASE_SERVICE_ROLE_KEY = "tok"
@@ -290,5 +311,109 @@ describe("send route templates", () => {
     const res = await POST(req("c10"))
     expect(res.status).toBe(400) // no eligible recipients
     expect(emailSender.queueEmailCampaign).not.toHaveBeenCalled()
+  })
+
+  // ── Phase 3c-ii: dynamic resolve-at-dispatch ──────────────────────────────
+  const smsBuyer = (id: string, n: string) => ({
+    id, phone: n, can_receive_sms: true, sms_suppressed: false, deleted_at: null, email_suppressed: false,
+  })
+
+  test("audience_definition re-resolves fresh at send (not the stale buyer_ids)", async () => {
+    h.state.campaigns.push({
+      id: "d1", channel: "sms", message: "Hi", org_id: "org-1",
+      audience_definition: { match: "all", conditions: [] }, buyer_ids: ["stale"], audience_preview_count: 1,
+    })
+    h.state.buyers.push(smsBuyer("fresh1", "+15125557001"), smsBuyer("stale", "+15125557000"))
+    h.state.resolveImpl = async () => new Set(["fresh1"])
+
+    const res = await POST(req("d1"))
+    expect(res.status).toBe(200)
+    const ids = (smsSender.queueSmsCampaign as any).mock.calls[0][0].recipients.map((r: any) => r.buyerId)
+    expect(ids).toContain("fresh1")
+    expect(ids).not.toContain("stale")
+    expect(h.state.resolveCalls).toHaveLength(1)
+    expect(h.state.resolveCalls[0].ctx.orgId).toBe("org-1") // scoped to the campaign's org
+  })
+
+  test("segment_id loads the saved segment's definition (org-scoped) and resolves it", async () => {
+    const def = { match: "all", conditions: [{ kind: "attribute", field: "vip", operator: "is", value: true }] }
+    h.state.campaigns.push({ id: "d2", channel: "sms", message: "Hi", org_id: "org-1", segment_id: "seg-1", audience_preview_count: 1 })
+    h.state.segments.push({ id: "seg-1", org_id: "org-1", deleted_at: null, definition: def })
+    h.state.buyers.push(smsBuyer("s1", "+15125557010"))
+    h.state.resolveImpl = async () => new Set(["s1"])
+
+    const res = await POST(req("d2"))
+    expect(res.status).toBe(200)
+    const ids = (smsSender.queueSmsCampaign as any).mock.calls[0][0].recipients.map((r: any) => r.buyerId)
+    expect(ids).toEqual(["s1"])
+    expect(h.state.resolveCalls[0].def).toEqual(def)
+    expect(h.state.resolveCalls[0].ctx.orgId).toBe("org-1")
+  })
+
+  test("resolve throws → falls back to the stored buyer_ids snapshot; send still completes", async () => {
+    h.state.campaigns.push({
+      id: "d3", channel: "sms", message: "Hi", org_id: "org-1",
+      audience_definition: { match: "all", conditions: [] }, buyer_ids: ["snap1"], audience_preview_count: 1,
+    })
+    h.state.buyers.push(smsBuyer("snap1", "+15125557020"))
+    h.state.resolveImpl = async () => { throw new Error("boom") }
+
+    const res = await POST(req("d3"))
+    expect(res.status).toBe(200)
+    const ids = (smsSender.queueSmsCampaign as any).mock.calls[0][0].recipients.map((r: any) => r.buyerId)
+    expect(ids).toEqual(["snap1"]) // snapshot used
+  })
+
+  test("successful empty resolution is respected (no fallback, sends to nobody)", async () => {
+    h.state.campaigns.push({
+      id: "d4", channel: "sms", message: "Hi", org_id: "org-1",
+      audience_definition: { match: "all", conditions: [] }, buyer_ids: ["snap1"], audience_preview_count: 1,
+    })
+    h.state.buyers.push(smsBuyer("snap1", "+15125557030"))
+    h.state.resolveImpl = async () => new Set<string>()
+
+    const res = await POST(req("d4"))
+    expect(res.status).toBe(400) // no recipients
+    expect(smsSender.queueSmsCampaign).not.toHaveBeenCalled()
+  })
+
+  test("drift guard pauses (status error, no send) when resolution expands past the ceiling", async () => {
+    h.state.campaigns.push({
+      id: "d5", channel: "sms", message: "Hi", org_id: "org-1",
+      audience_definition: { match: "all", conditions: [] }, buyer_ids: ["snap1"], audience_preview_count: 1,
+    })
+    h.state.buyers.push(smsBuyer("snap1", "+15125557040"))
+    // preview 1 → ceiling max(2, 251) = 251; resolve to 300 → over the ceiling
+    h.state.resolveImpl = async () => new Set(Array.from({ length: 300 }, (_, i) => `x${i}`))
+
+    const res = await POST(req("d5"))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.paused).toBe(true)
+    expect(body.reason).toBe("audience_drift_guard")
+    expect(smsSender.queueSmsCampaign).not.toHaveBeenCalled()
+    const errUpdate = h.state.campaignUpdates.find((u: any) => u.status === "error")
+    expect(errUpdate?.error).toMatch(/audience_drift_guard/)
+  })
+
+  test("legacy campaign (no segment fields) never calls resolveSegment", async () => {
+    h.state.campaigns.push({ id: "d6", channel: "sms", message: "Hi", buyer_ids: ["b1"] })
+    h.state.buyers.push(smsBuyer("b1", "+15125557050"))
+    const res = await POST(req("d6"))
+    expect(res.status).toBe(200)
+    expect(h.state.resolveCalls).toHaveLength(0)
+  })
+
+  test("cross-tenant: a segment_id owned by another org is not loaded; falls back to snapshot", async () => {
+    h.state.campaigns.push({ id: "d7", channel: "sms", message: "Hi", org_id: "org-1", segment_id: "seg-b", buyer_ids: ["snapA"], audience_preview_count: 1 })
+    // segment belongs to org B — the org-scoped lookup must not return it.
+    h.state.segments.push({ id: "seg-b", org_id: "org-2", deleted_at: null, definition: { match: "all", conditions: [] } })
+    h.state.buyers.push(smsBuyer("snapA", "+15125557060"))
+
+    const res = await POST(req("d7"))
+    expect(res.status).toBe(200)
+    expect(h.state.resolveCalls).toHaveLength(0) // definition null → no resolve
+    const ids = (smsSender.queueSmsCampaign as any).mock.calls[0][0].recipients.map((r: any) => r.buyerId)
+    expect(ids).toEqual(["snapA"]) // snapshot used
   })
 })
