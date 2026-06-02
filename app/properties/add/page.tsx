@@ -76,6 +76,7 @@ export default function AddPropertyPage() {
     bathrooms: "",
     sqft: "",
     price: "",
+    buy_price: "",
     condition: "",
     status: "available",
     disposition_strategy: "",
@@ -99,6 +100,9 @@ export default function AddPropertyPage() {
   );
   const numericPrice = form.price
     ? Number(form.price.replace(/[^\d]/g, ""))
+    : undefined;
+  const numericBuyPrice = form.buy_price
+    ? Number(form.buy_price.replace(/[^\d]/g, ""))
     : undefined;
   const photoPreviews = useMemo(
     () =>
@@ -158,8 +162,10 @@ export default function AddPropertyPage() {
       field,
       String(Math.max(0, Number(form[field] || "0") + delta)),
     );
-  const formatPrice = () =>
-    handleChange("price", numericPrice ? numericPrice.toLocaleString() : "");
+  const formatPrice = (field: "price" | "buy_price") => {
+    const value = field === "price" ? numericPrice : numericBuyPrice;
+    handleChange(field, value ? value.toLocaleString() : "");
+  };
   const handleDropFiles = (files: FileList | null) =>
     files && setPhotos((prev) => [...prev, ...Array.from(files)]);
 
@@ -176,6 +182,7 @@ export default function AddPropertyPage() {
         state: form.state || null,
         zip: form.zip || null,
         price: numericPrice ?? null,
+        buy_price: numericBuyPrice ?? null,
         bedrooms: form.bedrooms ? Number(form.bedrooms) : null,
         bathrooms: form.bathrooms ? Number(form.bathrooms) : null,
         sqft: form.sqft ? Number(form.sqft) : null,
@@ -439,10 +446,27 @@ export default function AddPropertyPage() {
                         className="pl-9 text-lg"
                         placeholder="125,000"
                         value={form.price}
-                        onBlur={formatPrice}
+                        onBlur={() => formatPrice("price")}
                         onChange={(e) => handleChange("price", e.target.value)}
                       />
                     </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Buy price</Label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        className="pl-9 text-lg"
+                        placeholder="100,000"
+                        value={form.buy_price}
+                        onBlur={() => formatPrice("buy_price")}
+                        onChange={(e) => handleChange("buy_price", e.target.value)}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Your cost basis — what you&apos;re getting it under contract for.
+                    </p>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 rounded-lg border bg-muted/20 p-4">

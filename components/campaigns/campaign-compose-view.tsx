@@ -27,6 +27,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { BuyerService } from "@/services/buyer-service"
 import { TemplateService } from "@/services/template-service"
 import SmsSendTimeCard from "@/components/campaigns/sms-send-time-card"
+import CampaignPropertySelector from "@/components/campaigns/campaign-property-selector"
 import { Can } from "@/components/auth/Can"
 
 
@@ -68,7 +69,7 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
   const router = useRouter()
   const searchParams = useSearchParams()
   const [campaign, setCampaign] = useState<any>(initialCampaign)
-  const [expandedCard, setExpandedCard] = useState<"to"|"from"|"subject"|"sendTime"|"content"|null>(null)
+  const [expandedCard, setExpandedCard] = useState<"to"|"from"|"subject"|"sendTime"|"content"|"property"|null>(null)
   const [autosaveState, setAutosaveState] = useState<"idle"|"saving"|"saved"|"failed">("idle")
   const [hasEdited, setHasEdited] = useState(false)
   const [hasPrefillSnapshot, setHasPrefillSnapshot] = useState<CampaignAudienceSnapshot | null>(null)
@@ -94,9 +95,10 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
   const [emailSenders, setEmailSenders] = useState<EmailSenderOption[]>([])
   const [sendersLoaded, setSendersLoaded] = useState(false)
   const initialFromEmailRef = useRef<string | null>(campaign.from_email ?? null)
+  const campaignGroupIdsKey = useMemo(() => JSON.stringify(campaign.group_ids || []), [campaign.group_ids])
 
   useEffect(() => {
-    const groupIds = campaign.group_ids || []
+    const groupIds = JSON.parse(campaignGroupIdsKey) as string[]
     if (!groupIds.length) {
       setResolvedGroupBuyerIds([])
       return
@@ -106,7 +108,7 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
       .then((ids) => { if (alive) setResolvedGroupBuyerIds(ids) })
       .catch(() => { if (alive) setResolvedGroupBuyerIds([]) })
     return () => { alive = false }
-  }, [JSON.stringify(campaign.group_ids || [])])
+  }, [campaignGroupIdsKey])
 
   const allRecipientIds = useMemo(() => {
     const direct = campaign.buyer_ids || []
@@ -414,6 +416,7 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
       </CardRow>
       <CardRow id="subject" title="Subject" valid={subjectValid} ctaText="Add subject" summary={subjectValid ? campaign.subject : "What's the subject line?"} expandedCard={expandedCard} setExpandedCard={setExpandedCard}><div className="space-y-4"><p className="text-sm text-muted-foreground">What&apos;s the subject line for this campaign?</p><div className="space-y-2"><div className="flex items-center justify-between"><label className="text-sm font-medium">Subject <span className="font-normal text-muted-foreground">(Required)</span></label><span className="text-xs text-muted-foreground">{150 - (campaign.subject?.length || 0)} left</span></div><Input maxLength={150} value={campaign.subject || ""} onChange={(e) => update({ subject: e.target.value })} /><p className="text-xs text-muted-foreground">This is the first thing people see in their inbox.</p></div><div className="space-y-2"><div className="flex items-center justify-between"><label className="text-sm font-medium">Preview Text</label><span className="text-xs text-muted-foreground">{150 - ((campaign as any).preview_text?.length || 0)} left</span></div><Input maxLength={150} value={(campaign as any).preview_text || ""} onChange={(e) => update({ preview_text: e.target.value })} /><p className="text-xs text-muted-foreground">Preview text appears in the inbox after the subject line.</p></div></div></CardRow>
       <CardRow id="content" title="Content" valid={contentValid} ctaText="Design email" summary={contentValid ? `Email designed — ${(campaign.message || "").split(/\s+/).filter(Boolean).length} words` : "Design the email body"} expandedCard={expandedCard} setExpandedCard={setExpandedCard}><Button onClick={openBuilder}>Open builder</Button></CardRow>
+      <CardRow id="property" title="Property" valid={true} ctaText="Attribute property" summary={campaign.property_id ? "Campaign cost attributed to a property" : "Optional property attribution"} expandedCard={expandedCard} setExpandedCard={setExpandedCard}><CampaignPropertySelector value={campaign.property_id ?? null} onChange={(property_id) => update({ property_id })} /></CardRow>
       <CardRow id="sendTime" title="Send time" valid={sendTimeValid} ctaText="Set send time" summary={campaign.scheduled_at ? `Scheduled for ${new Date(campaign.scheduled_at).toLocaleString()}` : "Send immediately when you click Send"} expandedCard={expandedCard} setExpandedCard={setExpandedCard}><SmsSendTimeCard scheduledAt={campaign.scheduled_at ?? null} onScheduledAtChange={(v) => update({ scheduled_at: v })} weekdayOnly={campaign.weekday_only ?? false} onWeekdayOnlyChange={(v) => update({ weekday_only: v })} runFrom={campaign.run_from ?? null} onRunFromChange={(v) => update({ run_from: v })} runUntil={campaign.run_until ?? null} onRunUntilChange={(v) => update({ run_until: v })} /></CardRow>
     </main>
     <AlertDialog open={sendConfirmOpen} onOpenChange={setSendConfirmOpen}>

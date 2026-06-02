@@ -3,7 +3,7 @@ import { requireOrgContext } from "@/lib/auth/org-context"
 import { requirePermission } from "@/lib/permissions/server"
 import { sendOfferStatusNotification } from "@/lib/offer-notifications"
 
-const OFFER_SELECT = "*, buyers(id,fname,lname,full_name,phone,email,can_receive_sms,can_receive_email), properties(id,address,city,state,zip)"
+const OFFER_SELECT = "*, buyers(id,fname,lname,full_name,phone,email,can_receive_sms,can_receive_email), properties(id,address,city,state,zip,buy_price)"
 
 export async function GET(request: NextRequest) {
   const { user, orgId, supabase } = await requireOrgContext()

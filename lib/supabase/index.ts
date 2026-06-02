@@ -142,6 +142,7 @@ export interface Property {
   latitude?: number | null
   longitude?: number | null
   price?: number | null
+  buy_price?: number | null
   down_payment?: number | null
   monthly_payment?: number | null
   earnest_money?: number | null
@@ -187,6 +188,9 @@ export interface Offer {
   property_id?: string | null
   offer_type?: string | null
   offer_price?: number | null
+  accepted_price?: number | null
+  assignment_fee?: number | null
+  deal_expenses?: number | null
   down_payment?: number | null
   monthly_payment?: number | null
   earnest_money?: number | null
@@ -200,6 +204,39 @@ export interface Offer {
   withdrawn_at?: string | null
   countered_at?: string | null
   closed_at?: string | null
+  created_at?: string
+  updated_at?: string
+}
+
+export interface Disposition {
+  id: string
+  org_id: string
+  property_id: string
+  buyer_id?: string | null
+  accepted_offer_id?: string | null
+  deal_type?: string | null
+  close_type?: string | null
+  sale_status?: "pending" | "under_contract" | "closed" | "dead" | string
+  buy_price?: number | null
+  sale_price?: number | null
+  assignment_fee?: number | null
+  rehab_budget?: number | null
+  selling_marketed_price?: number | null
+  closing_expenses?: number | null
+  emd_amount?: number | null
+  seller_contract_accepted_date?: string | null
+  inspection_period_end?: string | null
+  scheduled_close_date?: string | null
+  buyer_contract_accepted_date?: string | null
+  under_contract_date?: string | null
+  under_contract_buyer_date?: string | null
+  closing_date?: string | null
+  title_agent?: string | null
+  title_company?: string | null
+  title_received_emd?: boolean | null
+  wholesale_checklist?: Record<string, unknown>
+  marketing_checklist?: Record<string, unknown>
+  notes?: string | null
   created_at?: string
   updated_at?: string
 }
