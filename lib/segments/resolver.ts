@@ -170,7 +170,7 @@ function buyersBase(ctx: ResolveContext): any {
     .is("deleted_at", null)
 }
 
-function applyAttributeFilter(query: any, cond: AttributeCondition, spec: AttributeFieldSpec): any {
+export function applyAttributeFilter(query: any, cond: AttributeCondition, spec: AttributeFieldSpec): any {
   const col = spec.column
   const op = cond.operator
 
@@ -189,8 +189,9 @@ function applyAttributeFilter(query: any, cond: AttributeCondition, spec: Attrib
   switch (spec.valueType) {
     case "text[]": {
       const arr = asStringArray(cond.value)
-      if (op === "contains") return query.overlaps(col, arr)
-      if (op === "not_contains") return query.not(col, "ov", toPgArrayLiteral(arr))
+      if (op === "contains") return query.overlaps(col, arr) // has ANY
+      if (op === "contains_all") return query.contains(col, arr) // has ALL (@>)
+      if (op === "not_contains") return query.not(col, "ov", toPgArrayLiteral(arr)) // has NONE
       return query
     }
     case "text": {

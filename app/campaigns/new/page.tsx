@@ -3,10 +3,11 @@ import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 import { resolveOrgIdForUser } from "@/lib/auth/org-context"
+import { decodeAudienceParam } from "@/lib/segments/audience-handoff"
 
 export const dynamic = "force-dynamic"
 
-export default async function NewCampaignPage({ searchParams }: { searchParams: { prefill?: string; duplicateOf?: string; type?: string } }) {
+export default async function NewCampaignPage({ searchParams }: { searchParams: { prefill?: string; duplicateOf?: string; type?: string; audience?: string; segment?: string } }) {
   const cookieStore = cookies()
   const supabase = createServerComponentClient({ cookies: () => cookieStore })
   const { data: { user } } = await supabase.auth.getUser()
@@ -26,7 +27,19 @@ export default async function NewCampaignPage({ searchParams }: { searchParams: 
     const { data: inserted } = await supabase.from("campaigns").insert(payload).select("id").single()
     campaignId = inserted?.id
   } else {
-    const { data: inserted } = await supabase.from("campaigns").insert({ id: randomUUID(), user_id: user.id, org_id: orgId, name: "Untitled campaign", subject: null, message: null, channel, group_ids: [], buyer_ids: [], scheduled_at: null, status: "draft", created_at: new Date().toISOString(), updated_at: new Date().toISOString() }).select("id").single()
+    // Audience handoff from the Buyers "Use in new campaign" door. Supports
+    // ?audience=<base64url SegmentDefinition> and ?segment=<id> so the Phase 3b
+    // AudiencePicker initializes from the seeded campaign provenance.
+    const audienceDefinition = decodeAudienceParam(searchParams?.audience)
+    const segmentId =
+      typeof searchParams?.segment === "string" && searchParams.segment ? searchParams.segment : null
+    const { data: inserted } = await supabase.from("campaigns").insert({
+      id: randomUUID(), user_id: user.id, org_id: orgId, name: "Untitled campaign", subject: null, message: null,
+      channel, group_ids: [], buyer_ids: [],
+      segment_id: segmentId,
+      audience_definition: segmentId ? null : audienceDefinition,
+      scheduled_at: null, status: "draft", created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+    }).select("id").single()
     campaignId = inserted?.id
   }
 

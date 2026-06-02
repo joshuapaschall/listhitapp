@@ -42,7 +42,7 @@ function makeClient(resolve: (state: QueryState) => any[]) {
       allCalls.push({ m: `${table}.${m}`, args })
     }
     const q: any = {}
-    const chain = ["select", "eq", "neq", "is", "not", "gte", "lte", "gt", "lt", "ilike", "overlaps", "or", "in", "order"]
+    const chain = ["select", "eq", "neq", "is", "not", "gte", "lte", "gt", "lt", "ilike", "overlaps", "contains", "or", "in", "order"]
     for (const m of chain) {
       q[m] = (...args: any[]) => {
         record(m, args)
@@ -168,6 +168,24 @@ describe("resolveAttributeCondition", () => {
     // Always org-scoped + not deleted.
     expect(allCalls).toContainEqual({ m: "buyers.eq", args: ["org_id", "org-1"] })
     expect(allCalls).toContainEqual({ m: "buyers.is", args: ["deleted_at", null] })
+  })
+
+  test("text[] contains_all uses .contains (has ALL), distinct from contains (.overlaps)", async () => {
+    const all = makeClient(() => [{ id: "a" }])
+    await resolveAttributeCondition(
+      { kind: "attribute", field: "tags", operator: "contains_all", value: ["vip", "cash"] },
+      baseCtx({ supabase: all.client }),
+    )
+    expect(all.allCalls).toContainEqual({ m: "buyers.contains", args: ["tags", ["vip", "cash"]] })
+    expect(all.allCalls.find((c) => c.m === "buyers.overlaps")).toBeUndefined()
+
+    const any = makeClient(() => [{ id: "a" }])
+    await resolveAttributeCondition(
+      { kind: "attribute", field: "tags", operator: "contains", value: ["vip", "cash"] },
+      baseCtx({ supabase: any.client }),
+    )
+    expect(any.allCalls).toContainEqual({ m: "buyers.overlaps", args: ["tags", ["vip", "cash"]] })
+    expect(any.allCalls.find((c) => c.m === "buyers.contains")).toBeUndefined()
   })
 
   test("number between issues gte + lte", async () => {

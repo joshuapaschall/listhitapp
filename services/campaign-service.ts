@@ -1,4 +1,6 @@
 import { supabase } from "@/lib/supabase"
+import { applyAttributeConditions } from "@/lib/segments/apply-filters"
+import type { AttributeCondition } from "@/lib/segments/types"
 
 
 interface CampaignFilters {
@@ -79,18 +81,14 @@ export class CampaignService {
         .from("buyers")
         .select("id")
         .is("deleted_at", null)
-      if (filters.tags && filters.tags.length) {
-        query = query.overlaps("tags", filters.tags)
-      }
-      if (filters.locations && filters.locations.length) {
-        query = query.overlaps("locations", filters.locations)
-      }
-      if (filters.minScore !== undefined) {
-        query = query.gte("score", filters.minScore)
-      }
-      if (filters.maxScore !== undefined) {
-        query = query.lte("score", filters.maxScore)
-      }
+      // Attribute predicates flow through the one shared engine primitive
+      // (has-ANY tag semantics preserved via operator "contains").
+      const attributeConditions: AttributeCondition[] = []
+      if (filters.tags && filters.tags.length) attributeConditions.push({ kind: "attribute", field: "tags", operator: "contains", value: filters.tags })
+      if (filters.locations && filters.locations.length) attributeConditions.push({ kind: "attribute", field: "locations", operator: "contains", value: filters.locations })
+      if (filters.minScore !== undefined) attributeConditions.push({ kind: "attribute", field: "score", operator: "gte", value: filters.minScore })
+      if (filters.maxScore !== undefined) attributeConditions.push({ kind: "attribute", field: "score", operator: "lte", value: filters.maxScore })
+      query = applyAttributeConditions(query, attributeConditions)
       const { data: filtered, error: filterErr } = await query
       if (filterErr) {
         console.error("Error fetching filtered buyers:", filterErr)

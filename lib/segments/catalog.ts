@@ -19,7 +19,7 @@ export interface AttributeFieldSpec {
 
 // Operator sets keyed by value type, per the task spec.
 const TEXT_ARRAY_OPS: AttributeOperator[] = [
-  "contains", "not_contains", "is_blank", "is_not_blank",
+  "contains", "contains_all", "not_contains", "is_blank", "is_not_blank",
 ]
 const NUMBER_OPS: AttributeOperator[] = [
   "gte", "lte", "eq", "between", "is_blank", "is_not_blank",
