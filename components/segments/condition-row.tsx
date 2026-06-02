@@ -171,10 +171,16 @@ function BehavioralRow({
     let next: BehavioralScope
     if (type === "specific_campaign") next = { type, campaignId: "" }
     else if (type === "within_days") next = { type, days: 30 }
+    else if (type === "last_n_campaigns") next = { type, n: 5 }
     else if (type === "this_campaign") next = { type }
     else next = { type: "any_campaign" }
     onChange({ ...condition, scope: next })
   }
+
+  // Channel override is only useful when there's something to choose: the builder
+  // spans both channels, or this metric is meaningful on more than one channel.
+  const metricChannels = BEHAVIORAL_BY_METRIC[condition.metric]?.channels ?? []
+  const showChannelOverride = channel === "both" || metricChannels.length > 1
 
   return (
     <>
@@ -234,6 +240,7 @@ function BehavioralRow({
             <SelectItem value="any_campaign">any campaign</SelectItem>
             <SelectItem value="specific_campaign">a specific campaign</SelectItem>
             <SelectItem value="within_days">in the last N days</SelectItem>
+            <SelectItem value="last_n_campaigns">any of the last N campaigns</SelectItem>
             {allowThisCampaign && <SelectItem value="this_campaign">this campaign</SelectItem>}
           </SelectContent>
         </Select>
@@ -267,22 +274,43 @@ function BehavioralRow({
         </div>
       )}
 
-      {/* Optional channel restriction (campaigns of this channel only). */}
-      <Select
-        value={condition.channel ?? "any"}
-        onValueChange={(c) =>
-          onChange({ ...condition, channel: c === "any" ? undefined : (c as "email" | "sms") })
-        }
-      >
-        <SelectTrigger className="w-[130px]">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="any">any channel</SelectItem>
-          <SelectItem value="email">email only</SelectItem>
-          <SelectItem value="sms">sms only</SelectItem>
-        </SelectContent>
-      </Select>
+      {scope.type === "last_n_campaigns" && (
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">last</span>
+          <Input
+            type="number"
+            min={1}
+            className="w-20"
+            value={scope.n}
+            onChange={(e) => {
+              const n = Math.max(1, Number(e.target.value) || 1)
+              onChange({ ...condition, scope: { type: "last_n_campaigns", n } })
+            }}
+          />
+          <span className="text-sm text-muted-foreground">campaigns</span>
+        </div>
+      )}
+
+      {/* Channel override. Unset = the channel being resolved (2.5 semantics);
+          "any" = both channels. Subordinate to metric/operator/scope. */}
+      {showChannelOverride && (
+        <Select
+          value={condition.channel ?? "this"}
+          onValueChange={(c) =>
+            onChange({ ...condition, channel: c === "this" ? undefined : (c as "email" | "sms" | "any") })
+          }
+        >
+          <SelectTrigger className="w-[140px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="this">This channel</SelectItem>
+            <SelectItem value="email">Email</SelectItem>
+            <SelectItem value="sms">SMS</SelectItem>
+            <SelectItem value="any">Any channel</SelectItem>
+          </SelectContent>
+        </Select>
+      )}
 
       {helper && (
         <span className="basis-full text-xs text-muted-foreground">{helper}</span>
