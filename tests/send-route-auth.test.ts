@@ -10,6 +10,7 @@ const h = vi.hoisted(() => {
     buyers: [] as any[],
     buyerGroups: [] as any[],
     authUser: null as any,
+    authOrgId: "org-1" as string | null,
     recipientCounter: 1,
   }
 
@@ -125,7 +126,21 @@ vi.mock("@/services/shortlink-service", () => ({
   createShortLinksBulk: vi.fn(async () => []),
   createShortLink: vi.fn(async () => null),
 }))
-
+vi.mock("@/lib/auth/org-context", () => ({
+  requireOrgContext: async () => ({ orgId: h.state.authOrgId }),
+  resolveOrgIdForUser: async () => h.state.authOrgId,
+}))
+vi.mock("@/lib/email-sender-resolver", () => ({
+  SenderNotVerifiedError: class SenderNotVerifiedError extends Error {},
+  resolveCampaignSender: async () => ({
+    fromEmail: "from@test.com",
+    fromName: "Test",
+    replyTo: "reply@test.com",
+  }),
+}))
+vi.mock("@/lib/notifications", () => ({
+  insertNotification: vi.fn(async () => ({})),
+}))
 
 let smsSender: any
 
@@ -136,6 +151,7 @@ describe("send route auth", () => {
     h.state.buyers = []
     h.state.buyerGroups = []
     h.state.authUser = null
+    h.state.authOrgId = "org-1"
     h.state.recipientCounter = 1
     process.env.SUPABASE_URL = "http://local"
     process.env.SUPABASE_SERVICE_ROLE_KEY = "svc"
@@ -146,10 +162,11 @@ describe("send route auth", () => {
     ;(smsSender.queueSmsCampaign as any).mockClear()
   })
 
-  test("returns 404 when user not owner (ownership enforced by query scope)", async () => {
-    h.state.campaigns.push({ id: "c1", user_id: "u1", channel: "sms", message: "Hi", buyer_ids: ["b1"] })
+  test("returns 404 when user is outside the campaign org", async () => {
+    h.state.campaigns.push({ id: "c1", org_id: "org-1", user_id: "u1", channel: "sms", message: "Hi", buyer_ids: ["b1"] })
     h.state.buyers.push({ id: "b1", phone: "+15125550111", can_receive_sms: true, deleted_at: null, email_suppressed: false })
     h.state.authUser = { id: "u2" }
+    h.state.authOrgId = "org-2"
     const req = new NextRequest("http://test", {
       method: "POST",
       headers: { Authorization: "Bearer aaa.bbb.ccc" },
@@ -160,7 +177,7 @@ describe("send route auth", () => {
   })
 
   test("allows owner token and queues the SMS campaign", async () => {
-    h.state.campaigns.push({ id: "c2", user_id: "u2", channel: "sms", message: "Yo", buyer_ids: ["b2"] })
+    h.state.campaigns.push({ id: "c2", org_id: "org-1", user_id: "u2", channel: "sms", message: "Yo", buyer_ids: ["b2"] })
     h.state.buyers.push({ id: "b2", phone: "+15125550123", can_receive_sms: true, deleted_at: null, email_suppressed: false })
     h.state.authUser = { id: "u2" }
     const req = new NextRequest("http://test", {

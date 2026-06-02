@@ -7,6 +7,7 @@ import { formatPhoneE164 } from "@/lib/dedup-utils"
 import { sendCampaignSMS } from "@/services/campaign-sender.server"
 import { getUserMergeContext } from "@/lib/user-context"
 import { requirePermission } from "@/lib/permissions/server"
+import { resolveOrgIdForUser } from "@/lib/auth/org-context"
 
 function parseMediaUrls(value: unknown): string[] {
   if (!value || typeof value !== "string") return []
@@ -25,10 +26,12 @@ export async function POST(request: Request) {
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const orgId = await resolveOrgIdForUser(user.id)
+  if (!orgId) return NextResponse.json({ error: "Organization context required" }, { status: 400 })
   const { campaignId, testPhone, forceDryRun } = await request.json()
   if (!campaignId || !testPhone) return NextResponse.json({ error: "campaignId and testPhone required" }, { status: 400 })
 
-  const { data: campaign } = await supabase.from("campaigns").select("*").eq("id", campaignId).eq("user_id", user.id).maybeSingle()
+  const { data: campaign } = await supabase.from("campaigns").select("*").eq("id", campaignId).eq("org_id", orgId).maybeSingle()
   if (!campaign) return NextResponse.json({ error: "Campaign not found" }, { status: 404 })
   if (campaign.status === "sent" || campaign.status === "sending") return NextResponse.json({ error: "Campaign cannot be edited" }, { status: 403 })
   if (campaign.channel !== "sms") return NextResponse.json({ error: "Campaign must be sms" }, { status: 400 })

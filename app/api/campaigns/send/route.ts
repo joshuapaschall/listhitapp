@@ -71,6 +71,7 @@ export async function POST(request: NextRequest) {
   }
 
   let userId: string | null = null
+  let orgId: string | null = null
   let authSource: "cron_secret" | "service_role" | "user_jwt"
   if (requestToken === cronSecret) {
     authSource = "cron_secret"
@@ -86,6 +87,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
     userId = user.id
+    orgId = await resolveOrgIdForUser(userId)
+    if (!orgId) {
+      return NextResponse.json({ error: "Organization context required" }, { status: 403 })
+    }
     authSource = "user_jwt"
   } else {
     console.error("campaigns/send unauthorized: invalid token")
@@ -98,8 +103,8 @@ export async function POST(request: NextRequest) {
     .from("campaigns")
     .select("*")
     .eq("id", campaignId)
-  if (authSource === "user_jwt" && userId) {
-    campaignQuery = campaignQuery.eq("user_id", userId)
+  if (authSource === "user_jwt" && orgId) {
+    campaignQuery = campaignQuery.eq("org_id", orgId)
   }
   const { data: campaign, error } = await campaignQuery.maybeSingle()
 
