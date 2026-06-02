@@ -15,6 +15,7 @@ import { requireOrgContext, resolveOrgIdForUser } from "@/lib/auth/org-context"
 import { resolveCampaignSender, SenderNotVerifiedError } from "@/lib/email-sender-resolver"
 import { isValidEmailSyntax } from "@/lib/email/validate-syntax"
 import { insertNotification } from "@/lib/notifications"
+import { applyChannelEligibility } from "@/lib/segments/eligibility"
 
 assertServer()
 
@@ -164,12 +165,14 @@ export async function POST(request: NextRequest) {
 
   const idSet = new Set<string>(buyerIds)
   if (groupIds.length) {
-    const { data: groupRows, error: groupErr } = await supabase
-      .from("buyer_groups")
-      .select("buyer_id, buyers!inner(id)")
-      .in("group_id", groupIds)
-      .is("buyers.deleted_at", null)
-      .eq("buyers.email_suppressed", false)
+    const { data: groupRows, error: groupErr } = await applyChannelEligibility(
+      supabase
+        .from("buyer_groups")
+        .select("buyer_id, buyers!inner(id)")
+        .in("group_id", groupIds),
+      campaign.channel,
+      "buyers.",
+    )
     if (groupErr) {
       console.error("Error fetching group buyers", groupErr)
       return new Response(JSON.stringify({ error: "Failed to fetch recipients" }), { status: 500 })
@@ -180,15 +183,10 @@ export async function POST(request: NextRequest) {
   }
 
   let finalIds = Array.from(idSet)
-  let allowedQuery = supabase
-    .from("buyers")
-    .select("id")
-    .in("id", finalIds)
-    .is("deleted_at", null)
-    .eq("email_suppressed", false)
-  if (campaign.channel === "email") {
-    allowedQuery = allowedQuery.eq("can_receive_email", true)
-  }
+  const allowedQuery = applyChannelEligibility(
+    supabase.from("buyers").select("id").in("id", finalIds),
+    campaign.channel,
+  )
   const { data: allowed, error: allowErr } = await allowedQuery
   if (allowErr) {
     console.error("Error filtering recipients", allowErr)
@@ -235,17 +233,16 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  let recipientsQuery = supabase
-    .from("campaign_recipients")
-    .select(
-      "id,buyer_id,status,buyers!inner(id,fname,lname,email,phone,phone2,phone3,can_receive_sms,can_receive_email,deleted_at)"
-    )
-    .eq("campaign_id", campaignId)
-    .is("buyers.deleted_at", null)
-    .eq("buyers.email_suppressed", false)
-  if (campaign.channel === "email") {
-    recipientsQuery = recipientsQuery.eq("buyers.can_receive_email", true)
-  }
+  const recipientsQuery = applyChannelEligibility(
+    supabase
+      .from("campaign_recipients")
+      .select(
+        "id,buyer_id,status,buyers!inner(id,fname,lname,email,phone,phone2,phone3,can_receive_sms,can_receive_email,deleted_at)"
+      )
+      .eq("campaign_id", campaignId),
+    campaign.channel,
+    "buyers.",
+  )
   const { data: recipients, error: recErr } = await recipientsQuery
 
   if (recErr) {

@@ -5,6 +5,7 @@ import {
   combineSets,
   resolveAttributeCondition,
   resolveBehavioralCondition,
+  resolveEligibleUniverse,
   resolveSegment,
   validateDefinition,
 } from "@/lib/segments/resolver"
@@ -369,5 +370,55 @@ describe("resolveSegment", () => {
     const def: SegmentDefinition = { match: "all", conditions: [] }
     const result = await resolveSegment(def, baseCtx({ supabase: client }))
     expect([...result].sort()).toEqual(["b", "c", "d"])
+  })
+})
+
+// ===========================================================================
+// Phase 3c-i — channel-correct eligibility universe
+// ===========================================================================
+
+describe("resolveEligibleUniverse — channel-correct suppression", () => {
+  // A pool of buyers with assorted consent flags. The mock applies the recorded
+  // eq/is/not filters to this pool, simulating the DB predicate.
+  const POOL = [
+    // email-suppressed BUT sms-opted-in with a phone → must be SMS-eligible.
+    { id: "sms-ok", org_id: "org-1", deleted_at: null, can_receive_sms: true, sms_suppressed: false, phone: "+15125550001", email_suppressed: true, can_receive_email: true, email: "a@x.com" },
+    // STOP'd → never SMS-eligible.
+    { id: "stop", org_id: "org-1", deleted_at: null, can_receive_sms: false, sms_suppressed: false, phone: "+15125550002" },
+    // sms-suppressed → excluded.
+    { id: "sms-supp", org_id: "org-1", deleted_at: null, can_receive_sms: true, sms_suppressed: true, phone: "+15125550003" },
+    // no phone → excluded from SMS.
+    { id: "no-phone", org_id: "org-1", deleted_at: null, can_receive_sms: true, sms_suppressed: false, phone: null },
+    // clean email buyer → email-eligible.
+    { id: "email-ok", org_id: "org-1", deleted_at: null, email_suppressed: false, can_receive_email: true, email: "b@x.com" },
+    // email-suppressed → excluded from email.
+    { id: "email-supp", org_id: "org-1", deleted_at: null, email_suppressed: true, can_receive_email: true, email: "c@x.com" },
+  ]
+
+  const applyFilters = (state: QueryState) => {
+    let out = POOL
+    for (const c of state.calls) {
+      if (c.m === "eq") out = out.filter((r: any) => r[c.args[0]] === c.args[1])
+      else if (c.m === "is") out = out.filter((r: any) => r[c.args[0]] === c.args[1])
+      else if (c.m === "not" && c.args[1] === "is" && c.args[2] === null)
+        out = out.filter((r: any) => r[c.args[0]] != null)
+    }
+    return out.map((r: any) => ({ id: r.id }))
+  }
+
+  test("sms: includes an email-suppressed + sms-opted-in buyer; excludes STOP'd / sms-suppressed / no-phone", async () => {
+    const { client } = makeClient((s) => (s.table === "buyers" ? applyFilters(s) : []))
+    const result = await resolveEligibleUniverse(baseCtx({ supabase: client, channel: "sms" }))
+    expect([...result].sort()).toEqual(["sms-ok"])
+    expect(result.has("stop")).toBe(false)
+    expect(result.has("sms-supp")).toBe(false)
+    expect(result.has("no-phone")).toBe(false)
+  })
+
+  test("email: unchanged — excludes email-suppressed", async () => {
+    const { client } = makeClient((s) => (s.table === "buyers" ? applyFilters(s) : []))
+    const result = await resolveEligibleUniverse(baseCtx({ supabase: client, channel: "email" }))
+    expect([...result].sort()).toEqual(["email-ok"])
+    expect(result.has("email-supp")).toBe(false)
   })
 })

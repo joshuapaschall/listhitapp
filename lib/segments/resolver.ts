@@ -17,6 +17,7 @@ import {
   BEHAVIORAL_BY_METRIC,
   type AttributeFieldSpec,
 } from "./catalog"
+import { applyChannelEligibility } from "./eligibility"
 import type {
   AttributeCondition,
   BehavioralCondition,
@@ -391,28 +392,16 @@ export async function resolveBehavioralCondition(
 // (the source of truth). See PR notes for the email_suppressed/sms_suppressed
 // reconciliation against the send route.
 export async function resolveEligibleUniverse(ctx: ResolveContext): Promise<Set<string>> {
-  return collectColumn(() => {
-    let q = ctx.supabase
-      .from("buyers")
-      .select("id")
-      .eq("org_id", ctx.orgId)
-      .is("deleted_at", null)
-    if (ctx.channel === "email") {
-      q = q
-        .eq("email_suppressed", false)
-        .eq("can_receive_email", true)
-        .not("email", "is", null)
-    } else {
-      // SMS: mirror the send route, which applies email_suppressed=false to BOTH
-      // channels (allowedQuery + recipientsQuery) and gates SMS eligibility on
-      // can_receive_sms + a usable phone. It does NOT gate on sms_suppressed.
-      q = q
-        .eq("email_suppressed", false)
-        .eq("can_receive_sms", true)
-        .not("phone", "is", null)
-    }
-    return q
-  }, "id")
+  // The SAME channel-eligibility predicate the send route uses, so preview ==
+  // actual send. Channels are independent (SMS is not gated on email_suppressed).
+  return collectColumn(
+    () =>
+      applyChannelEligibility(
+        ctx.supabase.from("buyers").select("id").eq("org_id", ctx.orgId),
+        ctx.channel,
+      ),
+    "id",
+  )
 }
 
 // ---------------------------------------------------------------------------

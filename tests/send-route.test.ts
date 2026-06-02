@@ -35,6 +35,11 @@ const h = vi.hoisted(() => {
         rows = rows.filter((r) => nested(r, col) === val)
         return q
       },
+      not: (col: string, op: string, val: any) => {
+        if (op === "is" && val === null) rows = rows.filter((r) => nested(r, col) != null)
+        else rows = rows.filter((r) => nested(r, col) !== val)
+        return q
+      },
       order: () => q,
       limit: () => q,
       maybeSingle: async () => ({ data: rows[0] || null, error: null }),
@@ -174,7 +179,7 @@ describe("send route templates", () => {
 
   test("queues SMS with the raw template + recipients (rendering deferred)", async () => {
     h.state.campaigns.push({ id: "c1", channel: "sms", message: "Hi {{first_name}}", buyer_ids: ["b1"] })
-    h.state.buyers.push({ id: "b1", fname: "John", lname: "Doe", phone: "+15125550111", can_receive_sms: true, deleted_at: null, email_suppressed: false })
+    h.state.buyers.push({ id: "b1", fname: "John", lname: "Doe", phone: "+15125550111", can_receive_sms: true, sms_suppressed: false, deleted_at: null, email_suppressed: false })
     const res = await POST(req("c1"))
     expect(res.status).toBe(200)
     expect(smsSender.queueSmsCampaign).toHaveBeenCalledWith(
@@ -204,7 +209,7 @@ describe("send route templates", () => {
 
   test("replaces SMS URLs with per-recipient short links before queueing", async () => {
     h.state.campaigns.push({ id: "c5", channel: "sms", message: "See https://example.com now", buyer_ids: ["b5"] })
-    h.state.buyers.push({ id: "b5", fname: "Alex", phone: "+15125550155", can_receive_sms: true, deleted_at: null, email_suppressed: false })
+    h.state.buyers.push({ id: "b5", fname: "Alex", phone: "+15125550155", can_receive_sms: true, sms_suppressed: false, deleted_at: null, email_suppressed: false })
     const res = await POST(req("c5"))
     expect(res.status).toBe(200)
     const arg = (smsSender.queueSmsCampaign as any).mock.calls[0][0]
@@ -214,7 +219,7 @@ describe("send route templates", () => {
   test("queues the full SMS body without trimming", async () => {
     const msg = "x".repeat(170)
     h.state.campaigns.push({ id: "c3", channel: "sms", message: msg, buyer_ids: ["b3"] })
-    h.state.buyers.push({ id: "b3", phone: "+15125550133", can_receive_sms: true, deleted_at: null, email_suppressed: false })
+    h.state.buyers.push({ id: "b3", phone: "+15125550133", can_receive_sms: true, sms_suppressed: false, deleted_at: null, email_suppressed: false })
     const res = await POST(req("c3"))
     expect(res.status).toBe(200)
     expect(smsSender.queueSmsCampaign).toHaveBeenCalledWith(
@@ -250,8 +255,8 @@ describe("send route templates", () => {
   test("merges buyer_ids and group_ids into ONE batched queue call", async () => {
     h.state.campaigns.push({ id: "c8", channel: "sms", message: "Hi", buyer_ids: ["b1"], group_ids: ["g1"] })
     h.state.buyers.push(
-      { id: "b1", phone: "+15125550101", can_receive_sms: true, deleted_at: null, email_suppressed: false },
-      { id: "b2", phone: "+15125550102", can_receive_sms: true, deleted_at: null, email_suppressed: false },
+      { id: "b1", phone: "+15125550101", can_receive_sms: true, sms_suppressed: false, deleted_at: null, email_suppressed: false },
+      { id: "b2", phone: "+15125550102", can_receive_sms: true, sms_suppressed: false, deleted_at: null, email_suppressed: false },
     )
     h.state.buyerGroups.push({ buyer_id: "b2", group_id: "g1" })
     const res = await POST(req("c8"))
@@ -261,5 +266,29 @@ describe("send route templates", () => {
     const arg = (smsSender.queueSmsCampaign as any).mock.calls[0][0]
     const buyerIds = arg.recipients.map((r: any) => r.buyerId).sort()
     expect(buyerIds).toEqual(["b1", "b2"])
+  })
+
+  test("SMS reaches an email-suppressed + SMS-opted-in buyer, never a STOP'd one", async () => {
+    h.state.campaigns.push({ id: "c9", channel: "sms", message: "Hi", buyer_ids: ["bs1", "bs2"] })
+    h.state.buyers.push(
+      // email hard-bounced (email_suppressed) but SMS-opted-in → must be reached
+      { id: "bs1", phone: "+15125559001", can_receive_sms: true, sms_suppressed: false, deleted_at: null, email_suppressed: true },
+      // STOP'd → must never be reached
+      { id: "bs2", phone: "+15125559002", can_receive_sms: false, sms_suppressed: false, deleted_at: null, email_suppressed: false },
+    )
+    const res = await POST(req("c9"))
+    expect(res.status).toBe(200)
+    const arg = (smsSender.queueSmsCampaign as any).mock.calls[0][0]
+    const ids = arg.recipients.map((r: any) => r.buyerId)
+    expect(ids).toContain("bs1")
+    expect(ids).not.toContain("bs2")
+  })
+
+  test("email still excludes email-suppressed buyers", async () => {
+    h.state.campaigns.push({ id: "c10", channel: "email", message: "Hello", buyer_ids: ["be1"] })
+    h.state.buyers.push({ id: "be1", email: "z@test.com", can_receive_email: true, deleted_at: null, email_suppressed: true })
+    const res = await POST(req("c10"))
+    expect(res.status).toBe(400) // no eligible recipients
+    expect(emailSender.queueEmailCampaign).not.toHaveBeenCalled()
   })
 })
