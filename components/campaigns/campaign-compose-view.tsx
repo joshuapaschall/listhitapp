@@ -13,8 +13,7 @@ import RecipientsPreviewSheet from "@/components/campaigns/recipients-preview-sh
 import dynamic from "next/dynamic"
 import type { TemplaticalEditor } from "@/components/campaigns/email/templatical-email-editor"
 import EmailTemplatePicker, { type EmailPickResult } from "@/components/campaigns/email/email-template-picker"
-import GroupTreeSelector from "@/components/buyers/group-tree-selector"
-import AudiencePicker from "@/components/segments/audience-picker"
+import CampaignAudienceStep from "@/components/campaigns/campaign-audience-step"
 import { useCampaignAudience } from "@/components/segments/use-campaign-audience"
 import { readAudienceSnapshot, clearAudienceSnapshot, type CampaignAudienceSnapshot } from "@/lib/campaign-audience"
 import { emptyEmailTemplate } from "@/lib/email-templates"
@@ -170,7 +169,6 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
 
   const update = (patch: any) => { setCampaign((p: any) => ({ ...p, ...patch })); setHasEdited(true) }
   const { audienceSelection, handleAudienceChange } = useCampaignAudience(campaign, "email", update)
-  const [showGroups, setShowGroups] = useState(false)
 
   useEffect(() => {
     if (campaign.channel !== "email") return
@@ -377,19 +375,7 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
     </div>
     <main className="max-w-4xl mx-auto px-6 py-8 space-y-3">
       <CardRow id="to" title="To" valid={toValid} ctaText="Add recipients" summary={toValid ? `${recipientCount} recipients` : "Who are you sending this to?"} expandedCard={expandedCard} setExpandedCard={setExpandedCard}>{hasPrefillSnapshot ? <AudienceFilterSummaryCard snapshot={hasPrefillSnapshot} onPreview={() => setPreviewOpen(true)} onAdjust={() => router.push("/buyers")} onClear={() => { setHasPrefillSnapshot(null); update({ buyer_ids: [] }) }} /> : (
-        <div className="space-y-4">
-          <AudiencePicker channel="email" value={audienceSelection} contextCampaignId={campaign.id} onChange={handleAudienceChange} />
-          <div className="border-t pt-3">
-            <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setShowGroups((v) => !v)}>
-              {showGroups ? "Hide saved groups" : "Send to a saved group instead"}
-            </Button>
-            {showGroups && (
-              <div className="mt-3">
-                <GroupTreeSelector value={campaign.group_ids || []} onChange={(ids) => update({ group_ids: ids })} />
-              </div>
-            )}
-          </div>
-        </div>
+        <CampaignAudienceStep channel="email" campaign={campaign} update={update} audienceSelection={audienceSelection} onAudienceChange={handleAudienceChange} recipientCount={recipientCount} />
       )}</CardRow>
       <CardRow id="from" title="From" valid={fromValid} ctaText="Add sender" summary={fromValid && selectedSender ? `${selectedSender.from_name || selectedSender.from_email} <${selectedSender.from_email}>` : "Who is sending this campaign?"} expandedCard={expandedCard} setExpandedCard={setExpandedCard}>
         <div className="space-y-4">

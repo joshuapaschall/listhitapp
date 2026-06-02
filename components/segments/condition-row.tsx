@@ -1,6 +1,6 @@
 "use client"
 
-import { Trash2, Info, AlertTriangle } from "lucide-react"
+import { X, Info, AlertTriangle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -363,8 +363,14 @@ export default function ConditionRow({
             </Tooltip>
           </TooltipProvider>
         )}
-        <Button variant="ghost" size="icon" onClick={onRemove} aria-label="Remove condition">
-          <Trash2 className="h-4 w-4" />
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-muted-foreground hover:text-foreground"
+          onClick={onRemove}
+          aria-label="Remove condition"
+        >
+          <X className="h-4 w-4" />
         </Button>
       </div>
     </div>

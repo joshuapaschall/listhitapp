@@ -163,7 +163,7 @@ export default function SegmentsPage() {
             </p>
           </div>
           {canEdit && (
-            <Button className="gap-1.5" onClick={() => setEditor(blankEditor())}>
+            <Button variant="brand" className="gap-1.5" onClick={() => setEditor(blankEditor())}>
               <Plus className="h-4 w-4" />
               New segment
             </Button>
@@ -341,7 +341,7 @@ function SegmentCard({
   const campaignSpecific = definitionNeedsCampaignContext(definition)
 
   return (
-    <Card className="flex flex-col rounded-xl">
+    <Card className="flex flex-col rounded-xl transition-all hover:border-emerald-200 hover:shadow-md dark:hover:border-emerald-900">
       <CardHeader className="flex-row items-start justify-between gap-2 space-y-0 pb-2">
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-1.5">
