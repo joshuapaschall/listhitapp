@@ -88,7 +88,8 @@ export function validateDefinition(def: SegmentDefinition): void {
         scopeType !== "any_campaign" &&
         scopeType !== "this_campaign" &&
         scopeType !== "specific_campaign" &&
-        scopeType !== "within_days"
+        scopeType !== "within_days" &&
+        scopeType !== "last_n_campaigns"
       ) {
         throw new Error(`Unknown behavioral scope: ${String(scopeType)}`)
       }
