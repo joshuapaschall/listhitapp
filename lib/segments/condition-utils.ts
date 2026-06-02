@@ -86,6 +86,7 @@ export function isConditionComplete(cond: SegmentCondition): boolean {
   if (!scope) return false
   if (scope.type === "specific_campaign") return Boolean(scope.campaignId)
   if (scope.type === "within_days") return isFiniteNumber(scope.days) && Number(scope.days) >= 1
+  if (scope.type === "last_n_campaigns") return isFiniteNumber(scope.n) && Number(scope.n) >= 1
   return true
 }
 
@@ -136,7 +137,9 @@ export function describeCondition(cond: SegmentCondition): string {
   const verb = spec?.label ?? cond.metric
   const did = cond.operator === "did_not" ? `didn't ${stripWas(verb)}` : verb
   const scopeText = describeScope(cond)
-  const channelText = cond.channel ? ` (${cond.channel})` : ""
+  // Unset channel = the channel being resolved (implied) → render nothing.
+  const channelText =
+    cond.channel === "any" ? " (any channel)" : cond.channel ? ` (${cond.channel})` : ""
   return `${did} · ${scopeText}${channelText}`
 }
 
@@ -156,6 +159,8 @@ export function describeScope(cond: BehavioralCondition): string {
       return "a specific campaign"
     case "within_days":
       return `in last ${scope.days} days`
+    case "last_n_campaigns":
+      return `last ${scope.n} campaigns`
     default:
       return ""
   }

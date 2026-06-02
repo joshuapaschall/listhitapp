@@ -38,13 +38,18 @@ export type BehavioralScope =
   | { type: "this_campaign" }                          // requires contextCampaignId at resolve time
   | { type: "specific_campaign"; campaignId: string }
   | { type: "within_days"; days: number }
+  | { type: "last_n_campaigns"; n: number }            // any of the most recent N campaigns on the channel
 
 export interface BehavioralCondition {
   kind: "behavioral"
   metric: BehavioralMetric
   operator: "did" | "did_not"
   scope: BehavioralScope
-  channel?: "email" | "sms"                            // optional: restrict to campaigns of this channel
+  // Which campaign channel(s) to look at:
+  //   unset       → the channel being resolved (ResolveContext.channel)
+  //   "email"/"sms" → that channel
+  //   "any"       → both channels
+  channel?: "email" | "sms" | "any"
 }
 
 export type SegmentCondition = AttributeCondition | BehavioralCondition

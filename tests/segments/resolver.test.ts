@@ -41,7 +41,7 @@ function makeClient(resolve: (state: QueryState) => any[]) {
       allCalls.push({ m: `${table}.${m}`, args })
     }
     const q: any = {}
-    const chain = ["select", "eq", "neq", "is", "not", "gte", "lte", "gt", "lt", "ilike", "overlaps", "or"]
+    const chain = ["select", "eq", "neq", "is", "not", "gte", "lte", "gt", "lt", "ilike", "overlaps", "or", "in", "order"]
     for (const m of chain) {
       q[m] = (...args: any[]) => {
         record(m, args)
@@ -50,6 +50,11 @@ function makeClient(resolve: (state: QueryState) => any[]) {
     }
     q.range = (from: number, to: number) => {
       record("range", [from, to])
+      return Promise.resolve({ data: resolve(state), error: null })
+    }
+    // Terminal for the lastNCampaignIds lookup (`await q.order().order().limit()`).
+    q.limit = (n: number) => {
+      record("limit", [n])
       return Promise.resolve({ data: resolve(state), error: null })
     }
     return q
@@ -225,6 +230,102 @@ describe("resolveBehavioralCondition", () => {
     const { client } = makeClient(recipientResolve)
     const cond: BehavioralCondition = { kind: "behavioral", metric: "opened", operator: "did", scope: { type: "this_campaign" } }
     await expect(resolveBehavioralCondition(cond, baseCtx({ supabase: client }))).rejects.toThrow(/contextCampaignId/)
+  })
+})
+
+// ===========================================================================
+// Phase 2.5 — channel-scoped behavioral conditions + last_n_campaigns
+// ===========================================================================
+
+const channelEq = (s: QueryState) =>
+  s.calls.find((c) => c.m === "eq" && c.args[0] === "campaigns.channel")?.args[1]
+const channelIn = (s: QueryState) =>
+  s.calls.find((c) => c.m === "in" && c.args[0] === "campaigns.channel")?.args[1]
+const sawRecipientQuery = (allCalls: MethodCall[]) =>
+  allCalls.some((c) => c.m === "from" && c.args[0] === "campaign_recipients")
+
+describe("behavioral channel scoping", () => {
+  test("an unset channel defaults to ctx.channel (sms)", async () => {
+    const { client, allCalls } = makeClient(() => [])
+    const cond: BehavioralCondition = { kind: "behavioral", metric: "clicked", operator: "did", scope: { type: "any_campaign" } }
+    await resolveBehavioralCondition(cond, baseCtx({ supabase: client, channel: "sms" }))
+    expect(allCalls).toContainEqual({ m: "campaign_recipients.eq", args: ["campaigns.channel", "sms"] })
+  })
+
+  test("an unset channel defaults to ctx.channel (email)", async () => {
+    const { client, allCalls } = makeClient(() => [])
+    const cond: BehavioralCondition = { kind: "behavioral", metric: "clicked", operator: "did", scope: { type: "any_campaign" } }
+    await resolveBehavioralCondition(cond, baseCtx({ supabase: client, channel: "email" }))
+    expect(allCalls).toContainEqual({ m: "campaign_recipients.eq", args: ["campaigns.channel", "email"] })
+  })
+
+  test("cross-channel bleed: an email clicker is excluded from an sms 'clicked' (and included for email)", async () => {
+    // X clicked only an email campaign.
+    const resolve = (s: QueryState) => {
+      if (s.table !== "campaign_recipients") return []
+      const cols = notCols(s)
+      if (channelEq(s) === "email" && cols.includes("clicked_at")) return [{ buyer_id: "X" }]
+      return []
+    }
+    const cond: BehavioralCondition = { kind: "behavioral", metric: "clicked", operator: "did", scope: { type: "any_campaign" } }
+
+    const sms = makeClient(resolve)
+    const smsResult = await resolveBehavioralCondition(cond, baseCtx({ supabase: sms.client, channel: "sms" }))
+    expect(smsResult.has("X")).toBe(false)
+
+    const email = makeClient(resolve)
+    const emailResult = await resolveBehavioralCondition(cond, baseCtx({ supabase: email.client, channel: "email" }))
+    expect(emailResult.has("X")).toBe(true)
+  })
+
+  test('channel "any" spans both channels (uses .in, not a single .eq)', async () => {
+    const { client, allCalls } = makeClient(() => [])
+    const cond: BehavioralCondition = { kind: "behavioral", metric: "clicked", operator: "did", scope: { type: "any_campaign" }, channel: "any" }
+    await resolveBehavioralCondition(cond, baseCtx({ supabase: client, channel: "sms" }))
+    expect(allCalls).toContainEqual({ m: "campaign_recipients.in", args: ["campaigns.channel", ["email", "sms"]] })
+    expect(allCalls.find((c) => c.m === "campaign_recipients.eq" && c.args[0] === "campaigns.channel")).toBeUndefined()
+  })
+
+  test("metric/channel clamp: 'opened' on sms resolves to empty with NO recipient query", async () => {
+    const { client, allCalls } = makeClient(() => [{ buyer_id: "should-not-appear" }])
+    const cond: BehavioralCondition = { kind: "behavioral", metric: "opened", operator: "did", scope: { type: "any_campaign" } }
+    const result = await resolveBehavioralCondition(cond, baseCtx({ supabase: client, channel: "sms" }))
+    expect(result.size).toBe(0)
+    expect(sawRecipientQuery(allCalls)).toBe(false)
+  })
+})
+
+describe("behavioral last_n_campaigns scope", () => {
+  test("queries last N campaign ids (channel + limit) and scopes recipients via .in(campaign_id)", async () => {
+    const resolve = (s: QueryState) => {
+      if (s.table === "campaigns") return [{ id: "c1" }, { id: "c2" }]
+      const cols = notCols(s)
+      if (cols.includes("opened_at")) return [{ buyer_id: "b" }]
+      if (cols.includes("sent_at")) return [{ buyer_id: "a" }, { buyer_id: "b" }]
+      return []
+    }
+    const { client, allCalls } = makeClient(resolve)
+    const cond: BehavioralCondition = { kind: "behavioral", metric: "opened", operator: "did_not", scope: { type: "last_n_campaigns", n: 5 } }
+    const result = await resolveBehavioralCondition(cond, baseCtx({ supabase: client, channel: "email" }))
+
+    // didn't open any of the last N = sent(last_n) − opened(last_n) = {a,b} − {b} = {a}
+    expect([...result].sort()).toEqual(["a"])
+    // campaign-id lookup ran with the channel filter + limit
+    expect(allCalls).toContainEqual({ m: "campaigns.eq", args: ["channel", "email"] })
+    expect(allCalls).toContainEqual({ m: "campaigns.limit", args: [5] })
+    // recipients scoped to those ids
+    expect(allCalls).toContainEqual({ m: "campaign_recipients.in", args: ["campaign_id", ["c1", "c2"]] })
+  })
+
+  test("zero campaigns on the channel → empty set, no .in([]) recipient query", async () => {
+    const resolve = (s: QueryState) => (s.table === "campaigns" ? [] : [{ buyer_id: "a" }])
+    const { client, allCalls } = makeClient(resolve)
+    const cond: BehavioralCondition = { kind: "behavioral", metric: "opened", operator: "did_not", scope: { type: "last_n_campaigns", n: 3 } }
+    const result = await resolveBehavioralCondition(cond, baseCtx({ supabase: client, channel: "email" }))
+
+    expect(result.size).toBe(0)
+    expect(sawRecipientQuery(allCalls)).toBe(false)
+    expect(allCalls.find((c) => c.m === "campaign_recipients.in")).toBeUndefined()
   })
 })
 

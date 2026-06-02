@@ -257,19 +257,56 @@ export async function resolveAttributeCondition(
 // Behavioral resolver
 // ---------------------------------------------------------------------------
 
+// Channels this condition should look at, clamped to channels where the metric
+// is meaningful. Unset channel = the channel being resolved (ctx.channel);
+// "email"/"sms" = that channel; "any" = both. Clamping makes nonsensical pairs
+// (e.g. `opened` on sms) resolve to empty instead of garbage.
+function effectiveChannels(cond: BehavioralCondition, ctx: ResolveContext): ("email" | "sms")[] {
+  const spec = BEHAVIORAL_BY_METRIC[cond.metric]
+  const base: ("email" | "sms")[] =
+    cond.channel === "any" ? ["email", "sms"] : [cond.channel ?? ctx.channel]
+  return base.filter((c) => spec?.channels.includes(c))
+}
+
+// The ids of the most-recent N campaigns on the given channel(s).
+async function lastNCampaignIds(
+  ctx: ResolveContext,
+  chans: ("email" | "sms")[],
+  n: number,
+): Promise<string[]> {
+  let q = ctx.supabase
+    .from("campaigns")
+    .select("id, scheduled_at, created_at")
+    .eq("org_id", ctx.orgId)
+    .is("deleted_at", null)
+  if (chans.length === 1) q = q.eq("channel", chans[0])
+  else q = q.in("channel", chans)
+  // most-recent first; coalesce scheduled_at → created_at
+  const { data } = await q
+    .order("scheduled_at", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
+    .limit(Math.max(1, n))
+  return (data ?? []).map((r: any) => r.id)
+}
+
 // Base query against campaign_recipients, org/channel-scoped via the joined
 // campaign. `!inner` ensures the join filters rows.
-function recipientsBase(ctx: ResolveContext, cond: BehavioralCondition): any {
-  let q = ctx.supabase
+function recipientsBase(ctx: ResolveContext, chans: ("email" | "sms")[]): any {
+  const q = ctx.supabase
     .from("campaign_recipients")
     .select("buyer_id, campaigns!inner(org_id,deleted_at,channel)")
     .eq("campaigns.org_id", ctx.orgId)
     .is("campaigns.deleted_at", null)
-  if (cond.channel) q = q.eq("campaigns.channel", cond.channel)
-  return q
+  if (chans.length === 1) return q.eq("campaigns.channel", chans[0])
+  return q.in("campaigns.channel", chans)
 }
 
-function applyScope(query: any, ctx: ResolveContext, scope: BehavioralScope): any {
+function applyScope(
+  query: any,
+  ctx: ResolveContext,
+  scope: BehavioralScope,
+  lastNIds: string[] | null,
+): any {
   switch (scope.type) {
     case "this_campaign":
       if (!ctx.contextCampaignId) {
@@ -282,6 +319,8 @@ function applyScope(query: any, ctx: ResolveContext, scope: BehavioralScope): an
       return query.eq("campaign_id", scope.campaignId)
     case "within_days":
       return query.gte("sent_at", daysAgoIso(scope.days))
+    case "last_n_campaigns":
+      return query.in("campaign_id", lastNIds ?? [])
     case "any_campaign":
     default:
       return query
@@ -289,13 +328,26 @@ function applyScope(query: any, ctx: ResolveContext, scope: BehavioralScope): an
 }
 
 // Buyers with a non-null `column` among the recipient rows matching cond's scope.
-function recipientSetForColumn(
+async function recipientSetForColumn(
   ctx: ResolveContext,
   cond: BehavioralCondition,
   column: string,
 ): Promise<Set<string>> {
+  const chans = effectiveChannels(cond, ctx)
+  // Metric not meaningful on the resolved channel → empty, no query.
+  if (chans.length === 0) return new Set<string>()
+
+  // last_n_campaigns needs a pre-query for the campaign ids.
+  let lastNIds: string[] | null = null
+  if (cond.scope.type === "last_n_campaigns") {
+    lastNIds = await lastNCampaignIds(ctx, chans, cond.scope.n)
+    // No campaigns on the channel → empty; avoid an `.in([])` that some
+    // PostgREST versions mishandle.
+    if (lastNIds.length === 0) return new Set<string>()
+  }
+
   return collectColumn(
-    () => applyScope(recipientsBase(ctx, cond), ctx, cond.scope).not(column, "is", null),
+    () => applyScope(recipientsBase(ctx, chans), ctx, cond.scope, lastNIds).not(column, "is", null),
     "buyer_id",
   )
 }
