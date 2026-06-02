@@ -31,14 +31,41 @@ describe("segment presets", () => {
     expect(cond.channel).toBeUndefined() // inherits channel-locking from the engine
   })
 
-  test("new_buyers_30d uses created_at within_days", () => {
-    const def = CORE_PRESETS.find((p) => p.id === "new_buyers_30d")!.build()
+  test("CORE_PRESETS is exactly the six behavioral presets", () => {
+    expect(CORE_PRESETS.map((p) => p.id)).toEqual([
+      "everyone_reachable",
+      "didnt_open_last",
+      "opened_last",
+      "clicked_last",
+      "didnt_click_last",
+      "didnt_reply_last",
+    ])
+  })
+
+  test("new_buyers_30d uses created_at within_days (now an OPTIONAL preset)", () => {
+    const def = OPTIONAL_PRESETS.find((p) => p.id === "new_buyers_30d")!.build()
     expect(def.conditions[0]).toEqual({
       kind: "attribute",
       field: "created_at",
       operator: "within_days",
       value: { days: 30 },
     })
+  })
+
+  test("presetsForChannel surfaces the right behavioral set per channel", () => {
+    expect(presetsForChannel("email").map((p) => p.id)).toEqual([
+      "everyone_reachable",
+      "didnt_open_last",
+      "opened_last",
+      "clicked_last",
+      "didnt_click_last",
+    ])
+    expect(presetsForChannel("sms").map((p) => p.id)).toEqual([
+      "everyone_reachable",
+      "clicked_last",
+      "didnt_click_last",
+      "didnt_reply_last",
+    ])
   })
 
   test("presetsForChannel channel-filters core presets", () => {

@@ -51,18 +51,21 @@ export default function SegmentBuilder({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="text-muted-foreground">Buyers match</span>
-        <Select value={match} onValueChange={(m) => setMatch(m as SegmentMatch)}>
-          <SelectTrigger className="w-[90px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All</SelectItem>
-            <SelectItem value="any">Any</SelectItem>
-          </SelectContent>
-        </Select>
-        <span className="text-muted-foreground">of the following conditions</span>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-muted-foreground">Buyers match</span>
+          <Select value={match} onValueChange={(m) => setMatch(m as SegmentMatch)}>
+            <SelectTrigger className="h-8 w-[84px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="any">Any</SelectItem>
+            </SelectContent>
+          </Select>
+          <span className="text-muted-foreground">of the following</span>
+        </div>
+        <SegmentCountBadge definition={value} channel={channel} contextCampaignId={contextCampaignId} />
       </div>
 
       {conditions.length === 0 ? (
@@ -87,10 +90,7 @@ export default function SegmentBuilder({
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-3">
-        <AddConditionMenu channel={channel} onAdd={addCondition} />
-        <SegmentCountBadge definition={value} channel={channel} contextCampaignId={contextCampaignId} />
-      </div>
+      <AddConditionMenu channel={channel} onAdd={addCondition} />
     </div>
   )
 }

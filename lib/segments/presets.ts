@@ -75,6 +75,12 @@ export const CORE_PRESETS: SegmentPreset[] = [
       conditions: [{ kind: "behavioral", metric: "replied", operator: "did_not", scope: lastN(1) }],
     }),
   },
+]
+
+// Defined but NOT surfaced yet — moving an entry into CORE_PRESETS is a one-line
+// change to enable it in the picker. The first block here are attribute/recency
+// presets kept out of the behavioral-only quick chips (still available to enable).
+export const OPTIONAL_PRESETS: SegmentPreset[] = [
   {
     id: "new_buyers_30d",
     label: "New buyers · 30 days",
@@ -130,11 +136,6 @@ export const CORE_PRESETS: SegmentPreset[] = [
       ],
     }),
   },
-]
-
-// Defined but NOT surfaced yet — moving an entry into CORE_PRESETS is a one-line
-// change to enable it in the picker.
-export const OPTIONAL_PRESETS: SegmentPreset[] = [
   {
     id: "never_engaged",
     label: "Never engaged",

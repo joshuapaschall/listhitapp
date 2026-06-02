@@ -13,7 +13,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, ChevronDown, ChevronRight } from "lucide-react"
+import { Plus, ChevronDown, ChevronRight, Check } from "lucide-react"
+import { cn } from "@/lib/utils"
 import type { Group } from "@/lib/supabase"
 import { getGroups, createGroup } from "@/lib/group-service"
 import { BuyerService } from "@/services/buyer-service"
@@ -22,6 +23,9 @@ interface GroupTreeSelectorProps {
   value: string[]
   onChange: (ids: string[]) => void
   allowCreate?: boolean
+  /** "premium" renders the campaign "To" step look: emerald-tint selected rows,
+   *  filled checks, right-aligned muted counts. Default keeps the checkbox tree. */
+  variant?: "default" | "premium"
 }
 
 interface StoredFolder {
@@ -62,7 +66,8 @@ const saveFolderSettings = (folders: GroupFolder[]) => {
   localStorage.setItem("buyerGroupFolders", JSON.stringify(data))
 }
 
-export default function GroupTreeSelector({ value, onChange, allowCreate = true }: GroupTreeSelectorProps) {
+export default function GroupTreeSelector({ value, onChange, allowCreate = true, variant = "default" }: GroupTreeSelectorProps) {
+  const premium = variant === "premium"
   const [folders, setFolders] = useState<GroupFolder[]>([])
   const [loading, setLoading] = useState(false)
   const [buyerCounts, setBuyerCounts] = useState<Record<string, number>>({})
@@ -204,6 +209,120 @@ export default function GroupTreeSelector({ value, onChange, allowCreate = true 
     saveFolderSettings(updated)
     setNewFolderName("")
     setShowCreateFolder(false)
+  }
+
+  if (premium) {
+    return (
+      <div className="space-y-1">
+        {folders.map((folder) => (
+          <div key={folder.id} className="space-y-0.5">
+            <button
+              type="button"
+              className="flex w-full items-center justify-between rounded-md px-1 py-1.5 text-left transition-colors hover:bg-muted/40"
+              onClick={() => toggleFolder(folder.id)}
+            >
+              <span className="flex items-center gap-1.5 text-sm font-medium">
+                {folder.expanded ? (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                )}
+                {folder.name}
+              </span>
+              <span className="text-xs tabular-nums text-muted-foreground">{folder.groups.length}</span>
+            </button>
+            {folder.expanded && (
+              <div className="space-y-0.5 pl-2">
+                {folder.groups.length === 0 ? (
+                  <p className="px-3 py-1.5 text-xs text-muted-foreground">No groups here yet.</p>
+                ) : (
+                  folder.groups.map((group) => {
+                    const selected = value.includes(group.id)
+                    return (
+                      <button
+                        key={group.id}
+                        type="button"
+                        onClick={() => toggleGroup(group.id)}
+                        className={cn(
+                          "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors",
+                          selected
+                            ? "bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100"
+                            : "hover:bg-muted/60",
+                        )}
+                      >
+                        <span className="flex min-w-0 items-center gap-2.5">
+                          <span
+                            className={cn(
+                              "flex h-4 w-4 shrink-0 items-center justify-center rounded-full transition-colors",
+                              selected
+                                ? "bg-emerald-600 text-white"
+                                : "border border-muted-foreground/40",
+                            )}
+                          >
+                            {selected && <Check className="h-3 w-3" />}
+                          </span>
+                          <span className="truncate">{group.name}</span>
+                        </span>
+                        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                          {buyerCounts[group.id] || 0}
+                        </span>
+                      </button>
+                    )
+                  })
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+
+        {allowCreate && (
+          <button
+            type="button"
+            onClick={() => setShowCreateGroup(true)}
+            className="flex items-center gap-1.5 px-1 pt-2 text-sm font-medium text-emerald-700 transition-colors hover:text-emerald-800 dark:text-emerald-400"
+          >
+            <Plus className="h-4 w-4" /> New group
+          </button>
+        )}
+
+        {allowCreate && (
+          <Dialog open={showCreateGroup} onOpenChange={setShowCreateGroup}>
+            <DialogContent className="max-w-sm">
+              <DialogHeader>
+                <DialogTitle>Create group</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <Input
+                  id="new-group-name-premium"
+                  name="new-group-name-premium"
+                  placeholder="Group name"
+                  value={newGroupName}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                />
+                <Select value={newGroupFolder} onValueChange={setNewGroupFolder}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Folder" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {folders.map((f) => (
+                      <SelectItem key={f.id} value={f.id}>
+                        {f.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowCreateGroup(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleCreateGroup}>Create</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+      </div>
+    )
   }
 
   return (
