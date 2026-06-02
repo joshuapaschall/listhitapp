@@ -1,6 +1,5 @@
 import { randomUUID } from "crypto"
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
+import { requireOrgContext } from "@/lib/auth/org-context"
 import { NextResponse } from "next/server"
 import { createLogger } from "@/lib/logger"
 import { hasPermission } from "@/lib/permissions/server"
@@ -19,24 +18,24 @@ export async function POST(
   { params }: { params: { id: string } },
 ) {
   try {
-    const cookieStore = cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
+    const { user, orgId, supabase } = await requireOrgContext()
 
-    if (authError || !user) {
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    if (!orgId) {
+      return NextResponse.json({ error: "Organization context required" }, { status: 400 })
     }
 
     const { data: campaign, error: fetchError } = await supabase
       .from("campaigns")
       .select("*")
       .eq("id", params.id)
+      .eq("org_id", orgId)
       .single()
 
-    if (fetchError || !campaign || campaign.user_id !== user.id || campaign.deleted_at) {
+    if (fetchError || !campaign || campaign.deleted_at) {
       return NextResponse.json({ error: "Campaign not found" }, { status: 404 })
     }
 
@@ -47,6 +46,7 @@ export async function POST(
     const duplicateCampaign = {
       id: randomUUID(),
       user_id: user.id,
+      org_id: orgId,
       name: `${campaign.name} (copy)`,
       subject: campaign.subject,
       message: campaign.message,

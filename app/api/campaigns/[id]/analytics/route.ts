@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
+import { requireOrgContext } from "@/lib/auth/org-context"
 import { assertServer } from "@/utils/assert-server"
 import { getEmailCampaignCostMetrics } from "@/services/email-metrics-service"
 
@@ -8,14 +7,12 @@ assertServer()
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const campaignId = (params.id ?? "").trim().replace(/^<+/, "").replace(/>+$/, "")
-  const cookieStore = cookies()
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user, orgId, supabase } = await requireOrgContext()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!orgId) return NextResponse.json({ error: "Organization context required" }, { status: 400 })
 
-  const { data: campaign } = await supabase.from("campaigns").select("id,user_id,org_id,channel").eq("id", campaignId).maybeSingle()
+  const { data: campaign } = await supabase.from("campaigns").select("id,org_id,channel").eq("id", campaignId).eq("org_id", orgId).maybeSingle()
   if (!campaign) return NextResponse.json({ error: "Campaign not found" }, { status: 404 })
-  if (campaign.user_id !== user.id) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const recipientsBaseSelect = "id,buyer_id,status,sent_at,delivered_at,opened_at,clicked_at,replied_at,bounced_at,complained_at,unsubscribed_at,error,actual_cost_usd,actual_segments,recipient_carrier"
   const recipientsBuyerSelect = "buyer:buyers(id,email,phone,fname,lname,full_name,company)"

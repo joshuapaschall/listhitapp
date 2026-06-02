@@ -190,7 +190,7 @@ describe("campaign permission gates", () => {
 
   describe("POST /api/campaigns/send-now", () => {
     test("denies SMS campaigns without campaigns.send_sms", async () => {
-      state.campaigns = [{ id: "sms-1", user_id: "user-1", channel: "sms" }]
+      state.campaigns = [{ id: "sms-1", org_id: "org-1", user_id: "user-1", channel: "sms" }]
 
       const res = await postSendNow("sms-1")
 
@@ -199,7 +199,7 @@ describe("campaign permission gates", () => {
     })
 
     test("allows SMS campaigns with campaigns.send_sms", async () => {
-      state.campaigns = [{ id: "sms-1", user_id: "user-1", channel: "sms" }]
+      state.campaigns = [{ id: "sms-1", org_id: "org-1", user_id: "user-1", channel: "sms" }]
       grant("campaigns.send_sms")
 
       const res = await postSendNow("sms-1")
@@ -212,7 +212,7 @@ describe("campaign permission gates", () => {
     })
 
     test("allows SMS campaigns for admins", async () => {
-      state.campaigns = [{ id: "sms-1", user_id: "user-1", channel: "sms" }]
+      state.campaigns = [{ id: "sms-1", org_id: "org-1", user_id: "user-1", channel: "sms" }]
       state.callerRole = "admin"
 
       const res = await postSendNow("sms-1")
@@ -221,7 +221,7 @@ describe("campaign permission gates", () => {
     })
 
     test("denies email campaigns without campaigns.send_email", async () => {
-      state.campaigns = [{ id: "email-1", user_id: "user-1", channel: "email" }]
+      state.campaigns = [{ id: "email-1", org_id: "org-1", user_id: "user-1", channel: "email" }]
 
       const res = await postSendNow("email-1")
 
@@ -230,7 +230,7 @@ describe("campaign permission gates", () => {
     })
 
     test("allows email campaigns with campaigns.send_email", async () => {
-      state.campaigns = [{ id: "email-1", user_id: "user-1", channel: "email" }]
+      state.campaigns = [{ id: "email-1", org_id: "org-1", user_id: "user-1", channel: "email" }]
       grant("campaigns.send_email")
 
       const res = await postSendNow("email-1")
@@ -240,7 +240,7 @@ describe("campaign permission gates", () => {
     })
 
     test("allows email campaigns for admins", async () => {
-      state.campaigns = [{ id: "email-1", user_id: "user-1", channel: "email" }]
+      state.campaigns = [{ id: "email-1", org_id: "org-1", user_id: "user-1", channel: "email" }]
       state.callerRole = "admin"
 
       const res = await postSendNow("email-1")
@@ -279,7 +279,7 @@ describe("campaign permission gates", () => {
 
   describe("POST /api/campaigns/delete", () => {
     beforeEach(() => {
-      state.campaigns = [{ id: "delete-1", user_id: "user-1", channel: "sms", status: "draft" }]
+      state.campaigns = [{ id: "delete-1", org_id: "org-1", user_id: "user-1", channel: "sms", status: "draft" }]
     })
 
     test("denies users with only campaigns.view", async () => {
