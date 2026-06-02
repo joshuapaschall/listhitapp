@@ -4,10 +4,32 @@ import { POST } from "../app/api/calls/record/route"
 let insertedCalls: any[] = []
 let senderMappings: any[] = []
 let callId = 1
+// Maps a DID (phone_number) to its org. The route looks this up to derive org_id.
+let voiceNumberOrgByPhone: Record<string, string> = {}
+let voiceNumberLookups: string[][] = []
 
 vi.mock("../lib/supabase", () => {
   const client = {
     from: (table: string) => {
+      if (table === "voice_numbers") {
+        let candidates: string[] = []
+        const query: any = {
+          select: () => query,
+          in: (_column: string, values: string[]) => {
+            candidates = values
+            voiceNumberLookups.push(values)
+            return query
+          },
+          not: () => query,
+          limit: () => query,
+          maybeSingle: async () => {
+            const match = candidates.find((phone) => voiceNumberOrgByPhone[phone])
+            return { data: match ? { org_id: voiceNumberOrgByPhone[match] } : null, error: null }
+          },
+        }
+        return query
+      }
+
       if (table === "calls") {
         return {
           insert: (row: any) => ({
@@ -51,6 +73,8 @@ describe("/api/calls/record", () => {
     insertedCalls = []
     senderMappings = []
     callId = 1
+    voiceNumberOrgByPhone = {}
+    voiceNumberLookups = []
   })
 
   test("stores WebRTC flag when creating call records", async () => {
@@ -79,7 +103,52 @@ describe("/api/calls/record", () => {
       })
     )
     expect(senderMappings).toEqual([
-      { buyer_id: "buyer-1", from_number: "+19998887777" }
+      { buyer_id: "buyer-1", from_number: "+19998887777", org_id: null }
     ])
+  })
+
+  test("derives org_id from the DID and stamps it on the call + sender records", async () => {
+    voiceNumberOrgByPhone = { "+19998887777": "org-42" }
+
+    const request = new NextRequest("http://test", {
+      method: "POST",
+      body: JSON.stringify({
+        buyerId: "buyer-1",
+        to: "+12223334444",
+        callerId: "+19998887777",
+        webrtc: true
+      })
+    })
+
+    const response = await POST(request)
+    expect(response.status).toBe(200)
+
+    // The route looked up the DID candidates in voice_numbers.
+    expect(voiceNumberLookups[0]).toEqual(
+      expect.arrayContaining(["+19998887777", "+12223334444"])
+    )
+    expect(insertedCalls).toHaveLength(1)
+    expect(insertedCalls[0].org_id).toBe("org-42")
+    expect(senderMappings).toEqual([
+      { buyer_id: "buyer-1", from_number: "+19998887777", org_id: "org-42" }
+    ])
+  })
+
+  test("does not fail the webhook when the DID cannot be resolved to an org", async () => {
+    voiceNumberOrgByPhone = {}
+
+    const request = new NextRequest("http://test", {
+      method: "POST",
+      body: JSON.stringify({
+        buyerId: "buyer-1",
+        to: "+12223334444",
+        callerId: "+19998887777",
+        webrtc: true
+      })
+    })
+
+    const response = await POST(request)
+    expect(response.status).toBe(200)
+    expect(insertedCalls[0].org_id).toBeNull()
   })
 })

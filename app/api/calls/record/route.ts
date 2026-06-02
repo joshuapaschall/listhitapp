@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { supabaseAdmin } from "@/lib/supabase"
 import { formatPhoneE164 } from "@/lib/dedup-utils"
 
 export async function POST(request: NextRequest) {
@@ -28,6 +28,32 @@ export async function POST(request: NextRequest) {
   const formattedTo = formatPhoneE164(to) || to
   const formattedFrom = formatPhoneE164(callerId) || callerId
 
+  // Webhook (no user session): derive the org from the inbound DID via voice_numbers.
+  // For outbound calls the DID is the caller ID; for inbound it's the destination.
+  // If the number can't be resolved, leave org_id null rather than failing the webhook.
+  let orgId: string | null = null
+  try {
+    const didCandidates = Array.from(
+      new Set([formattedFrom, formattedTo].filter((n): n is string => Boolean(n))),
+    )
+    if (didCandidates.length) {
+      const { data: voiceNumber } = await supabaseAdmin
+        .from("voice_numbers")
+        .select("org_id")
+        .in("phone_number", didCandidates)
+        .not("org_id", "is", null)
+        .limit(1)
+        .maybeSingle()
+      orgId = voiceNumber?.org_id ?? null
+    }
+  } catch (err) {
+    console.warn("calls/record: failed to resolve org from voice_numbers:", err)
+  }
+
+  if (!orgId) {
+    console.warn("calls/record: could not resolve org for call", { formattedFrom, formattedTo })
+  }
+
   try {
     // Save call record to database only (no actual call)
     const callRecord: any = {
@@ -35,6 +61,7 @@ export async function POST(request: NextRequest) {
       direction: direction,
       from_number: formattedFrom,
       to_number: formattedTo,
+      org_id: orgId,
       started_at: new Date().toISOString(),
       call_sid: `webrtc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, // Generate unique ID for WebRTC calls
       webrtc: webrtc
@@ -50,7 +77,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const { data, error } = await supabase.from("calls").insert(callRecord).select().single()
+    const { data, error } = await supabaseAdmin.from("calls").insert(callRecord).select().single()
 
     if (error) {
       console.error("Failed to save call record:", error)
@@ -62,16 +89,17 @@ export async function POST(request: NextRequest) {
     // Save caller ID mapping for future calls if this is a new buyer-number combination
     if (buyerId) {
       try {
-        const { data: existing } = await supabase
+        const { data: existing } = await supabaseAdmin
           .from("buyer_sms_senders")
           .select("from_number")
           .eq("buyer_id", buyerId)
           .maybeSingle()
 
         if (!existing?.from_number) {
-          await supabase.from("buyer_sms_senders").insert({
+          await supabaseAdmin.from("buyer_sms_senders").insert({
             buyer_id: buyerId,
             from_number: formattedFrom,
+            org_id: orgId,
           })
         }
       } catch (err) {

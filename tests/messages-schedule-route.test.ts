@@ -11,8 +11,10 @@ vi.mock("next/headers", () => ({
   cookies: () => ({ get: vi.fn(), set: vi.fn(), delete: vi.fn() }),
 }))
 
-vi.mock("@supabase/auth-helpers-nextjs", () => ({
-  createRouteHandlerClient: () => ({
+// The route resolves the org with requireOrgContext and stamps org_id on the cookie client.
+// This client handles both requirePermission (profiles/permissions) and the messages insert.
+function createOrgClient() {
+  return {
     auth: { getUser: async () => ({ data: { user: { id: "user-1" } }, error: null }) },
     from: (table: string) => {
       if (table === "profiles") {
@@ -22,35 +24,33 @@ vi.mock("@supabase/auth-helpers-nextjs", () => ({
         const query = { eq: () => query, then: (resolve: any) => resolve({ data: [], error: null }) }
         return { select: () => query }
       }
-      throw new Error(`Unexpected auth table ${table}`)
+      if (table === "messages") {
+        return {
+          insert: (row: any) => ({
+            select: () => ({
+              single: async () => {
+                insertedRow = row
+                return {
+                  data: { id: "db1", created_at: "2024-01-01T00:00:00.000Z" },
+                  error: null,
+                }
+              },
+            }),
+          }),
+        }
+      }
+      throw new Error(`Unexpected table ${table}`)
     },
-  }),
+  }
+}
+
+vi.mock("@/lib/auth/org-context", () => ({
+  requireOrgContext: async () => ({ user: { id: "user-1" }, orgId: "org-1", supabase: createOrgClient() }),
+  resolveOrgIdForUser: async () => "org-1",
 }))
 
 vi.mock("@/utils/mms.server", () => ({
   ensurePublicMediaUrls: (...args: any[]) => ensureMock(...args),
-}))
-
-vi.mock("@/lib/supabase", () => ({
-  supabase: {
-    from: (table: string) => {
-      if (table !== "messages") throw new Error(`Unexpected table ${table}`)
-      return {
-        insert: (row: any) => ({
-          select: () => ({
-            single: async () => {
-              insertedRow = row
-              return {
-                data: { id: "db1", created_at: "2024-01-01T00:00:00.000Z" },
-                error: null,
-              }
-            },
-          }),
-        }),
-      }
-    },
-  },
-  supabaseAdmin: {},
 }))
 
 describe("messages schedule route", () => {
@@ -109,6 +109,7 @@ describe("messages schedule route", () => {
       buyer_id: "buyer-1",
       status: "scheduled",
       provider_id: "telnyx-123",
+      org_id: "org-1",
     })
   })
 })

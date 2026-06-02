@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
-import { cookies } from "next/headers"
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { requirePermission } from "@/lib/permissions/server"
+import { requireOrgContext } from "@/lib/auth/org-context"
 
 export async function POST(req: NextRequest) {
-  const cookieStore = cookies()
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+  const { user, orgId, supabase } = await requireOrgContext()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!orgId) return NextResponse.json({ error: "Organization context required" }, { status: 400 })
   const denied = await requirePermission(supabase, "buyers.edit")
   if (denied) return denied
 
@@ -15,9 +15,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "buyer payload required" }, { status: 400 })
     }
 
+    // Strip any client-supplied org_id so the server-resolved org cannot be spoofed.
+    const { org_id: _ignoredOrgId, ...rest } = payload as Record<string, unknown>
+
     const { data, error } = await supabase
       .from("buyers")
-      .insert([payload])
+      .insert([{ ...rest, org_id: orgId }])
       .select()
       .single()
 
