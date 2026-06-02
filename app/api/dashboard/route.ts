@@ -3,8 +3,12 @@ import { requireOrgContext } from "@/lib/auth/org-context"
 import {
   fetchCallTrends,
   fetchEmailTrends,
+  fetchFunnel,
   fetchKpis,
+  fetchLiveDeals,
+  fetchNeedsYouToday,
   fetchOfferTrends,
+  fetchProfitMetrics,
   fetchRecentActivity,
   fetchShowingTrends,
   fetchTextTrends,
@@ -40,6 +44,10 @@ export async function GET(request: NextRequest) {
       showingTrends,
       unsubscribeTrends,
       recentActivity,
+      profit,
+      liveDeals,
+      needsYouToday,
+      funnel,
     ] = await Promise.all([
       fetchKpis(rangeParam, orgId, supabase),
       fetchTextTrends(rangeParam, orgId, supabase),
@@ -49,6 +57,10 @@ export async function GET(request: NextRequest) {
       fetchShowingTrends(rangeParam, orgId, supabase),
       fetchUnsubscribeTrends(rangeParam, orgId, supabase),
       fetchRecentActivity(rangeParam, orgId, supabase),
+      fetchProfitMetrics(rangeParam, orgId, supabase),
+      fetchLiveDeals(orgId, supabase),
+      fetchNeedsYouToday(orgId, supabase),
+      fetchFunnel(rangeParam, orgId, supabase),
     ])
 
     return NextResponse.json({
@@ -60,6 +72,10 @@ export async function GET(request: NextRequest) {
       showingTrends,
       unsubscribeTrends,
       recentActivity,
+      profit,
+      liveDeals,
+      needsYouToday,
+      funnel,
     })
   } catch (err) {
     console.error("GET /api/dashboard error:", err)
