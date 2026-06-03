@@ -7,6 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { getRecipientIdentity, getStatusBadgeClass } from "./CampaignRecipientsTable"
+import { formatPhoneDisplay } from "@/lib/dedup-utils"
 
 function formatDate(value?: string | null) {
   if (!value) return "—"
@@ -49,7 +50,7 @@ export default function SmsRecipientDrilldownSheet({ open, onOpenChange, recipie
     <SheetContent side="right" className="w-[360px] p-0 sm:w-[560px]">
       <SheetHeader className="border-b px-6 py-4">
         <SheetTitle>{identity.name}</SheetTitle>
-        <SheetDescription>{identity.phone || "No phone available"}</SheetDescription>
+        <SheetDescription>{identity.phone ? formatPhoneDisplay(identity.phone) : "No phone available"}</SheetDescription>
       </SheetHeader>
       <ScrollArea className="h-full">
         <div className="space-y-6 px-6 py-5">
