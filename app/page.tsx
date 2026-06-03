@@ -46,7 +46,6 @@ import {
   MoreHorizontal,
   CheckCircle,
   X,
-  Edit,
   Loader2,
   PanelLeftClose, PanelLeftOpen,
   Users,
@@ -60,6 +59,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Menu,
+  Pencil,
+  Ban,
 } from "lucide-react"
 
 import TagFilterSelector from "@/components/buyers/tag-filter-selector"
@@ -68,7 +69,8 @@ import LocationFilterSelector from "@/components/buyers/location-filter-selector
 import { exportBuyersToCSV } from "@/lib/export-utils"
 import { Can } from "@/components/auth/Can"
 import { usePermissions } from "@/hooks/use-permissions"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { PROPERTY_TYPES } from "@/lib/constant"
 import { saveAudienceSnapshot } from "@/lib/campaign-audience"
 import CampaignChannelPicker from "@/components/campaigns/campaign-channel-picker"
@@ -904,14 +906,10 @@ function BuyersPageContent() {
   }
 
   const getScoreColor = (score: number) => {
-    if (score >= 90) return "text-green-600 bg-green-50"
+    if (score >= 90) return "text-emerald-700 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-950/50"
     if (score >= 70) return "text-foreground bg-muted"
-    if (score >= 50) return "text-yellow-600 bg-yellow-50"
-    return "text-red-600 bg-red-50"
-  }
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString()
+    if (score >= 50) return "text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-950/50"
+    return "text-red-700 bg-red-50 dark:text-red-300 dark:bg-red-950/50"
   }
 
   const formatName = (buyer: Buyer) => {
@@ -1115,28 +1113,23 @@ function BuyersPageContent() {
                   </DropdownMenuContent>
                   </DropdownMenu>
                 </Can>
-                <Button variant="outline" aria-label="Create a new marketing campaign" onClick={() => { setCampaignPickerSource("header"); setCampaignPickerOpen(true) }}>
-                  <Target className="mr-1 h-4 w-4" /> Campaign
-                </Button>
               </div>
             </div>
 
             {/* Enhanced Bulk Actions - More compact */}
               {selectedBuyers.length > 0 && (
-              <div className="bg-muted border border-border rounded-lg p-3 lg:p-4 mb-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center space-x-2">
-                    <Badge variant="secondary">{selectedBuyers.length} selected</Badge>
-                    {!allSelected && selectedBuyers.length < totalCount && (
-                      <button
-                        className="text-xs underline"
-                        onClick={handleSelectAllResults}
-                      >
-                        Select all {totalCount} buyers
-                      </button>
-                    )}
-                  </div>
-                  <div className="flex items-center space-x-2 flex-wrap">
+              <div className="bg-muted border border-border rounded-lg p-3 mb-3 flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-medium">{selectedBuyers.length} selected</span>
+                {allSelected ? (
+                  <button className="text-xs text-brand underline" onClick={() => setSelectedBuyers([])}>
+                    All {totalCount} selected · Clear
+                  </button>
+                ) : totalCount > itemsPerPage && buyers.length > 0 && buyers.every((b: Buyer) => selectedBuyers.includes(b.id)) ? (
+                  <button className="text-xs text-brand underline" onClick={handleSelectAllResults}>
+                    Select all {totalCount} matching this filter
+                  </button>
+                ) : null}
+                  <div className="ml-auto flex items-center gap-2 flex-wrap">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="outline" size="sm" aria-label="Manage tags for selected buyers">
@@ -1206,7 +1199,7 @@ function BuyersPageContent() {
                       </DropdownMenuContent>
                     </DropdownMenu>
 
-                    <Button variant="outline" size="sm" aria-label="Create campaign with selected buyers" onClick={() => { setCampaignPickerSource("selection"); setCampaignPickerOpen(true) }}>
+                    <Button variant="brand" size="sm" aria-label="Create campaign with selected buyers" onClick={() => { setCampaignPickerSource("selection"); setCampaignPickerOpen(true) }}>
                       <Target className="mr-1 h-4 w-4" /> Campaign
                     </Button>
 
@@ -1229,78 +1222,55 @@ function BuyersPageContent() {
                       <X className="h-4 w-4" />
                     </Button>
                   </div>
-                </div>
               </div>
             )}
 
             {/* Filters - More responsive grid */}
-            <div className="space-y-4">
-              {/* Search and Location - First Row */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="search-input" className="block text-sm font-medium text-muted-foreground mb-2">
-                    Search
-                  </label>
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="search-input"
-                      placeholder="Search by name, phone, email, or company"
-                      className="pl-9"
-                      value={filters.search}
-                      onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label htmlFor="location-filter" className="block text-sm font-medium text-muted-foreground mb-2">
-                    Location
-                  </label>
+            <div className="space-y-3">
+              {/* Row A — search */}
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="search-input"
+                  placeholder="Search by name, phone, email, or company"
+                  className="pl-9 h-9"
+                  value={filters.search}
+                  onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
+                />
+              </div>
+
+              {/* Row B — Location / Include / Exclude / Property Type on one row */}
+              <div className="flex gap-2">
+                <div className="flex-1 min-w-0">
                   <LocationFilterSelector
                     selectedLocations={filters.selectedLocations || []}
                     onChange={(selectedLocations: string[]) => setFilters((prev) => ({ ...prev, selectedLocations }))}
-                    placeholder="Select locations to filter by..."
+                    placeholder="Locations…"
                   />
                 </div>
-              </div>
-
-              {/* Include Tags, Exclude Tags, Property Type - Second Row */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <div>
-                  <label htmlFor="include-tags" className="block text-sm font-medium text-muted-foreground mb-2">
-                    Include Tags
-                  </label>
+                <div className="flex-1 min-w-0">
                   <TagFilterSelector
                     availableTags={tags}
                     selectedTags={filters.selectedTags || []}
                     onChange={(selectedTags: string[]) => setFilters((prev) => ({ ...prev, selectedTags }))}
-                    placeholder="Select tags to include..."
+                    placeholder="Include tags…"
                   />
                 </div>
-                <div>
-                  <label htmlFor="exclude-tags" className="block text-sm font-medium text-muted-foreground mb-2">
-                    Exclude Tags
-                  </label>
+                <div className="flex-1 min-w-0">
                   <TagFilterSelector
                     availableTags={tags}
                     selectedTags={filters.excludeTags || []}
                     onChange={(excludeTags: string[]) => setFilters((prev) => ({ ...prev, excludeTags }))}
-                    placeholder="Select tags to exclude..."
+                    placeholder="Exclude tags…"
                     variant="exclude"
                   />
                 </div>
-                <div>
-                  <label
-                    htmlFor="property-type-filter"
-                    className="block text-sm font-medium text-muted-foreground mb-2"
-                  >
-                    Property Type
-                  </label>
+                <div className="flex-1 min-w-0">
                   <Select
                     value={filters.propertyType}
                     onValueChange={(value: string) => setFilters((prev) => ({ ...prev, propertyType: value }))}
                   >
-                    <SelectTrigger id="property-type-filter">
+                    <SelectTrigger id="property-type-filter" className="h-9">
                       <SelectValue placeholder="Any property type" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1315,79 +1285,42 @@ function BuyersPageContent() {
                 </div>
               </div>
 
-              {/* Collapsible Advanced Filters */}
+              {/* Row C — Advanced filters toggle + Reset all */}
               <details className="group">
-                <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground">
-                  Advanced Filters
+                <summary className="flex cursor-pointer list-none items-center justify-between text-sm">
+                  <span className="font-medium text-muted-foreground group-hover:text-foreground">Advanced filters</span>
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); clearAllFilters(); }}
+                    className="text-brand hover:underline"
+                    aria-label="Clear all active filters"
+                  >
+                    Reset all
+                  </span>
                 </summary>
-                <div className="mt-4 space-y-4">
-                  {/* Score Range and Date Range */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="mt-3 rounded-lg border border-border bg-muted/40 p-3">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <div>
-                      <label htmlFor="min-score" className="block text-sm font-medium text-muted-foreground mb-2">
-                        Min Score
-                      </label>
-                      <Input
-                        id="min-score"
-                        type="number"
-                        placeholder="0"
-                        min="0"
-                        max="100"
-                        value={filters.minScore}
-                        onChange={(e) => setFilters((prev) => ({ ...prev, minScore: e.target.value }))}
-                      />
+                      <label htmlFor="min-score" className="block text-xs font-medium text-muted-foreground mb-1">Min Score</label>
+                      <Input id="min-score" type="number" placeholder="0" min="0" max="100" className="h-9" value={filters.minScore} onChange={(e) => setFilters((prev) => ({ ...prev, minScore: e.target.value }))} />
                     </div>
                     <div>
-                      <label htmlFor="max-score" className="block text-sm font-medium text-muted-foreground mb-2">
-                        Max Score
-                      </label>
-                      <Input
-                        id="max-score"
-                        type="number"
-                        placeholder="100"
-                        min="0"
-                        max="100"
-                        value={filters.maxScore}
-                        onChange={(e) => setFilters((prev) => ({ ...prev, maxScore: e.target.value }))}
-                      />
+                      <label htmlFor="max-score" className="block text-xs font-medium text-muted-foreground mb-1">Max Score</label>
+                      <Input id="max-score" type="number" placeholder="100" min="0" max="100" className="h-9" value={filters.maxScore} onChange={(e) => setFilters((prev) => ({ ...prev, maxScore: e.target.value }))} />
                     </div>
                     <div>
-                      <label htmlFor="created-after" className="block text-sm font-medium text-muted-foreground mb-2">
-                        Created After
-                      </label>
-                      <Input
-                        id="created-after"
-                        type="date"
-                        value={filters.createdAfter}
-                        onChange={(e) => setFilters((prev) => ({ ...prev, createdAfter: e.target.value }))}
-                      />
+                      <label htmlFor="created-after" className="block text-xs font-medium text-muted-foreground mb-1">Created After</label>
+                      <Input id="created-after" type="date" className="h-9" value={filters.createdAfter} onChange={(e) => setFilters((prev) => ({ ...prev, createdAfter: e.target.value }))} />
                     </div>
                     <div>
-                      <label htmlFor="created-before" className="block text-sm font-medium text-muted-foreground mb-2">
-                        Created Before
-                      </label>
-                      <Input
-                        id="created-before"
-                        type="date"
-                        value={filters.createdBefore}
-                        onChange={(e) => setFilters((prev) => ({ ...prev, createdBefore: e.target.value }))}
-                      />
+                      <label htmlFor="created-before" className="block text-xs font-medium text-muted-foreground mb-1">Created Before</label>
+                      <Input id="created-before" type="date" className="h-9" value={filters.createdBefore} onChange={(e) => setFilters((prev) => ({ ...prev, createdBefore: e.target.value }))} />
                     </div>
-                  </div>
-
-                  {/* Status Filters */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div>
-                      <label htmlFor="vip-status" className="block text-sm font-medium text-muted-foreground mb-2">
-                        VIP Status
-                      </label>
-                      <Select
-                        value={filters.vip}
-                        onValueChange={(value: string) => setFilters((prev) => ({ ...prev, vip: value }))}
-                      >
-                        <SelectTrigger id="vip-status">
-                          <SelectValue placeholder="Any" />
-                        </SelectTrigger>
+                      <label htmlFor="vip-status" className="block text-xs font-medium text-muted-foreground mb-1">VIP Status</label>
+                      <Select value={filters.vip} onValueChange={(value: string) => setFilters((prev) => ({ ...prev, vip: value }))}>
+                        <SelectTrigger id="vip-status" className="h-9"><SelectValue placeholder="Any" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="any">Any</SelectItem>
                           <SelectItem value="vip">VIP Only</SelectItem>
@@ -1396,16 +1329,9 @@ function BuyersPageContent() {
                       </Select>
                     </div>
                     <div>
-                      <label htmlFor="vetted-status" className="block text-sm font-medium text-muted-foreground mb-2">
-                        Vetted Status
-                      </label>
-                      <Select
-                        value={filters.vetted}
-                        onValueChange={(value: string) => setFilters((prev) => ({ ...prev, vetted: value }))}
-                      >
-                        <SelectTrigger id="vetted-status">
-                          <SelectValue placeholder="Any" />
-                        </SelectTrigger>
+                      <label htmlFor="vetted-status" className="block text-xs font-medium text-muted-foreground mb-1">Vetted Status</label>
+                      <Select value={filters.vetted} onValueChange={(value: string) => setFilters((prev) => ({ ...prev, vetted: value }))}>
+                        <SelectTrigger id="vetted-status" className="h-9"><SelectValue placeholder="Any" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="any">Any</SelectItem>
                           <SelectItem value="vetted">Vetted Only</SelectItem>
@@ -1414,16 +1340,9 @@ function BuyersPageContent() {
                       </Select>
                     </div>
                     <div>
-                      <label htmlFor="email-status" className="block text-sm font-medium text-muted-foreground mb-2">
-                        Can Receive Email
-                      </label>
-                      <Select
-                        value={filters.canReceiveEmail}
-                        onValueChange={(value: string) => setFilters((prev) => ({ ...prev, canReceiveEmail: value }))}
-                      >
-                        <SelectTrigger id="email-status">
-                          <SelectValue placeholder="Any" />
-                        </SelectTrigger>
+                      <label htmlFor="email-status" className="block text-xs font-medium text-muted-foreground mb-1">Can Receive Email</label>
+                      <Select value={filters.canReceiveEmail} onValueChange={(value: string) => setFilters((prev) => ({ ...prev, canReceiveEmail: value }))}>
+                        <SelectTrigger id="email-status" className="h-9"><SelectValue placeholder="Any" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="any">Any</SelectItem>
                           <SelectItem value="yes">Yes</SelectItem>
@@ -1432,16 +1351,9 @@ function BuyersPageContent() {
                       </Select>
                     </div>
                     <div>
-                      <label htmlFor="sms-status" className="block text-sm font-medium text-muted-foreground mb-2">
-                        Can Receive SMS
-                      </label>
-                      <Select
-                        value={filters.canReceiveSMS}
-                        onValueChange={(value: string) => setFilters((prev) => ({ ...prev, canReceiveSMS: value }))}
-                      >
-                        <SelectTrigger id="sms-status">
-                          <SelectValue placeholder="Any" />
-                        </SelectTrigger>
+                      <label htmlFor="sms-status" className="block text-xs font-medium text-muted-foreground mb-1">Can Receive SMS</label>
+                      <Select value={filters.canReceiveSMS} onValueChange={(value: string) => setFilters((prev) => ({ ...prev, canReceiveSMS: value }))}>
+                        <SelectTrigger id="sms-status" className="h-9"><SelectValue placeholder="Any" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="any">Any</SelectItem>
                           <SelectItem value="yes">Yes</SelectItem>
@@ -1452,181 +1364,180 @@ function BuyersPageContent() {
                   </div>
                 </div>
               </details>
-
-              {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                <Button variant="destructive" onClick={clearAllFilters} aria-label="Clear all active filters">
-                  Reset All Filters
-                </Button>
-              </div>
             </div>
           </div>
         </div>
 
-        {/* Table - Horizontal scroll on smaller screens */}
+        {/* Table — CSS grid, no horizontal scroll */}
         <div className="flex-1 min-h-0 min-w-0 overflow-y-auto">
-          <div className="min-w-0 overflow-x-auto">
-            <table className="w-max min-w-full border-collapse">
-              <thead className="bg-muted/50 sticky top-0">
-                <tr>
-                  <th className="p-3 text-left w-10 text-heading">
+          <div className="min-w-0">
+            {/* Header row */}
+            <div
+              className="grid items-center gap-2 sticky top-0 z-10 border-b border-border bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground"
+              style={{ gridTemplateColumns: "34px minmax(0,1.7fr) 56px minmax(0,1fr) 72px 132px" }}
+            >
+              <div>
+                <Checkbox
+                  checked={allSelected}
+                  onCheckedChange={toggleSelectAll}
+                  aria-label="Select all buyers on this page"
+                />
+              </div>
+              <div>Name</div>
+              <div>Score</div>
+              <div>Tags</div>
+              <div>Created</div>
+              <div className="text-right">Actions</div>
+            </div>
+
+            {/* Rows */}
+            {buyers.map((buyer: Buyer) => {
+              const initials = formatName(buyer)
+                .split(" ")
+                .map((n) => n[0])
+                .filter(Boolean)
+                .slice(0, 2)
+                .join("")
+                .toUpperCase()
+              const tagList = buyer.tags ?? []
+              return (
+                <div
+                  key={buyer.id}
+                  className={`grid items-center gap-2 border-b border-border px-3 py-2 hover:bg-muted/40 ${selectedBuyers.includes(buyer.id) ? "bg-brand/5" : ""}`}
+                  style={{ gridTemplateColumns: "34px minmax(0,1.7fr) 56px minmax(0,1fr) 72px 132px" }}
+                >
+                  <div>
                     <Checkbox
-                      checked={allSelected}
-                      onCheckedChange={toggleSelectAll}
-                      aria-label="Select all buyers on this page"
+                      checked={selectedBuyers.includes(buyer.id)}
+                      onCheckedChange={() => toggleSelectBuyer(buyer.id)}
+                      aria-label={`Select ${formatName(buyer)}`}
                     />
-                  </th>
-                  <th className="p-3 text-left text-heading">Name</th>
-                  <th className="p-3 text-left text-heading">Email</th>
-                  <th className="p-3 text-left text-heading">Phone</th>
-                  <th className="p-3 text-left text-heading">Score</th>
-                  <th className="p-3 text-left text-heading">Tags</th>
-                  <th className="p-3 text-left text-heading">Created</th>
-                  <th className="p-3 text-left text-heading w-16">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {buyers.map((buyer: Buyer) => (
-                  <tr key={buyer.id} className="row-base divider-row tr-hover group h-16 first:border-t-0">
-                    <td className="p-3">
-                      <Checkbox
-                        checked={selectedBuyers.includes(buyer.id)}
-                        onCheckedChange={() => toggleSelectBuyer(buyer.id)}
-                        aria-label={`Select ${formatName(buyer)}`}
-                      />
-                    </td>
-                    <td className="p-3 text-body font-medium">
-                      <div className="flex items-center justify-between min-w-0">
-                        <div className="truncate mr-2 text-sm font-semibold text-heading">{formatName(buyer)}</div>
-                        <div className="flex items-center space-x-1">
-                          {buyer.vip && (
-                            <span title="VIP Client">
-                              <Star className="h-4 w-4 text-amber-500 fill-amber-500" />
-                            </span>
-                          )}
-                          {buyer.vetted && (
-                            <span title="Vetted Buyer">
-                              <CheckCircle className="h-4 w-4 text-emerald-500" />
-                            </span>
-                          )}
-                          <span title={buyer.can_receive_email && !buyer.is_unsubscribed ? "Can receive email" : "Cannot receive email"}>
-                            <Mail className={`h-4 w-4 ${buyer.can_receive_email && !buyer.is_unsubscribed ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/40"}`} />
-                          </span>
-                          <span title={buyer.can_receive_sms && !buyer.is_unsubscribed ? "Can receive SMS" : "Cannot receive SMS"}>
-                            <MessageSquare className={`h-4 w-4 ${buyer.can_receive_sms && !buyer.is_unsubscribed ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/40"}`} />
-                          </span>
-                        </div>
-                      </div>
-                      {buyer.company && <div className="text-xs text-secondary">{buyer.company}</div>}
-                    </td>
-                    <td className="p-3 max-w-[12rem] truncate text-body">
-                      {buyer.email || "No email"}
-                    </td>
-                    <td className="p-3 font-mono text-sm whitespace-nowrap text-body">{buyer.phone ? formatPhoneDisplay(buyer.phone) : "No phone"}</td>
-                    <td className="p-3 text-body">
-                      <Badge
-                        className={`${getScoreColor(buyer.score ?? 0)} border-0`}
-                        title={`Buyer score: ${buyer.score ?? 0}/100`}
-                      >
-                        {buyer.score}
-                      </Badge>
-                    </td>
-                    <td className="p-3 text-body">
-                      <div className="flex flex-wrap gap-1 max-w-40">
-                        {buyer.tags?.slice(0, 3).map((tag: string, index: number) => (
-                          <Badge
-                            key={index}
-                            variant="outline"
-                            className="text-xs px-2 py-0.5 whitespace-nowrap"
-                            title={tag}
-                          >
-                            {tag}
-                          </Badge>
-                        ))}
-                        {buyer.tags && buyer.tags.length > 3 && (
-                          <Badge
-                            variant="outline"
-                            className="text-xs px-2 py-0.5"
-                            title={`${buyer.tags.length - 3} more tags`}
-                          >
-                            +{buyer.tags.length - 3}
-                          </Badge>
+                  </div>
+
+                  {/* Identity (bundled) */}
+                  <div className="flex min-w-0 items-center gap-2">
+                    <Avatar className="h-8 w-8 shrink-0">
+                      <AvatarFallback>{initials || "—"}</AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="truncate text-sm font-medium text-foreground">{formatName(buyer)}</span>
+                        {buyer.vip && (
+                          <span title="VIP Client"><Star className="h-3.5 w-3.5 shrink-0 fill-amber-500 text-amber-500" /></span>
                         )}
+                        {buyer.vetted && (
+                          <span title="Vetted Buyer"><CheckCircle className="h-3.5 w-3.5 shrink-0 text-emerald-500" /></span>
+                        )}
+                        {buyer.blocked_at && (
+                          <span title="Blocked"><Ban className="h-3.5 w-3.5 shrink-0 text-red-600 dark:text-red-400" /></span>
+                        )}
+                        <span title={buyer.can_receive_email && !buyer.is_unsubscribed ? "Can receive email" : "Cannot receive email"}>
+                          <Mail className={`h-3.5 w-3.5 shrink-0 ${buyer.can_receive_email && !buyer.is_unsubscribed ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/40"}`} />
+                        </span>
+                        <span title={buyer.can_receive_sms && !buyer.is_unsubscribed ? "Can receive SMS" : "Cannot receive SMS"}>
+                          <MessageSquare className={`h-3.5 w-3.5 shrink-0 ${buyer.can_receive_sms && !buyer.is_unsubscribed ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/40"}`} />
+                        </span>
                       </div>
-                    </td>
-                    <td className="p-3 text-sm text-secondary font-mono whitespace-nowrap">
-                      {buyer.created_at ? formatDate(buyer.created_at) : "—"}
-                    </td>
-                    <td className="p-3">
-                      <div className="flex items-center space-x-1">
+                      <div className="truncate text-xs text-muted-foreground">
+                        <span className="font-mono">{buyer.phone ? formatPhoneDisplay(buyer.phone) : "No phone"}</span>
+                        {" · "}
+                        {buyer.email || "No email"}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Score */}
+                  <div>
+                    <Badge className={`${getScoreColor(buyer.score ?? 0)} border-0`} title={`Buyer score: ${buyer.score ?? 0}/100`}>
+                      {buyer.score}
+                    </Badge>
+                  </div>
+
+                  {/* Tags */}
+                  <div className="flex items-center gap-1 overflow-hidden">
+                    {tagList.slice(0, 2).map((tag: string, index: number) => (
+                      <span key={index} title={tag} className="whitespace-nowrap rounded-md border border-border bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                        {tag}
+                      </span>
+                    ))}
+                    {tagList.length > 2 && (
+                      <span title={`${tagList.length - 2} more tags`} className="whitespace-nowrap rounded-md border border-border bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                        +{tagList.length - 2}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Created */}
+                  <div className="text-xs text-muted-foreground">
+                    {buyer.created_at
+                      ? new Date(buyer.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+                      : "—"}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center justify-end gap-0.5">
+                    <CallButton phone={buyer.phone} name={formatName(buyer)} buyerId={buyer.id} size="icon" variant="ghost" />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                      onClick={() => handleSendSms(buyer)}
+                      aria-label={`Text ${formatName(buyer)}`}
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                      onClick={() => handleSendEmail(buyer)}
+                      aria-label={`Email ${formatName(buyer)}`}
+                    >
+                      <Mail className="h-4 w-4" />
+                    </Button>
+                    <Can permission="buyers.edit">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                        onClick={() => handleEditBuyer(buyer)}
+                        aria-label={`Edit ${formatName(buyer)}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    </Can>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
                         <Button
                           variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 group"
-                          onClick={() => handleSendEmail(buyer)}
-                          aria-label={`Send email to ${formatName(buyer)}`}
-                        >
-                          <Mail className="h-4 w-4 text-gray-500 group-hover:text-sky-600 transition" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 group"
-                          onClick={() => handleSendSms(buyer)}
-                          aria-label={`Send SMS to ${formatName(buyer)}`}
-                        >
-                          <MessageSquare className="h-4 w-4 text-gray-500 group-hover:text-sky-600 transition" />
-                        </Button>
-                        <CallButton
-                          phone={buyer.phone}
-                          name={formatName(buyer)}
-                          buyerId={buyer.id}
                           size="icon"
-                          variant="ghost"
-                        />
+                          className="h-7 w-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                          aria-label={`More options for ${formatName(buyer)}`}
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
                         <Can permission="buyers.edit">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 group"
-                            onClick={() => handleEditBuyer(buyer)}
-                            aria-label={`Edit ${formatName(buyer)}`}
-                          >
-                            <Edit className="h-4 w-4 text-gray-500 group-hover:text-sky-600 transition" />
-                          </Button>
+                          <DropdownMenuItem onClick={() => handleEditBuyer(buyer)}>
+                            <Pencil className="mr-2 h-4 w-4" /> Edit buyer
+                          </DropdownMenuItem>
                         </Can>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0 group"
-                              aria-label={`More options for ${formatName(buyer)}`}
-                            >
-                              <MoreHorizontal className="h-4 w-4 text-gray-500 group-hover:text-sky-600 transition" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent>
-                            <Can permission="buyers.delete">
-                              <DropdownMenuItem
-                                onClick={() => setBuyerToDelete(buyer)}
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete
-                              </DropdownMenuItem>
-                            </Can>
-                            <DropdownMenuItem onClick={() => handleToggleBlock(buyer)}>
-                              <X className="mr-2 h-4 w-4" />
-                              {buyer.blocked_at ? "Unblock" : "Block"}
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                        <DropdownMenuItem onClick={() => handleToggleBlock(buyer)}>
+                          <Ban className="mr-2 h-4 w-4" /> {buyer.blocked_at ? "Unblock buyer" : "Block buyer"}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <Can permission="buyers.delete">
+                          <DropdownMenuItem className="text-red-600 focus:text-red-600 dark:text-red-400" onClick={() => setBuyerToDelete(buyer)}>
+                            <Trash2 className="mr-2 h-4 w-4" /> Delete buyer
+                          </DropdownMenuItem>
+                        </Can>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              )
+            })}
           </div>
 
           {buyers.length === 0 && (
@@ -1645,56 +1556,18 @@ function BuyersPageContent() {
           )}
         </div>
 
-        {/* Pagination - More compact on mobile */}
-        {totalPages > 1 && (
-          <div className="border-t bg-background p-3 lg:p-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="text-sm text-muted-foreground">
-                Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, totalCount)}{" "}
-                of {totalCount} results
-              </div>
-              <div className="flex items-center space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(currentPage - 1)}
-                  disabled={currentPage === 1}
-                  aria-label="Go to previous page"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                  <span className="hidden sm:inline">Previous</span>
-                </Button>
-                <div className="flex items-center space-x-1">
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    let pageNum
-                    if (totalPages <= 5) {
-                      pageNum = i + 1
-                    } else if (currentPage <= 3) {
-                      pageNum = i + 1
-                    } else if (currentPage >= totalPages - 2) {
-                      pageNum = totalPages - 4 + i
-                    } else {
-                      pageNum = currentPage - 2 + i
-                    }
-
-                    return (
-                      <Button
-                        key={pageNum}
-                        variant={currentPage === pageNum ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setCurrentPage(pageNum)}
-                        className="w-8 h-8 p-0"
-                        aria-label={`Go to page ${pageNum}`}
-                      >
-                        {pageNum}
-                      </Button>
-                    )
-                  })}
-                </div>
-                <div className="flex items-center space-x-1">
-                  <span className="text-sm">Rows:</span>
+        {/* Pagination */}
+        {totalCount > 0 && (
+          <div className="border-t border-border bg-background px-3 py-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                <span>
+                  Showing {(currentPage - 1) * itemsPerPage + 1}–{Math.min(currentPage * itemsPerPage, totalCount)} of {totalCount}
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span>Rows</span>
                   <Select value={String(itemsPerPage)} onValueChange={(v) => setItemsPerPage(Number(v))}>
-                    <SelectTrigger className="w-20 h-8">
+                    <SelectTrigger className="h-8 w-[4.5rem]">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1705,15 +1578,51 @@ function BuyersPageContent() {
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
                 <Button
                   variant="outline"
-                  size="sm"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setCurrentPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  aria-label="Go to previous page"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                {(() => {
+                  const wanted = new Set<number>([1, totalPages, currentPage - 1, currentPage, currentPage + 1])
+                  const sorted = [...wanted].filter((n) => n >= 1 && n <= totalPages).sort((a, b) => a - b)
+                  const out: JSX.Element[] = []
+                  let prev = 0
+                  for (const n of sorted) {
+                    if (n - prev > 1) out.push(<span key={`gap-${n}`} className="px-1 text-muted-foreground">…</span>)
+                    out.push(
+                      <Button
+                        key={n}
+                        size="icon"
+                        variant={currentPage === n ? "default" : "outline"}
+                        className={`h-8 w-8 ${currentPage === n ? "bg-brand text-white hover:bg-brand-hover" : ""}`}
+                        onClick={() => setCurrentPage(n)}
+                        aria-label={`Go to page ${n}`}
+                        aria-current={currentPage === n ? "page" : undefined}
+                      >
+                        {n}
+                      </Button>,
+                    )
+                    prev = n
+                  }
+                  return out
+                })()}
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
                   onClick={() => setCurrentPage(currentPage + 1)}
                   disabled={currentPage === totalPages}
                   aria-label="Go to next page"
                 >
-                  <span className="hidden sm:inline">Next</span>
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
