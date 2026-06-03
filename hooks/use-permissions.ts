@@ -74,7 +74,10 @@ export function usePermissions() {
     return () => {
       active = false
     }
-  }, [sessionLoading, user])
+    // Depend on the user id (not the object): a new-but-identical user
+    // reference from a token refresh must not re-run the permission fetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionLoading, user?.id])
 
   const loading = sessionLoading || permissionsLoading
   const isAdmin = role === "admin" || role === "owner"

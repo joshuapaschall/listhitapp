@@ -19,10 +19,20 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let mounted = true
+
+    // Only update state when the user IDENTITY actually changes. Supabase fires
+    // TOKEN_REFRESHED / SIGNED_IN on tab focus with a fresh-but-identical user
+    // object; reacting to those cascades through usePermissions and re-triggers
+    // the full-screen loader. Gating on user id keeps the reference stable.
+    const applyAuth = (nextSession: Session | null) => {
+      const nextUser = nextSession?.user ?? null
+      setUser((prev) => (prev?.id !== nextUser?.id ? nextUser : prev))
+      setSession((prev) => (prev?.user?.id !== nextUser?.id ? nextSession : prev))
+    }
+
     supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return
-      setSession(data.session)
-      setUser(data.session?.user ?? null)
+      applyAuth(data.session)
       setLoading(false)
     })
 
@@ -30,8 +40,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, s) => {
       if (!mounted) return
-      setSession(s)
-      setUser(s?.user ?? null)
+      applyAuth(s)
       setLoading(false)
     })
 

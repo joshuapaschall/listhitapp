@@ -17,7 +17,7 @@ import {
 import MainLayout from "@/components/layout/main-layout"
 import { CampaignService } from "@/services/campaign-service"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import CampaignChannelPicker from "@/components/campaigns/campaign-channel-picker"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -363,44 +363,14 @@ export default function CampaignsPage() {
         )}
       </div>
 
-      <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Create a campaign</DialogTitle>
-            <DialogDescription>Choose how you want to reach your buyers.</DialogDescription>
-          </DialogHeader>
-          <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <button
-              type="button"
-              className="group flex h-full cursor-pointer flex-col rounded-lg border border-border bg-background p-6 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-[#10B981] hover:bg-[#ECFDF5] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10B981] focus-visible:ring-offset-2"
-              onClick={() => {
-                router.push("/campaigns/new?type=email")
-                setPickerOpen(false)
-              }}
-            >
-              <div className="mb-4 flex size-11 items-center justify-center rounded-full bg-[#ECFDF5] text-[#059669]">
-                <Mail className="size-5" />
-              </div>
-              <h3 className="text-base font-semibold text-foreground">Email campaign</h3>
-              <p className="mt-2 text-sm text-muted-foreground">Rich, designed emails with images and templates.</p>
-            </button>
-            <button
-              type="button"
-              className="group flex h-full cursor-pointer flex-col rounded-lg border border-border bg-background p-6 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-[#10B981] hover:bg-[#ECFDF5] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10B981] focus-visible:ring-offset-2"
-              onClick={() => {
-                router.push("/campaigns/new?type=sms")
-                setPickerOpen(false)
-              }}
-            >
-              <div className="mb-4 flex size-11 items-center justify-center rounded-full bg-[#ECFDF5] text-[#059669]">
-                <MessageSquare className="size-5" />
-              </div>
-              <h3 className="text-base font-semibold text-foreground">SMS campaign</h3>
-              <p className="mt-2 text-sm text-muted-foreground">Short text messages that land directly on their phone.</p>
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <CampaignChannelPicker
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        onSelect={(channel) => {
+          router.push(`/campaigns/new?type=${channel}`)
+          setPickerOpen(false)
+        }}
+      />
 
       <ConfirmInputDialog
         open={!!deleteId}
