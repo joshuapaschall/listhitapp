@@ -87,7 +87,6 @@ export default function AddPropertyPage() {
     notes: "",
     video_link: "",
     website_url: "",
-    short_slug: "",
   });
 
   const handleChange = <K extends keyof typeof form>(
@@ -197,7 +196,6 @@ export default function AddPropertyPage() {
         tags: form.tags.length > 0 ? form.tags : null,
         video_link: form.video_link || null,
         website_url: form.website_url || null,
-        short_slug: form.short_slug || null,
         latitude: coords.lat,
         longitude: coords.lng,
       });
@@ -512,7 +510,6 @@ export default function AddPropertyPage() {
                 <div className="space-y-4 md:col-span-1">
                   <div><Label>Video Link</Label><div className="relative"><Play className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="https://youtube.com/..." value={form.video_link} onChange={(e) => handleChange("video_link", e.target.value)} /></div></div>
                   <div><Label>Website URL</Label><div className="relative"><Globe className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="https://yourpropertysite.com" value={form.website_url} onChange={(e) => handleChange("website_url", e.target.value)} /></div></div>
-                  <div><Label>Short Link Slug</Label><div className="flex items-center rounded-md border bg-muted/10"><span className="px-3 text-sm text-muted-foreground">short.io/</span><Input className="border-0 bg-transparent" placeholder="123-main-st" value={form.short_slug} onChange={(e) => handleChange("short_slug", e.target.value)} /></div></div>
                 </div>
               </CardContent>
             </Card>

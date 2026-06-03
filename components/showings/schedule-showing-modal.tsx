@@ -81,7 +81,7 @@ export default function ScheduleShowingModal({ open, onOpenChange, onSuccess, bu
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Schedule Showing</DialogTitle>
           <DialogDescription>Select buyer and property to schedule a showing.</DialogDescription>

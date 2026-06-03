@@ -110,7 +110,7 @@ export default function CreateOfferModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-xl">
+      <DialogContent className="max-w-xl" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Create Offer</DialogTitle>
           <DialogDescription>Record a new offer from a buyer.</DialogDescription>
