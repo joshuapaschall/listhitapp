@@ -212,17 +212,18 @@ export default function SegmentsPage() {
 
       {/* Create / edit sheet */}
       <Sheet open={!!editor} onOpenChange={(o) => !o && setEditor(null)}>
-        <SheetContent className="flex w-full flex-col gap-0 sm:max-w-2xl">
-          <SheetHeader>
+        <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-2xl">
+          <SheetHeader className="px-6 pt-6">
             <SheetTitle>{editor?.id ? "Edit segment" : "New segment"}</SheetTitle>
             <SheetDescription>Define who belongs to this audience.</SheetDescription>
           </SheetHeader>
 
           {editor && (
-            <div className="flex-1 space-y-4 overflow-y-auto py-4">
+            <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">Name</label>
                 <Input
+                  className="focus-visible:ring-emerald-500"
                   value={editor.name}
                   onChange={(e) => setEditor({ ...editor, name: e.target.value })}
                   placeholder="e.g. Cash buyers in Texas"
@@ -231,6 +232,7 @@ export default function SegmentsPage() {
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">Description</label>
                 <Textarea
+                  className="focus-visible:ring-emerald-500"
                   value={editor.description}
                   onChange={(e) => setEditor({ ...editor, description: e.target.value })}
                   placeholder="Optional"
@@ -243,7 +245,7 @@ export default function SegmentsPage() {
                   value={editor.channel}
                   onValueChange={(c) => setEditor({ ...editor, channel: c as ChannelChoice })}
                 >
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger className="w-full focus:ring-emerald-500">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -252,9 +254,10 @@ export default function SegmentsPage() {
                     <SelectItem value="sms">SMS</SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">Which campaigns can reuse this segment.</p>
               </div>
 
-              <div className="rounded-lg border p-4">
+              <div className="rounded-xl border bg-card p-4 shadow-sm">
                 <SegmentBuilder
                   value={editor.definition}
                   onChange={(definition) => setEditor({ ...editor, definition })}
@@ -265,7 +268,7 @@ export default function SegmentsPage() {
             </div>
           )}
 
-          <SheetFooter className="gap-2 border-t pt-4 sm:justify-between">
+          <SheetFooter className="gap-2 border-t px-6 pb-6 pt-4 sm:items-center sm:justify-between">
             {!saveValidation.ok && saveValidation.reason ? (
               <span className="text-xs text-amber-600">{saveValidation.reason}</span>
             ) : (
@@ -276,6 +279,7 @@ export default function SegmentsPage() {
                 Cancel
               </Button>
               <Button
+                variant="brand"
                 disabled={!saveValidation.ok || saveMutation.isPending}
                 onClick={() => editor && saveMutation.mutate(editor)}
               >

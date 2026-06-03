@@ -102,15 +102,16 @@ describe("SegmentBuilder (catalog-driven)", () => {
     expect(texts).toContain("did not")
   })
 
-  test("an email-only metric is disabled when channel is sms", async () => {
+  test("an email-only metric is hidden when channel is sms", async () => {
     renderRow(
       { kind: "behavioral", metric: "replied", operator: "did", scope: { type: "any_campaign" } },
       { channel: "sms" },
     )
-    const options = await openByValue("replied")
-    const opened = options.find((o) => /opened \(email only\)/i.test(o.textContent ?? ""))
-    expect(opened).toBeTruthy()
-    expect(opened?.getAttribute("aria-disabled")).toBe("true")
+    const texts = optionTexts(await openByValue("replied"))
+    // Inapplicable signals are hidden entirely, not greyed: no "opened" option,
+    // and no "(email only)" affordance.
+    expect(texts.some((t) => /opened/i.test(t))).toBe(false)
+    expect(texts.some((t) => /email only/i.test(t))).toBe(false)
   })
 
   test("'this campaign' scope is absent when allowThisCampaign is false", async () => {
