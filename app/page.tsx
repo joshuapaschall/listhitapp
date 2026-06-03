@@ -1580,16 +1580,12 @@ function BuyersPageContent() {
                           {status.charAt(0).toUpperCase() + status.slice(1)}
                         </span>
                         <div className="flex items-center space-x-2">
-                          {buyer.can_receive_email && (
-                            <span title="Can receive email">
-                              <Mail className="h-4 w-4 text-muted-foreground" />
-                            </span>
-                          )}
-                          {buyer.can_receive_sms && (
-                            <span title="Can receive SMS">
-                              <MessageSquare className="h-4 w-4 text-muted-foreground" />
-                            </span>
-                          )}
+                          <span title={buyer.can_receive_email && !buyer.is_unsubscribed ? "Can receive email" : "Cannot receive email"}>
+                            <Mail className={`h-4 w-4 ${buyer.can_receive_email && !buyer.is_unsubscribed ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/40"}`} />
+                          </span>
+                          <span title={buyer.can_receive_sms && !buyer.is_unsubscribed ? "Can receive SMS" : "Cannot receive SMS"}>
+                            <MessageSquare className={`h-4 w-4 ${buyer.can_receive_sms && !buyer.is_unsubscribed ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/40"}`} />
+                          </span>
                         </div>
                       </div>
                       )

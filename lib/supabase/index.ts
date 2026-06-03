@@ -77,6 +77,7 @@ export interface Buyer {
   vetted?: boolean | null
   can_receive_email?: boolean | null
   can_receive_sms?: boolean | null
+  is_unsubscribed?: boolean | null
   property_type?: string[] | null
   asking_price_min?: number | null
   asking_price_max?: number | null

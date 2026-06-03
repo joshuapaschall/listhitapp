@@ -2,7 +2,7 @@ import { NextFetchEvent, NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 
 import { deriveProfile, type BuyerTypeKey, type PaymentKey, sanitizeLocations, sanitizePropertyTypes } from "@/lib/buyer-taxonomy"
-import { normalizeEmail, formatPhoneE164, mergeUnique } from "@/lib/dedup-utils"
+import { normalizeEmail, formatPhoneE164, normalizePhone, mergeUnique } from "@/lib/dedup-utils"
 import { validateEmailDebounce, isEmailAcceptable, WRITE_DIAGNOSTIC_TAGS } from "@/lib/debounce"
 import { lookupNumber, isLineAcceptable } from "@/lib/number-lookup"
 import { assertAllowedOrigin, corsHeaders, errorResponse, isRateLimited } from "@/lib/public-api"
@@ -84,7 +84,7 @@ export async function POST(request: NextRequest, event: NextFetchEvent) {
       fname: payload.fname,
       lname: payload.lname || null,
       email: payload.email,
-      phone: phoneE164,
+      phone: normalizePhone(payload.phone),
       source: "website_signup",
       status: "lead",
       can_receive_sms: true,
