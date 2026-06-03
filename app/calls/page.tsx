@@ -12,8 +12,34 @@ import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/use-permissions";
 import CallLogFilters, { CallLogFiltersValue } from "@/components/calls/call-log-filters";
 import CallLogTable, { CallRow } from "@/components/calls/call-log-table";
+import CallStatusBadge from "@/components/calls/call-status-badge";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { contactName, externalNumber, formatPhone, relativeCallTime } from "@/lib/calls/format";
 import { useCall } from "@/components/voice/CallProvider";
+
+function CallDetailContent({ call, onCallBack, recent }: { call: CallRow | null; onCallBack: (call: CallRow) => void; recent: CallRow[] }) {
+  if (!call) return <p className="text-sm text-muted-foreground">Select a call to view detail.</p>;
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className="font-semibold">{contactName(call)}</p>
+        <p className="text-sm text-muted-foreground">{formatPhone(externalNumber(call))}</p>
+        {call.buyer?.id ? <Link href={`/buyers/${call.buyer.id}`} className="mt-1 inline-flex items-center gap-1 text-sm text-brand">View buyer <ArrowUpRight className="h-3.5 w-3.5" /></Link> : null}
+      </div>
+      <Can permission="calls.make_receive">
+        <Button variant="brand" className="w-full" onClick={() => onCallBack(call)}>Call back</Button>
+      </Can>
+      {call.telnyx_recording_id || call.recording_url || call.voicemail_storage_path ? <Can permission="calls.recordings"><div className="rounded-lg border border-border bg-card p-3"><audio controls className="w-full" src={call.call_sid ? `/api/recordings/${call.call_sid}/stream` : call.recording_url ?? call.voicemail_storage_path ?? undefined} /></div></Can> : null}
+      <div>
+        <p className="mb-2 text-sm font-medium">Recent with this contact</p>
+        <div className="space-y-2">
+          {recent.map((c) => <div key={c.id} className="flex items-center justify-between gap-2 rounded-md border border-border p-2 text-sm"><span>{relativeCallTime(c.started_at)}</span><CallStatusBadge status={c.status} /></div>)}
+          {recent.length === 0 ? <p className="text-sm text-muted-foreground">No recent calls in this view.</p> : null}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const APP_TIMEZONE = "America/New_York";
 
@@ -40,6 +66,7 @@ export default function CallsPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | "voicemail" | "missed">("all");
   const [page, setPage] = useState(1);
   const [selectedCall, setSelectedCall] = useState<CallRow | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { makeCall } = useCall();
@@ -47,6 +74,10 @@ export default function CallsPage() {
   const canMakeReceiveCalls = can("calls.make_receive");
 
   useEffect(() => setPage(1), [filters]);
+
+  const handleCallBack = (call: CallRow) => {
+    makeCall(call.direction === "inbound" ? call.from_number ?? "" : call.to_number ?? "", call.buyer?.id ?? undefined);
+  };
 
   const rangeParams = useMemo(() => {
     if (filters.range === "all") return {};
@@ -135,7 +166,7 @@ export default function CallsPage() {
 
   return (
     <MainLayout>
-      <div className="mx-auto max-w-[1400px] space-y-4 px-6 py-8">
+      <div className="mx-auto max-w-[1600px] space-y-4 px-4 lg:px-8 py-8">
         <div className="flex items-start justify-between"><div><h1 className="text-3xl font-semibold tracking-tight">Calls</h1><p className="text-sm text-muted-foreground">Every call, recording, and voicemail.</p></div><Button variant="outline" onClick={() => { queryClient.invalidateQueries({ queryKey: ["calls-history"] }); queryClient.invalidateQueries({ queryKey: ["calls-stats"] }); }}><RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />Refresh</Button></div>
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -144,7 +175,7 @@ export default function CallsPage() {
               <CardTitle className="text-sm text-muted-foreground">Calls today</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="font-mono text-2xl font-semibold text-emerald-700">{statsData?.stats?.callsToday ?? 0}</p>
+              <p className="font-mono text-2xl font-semibold text-foreground">{statsData?.stats?.callsToday ?? 0}</p>
             </CardContent>
           </Card>
           <Card>
@@ -152,7 +183,7 @@ export default function CallsPage() {
               <CardTitle className="text-sm text-muted-foreground">Talk time</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="font-mono text-2xl font-semibold text-emerald-700">{`${Math.floor((statsData?.stats?.talkTimeTodaySeconds ?? 0) / 60)}m`}</p>
+              <p className="font-mono text-2xl font-semibold text-foreground">{`${Math.floor((statsData?.stats?.talkTimeTodaySeconds ?? 0) / 60)}m`}</p>
             </CardContent>
           </Card>
           <button
@@ -160,12 +191,12 @@ export default function CallsPage() {
             className="cursor-pointer text-left"
             onClick={() => setStatusFilter((current) => (current === "voicemail" ? "all" : "voicemail"))}
           >
-            <Card className={`transition-colors hover:bg-muted/30 ${statusFilter === "voicemail" ? "ring-2 ring-purple-500 bg-purple-50" : ""}`}>
+            <Card className={`transition-colors hover:bg-muted/30 ${statusFilter === "voicemail" ? "ring-2 ring-brand bg-brand/5" : ""}`}>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-muted-foreground">Voicemails</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="font-mono text-2xl font-semibold text-purple-700">{statsData?.stats?.newVoicemails ?? 0}</p>
+                <p className="font-mono text-2xl font-semibold text-foreground">{statsData?.stats?.newVoicemails ?? 0}</p>
               </CardContent>
             </Card>
           </button>
@@ -174,12 +205,12 @@ export default function CallsPage() {
             className="cursor-pointer text-left"
             onClick={() => setStatusFilter((current) => (current === "missed" ? "all" : "missed"))}
           >
-            <Card className={`transition-colors hover:bg-muted/30 ${statusFilter === "missed" ? "ring-2 ring-red-500 bg-red-50" : ""}`}>
+            <Card className={`border-l-[3px] border-l-brand rounded-l-none transition-colors hover:bg-muted/30 ${statusFilter === "missed" ? "ring-2 ring-brand bg-brand/5" : ""}`}>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-muted-foreground">Missed</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="font-mono text-2xl font-semibold text-red-600">{statsData?.stats?.missedToday ?? 0}</p>
+                <p className="font-mono text-2xl font-semibold text-foreground">{statsData?.stats?.missedToday ?? 0}</p>
               </CardContent>
             </Card>
           </button>
@@ -187,33 +218,30 @@ export default function CallsPage() {
 
         <CallLogFilters value={filters} onChange={setFilters} />
 
-        <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
-          <CallLogTable calls={filteredCalls} loading={isLoading} pagination={data?.pagination} setPage={setPage} selectedId={selectedCall?.id ?? null} onSelect={setSelectedCall} />
-          <Card className="h-fit">
+        <div className="grid gap-4 lg:grid-cols-[1.9fr_1fr]">
+          <CallLogTable
+            calls={filteredCalls}
+            loading={isLoading}
+            pagination={data?.pagination}
+            setPage={setPage}
+            selectedId={selectedCall?.id ?? null}
+            onSelect={(call) => { setSelectedCall(call); if (typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches) setDetailOpen(true); }}
+          />
+          <Card className="hidden lg:block h-fit">
             <CardHeader><CardTitle>Call detail</CardTitle></CardHeader>
             <CardContent>
-              {!selectedCall ? <p className="text-sm text-muted-foreground">Select a call to view detail.</p> : <div className="space-y-4">
-                <div>
-                  <p className="font-semibold">{contactName(selectedCall)}</p>
-                  <p className="text-sm text-muted-foreground">{formatPhone(externalNumber(selectedCall))}</p>
-                  {selectedCall.buyer?.id ? <Link href={`/buyers/${selectedCall.buyer.id}`} className="mt-1 inline-flex items-center gap-1 text-sm text-emerald-700">View buyer <ArrowUpRight className="h-3.5 w-3.5" /></Link> : null}
-                </div>
-                <Can permission="calls.make_receive">
-                  <Button className="w-full bg-[#059669] hover:bg-[#047857]" onClick={() => makeCall(selectedCall.direction === "inbound" ? selectedCall.from_number ?? "" : selectedCall.to_number ?? "", selectedCall.buyer?.id ?? undefined)}>Call back</Button>
-                </Can>
-                {selectedCall.telnyx_recording_id || selectedCall.recording_url || selectedCall.voicemail_storage_path ? <Can permission="calls.recordings"><div className="rounded-lg border bg-card p-3"><audio controls className="w-full" src={selectedCall.call_sid ? `/api/recordings/${selectedCall.call_sid}/stream` : selectedCall.recording_url ?? selectedCall.voicemail_storage_path ?? undefined} /></div></Can> : null}
-                <div>
-                  <p className="mb-2 text-sm font-medium">Recent with this contact</p>
-                  <div className="space-y-2">
-                    {selectedRecent.map((call) => <div key={call.id} className="rounded-md border p-2 text-sm"><p>{relativeCallTime(call.started_at)}</p><p className="text-muted-foreground">{call.status}</p></div>)}
-                    {selectedRecent.length === 0 ? <p className="text-sm text-muted-foreground">No recent calls in this view.</p> : null}
-                  </div>
-                </div>
-              </div>}
+              <CallDetailContent call={selectedCall} onCallBack={handleCallBack} recent={selectedRecent} />
             </CardContent>
           </Card>
         </div>
       </div>
+
+      <Sheet open={detailOpen} onOpenChange={setDetailOpen}>
+        <SheetContent side="bottom" className="lg:hidden max-h-[85vh] overflow-y-auto">
+          <SheetHeader><SheetTitle>Call detail</SheetTitle></SheetHeader>
+          <div className="mt-4"><CallDetailContent call={selectedCall} onCallBack={handleCallBack} recent={selectedRecent} /></div>
+        </SheetContent>
+      </Sheet>
     </MainLayout>
   );
 }
