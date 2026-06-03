@@ -275,8 +275,8 @@ export default function EmailDomainDetailPage({ params }: { params: { id: string
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="h-auto rounded-none border-b bg-transparent p-0">
-          <TabsTrigger value="dns" className="rounded-none border-b-2 border-transparent data-[state=active]:border-emerald-600 data-[state=active]:text-emerald-700">DNS setup</TabsTrigger>
-          <TabsTrigger value="senders" className="rounded-none border-b-2 border-transparent data-[state=active]:border-emerald-600 data-[state=active]:text-emerald-700">From addresses</TabsTrigger>
+          <TabsTrigger value="dns" className="rounded-none border-b-2 border-transparent data-[state=active]:border-foreground data-[state=active]:text-foreground">DNS setup</TabsTrigger>
+          <TabsTrigger value="senders" className="rounded-none border-b-2 border-transparent data-[state=active]:border-foreground data-[state=active]:text-foreground">From addresses</TabsTrigger>
         </TabsList>
 
         <TabsContent className="space-y-6 pt-6" value="dns">
@@ -295,7 +295,7 @@ export default function EmailDomainDetailPage({ params }: { params: { id: string
                 <CardTitle>How to add these</CardTitle>
                 <CardDescription>Use the copy buttons below to avoid typos.</CardDescription>
               </div>
-              <Button className={domain.status === "verified" ? "bg-[#059669] text-white hover:bg-[#047857]" : ""} disabled={manualChecking} onClick={() => void runVerification({ manual: true })} variant={domain.status === "verified" ? "default" : "outline"}>
+              <Button className={domain.status === "verified" ? "text-white" : ""} disabled={manualChecking} onClick={() => void runVerification({ manual: true })} variant={domain.status === "verified" ? "default" : "outline"}>
                 {manualChecking ? <Loader2 className="size-4 animate-spin" /> : <RefreshCcw className="size-4" />}
                 Check verification
               </Button>
@@ -308,7 +308,7 @@ export default function EmailDomainDetailPage({ params }: { params: { id: string
                   "Come back and click Check verification, or just wait — it re-checks automatically.",
                 ].map((step, index) => (
                   <div className="rounded-md border bg-muted/20 p-3" key={step}>
-                    <div className="mb-2 flex size-7 items-center justify-center rounded-full bg-emerald-50 text-sm font-semibold text-emerald-700">{index + 1}</div>
+                    <div className="mb-2 flex size-7 items-center justify-center rounded-full bg-muted text-sm font-semibold text-foreground">{index + 1}</div>
                     <p className="text-sm text-muted-foreground">{step}</p>
                   </div>
                 ))}

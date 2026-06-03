@@ -116,7 +116,7 @@ export default function VoicemailGreetingEditor({
         <div className="rounded-md border p-3">
           <p className="text-sm font-medium text-gray-900">
             Current greeting
-            <span className="ml-2 rounded bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700">
+            <span className="ml-2 rounded bg-muted px-2 py-0.5 text-xs text-foreground">
               {currentSource === "recorded" ? "Recorded" : "AI Voice"}
             </span>
           </p>
@@ -150,7 +150,7 @@ export default function VoicemailGreetingEditor({
             ))}
           </select>
           <button
-            className="rounded bg-emerald-600 px-3 py-2 text-sm text-white"
+            className="rounded bg-primary px-3 py-2 text-sm text-primary-foreground"
             disabled={busy}
             onClick={async () => {
               setBusy(true);
@@ -194,7 +194,7 @@ export default function VoicemailGreetingEditor({
           <button className="rounded bg-gray-200 px-3 py-2 text-sm" onClick={() => mediaRecorderRef.current?.stop()}>Stop</button>
           {recordingUrl ? <audio controls className="w-full" src={recordingUrl} /> : null}
           <button
-            className="rounded bg-emerald-600 px-3 py-2 text-sm text-white"
+            className="rounded bg-primary px-3 py-2 text-sm text-primary-foreground"
             disabled={!recordingBlob || busy}
             onClick={async () => {
               setBusy(true);
@@ -213,14 +213,14 @@ export default function VoicemailGreetingEditor({
       )}
 
       {previewUrl ? (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3">
-          <p className="text-sm font-medium text-emerald-700">Preview — not live yet</p>
+        <div className="rounded-md border border-border bg-muted p-3">
+          <p className="text-sm font-medium text-foreground">Preview — not live yet</p>
           <audio controls className="mt-2 w-full" src={previewUrl} />
         </div>
       ) : null}
 
       <button
-        className="rounded bg-emerald-600 px-4 py-2 text-sm text-white disabled:opacity-60"
+        className="rounded bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-60"
         disabled={!previewUrl || busy}
         onClick={async () => {
           if (!previewUrl || !previewSource) return;

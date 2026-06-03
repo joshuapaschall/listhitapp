@@ -74,7 +74,7 @@ export default function MarketDetailPage() {
   return (
     <PermissionGate permission="settings.markets" title="Markets">
       <div className="space-y-6 p-8">
-      <Link href="/settings/markets" className="text-sm text-muted-foreground hover:text-emerald-700">← Back to Markets</Link>
+      <Link href="/settings/markets" className="text-sm text-muted-foreground hover:text-foreground">← Back to Markets</Link>
 
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-2">
@@ -106,9 +106,9 @@ export default function MarketDetailPage() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="h-auto rounded-none border-b bg-transparent p-0">
-          <TabsTrigger value="routing" className="rounded-none border-b-2 border-transparent data-[state=active]:border-emerald-600 data-[state=active]:text-emerald-700">Call routing & voicemail</TabsTrigger>
-          <TabsTrigger value="numbers" className="rounded-none border-b-2 border-transparent data-[state=active]:border-emerald-600 data-[state=active]:text-emerald-700">Phone numbers</TabsTrigger>
-          <TabsTrigger value="overview" className="rounded-none border-b-2 border-transparent data-[state=active]:border-emerald-600 data-[state=active]:text-emerald-700">Overview</TabsTrigger>
+          <TabsTrigger value="routing" className="rounded-none border-b-2 border-transparent data-[state=active]:border-foreground data-[state=active]:text-foreground">Call routing & voicemail</TabsTrigger>
+          <TabsTrigger value="numbers" className="rounded-none border-b-2 border-transparent data-[state=active]:border-foreground data-[state=active]:text-foreground">Phone numbers</TabsTrigger>
+          <TabsTrigger value="overview" className="rounded-none border-b-2 border-transparent data-[state=active]:border-foreground data-[state=active]:text-foreground">Overview</TabsTrigger>
         </TabsList>
 
         <TabsContent value="routing" className="mt-6 space-y-4">
@@ -163,7 +163,7 @@ export default function MarketDetailPage() {
                     <Accordion type="single" collapsible key={number.e164}>
                       <AccordionItem value={number.e164} id={`num-${number.e164}`}>
                         <AccordionTrigger>
-                          <div className="flex items-center gap-2"><span>{number.label || number.e164}</span><Badge className="bg-emerald-50 text-emerald-700">Per-number config</Badge></div>
+                          <div className="flex items-center gap-2"><span>{number.label || number.e164}</span><Badge className="bg-muted text-foreground">Per-number config</Badge></div>
                         </AccordionTrigger>
                         <AccordionContent className="space-y-6">
                           <button className="text-sm text-muted-foreground underline" onClick={async () => {
@@ -194,7 +194,7 @@ export default function MarketDetailPage() {
                 <div key={number.e164} className="flex items-center justify-between border-b px-4 py-3">
                   <LabeledValue label="Phone number"><NumberIdentity label={number.label || "No label"} e164={number.e164} /></LabeledValue>
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className={number.config_override ? "border-slate-200" : "border-emerald-200 bg-emerald-50 text-emerald-700"}>{number.config_override ? "Per-number config" : "Inherits market config"}</Badge>
+                    <Badge variant="outline" className={number.config_override ? "border-slate-200" : "border-border bg-muted text-foreground"}>{number.config_override ? "Per-number config" : "Inherits market config"}</Badge>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild><Button size="icon" variant="ghost"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
@@ -215,7 +215,7 @@ export default function MarketDetailPage() {
         </TabsContent>
 
         <TabsContent value="overview" className="mt-6 space-y-4">
-          <Card className="bg-emerald-50 border-emerald-200"><CardContent className="p-6"><p className="text-sm text-emerald-700">Numbers in market</p><p className="text-2xl font-semibold text-emerald-900">{market.numberCount}</p></CardContent></Card>
+          <Card className="bg-muted border-border"><CardContent className="p-6"><p className="text-sm text-foreground">Numbers in market</p><p className="text-2xl font-semibold text-foreground">{market.numberCount}</p></CardContent></Card>
           <Card>
             <CardHeader><CardTitle>Current configuration</CardTitle></CardHeader>
             <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2">
