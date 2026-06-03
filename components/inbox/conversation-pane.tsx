@@ -1151,16 +1151,35 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
 
   const handleBlock = async () => {
     if (!thread || !thread.buyer_id) return;
-    const { error } = await supabase
-      .from("buyers")
-      .update({ status: "blocked" })
-      .eq("id", thread.buyer_id);
-    if (error) {
-      console.error(error);
-      toast.error("Failed to block buyer");
-    } else {
-      setBuyer((b) => (b ? { ...b, status: "blocked" } : b));
+    try {
+      const res = await fetch(`/api/buyers/${thread.buyer_id}/block`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "block" }),
+      });
+      if (!res.ok) throw new Error("block failed");
+      setBuyer((b) => (b ? { ...b, blocked_at: new Date().toISOString() } : b));
       toast.success("Buyer blocked");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to block buyer");
+    }
+  };
+
+  const handleUnblock = async () => {
+    if (!thread || !thread.buyer_id) return;
+    try {
+      const res = await fetch(`/api/buyers/${thread.buyer_id}/block`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "unblock" }),
+      });
+      if (!res.ok) throw new Error("unblock failed");
+      setBuyer((b) => (b ? { ...b, blocked_at: null } : b));
+      toast.success("Buyer unblocked");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to unblock buyer");
     }
   };
 
@@ -1232,7 +1251,11 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={handleBlock}>Block</DropdownMenuItem>
+              {buyer?.blocked_at ? (
+                <DropdownMenuItem onSelect={handleUnblock}>Unblock</DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem onSelect={handleBlock}>Block</DropdownMenuItem>
+              )}
               <DropdownMenuItem onSelect={handleUnsubscribe}>
                 Unsubscribe
               </DropdownMenuItem>

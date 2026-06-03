@@ -106,8 +106,12 @@ export interface Buyer {
   first_time_buyer?: boolean | null
   can_receive_calls?: boolean | null
   email_suppressed?: boolean | null
+  email_suppressed_at?: string | null
+  email_suppressed_reason?: string | null
   email_bounced_at?: string | null
   email_complained_at?: string | null
+  blocked_at?: string | null
+  blocked_reason?: string | null
   deleted_at?: string | null
   updated_at?: string
 }

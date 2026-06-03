@@ -124,12 +124,18 @@ export async function POST(request: NextRequest) {
 
   const { data: buyers, error: buyerErr } = await supabaseAdmin
     .from("buyers")
-    .select("id, can_receive_sms")
+    .select("id, can_receive_sms, blocked_at")
     .or(orClause)
 
   if (buyerErr) {
     console.error("❌ Supabase buyers error", buyerErr)
     return new NextResponse("Supabase error", { status: 500 })
+  }
+
+  // Bidirectional block: a blocked buyer's inbound SMS is dropped entirely — no
+  // message insert, no thread upsert, no notification (STOP/HELP included).
+  if (buyers?.some((b) => b.blocked_at)) {
+    return NextResponse.json({ received: true, blocked: true }, { status: 200 });
   }
 
   const buyerIds = buyers?.map((b) => b.id) ?? []

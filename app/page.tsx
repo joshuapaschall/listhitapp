@@ -717,6 +717,23 @@ function BuyersPageContent() {
     setShowSendEmailModal(true)
   }
 
+  const handleToggleBlock = async (buyer: Buyer) => {
+    const action = buyer.blocked_at ? "unblock" : "block"
+    try {
+      const res = await fetch(`/api/buyers/${buyer.id}/block`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      })
+      if (!res.ok) throw new Error("block request failed")
+      queryClient.invalidateQueries({ queryKey: ["buyers"] })
+      toast.success(action === "block" ? "Buyer blocked" : "Buyer unblocked")
+    } catch (err) {
+      log("error", "Failed to toggle block", { error: err })
+      toast.error(action === "block" ? "Failed to block buyer" : "Failed to unblock buyer")
+    }
+  }
+
   const performDeleteBuyer = async () => {
     if (!buyerToDelete) return
     try {
@@ -1637,13 +1654,9 @@ function BuyersPageContent() {
                                 Delete
                               </DropdownMenuItem>
                             </Can>
-                            <DropdownMenuItem
-                              onClick={() => {
-                                log("buyers", "Block buyer:", buyer.id)
-                              }}
-                            >
+                            <DropdownMenuItem onClick={() => handleToggleBlock(buyer)}>
                               <X className="mr-2 h-4 w-4" />
-                              Block
+                              {buyer.blocked_at ? "Unblock" : "Block"}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
