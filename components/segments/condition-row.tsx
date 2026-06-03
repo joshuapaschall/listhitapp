@@ -201,15 +201,11 @@ function BehavioralRow({
         <SelectContent>
           <SelectGroup>
             <SelectLabel>Campaign activity</SelectLabel>
-            {BEHAVIORAL_CATALOG.map((s) => {
-              const enabled = metricEnabled(s.channels, channel)
-              return (
-                <SelectItem key={s.metric} value={s.metric} disabled={!enabled}>
-                  <span className="capitalize">{s.label}</span>
-                  {!enabled ? ` (${s.channels.join("/")} only)` : ""}
-                </SelectItem>
-              )
-            })}
+            {BEHAVIORAL_CATALOG.filter((s) => metricEnabled(s.channels, channel)).map((s) => (
+              <SelectItem key={s.metric} value={s.metric}>
+                <span className="capitalize">{s.label}</span>
+              </SelectItem>
+            ))}
           </SelectGroup>
         </SelectContent>
       </Select>

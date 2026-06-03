@@ -75,27 +75,15 @@ export default function AddConditionMenu({ channel, onAdd }: AddConditionMenuPro
             ))}
           </CommandGroup>
           <CommandGroup heading="What they did (campaign activity)">
-            {BEHAVIORAL_CATALOG.map((spec) => {
-              const enabled = metricEnabled(spec.channels, channel)
-              return (
-                <CommandItem
-                  key={`beh-${spec.metric}`}
-                  value={`activity ${spec.label}`}
-                  disabled={!enabled}
-                  onSelect={() => {
-                    if (!enabled) return
-                    pick(defaultBehavioralCondition(spec.metric))
-                  }}
-                >
-                  <span className="capitalize">{spec.label}</span>
-                  {!enabled && (
-                    <span className="ml-auto text-xs text-muted-foreground">
-                      {spec.channels.join("/")} only
-                    </span>
-                  )}
-                </CommandItem>
-              )
-            })}
+            {BEHAVIORAL_CATALOG.filter((spec) => metricEnabled(spec.channels, channel)).map((spec) => (
+              <CommandItem
+                key={`beh-${spec.metric}`}
+                value={`activity ${spec.label}`}
+                onSelect={() => pick(defaultBehavioralCondition(spec.metric))}
+              >
+                <span className="capitalize">{spec.label}</span>
+              </CommandItem>
+            ))}
           </CommandGroup>
         </CommandList>
       </Command>
