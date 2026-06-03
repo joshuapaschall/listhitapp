@@ -6,7 +6,6 @@ import { Star, Trash2 } from "lucide-react"
 import { type ThreadWithBuyer } from "@/services/message-service"
 import { supabase } from "@/lib/supabase"
 import { useQueryClient } from "@tanstack/react-query"
-import useFreshnessTimer from "@/hooks/use-freshness-timer"
 import { formatSmartTimestamp } from "@/utils/date"
 
 interface ConversationRowProps {
@@ -16,7 +15,6 @@ interface ConversationRowProps {
 }
 
 export default function ConversationRow({ thread, selected, onSelect }: ConversationRowProps) {
-  const isFresh = useFreshnessTimer(new Date(thread.updated_at ?? 0))
   let queryClient: ReturnType<typeof useQueryClient> | null = null
   try {
     // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -28,12 +26,6 @@ export default function ConversationRow({ thread, selected, onSelect }: Conversa
   const name = buyer
     ? buyer.full_name || `${buyer.fname || ""} ${buyer.lname || ""}`.trim() || "Unnamed"
     : thread.phone_number ?? ""
-
-  const color = !thread.unread
-    ? "bg-gray-400"
-    : isFresh
-    ? "bg-blue-500"
-    : "bg-red-500"
 
   const timestamp = formatSmartTimestamp(thread.updated_at ?? null)
 
@@ -64,18 +56,22 @@ export default function ConversationRow({ thread, selected, onSelect }: Conversa
   return (
     <div
       className={cn(
-        "p-2 cursor-pointer border-b flex items-center gap-2 group hover:border-primary border-l-2 border-transparent",
-        selected && "bg-muted",
+        "p-2 cursor-pointer border-b flex items-center gap-2 group border-l-2 border-transparent hover:bg-muted/60",
+        selected && "border-brand bg-muted",
       )}
       onClick={() => onSelect?.(thread)}
     >
-      <span className={cn("h-2 w-2 rounded-full", color)} />
+      {thread.unread ? (
+        <span className="h-2 w-2 rounded-full bg-brand" />
+      ) : (
+        <span className="h-2 w-2" />
+      )}
       <Avatar className="h-8 w-8">
         <AvatarFallback>{initials}</AvatarFallback>
       </Avatar>
       <div className="flex-1 overflow-hidden">
         <div className="flex items-center gap-2">
-          <div className="font-medium text-sm truncate flex-1">{name}</div>
+          <div className={cn("text-sm truncate flex-1", thread.unread ? "font-semibold text-foreground" : "font-medium")}>{name}</div>
           <div className="text-xs text-muted-foreground whitespace-nowrap">
             {timestamp}
           </div>
@@ -93,7 +89,7 @@ export default function ConversationRow({ thread, selected, onSelect }: Conversa
             </button>
           </div>
         </div>
-        <div className="text-xs text-muted-foreground truncate">
+        <div className={cn("text-xs truncate", thread.unread ? "text-foreground" : "text-muted-foreground")}>
           {thread.last_message || thread.phone_number}
         </div>
       </div>
