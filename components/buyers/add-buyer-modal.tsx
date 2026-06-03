@@ -478,30 +478,34 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <User className="h-5 w-5 text-blue-500" />
-            Create Buyer Account
+            <User className="h-5 w-5 text-brand" />
+            Create buyer account
           </DialogTitle>
           <DialogDescription>Enter the buyer&apos;s information following the natural sales process flow.</DialogDescription>
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="flex w-full justify-start gap-1 overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <TabsTrigger value="contact" className="flex items-center gap-2 shrink-0">
-              <User className="h-4 w-4" />
-              Contact Info
-            </TabsTrigger>
-            <TabsTrigger value="location" className="flex items-center gap-2 shrink-0">
-              <MapPin className="h-4 w-4" />
-              Location
-            </TabsTrigger>
-            <TabsTrigger value="preferences" className="flex items-center gap-2 shrink-0">
-              <Home className="h-4 w-4" />
-              Preferences
-            </TabsTrigger>
-            <TabsTrigger value="status" className="flex items-center gap-2 shrink-0">
-              <Star className="h-4 w-4" />
-              Status & Notes
-            </TabsTrigger>
+          <TabsList className="inline-flex w-full gap-2 overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden bg-transparent p-0">
+            {([
+              ["contact", "Contact info"],
+              ["location", "Location"],
+              ["preferences", "Preferences"],
+              ["status", "Status & notes"],
+            ] as const).map(([value, label], idx) => {
+              const active = activeTab === value
+              return (
+                <TabsTrigger
+                  key={value}
+                  value={value}
+                  className="flex items-center gap-2 shrink-0 rounded-md px-2 text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm focus-visible:ring-1 focus-visible:ring-[hsl(var(--brand-ring))] focus-visible:ring-offset-0"
+                >
+                  <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs ${active ? "bg-brand text-white" : "bg-muted text-muted-foreground"}`}>
+                    {idx + 1}
+                  </span>
+                  <span className={`text-xs ${active ? "text-foreground" : "text-muted-foreground"}`}>{label}</span>
+                </TabsTrigger>
+              )
+            })}
           </TabsList>
 
           <TabsContent value="contact" className="space-y-4">
@@ -515,7 +519,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
               </CardHeader>
               <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="fname" className="font-semibold">
+                  <Label htmlFor="fname" className="text-xs text-muted-foreground">
                     First Name
                   </Label>
                   <Input
@@ -527,7 +531,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
                   />
                 </div>
                 <div>
-                  <Label htmlFor="lname" className="font-semibold">
+                  <Label htmlFor="lname" className="text-xs text-muted-foreground">
                     Last Name
                   </Label>
                   <Input
@@ -549,7 +553,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
               </CardHeader>
               <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="phone" className="font-semibold">
+                  <Label htmlFor="phone" className="text-xs text-muted-foreground">
                     Phone Number
                   </Label>
                   <Input
@@ -562,7 +566,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
                   />
                 </div>
                 <div>
-                  <Label htmlFor="email" className="font-semibold">
+                  <Label htmlFor="email" className="text-xs text-muted-foreground">
                     Email Address
                   </Label>
                   <Input
@@ -585,7 +589,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label htmlFor="mailing_address" className="font-semibold">
+                  <Label htmlFor="mailing_address" className="text-xs text-muted-foreground">
                     Street Address
                   </Label>
                   <Input
@@ -598,7 +602,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <Label htmlFor="mailing_city" className="font-semibold">
+                    <Label htmlFor="mailing_city" className="text-xs text-muted-foreground">
                       City
                     </Label>
                     <Input
@@ -610,7 +614,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
                     />
                   </div>
                   <div>
-                    <Label htmlFor="mailing_state" className="font-semibold">
+                    <Label htmlFor="mailing_state" className="text-xs text-muted-foreground">
                       State
                     </Label>
                     <Input
@@ -622,7 +626,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
                     />
                   </div>
                   <div>
-                    <Label htmlFor="mailing_zip" className="font-semibold">
+                    <Label htmlFor="mailing_zip" className="text-xs text-muted-foreground">
                       ZIP Code
                     </Label>
                     <Input
@@ -645,7 +649,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
               </CardHeader>
               <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="company" className="font-semibold">
+                  <Label htmlFor="company" className="text-xs text-muted-foreground">
                     Company Name
                   </Label>
                   <Input
@@ -657,7 +661,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
                   />
                 </div>
                 <div>
-                  <Label htmlFor="website" className="font-semibold">
+                  <Label htmlFor="website" className="text-xs text-muted-foreground">
                     Website URL
                   </Label>
                   <Input
@@ -680,7 +684,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label htmlFor="score" className="font-semibold">
+                  <Label htmlFor="score" className="text-xs text-muted-foreground">
                     Buyer Score (0-100)
                   </Label>
                   <Input
@@ -695,7 +699,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
                 </div>
 
                 <div>
-                  <Label className="font-semibold">Tags</Label>
+                  <Label className="text-xs text-muted-foreground">Tags</Label>
                   <div className="mt-1">
                     <TagSelector
                       value={formData.tags}
@@ -706,14 +710,14 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
                 </div>
 
                 <div>
-                  <Label className="font-semibold">Assign to Groups</Label>
+                  <Label className="text-xs text-muted-foreground">Assign to Groups</Label>
                   <div className="mt-1 max-h-48 overflow-y-auto">
                     <GroupTreeSelector value={groupIds} onChange={setGroupIds} />
                   </div>
                 </div>
 
                 <div>
-                  <Label htmlFor="source" className="font-semibold">
+                  <Label htmlFor="source" className="text-xs text-muted-foreground">
                     How did they hear about us?
                   </Label>
                   <Select value={formData.source} onValueChange={(value) => handleInputChange("source", value)}>
@@ -744,7 +748,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label className="font-semibold">Areas of Interest</Label>
+                  <Label className="text-xs text-muted-foreground">Areas of Interest</Label>
                   <div className="mt-1">
                     <LocationSelector
                       value={formData.locations}
@@ -781,18 +785,23 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <Label className="font-semibold">What types of properties are they interested in?</Label>
+                <Label className="text-xs text-muted-foreground">What types of properties are they interested in?</Label>
                 <div className="flex flex-wrap gap-2 mt-2">
-                  {PROPERTY_TYPES.map((type) => (
-                    <Badge
-                      key={type}
-                      variant={formData.property_type.includes(type) ? "default" : "outline"}
-                      className="cursor-pointer text-sm px-3 py-1"
-                      onClick={() => handlePropertyTypeToggle(type)}
-                    >
-                      {type}
-                    </Badge>
-                  ))}
+                  {PROPERTY_TYPES.map((type) => {
+                    const selected = formData.property_type.includes(type)
+                    return (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => handlePropertyTypeToggle(type)}
+                        className={`cursor-pointer rounded-full border px-3 py-1 text-sm transition-colors ${
+                          selected ? "border-brand bg-brand/5 text-brand" : "border-border text-foreground hover:bg-muted"
+                        }`}
+                      >
+                        {type}
+                      </button>
+                    )
+                  })}
                 </div>
               </CardContent>
             </Card>
@@ -805,7 +814,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
               </CardHeader>
               <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="asking_price_min" className="font-semibold">
+                  <Label htmlFor="asking_price_min" className="text-xs text-muted-foreground">
                     Minimum Price ($)
                   </Label>
                   <Input
@@ -818,7 +827,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
                   />
                 </div>
                 <div>
-                  <Label htmlFor="asking_price_max" className="font-semibold">
+                  <Label htmlFor="asking_price_max" className="text-xs text-muted-foreground">
                     Maximum Price ($)
                   </Label>
                   <Input
@@ -841,7 +850,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
               </CardHeader>
               <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="year_built_min" className="font-semibold">
+                  <Label htmlFor="year_built_min" className="text-xs text-muted-foreground">
                     Minimum Year Built
                   </Label>
                   <Input
@@ -854,7 +863,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
                   />
                 </div>
                 <div>
-                  <Label htmlFor="year_built_max" className="font-semibold">
+                  <Label htmlFor="year_built_max" className="text-xs text-muted-foreground">
                     Maximum Year Built
                   </Label>
                   <Input
@@ -867,7 +876,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
                   />
                 </div>
                 <div>
-                  <Label htmlFor="sqft_min" className="font-semibold">
+                  <Label htmlFor="sqft_min" className="text-xs text-muted-foreground">
                     Minimum Square Feet
                   </Label>
                   <Input
@@ -880,7 +889,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
                   />
                 </div>
                 <div>
-                  <Label htmlFor="sqft_max" className="font-semibold">
+                  <Label htmlFor="sqft_max" className="text-xs text-muted-foreground">
                     Maximum Square Feet
                   </Label>
                   <Input
@@ -893,7 +902,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
                   />
                 </div>
                 <div>
-                  <Label htmlFor="beds_min" className="font-semibold">
+                  <Label htmlFor="beds_min" className="text-xs text-muted-foreground">
                     Minimum Bedrooms
                   </Label>
                   <Input
@@ -906,7 +915,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
                   />
                 </div>
                 <div>
-                  <Label htmlFor="baths_min" className="font-semibold">
+                  <Label htmlFor="baths_min" className="text-xs text-muted-foreground">
                     Minimum Bathrooms
                   </Label>
                   <Input
@@ -930,7 +939,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
               </CardHeader>
               <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="min_arv" className="font-semibold">
+                  <Label htmlFor="min_arv" className="text-xs text-muted-foreground">
                     Minimum ARV ($)
                   </Label>
                   <Input
@@ -943,7 +952,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
                   />
                 </div>
                 <div>
-                  <Label htmlFor="min_arv_percent" className="font-semibold">
+                  <Label htmlFor="min_arv_percent" className="text-xs text-muted-foreground">
                     Minimum ARV Percentage (%)
                   </Label>
                   <Input
@@ -957,7 +966,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
                   />
                 </div>
                 <div>
-                  <Label htmlFor="min_gross_margin" className="font-semibold">
+                  <Label htmlFor="min_gross_margin" className="text-xs text-muted-foreground">
                     Minimum Gross Margin ($)
                   </Label>
                   <Input
@@ -970,7 +979,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
                   />
                 </div>
                 <div>
-                  <Label htmlFor="max_gross_margin" className="font-semibold">
+                  <Label htmlFor="max_gross_margin" className="text-xs text-muted-foreground">
                     Maximum Gross Margin ($)
                   </Label>
                   <Input
@@ -993,7 +1002,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
               </CardHeader>
               <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="down_payment_min" className="font-semibold">
+                  <Label htmlFor="down_payment_min" className="text-xs text-muted-foreground">
                     Minimum Down Payment ($)
                   </Label>
                   <Input
@@ -1006,7 +1015,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
                   />
                 </div>
                 <div>
-                  <Label htmlFor="down_payment_max" className="font-semibold">
+                  <Label htmlFor="down_payment_max" className="text-xs text-muted-foreground">
                     Maximum Down Payment ($)
                   </Label>
                   <Input
@@ -1019,7 +1028,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
                   />
                 </div>
                 <div>
-                  <Label htmlFor="monthly_payment_min" className="font-semibold">
+                  <Label htmlFor="monthly_payment_min" className="text-xs text-muted-foreground">
                     Minimum Monthly Payment ($)
                   </Label>
                   <Input
@@ -1032,7 +1041,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
                   />
                 </div>
                 <div>
-                  <Label htmlFor="monthly_payment_max" className="font-semibold">
+                  <Label htmlFor="monthly_payment_max" className="text-xs text-muted-foreground">
                     Maximum Monthly Payment ($)
                   </Label>
                   <Input
@@ -1059,7 +1068,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label htmlFor="status" className="font-semibold">
+                  <Label htmlFor="status" className="text-xs text-muted-foreground">
                     Current Buyer Status
                   </Label>
                   <Select value={formData.status} onValueChange={(value) => handleInputChange("status", value)}>
@@ -1088,7 +1097,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
                 <div className="grid grid-cols-2 gap-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label htmlFor="vip" className="font-semibold">
+                      <Label htmlFor="vip" className="text-xs text-muted-foreground">
                         VIP Status
                       </Label>
                       <p className="text-sm text-muted-foreground">Mark as VIP for priority treatment</p>
@@ -1102,7 +1111,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
 
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label htmlFor="vetted" className="font-semibold">
+                      <Label htmlFor="vetted" className="text-xs text-muted-foreground">
                         Vetted
                       </Label>
                       <p className="text-sm text-muted-foreground">Buyer has been verified/vetted</p>
@@ -1127,7 +1136,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
                 <div className="grid grid-cols-2 gap-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label htmlFor="can_receive_email" className="font-semibold">
+                      <Label htmlFor="can_receive_email" className="text-xs text-muted-foreground">
                         Can Receive Email
                       </Label>
                       <p className="text-sm text-muted-foreground">Allow email communications</p>
@@ -1141,7 +1150,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
 
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label htmlFor="can_receive_sms" className="font-semibold">
+                      <Label htmlFor="can_receive_sms" className="text-xs text-muted-foreground">
                         Can Receive SMS
                       </Label>
                       <p className="text-sm text-muted-foreground">Allow text message communications</p>
@@ -1164,7 +1173,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label htmlFor="notes" className="font-semibold">
+                  <Label htmlFor="notes" className="text-xs text-muted-foreground">
                     Notes
                   </Label>
                   <Textarea
@@ -1245,12 +1254,12 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
 
           <div>
             {!isLastTab ? (
-              <Button onClick={handleNext}>
+              <Button variant="brand" onClick={handleNext}>
                 Next
                 <ChevronRight className="ml-2 h-4 w-4" />
               </Button>
             ) : (
-              <Button onClick={() => handleSubmit()} disabled={loading}>
+              <Button variant="brand" onClick={() => handleSubmit()} disabled={loading}>
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
