@@ -957,7 +957,7 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex justify-end">
-                    <Button size="sm" onClick={() => setShowScheduleModal(true)}>
+                    <Button type="button" size="sm" onClick={() => setShowScheduleModal(true)}>
                       <Plus className="h-4 w-4 mr-1" />
                       Schedule Showing
                     </Button>
@@ -1000,7 +1000,7 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex justify-end">
-                    <Button size="sm" onClick={() => setShowCreateOfferModal(true)}>
+                    <Button type="button" size="sm" onClick={() => setShowCreateOfferModal(true)}>
                       <Plus className="h-4 w-4 mr-1" />
                       New Offer
                     </Button>
@@ -1037,14 +1037,14 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
                   <CardDescription>Track all communications with this buyer</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <Button variant="destructive" onClick={handleUnsubscribe}>
+                  <Button type="button" variant="destructive" onClick={handleUnsubscribe}>
                     Unsubscribe from All
                   </Button>
                   <div className="flex flex-wrap items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setShowEmailModal(true)}>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setShowEmailModal(true)}>
                       <Mail className="h-4 w-4 mr-1.5" /> Send Email
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => setShowSmsModal(true)}>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setShowSmsModal(true)}>
                       <MessageSquare className="h-4 w-4 mr-1.5" /> Send SMS
                     </Button>
                     <CallButton
