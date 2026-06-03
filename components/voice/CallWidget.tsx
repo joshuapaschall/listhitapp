@@ -1,12 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRightLeft, Grid, Mic, MicOff, Pause, PhoneIncoming, PhoneOff, Play } from "lucide-react";
+import { ArrowRightLeft, Grid, Mic, MicOff, Pause, Phone, PhoneIncoming, PhoneOff, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useCall } from "@/components/voice/CallProvider";
 import { formatPhoneDisplay } from "@/lib/dedup-utils";
 import { Dialer } from "@/components/voice/Dialer";
+
+// Raw call green / hang-up red — allowed on the round call/answer/end controls.
+const CALL_GREEN = "#1DB954";
+const HANGUP_RED = "#E24B4A";
+
+const initialsOf = (s: string) =>
+  s.split(" ").map((n) => n[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "?";
 
 export function CallWidget() {
   const { status, activeCall, incomingCall, currentContact, answerCall, disconnectCall, toggleMute, isMuted, toggleHold, isOnHold, sendDTMF, transfer, dialerOpen, setDialerOpen } = useCall();
@@ -40,6 +48,7 @@ export function CallWidget() {
 
   const callNumber = useMemo(() => currentContact?.number || (activeCall as any)?.parameters?.To || (activeCall as any)?.parameters?.From || (incomingCall as any)?.parameters?.From || "", [currentContact, activeCall, incomingCall]);
   const callName = currentContact?.name || "";
+  const avatarSeed = callName || formatPhoneDisplay(callNumber) || "?";
 
   const tone = (digit: string) => {
     sendDTMF(digit);
@@ -56,30 +65,84 @@ export function CallWidget() {
   };
 
   if (incomingCall && !activeCall) {
-    return <div className="fixed bottom-6 right-6 w-80 rounded-2xl border bg-white dark:bg-slate-900 p-4">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground"><PhoneIncoming className="h-4 w-4" />Incoming call</div>
-      <div className="mt-2 text-lg font-semibold">{callName || formatPhoneDisplay(callNumber) || "Unknown"}</div>
-      <div className="mt-4 flex gap-2"><Button className="flex-1 bg-[hsl(var(--brand))] hover:bg-[hsl(var(--brand-hover))] text-white" onClick={answerCall}>Answer</Button><Button className="flex-1" variant="destructive" onClick={disconnectCall}>Decline</Button></div>
+    return <div className="fixed bottom-6 right-6 z-50 w-80">
+      <div className="rounded-2xl border border-border bg-card p-5 shadow-lg">
+        <div className="mx-auto flex w-fit items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
+          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: CALL_GREEN }} />
+          <PhoneIncoming className="h-3.5 w-3.5" />
+          Incoming call
+        </div>
+        <div className="mt-4 flex flex-col items-center">
+          <Avatar className="h-16 w-16 ring-2 ring-brand">
+            <AvatarFallback className="text-lg">{initialsOf(avatarSeed)}</AvatarFallback>
+          </Avatar>
+          <div className="mt-3 text-lg font-semibold text-foreground">{callName || formatPhoneDisplay(callNumber) || "Unknown"}</div>
+          <div className="font-mono text-sm text-muted-foreground">{formatPhoneDisplay(callNumber)}</div>
+        </div>
+        <div className="mt-5 flex items-center justify-center gap-12">
+          <div className="flex flex-col items-center gap-1.5">
+            <button type="button" onClick={disconnectCall} aria-label="Decline" className="flex h-14 w-14 items-center justify-center rounded-full text-white shadow-sm transition-transform hover:scale-105" style={{ backgroundColor: HANGUP_RED }}>
+              <PhoneOff className="h-6 w-6" />
+            </button>
+            <span className="text-xs text-muted-foreground">Decline</span>
+          </div>
+          <div className="flex flex-col items-center gap-1.5">
+            <button type="button" onClick={answerCall} aria-label="Answer" className="flex h-14 w-14 items-center justify-center rounded-full text-white shadow-sm transition-transform hover:scale-105" style={{ backgroundColor: CALL_GREEN }}>
+              <Phone className="h-6 w-6" />
+            </button>
+            <span className="text-xs text-muted-foreground">Answer</span>
+          </div>
+        </div>
+      </div>
     </div>;
   }
 
   if (activeCall) {
     const mm = String(Math.floor(elapsed / 60)).padStart(2, "0");
     const ss = String(elapsed % 60).padStart(2, "0");
+    const lineFrom = (activeCall as any)?.parameters?.From as string | undefined;
+    const stateDot = isOnHold ? "bg-amber-500" : status === "connecting" ? "bg-sky-500" : "";
+    const stateLabel = isOnHold ? "On hold" : status === "connecting" ? "Connecting" : "On call";
     return <div className="fixed bottom-6 right-6 z-50" style={{ transform: `translate(${position.x}px, ${position.y}px)` }}>
-      <div className="w-[360px] rounded-2xl bg-slate-900 text-white border border-slate-700 p-4">
-        <button className="mx-auto mb-3 block h-1.5 w-14 rounded-full bg-slate-600" aria-label="Drag call widget" onMouseDown={(e)=>{drag.current={dx:e.clientX-position.x,dy:e.clientY-position.y};}} />
-        <div className="flex items-center justify-between"><div className="flex items-center gap-2"><span className={`h-2.5 w-2.5 rounded-full ${isOnHold?"bg-amber-400":status==="connecting"?"bg-sky-400":"bg-emerald-400"}`} /><span className="text-xs uppercase tracking-wide">{isOnHold?"On hold":status === "connecting"?"Connecting":"On call"}</span></div><span className="font-mono text-sm">{mm}:{ss}</span></div>
-        <div className="mt-3"><div className="text-lg font-semibold">{callName || formatPhoneDisplay(callNumber) || "Active call"}</div><div className="font-mono text-sm text-slate-300">{formatPhoneDisplay(callNumber)}</div></div>
-        <div className="mt-4 flex items-center gap-2">
-          <Button size="icon" variant="secondary" aria-label="Toggle mute" onClick={toggleMute}>{isMuted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}</Button>
-          <Button size="icon" variant="secondary" aria-label="Toggle hold" onClick={() => toggleHold()}>{isOnHold ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}</Button>
-          <Button size="icon" variant="secondary" aria-label="Toggle keypad" onClick={() => setKeypadOpen((v)=>!v)}><Grid className="h-4 w-4" /></Button>
-          <Button size="icon" variant="secondary" aria-label="Transfer call" onClick={() => setTransferOpen((v)=>!v)}><ArrowRightLeft className="h-4 w-4" /></Button>
-          <Button size="icon" variant="destructive" aria-label="End call" onClick={disconnectCall}><PhoneOff className="h-4 w-4" /></Button>
+      <div className="w-[360px] rounded-2xl border border-border bg-card p-5 shadow-lg">
+        <button className="mx-auto mb-4 block h-1.5 w-14 rounded-full bg-muted" aria-label="Drag call widget" onMouseDown={(e)=>{drag.current={dx:e.clientX-position.x,dy:e.clientY-position.y};}} />
+        <div className="flex flex-col items-center">
+          <Avatar className="h-16 w-16 ring-2 ring-brand">
+            <AvatarFallback className="text-lg">{initialsOf(avatarSeed)}</AvatarFallback>
+          </Avatar>
+          <div className="mt-3 text-lg font-semibold text-foreground">{callName || formatPhoneDisplay(callNumber) || "Active call"}</div>
+          <div className="font-mono text-sm text-muted-foreground">{formatPhoneDisplay(callNumber)}</div>
+          {lineFrom && lineFrom !== callNumber ? (
+            <div className="text-xs text-muted-foreground">from {formatPhoneDisplay(lineFrom)}</div>
+          ) : null}
+          <div className="mt-2 flex items-center gap-2 rounded-full bg-muted px-2.5 py-1 text-xs">
+            <span className={`h-2 w-2 rounded-full ${stateDot}`} style={stateDot ? undefined : { backgroundColor: CALL_GREEN }} />
+            <span className="text-muted-foreground">{stateLabel}</span>
+            <span className="font-mono text-foreground">{mm}:{ss}</span>
+          </div>
         </div>
-        {keypadOpen ? <div className="mt-3 grid grid-cols-3 gap-2">{["1","2","3","4","5","6","7","8","9","*","0","#"].map((d)=><Button key={d} type="button" variant="outline" className="font-mono text-slate-900" onClick={()=>tone(d)}>{d}</Button>)}</div> : null}
-        {transferOpen ? <div className="mt-3 flex gap-2"><Input value={destination} className="bg-slate-800 border-slate-700" onChange={(e)=>setDestination(e.target.value)} placeholder="Transfer to number" /><Button onClick={() => transfer(destination)}>Transfer</Button></div> : null}
+
+        <div className="mt-5 flex items-center justify-center gap-3">
+          <button type="button" aria-label="Toggle mute" onClick={toggleMute} className={`flex h-11 w-11 items-center justify-center rounded-full border ${isMuted ? "border-brand bg-brand text-white" : "border-border bg-card text-foreground hover:bg-muted"}`}>
+            {isMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+          </button>
+          <button type="button" aria-label="Toggle hold" onClick={() => toggleHold()} className={`flex h-11 w-11 items-center justify-center rounded-full border ${isOnHold ? "border-brand bg-brand text-white" : "border-border bg-card text-foreground hover:bg-muted"}`}>
+            {isOnHold ? <Play className="h-5 w-5" /> : <Pause className="h-5 w-5" />}
+          </button>
+          <button type="button" aria-label="Toggle keypad" onClick={() => setKeypadOpen((v)=>!v)} className={`flex h-11 w-11 items-center justify-center rounded-full border ${keypadOpen ? "border-brand bg-brand text-white" : "border-border bg-card text-foreground hover:bg-muted"}`}>
+            <Grid className="h-5 w-5" />
+          </button>
+          <button type="button" aria-label="Transfer call" onClick={() => setTransferOpen((v)=>!v)} className={`flex h-11 w-11 items-center justify-center rounded-full border ${transferOpen ? "border-brand bg-brand text-white" : "border-border bg-card text-foreground hover:bg-muted"}`}>
+            <ArrowRightLeft className="h-5 w-5" />
+          </button>
+        </div>
+
+        {keypadOpen ? <div className="mt-4 grid grid-cols-3 gap-2">{["1","2","3","4","5","6","7","8","9","*","0","#"].map((d)=><Button key={d} type="button" variant="outline" className="h-10 font-mono" onClick={()=>tone(d)}>{d}</Button>)}</div> : null}
+        {transferOpen ? <div className="mt-4 flex gap-2"><Input value={destination} onChange={(e)=>setDestination(e.target.value)} placeholder="Transfer to number" /><Button onClick={() => transfer(destination)}>Transfer</Button></div> : null}
+
+        <Button type="button" className="mt-4 w-full text-white hover:opacity-90" style={{ backgroundColor: HANGUP_RED }} onClick={disconnectCall}>
+          <PhoneOff className="mr-2 h-4 w-4" />End call
+        </Button>
       </div>
       <Dialer open={dialerOpen} onOpenChange={setDialerOpen} />
     </div>;
