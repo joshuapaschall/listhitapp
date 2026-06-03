@@ -32,7 +32,7 @@ export default function ProfitZone({ data }: ProfitZoneProps) {
   ]
 
   return (
-    <Card className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+    <Card className="rounded-2xl border border-border border-l-[3px] border-l-brand bg-card p-5 shadow-sm">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div className="text-sm font-semibold text-foreground">Profit &amp; performance</div>
         {data.hasData ? (
@@ -52,6 +52,14 @@ export default function ProfitZone({ data }: ProfitZoneProps) {
           </Link>
         )}
       </div>
+      {data.hasData ? (
+        <div className="mb-4">
+          <div className="text-3xl font-semibold tracking-tight text-foreground tabular-nums">
+            {formatUsd(data.netProfit)}
+          </div>
+          <div className="text-[11px] text-muted-foreground">net profit this period</div>
+        </div>
+      ) : null}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {data.hasData
           ? populatedTiles.map((tile) => (
