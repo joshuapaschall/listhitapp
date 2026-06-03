@@ -1324,7 +1324,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
             isOutbound
               ? m.status === "failed"
                 ? "ml-auto bg-red-200 text-red-900"
-                : "ml-auto bg-primary text-primary-foreground"
+                : "ml-auto bg-[#007AFF] text-white"
               : "bg-muted text-foreground",
           );
           const audioSrc = parseAudioUrl((m as any).audioUrl || (m as any).audio_url)
