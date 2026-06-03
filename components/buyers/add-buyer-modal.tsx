@@ -17,10 +17,28 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, User, MapPin, Home, Star, AlertCircle, ChevronRight, ChevronLeft } from "lucide-react"
+import {
+  Loader2,
+  User,
+  MapPin,
+  Home,
+  Star,
+  AlertCircle,
+  ChevronRight,
+  ChevronLeft,
+  Phone,
+  Building2,
+  FileText,
+  DollarSign,
+  Ruler,
+  TrendingUp,
+  Landmark,
+  Flag,
+  MessageSquare,
+} from "lucide-react"
 import { supabase, type Buyer, type Property } from "@/lib/supabase"
 import { normalizeEmail, normalizePhone, mergeUnique } from "@/lib/dedup-utils"
 import { toast } from "sonner"
@@ -487,662 +505,690 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
           </TabsList>
 
           <TabsContent value="contact" className="space-y-4">
+            <p className="text-sm text-muted-foreground mb-4">Basic contact information and buyer details</p>
+
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <strong>Contact Information</strong>
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+                  <User className="h-5 w-5 text-muted-foreground" /> Personal Information
                 </CardTitle>
-                <CardDescription>Basic contact information and buyer details</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Personal Info Section */}
-                <div className="border-l-4 border-blue-500 pl-4">
-                  <h4 className="font-bold text-base mb-3 text-foreground">Personal Information</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="fname" className="font-semibold">
-                        First Name
-                      </Label>
-                      <Input
-                        id="fname"
-                        value={formData.fname}
-                        onChange={(e) => handleInputChange("fname", e.target.value)}
-                        placeholder="John"
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="lname" className="font-semibold">
-                        Last Name
-                      </Label>
-                      <Input
-                        id="lname"
-                        value={formData.lname}
-                        onChange={(e) => handleInputChange("lname", e.target.value)}
-                        placeholder="Smith"
-                        className="mt-1"
-                      />
-                    </div>
+              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="fname" className="font-semibold">
+                    First Name
+                  </Label>
+                  <Input
+                    id="fname"
+                    value={formData.fname}
+                    onChange={(e) => handleInputChange("fname", e.target.value)}
+                    placeholder="John"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="lname" className="font-semibold">
+                    Last Name
+                  </Label>
+                  <Input
+                    id="lname"
+                    value={formData.lname}
+                    onChange={(e) => handleInputChange("lname", e.target.value)}
+                    placeholder="Smith"
+                    className="mt-1"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+                  <Phone className="h-5 w-5 text-muted-foreground" /> Contact Details
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="phone" className="font-semibold">
+                    Phone Number
+                  </Label>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    value={formData.phone}
+                    onChange={(e) => handleInputChange("phone", e.target.value)}
+                    placeholder="(555) 123-4567"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="email" className="font-semibold">
+                    Email Address
+                  </Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => handleInputChange("email", e.target.value)}
+                    placeholder="john@example.com"
+                    className="mt-1"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+                  <MapPin className="h-5 w-5 text-muted-foreground" /> Mailing Address
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="mailing_address" className="font-semibold">
+                    Street Address
+                  </Label>
+                  <Input
+                    id="mailing_address"
+                    value={formData.mailing_address}
+                    onChange={(e) => handleInputChange("mailing_address", e.target.value)}
+                    placeholder="123 Main Street"
+                    className="mt-1"
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <Label htmlFor="mailing_city" className="font-semibold">
+                      City
+                    </Label>
+                    <Input
+                      id="mailing_city"
+                      value={formData.mailing_city}
+                      onChange={(e) => handleInputChange("mailing_city", e.target.value)}
+                      placeholder="Atlanta"
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="mailing_state" className="font-semibold">
+                      State
+                    </Label>
+                    <Input
+                      id="mailing_state"
+                      value={formData.mailing_state}
+                      onChange={(e) => handleInputChange("mailing_state", e.target.value)}
+                      placeholder="GA"
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="mailing_zip" className="font-semibold">
+                      ZIP Code
+                    </Label>
+                    <Input
+                      id="mailing_zip"
+                      value={formData.mailing_zip}
+                      onChange={(e) => handleInputChange("mailing_zip", e.target.value)}
+                      placeholder="30309"
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+                  <Building2 className="h-5 w-5 text-muted-foreground" /> Business Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="company" className="font-semibold">
+                    Company Name
+                  </Label>
+                  <Input
+                    id="company"
+                    value={formData.company}
+                    onChange={(e) => handleInputChange("company", e.target.value)}
+                    placeholder="ABC Investments"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="website" className="font-semibold">
+                    Website URL
+                  </Label>
+                  <Input
+                    id="website"
+                    type="url"
+                    value={formData.website}
+                    onChange={(e) => handleInputChange("website", e.target.value)}
+                    placeholder="https://example.com"
+                    className="mt-1"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+                  <FileText className="h-5 w-5 text-muted-foreground" /> Additional Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="score" className="font-semibold">
+                    Buyer Score (0-100)
+                  </Label>
+                  <Input
+                    id="score"
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={formData.score}
+                    onChange={(e) => handleInputChange("score", Number.parseInt(e.target.value) || 0)}
+                    className="mt-1"
+                  />
+                </div>
+
+                <div>
+                  <Label className="font-semibold">Tags</Label>
+                  <div className="mt-1">
+                    <TagSelector
+                      value={formData.tags}
+                      onChange={(tags) => handleInputChange("tags", tags)}
+                      placeholder="Add tags to categorize this buyer..."
+                    />
                   </div>
                 </div>
 
-                {/* Contact Details Section */}
-                <div className="border-l-4 border-green-500 pl-4">
-                  <h4 className="font-bold text-base mb-3 text-foreground">Contact Details</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="phone" className="font-semibold">
-                        Phone Number
-                      </Label>
-                      <Input
-                        id="phone"
-                        type="tel"
-                        value={formData.phone}
-                        onChange={(e) => handleInputChange("phone", e.target.value)}
-                        placeholder="(555) 123-4567"
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="email" className="font-semibold">
-                        Email Address
-                      </Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => handleInputChange("email", e.target.value)}
-                        placeholder="john@example.com"
-                        className="mt-1"
-                      />
-                    </div>
+                <div>
+                  <Label className="font-semibold">Assign to Groups</Label>
+                  <div className="mt-1 max-h-48 overflow-y-auto">
+                    <GroupTreeSelector value={groupIds} onChange={setGroupIds} />
                   </div>
                 </div>
 
-                {/* Mailing Address Section */}
-                <div className="border-l-4 border-purple-500 pl-4">
-                  <h4 className="font-bold text-base mb-3 text-foreground">Mailing Address</h4>
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="mailing_address" className="font-semibold">
-                        Street Address
-                      </Label>
-                      <Input
-                        id="mailing_address"
-                        value={formData.mailing_address}
-                        onChange={(e) => handleInputChange("mailing_address", e.target.value)}
-                        placeholder="123 Main Street"
-                        className="mt-1"
-                      />
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div>
-                        <Label htmlFor="mailing_city" className="font-semibold">
-                          City
-                        </Label>
-                        <Input
-                          id="mailing_city"
-                          value={formData.mailing_city}
-                          onChange={(e) => handleInputChange("mailing_city", e.target.value)}
-                          placeholder="Atlanta"
-                          className="mt-1"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="mailing_state" className="font-semibold">
-                          State
-                        </Label>
-                        <Input
-                          id="mailing_state"
-                          value={formData.mailing_state}
-                          onChange={(e) => handleInputChange("mailing_state", e.target.value)}
-                          placeholder="GA"
-                          className="mt-1"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="mailing_zip" className="font-semibold">
-                          ZIP Code
-                        </Label>
-                        <Input
-                          id="mailing_zip"
-                          value={formData.mailing_zip}
-                          onChange={(e) => handleInputChange("mailing_zip", e.target.value)}
-                          placeholder="30309"
-                          className="mt-1"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Business Info Section */}
-                <div className="border-l-4 border-orange-500 pl-4">
-                  <h4 className="font-bold text-base mb-3 text-foreground">Business Information</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="company" className="font-semibold">
-                        Company Name
-                      </Label>
-                      <Input
-                        id="company"
-                        value={formData.company}
-                        onChange={(e) => handleInputChange("company", e.target.value)}
-                        placeholder="ABC Investments"
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="website" className="font-semibold">
-                        Website URL
-                      </Label>
-                      <Input
-                        id="website"
-                        type="url"
-                        value={formData.website}
-                        onChange={(e) => handleInputChange("website", e.target.value)}
-                        placeholder="https://example.com"
-                        className="mt-1"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Additional Info Section */}
-                <div className="border-l-4 border-red-500 pl-4">
-                  <h4 className="font-bold text-base mb-3 text-foreground">Additional Information</h4>
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="score" className="font-semibold">
-                        Buyer Score (0-100)
-                      </Label>
-                      <Input
-                        id="score"
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={formData.score}
-                        onChange={(e) => handleInputChange("score", Number.parseInt(e.target.value) || 0)}
-                        className="mt-1"
-                      />
-                    </div>
-
-                    <div>
-                      <Label className="font-semibold">Tags</Label>
-                      <div className="mt-1">
-                        <TagSelector
-                          value={formData.tags}
-                          onChange={(tags) => handleInputChange("tags", tags)}
-                          placeholder="Add tags to categorize this buyer..."
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label className="font-semibold">Assign to Groups</Label>
-                      <div className="mt-1 max-h-48 overflow-y-auto">
-                        <GroupTreeSelector value={groupIds} onChange={setGroupIds} />
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label htmlFor="source" className="font-semibold">
-                        How did they hear about us?
-                      </Label>
-                      <Select value={formData.source} onValueChange={(value) => handleInputChange("source", value)}>
-                        <SelectTrigger className="mt-1">
-                          <SelectValue placeholder="Select how this buyer heard about us" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {SOURCES.map((source) => (
-                            <SelectItem key={source} value={source}>
-                              {source}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
+                <div>
+                  <Label htmlFor="source" className="font-semibold">
+                    How did they hear about us?
+                  </Label>
+                  <Select value={formData.source} onValueChange={(value) => handleInputChange("source", value)}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Select how this buyer heard about us" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SOURCES.map((source) => (
+                        <SelectItem key={source} value={source}>
+                          {source}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
 
           <TabsContent value="location" className="space-y-4">
+            <p className="text-sm text-muted-foreground mb-4">Target areas and specific properties where the buyer is interested</p>
+
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <strong>Location Settings</strong>
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+                  <MapPin className="h-5 w-5 text-muted-foreground" /> Target Locations
                 </CardTitle>
-                <CardDescription>Target areas and specific properties where the buyer is interested</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Target Locations Section */}
-                <div className="border-l-4 border-blue-500 pl-4">
-                  <h4 className="font-bold text-base mb-3 text-foreground">Target Locations</h4>
-                  <div>
-                    <Label className="font-semibold">Areas of Interest</Label>
-                    <div className="mt-1">
-                      <LocationSelector
-                        value={formData.locations}
-                        onChange={(locations) => handleInputChange("locations", locations)}
-                        placeholder="Add cities, counties, or states where buyer wants to purchase..."
-                      />
-                    </div>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label className="font-semibold">Areas of Interest</Label>
+                  <div className="mt-1">
+                    <LocationSelector
+                      value={formData.locations}
+                      onChange={(locations) => handleInputChange("locations", locations)}
+                      placeholder="Add cities, counties, or states where buyer wants to purchase..."
+                    />
                   </div>
                 </div>
+              </CardContent>
+            </Card>
 
-                {/* Specific Property Interest Section */}
-                <div className="border-l-4 border-green-500 pl-4">
-                  <h4 className="font-bold text-base mb-3 text-foreground">Specific Property Interest</h4>
-                  <PropertySelector value={property} onChange={setProperty} />
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Select the property this buyer is interested in
-                  </p>
-                </div>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+                  <Home className="h-5 w-5 text-muted-foreground" /> Specific Property Interest
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <PropertySelector value={property} onChange={setProperty} />
+                <p className="text-sm text-muted-foreground mt-1">
+                  Select the property this buyer is interested in
+                </p>
               </CardContent>
             </Card>
           </TabsContent>
 
           <TabsContent value="preferences" className="space-y-4">
+            <p className="text-sm text-muted-foreground mb-4">Buyer&apos;s property criteria and investment parameters</p>
+
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <strong>Property Preferences</strong>
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+                  <Home className="h-5 w-5 text-muted-foreground" /> Property Types
                 </CardTitle>
-                <CardDescription>Buyer&apos;s property criteria and investment parameters</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-8">
-                {/* Property Types Section */}
-                <div className="border-l-4 border-blue-500 pl-4">
-                  <h4 className="font-bold text-base mb-3 text-foreground">Property Types</h4>
-                  <Label className="font-semibold">What types of properties are they interested in?</Label>
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {PROPERTY_TYPES.map((type) => (
-                      <Badge
-                        key={type}
-                        variant={formData.property_type.includes(type) ? "default" : "outline"}
-                        className="cursor-pointer text-sm px-3 py-1"
-                        onClick={() => handlePropertyTypeToggle(type)}
-                      >
-                        {type}
-                      </Badge>
-                    ))}
-                  </div>
+              <CardContent className="space-y-4">
+                <Label className="font-semibold">What types of properties are they interested in?</Label>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {PROPERTY_TYPES.map((type) => (
+                    <Badge
+                      key={type}
+                      variant={formData.property_type.includes(type) ? "default" : "outline"}
+                      className="cursor-pointer text-sm px-3 py-1"
+                      onClick={() => handlePropertyTypeToggle(type)}
+                    >
+                      {type}
+                    </Badge>
+                  ))}
                 </div>
+              </CardContent>
+            </Card>
 
-                {/* Price Range Section */}
-                <div className="border-l-4 border-green-500 pl-4">
-                  <h4 className="font-bold text-base mb-3 text-foreground">Price Range</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="asking_price_min" className="font-semibold">
-                        Minimum Price ($)
-                      </Label>
-                      <Input
-                        id="asking_price_min"
-                        type="number"
-                        value={formData.asking_price_min}
-                        onChange={(e) => handleInputChange("asking_price_min", e.target.value)}
-                        placeholder="50,000"
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="asking_price_max" className="font-semibold">
-                        Maximum Price ($)
-                      </Label>
-                      <Input
-                        id="asking_price_max"
-                        type="number"
-                        value={formData.asking_price_max}
-                        onChange={(e) => handleInputChange("asking_price_max", e.target.value)}
-                        placeholder="500,000"
-                        className="mt-1"
-                      />
-                    </div>
-                  </div>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+                  <DollarSign className="h-5 w-5 text-muted-foreground" /> Price Range
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="asking_price_min" className="font-semibold">
+                    Minimum Price ($)
+                  </Label>
+                  <Input
+                    id="asking_price_min"
+                    type="number"
+                    value={formData.asking_price_min}
+                    onChange={(e) => handleInputChange("asking_price_min", e.target.value)}
+                    placeholder="50,000"
+                    className="mt-1"
+                  />
                 </div>
-
-                {/* Property Specifications Section */}
-                <div className="border-l-4 border-purple-500 pl-4">
-                  <h4 className="font-bold text-base mb-3 text-foreground">Property Specifications</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="year_built_min" className="font-semibold">
-                        Minimum Year Built
-                      </Label>
-                      <Input
-                        id="year_built_min"
-                        type="number"
-                        value={formData.year_built_min}
-                        onChange={(e) => handleInputChange("year_built_min", e.target.value)}
-                        placeholder="1980"
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="year_built_max" className="font-semibold">
-                        Maximum Year Built
-                      </Label>
-                      <Input
-                        id="year_built_max"
-                        type="number"
-                        value={formData.year_built_max}
-                        onChange={(e) => handleInputChange("year_built_max", e.target.value)}
-                        placeholder="2024"
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="sqft_min" className="font-semibold">
-                        Minimum Square Feet
-                      </Label>
-                      <Input
-                        id="sqft_min"
-                        type="number"
-                        value={formData.sqft_min}
-                        onChange={(e) => handleInputChange("sqft_min", e.target.value)}
-                        placeholder="1,000"
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="sqft_max" className="font-semibold">
-                        Maximum Square Feet
-                      </Label>
-                      <Input
-                        id="sqft_max"
-                        type="number"
-                        value={formData.sqft_max}
-                        onChange={(e) => handleInputChange("sqft_max", e.target.value)}
-                        placeholder="5,000"
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="beds_min" className="font-semibold">
-                        Minimum Bedrooms
-                      </Label>
-                      <Input
-                        id="beds_min"
-                        type="number"
-                        value={formData.beds_min}
-                        onChange={(e) => handleInputChange("beds_min", e.target.value)}
-                        placeholder="2"
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="baths_min" className="font-semibold">
-                        Minimum Bathrooms
-                      </Label>
-                      <Input
-                        id="baths_min"
-                        type="number"
-                        step="0.5"
-                        value={formData.baths_min}
-                        onChange={(e) => handleInputChange("baths_min", e.target.value)}
-                        placeholder="1.5"
-                        className="mt-1"
-                      />
-                    </div>
-                  </div>
+                <div>
+                  <Label htmlFor="asking_price_max" className="font-semibold">
+                    Maximum Price ($)
+                  </Label>
+                  <Input
+                    id="asking_price_max"
+                    type="number"
+                    value={formData.asking_price_max}
+                    onChange={(e) => handleInputChange("asking_price_max", e.target.value)}
+                    placeholder="500,000"
+                    className="mt-1"
+                  />
                 </div>
+              </CardContent>
+            </Card>
 
-                {/* Investment Criteria Section */}
-                <div className="border-l-4 border-orange-500 pl-4">
-                  <h4 className="font-bold text-base mb-3 text-foreground">Investment Criteria</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="min_arv" className="font-semibold">
-                        Minimum ARV ($)
-                      </Label>
-                      <Input
-                        id="min_arv"
-                        type="number"
-                        value={formData.min_arv}
-                        onChange={(e) => handleInputChange("min_arv", e.target.value)}
-                        placeholder="100,000"
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="min_arv_percent" className="font-semibold">
-                        Minimum ARV Percentage (%)
-                      </Label>
-                      <Input
-                        id="min_arv_percent"
-                        type="number"
-                        step="0.1"
-                        value={formData.min_arv_percent}
-                        onChange={(e) => handleInputChange("min_arv_percent", e.target.value)}
-                        placeholder="70"
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="min_gross_margin" className="font-semibold">
-                        Minimum Gross Margin ($)
-                      </Label>
-                      <Input
-                        id="min_gross_margin"
-                        type="number"
-                        value={formData.min_gross_margin}
-                        onChange={(e) => handleInputChange("min_gross_margin", e.target.value)}
-                        placeholder="20,000"
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="max_gross_margin" className="font-semibold">
-                        Maximum Gross Margin ($)
-                      </Label>
-                      <Input
-                        id="max_gross_margin"
-                        type="number"
-                        value={formData.max_gross_margin}
-                        onChange={(e) => handleInputChange("max_gross_margin", e.target.value)}
-                        placeholder="100,000"
-                        className="mt-1"
-                      />
-                    </div>
-                  </div>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+                  <Ruler className="h-5 w-5 text-muted-foreground" /> Property Specifications
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="year_built_min" className="font-semibold">
+                    Minimum Year Built
+                  </Label>
+                  <Input
+                    id="year_built_min"
+                    type="number"
+                    value={formData.year_built_min}
+                    onChange={(e) => handleInputChange("year_built_min", e.target.value)}
+                    placeholder="1980"
+                    className="mt-1"
+                  />
                 </div>
+                <div>
+                  <Label htmlFor="year_built_max" className="font-semibold">
+                    Maximum Year Built
+                  </Label>
+                  <Input
+                    id="year_built_max"
+                    type="number"
+                    value={formData.year_built_max}
+                    onChange={(e) => handleInputChange("year_built_max", e.target.value)}
+                    placeholder="2024"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="sqft_min" className="font-semibold">
+                    Minimum Square Feet
+                  </Label>
+                  <Input
+                    id="sqft_min"
+                    type="number"
+                    value={formData.sqft_min}
+                    onChange={(e) => handleInputChange("sqft_min", e.target.value)}
+                    placeholder="1,000"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="sqft_max" className="font-semibold">
+                    Maximum Square Feet
+                  </Label>
+                  <Input
+                    id="sqft_max"
+                    type="number"
+                    value={formData.sqft_max}
+                    onChange={(e) => handleInputChange("sqft_max", e.target.value)}
+                    placeholder="5,000"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="beds_min" className="font-semibold">
+                    Minimum Bedrooms
+                  </Label>
+                  <Input
+                    id="beds_min"
+                    type="number"
+                    value={formData.beds_min}
+                    onChange={(e) => handleInputChange("beds_min", e.target.value)}
+                    placeholder="2"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="baths_min" className="font-semibold">
+                    Minimum Bathrooms
+                  </Label>
+                  <Input
+                    id="baths_min"
+                    type="number"
+                    step="0.5"
+                    value={formData.baths_min}
+                    onChange={(e) => handleInputChange("baths_min", e.target.value)}
+                    placeholder="1.5"
+                    className="mt-1"
+                  />
+                </div>
+              </CardContent>
+            </Card>
 
-                {/* Owner Finance Section */}
-                <div className="border-l-4 border-yellow-500 pl-4">
-                  <h4 className="font-bold text-base mb-3 text-foreground flex items-center gap-2">
-                    Owner Finance / Rent to Own / Land Contract
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="down_payment_min" className="font-semibold">
-                        Minimum Down Payment ($)
-                      </Label>
-                      <Input
-                        id="down_payment_min"
-                        type="number"
-                        value={formData.down_payment_min}
-                        onChange={(e) => handleInputChange("down_payment_min", e.target.value)}
-                        placeholder="5,000"
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="down_payment_max" className="font-semibold">
-                        Maximum Down Payment ($)
-                      </Label>
-                      <Input
-                        id="down_payment_max"
-                        type="number"
-                        value={formData.down_payment_max}
-                        onChange={(e) => handleInputChange("down_payment_max", e.target.value)}
-                        placeholder="50,000"
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="monthly_payment_min" className="font-semibold">
-                        Minimum Monthly Payment ($)
-                      </Label>
-                      <Input
-                        id="monthly_payment_min"
-                        type="number"
-                        value={formData.monthly_payment_min}
-                        onChange={(e) => handleInputChange("monthly_payment_min", e.target.value)}
-                        placeholder="500"
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="monthly_payment_max" className="font-semibold">
-                        Maximum Monthly Payment ($)
-                      </Label>
-                      <Input
-                        id="monthly_payment_max"
-                        type="number"
-                        value={formData.monthly_payment_max}
-                        onChange={(e) => handleInputChange("monthly_payment_max", e.target.value)}
-                        placeholder="2,000"
-                        className="mt-1"
-                      />
-                    </div>
-                  </div>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+                  <TrendingUp className="h-5 w-5 text-muted-foreground" /> Investment Criteria
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="min_arv" className="font-semibold">
+                    Minimum ARV ($)
+                  </Label>
+                  <Input
+                    id="min_arv"
+                    type="number"
+                    value={formData.min_arv}
+                    onChange={(e) => handleInputChange("min_arv", e.target.value)}
+                    placeholder="100,000"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="min_arv_percent" className="font-semibold">
+                    Minimum ARV Percentage (%)
+                  </Label>
+                  <Input
+                    id="min_arv_percent"
+                    type="number"
+                    step="0.1"
+                    value={formData.min_arv_percent}
+                    onChange={(e) => handleInputChange("min_arv_percent", e.target.value)}
+                    placeholder="70"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="min_gross_margin" className="font-semibold">
+                    Minimum Gross Margin ($)
+                  </Label>
+                  <Input
+                    id="min_gross_margin"
+                    type="number"
+                    value={formData.min_gross_margin}
+                    onChange={(e) => handleInputChange("min_gross_margin", e.target.value)}
+                    placeholder="20,000"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="max_gross_margin" className="font-semibold">
+                    Maximum Gross Margin ($)
+                  </Label>
+                  <Input
+                    id="max_gross_margin"
+                    type="number"
+                    value={formData.max_gross_margin}
+                    onChange={(e) => handleInputChange("max_gross_margin", e.target.value)}
+                    placeholder="100,000"
+                    className="mt-1"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+                  <Landmark className="h-5 w-5 text-muted-foreground" /> Owner Finance / Rent to Own / Land Contract
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="down_payment_min" className="font-semibold">
+                    Minimum Down Payment ($)
+                  </Label>
+                  <Input
+                    id="down_payment_min"
+                    type="number"
+                    value={formData.down_payment_min}
+                    onChange={(e) => handleInputChange("down_payment_min", e.target.value)}
+                    placeholder="5,000"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="down_payment_max" className="font-semibold">
+                    Maximum Down Payment ($)
+                  </Label>
+                  <Input
+                    id="down_payment_max"
+                    type="number"
+                    value={formData.down_payment_max}
+                    onChange={(e) => handleInputChange("down_payment_max", e.target.value)}
+                    placeholder="50,000"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="monthly_payment_min" className="font-semibold">
+                    Minimum Monthly Payment ($)
+                  </Label>
+                  <Input
+                    id="monthly_payment_min"
+                    type="number"
+                    value={formData.monthly_payment_min}
+                    onChange={(e) => handleInputChange("monthly_payment_min", e.target.value)}
+                    placeholder="500"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="monthly_payment_max" className="font-semibold">
+                    Maximum Monthly Payment ($)
+                  </Label>
+                  <Input
+                    id="monthly_payment_max"
+                    type="number"
+                    value={formData.monthly_payment_max}
+                    onChange={(e) => handleInputChange("monthly_payment_max", e.target.value)}
+                    placeholder="2,000"
+                    className="mt-1"
+                  />
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
 
           <TabsContent value="status" className="space-y-4">
+            <p className="text-sm text-muted-foreground mb-4">Set the buyer&apos;s status and communication preferences</p>
+
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <strong>Buyer Status & Communication</strong>
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+                  <Flag className="h-5 w-5 text-muted-foreground" /> Lead Status
                 </CardTitle>
-                <CardDescription>Set the buyer&apos;s status and communication preferences</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Status Section */}
-                <div className="border-l-4 border-blue-500 pl-4">
-                  <h4 className="font-bold text-base mb-3 text-foreground">Lead Status</h4>
-                  <div>
-                    <Label htmlFor="status" className="font-semibold">
-                      Current Buyer Status
-                    </Label>
-                    <Select value={formData.status} onValueChange={(value) => handleInputChange("status", value)}>
-                      <SelectTrigger className="mt-1">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {STATUSES.map((status) => (
-                          <SelectItem key={status.value} value={status.value}>
-                            {status.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                {/* Special Flags Section */}
-                <div className="border-l-4 border-green-500 pl-4">
-                  <h4 className="font-bold text-base mb-3 text-foreground">Special Designations</h4>
-                  <div className="grid grid-cols-2 gap-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <Label htmlFor="vip" className="font-semibold">
-                          VIP Status
-                        </Label>
-                        <p className="text-sm text-muted-foreground">Mark as VIP for priority treatment</p>
-                      </div>
-                      <Switch
-                        id="vip"
-                        checked={formData.vip}
-                        onCheckedChange={(checked) => handleInputChange("vip", checked)}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <Label htmlFor="vetted" className="font-semibold">
-                          Vetted
-                        </Label>
-                        <p className="text-sm text-muted-foreground">Buyer has been verified/vetted</p>
-                      </div>
-                      <Switch
-                        id="vetted"
-                        checked={formData.vetted}
-                        onCheckedChange={(checked) => handleInputChange("vetted", checked)}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Communication Preferences Section */}
-                <div className="border-l-4 border-purple-500 pl-4">
-                  <h4 className="font-bold text-base mb-3 text-foreground">Communication Preferences</h4>
-                  <div className="grid grid-cols-2 gap-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <Label htmlFor="can_receive_email" className="font-semibold">
-                          Can Receive Email
-                        </Label>
-                        <p className="text-sm text-muted-foreground">Allow email communications</p>
-                      </div>
-                      <Switch
-                        id="can_receive_email"
-                        checked={formData.can_receive_email}
-                        onCheckedChange={(checked) => handleInputChange("can_receive_email", checked)}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <Label htmlFor="can_receive_sms" className="font-semibold">
-                          Can Receive SMS
-                        </Label>
-                        <p className="text-sm text-muted-foreground">Allow text message communications</p>
-                      </div>
-                      <Switch
-                        id="can_receive_sms"
-                        checked={formData.can_receive_sms}
-                        onCheckedChange={(checked) => handleInputChange("can_receive_sms", checked)}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Notes Section */}
-                <div className="border-l-4 border-orange-500 pl-4">
-                  <h4 className="font-bold text-base mb-3 text-foreground">Additional Notes</h4>
-                  <div>
-                    <Label htmlFor="notes" className="font-semibold">
-                      Notes
-                    </Label>
-                    <Textarea
-                      id="notes"
-                      value={formData.notes}
-                      onChange={(e) => handleInputChange("notes", e.target.value)}
-                      placeholder="Additional notes about this buyer..."
-                      rows={4}
-                      className="mt-1"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 pt-2">
-                  <Switch
-                    id="schedule_showing"
-                    checked={scheduleShowing}
-                    onCheckedChange={setScheduleShowing}
-                  />
-                  <Label htmlFor="schedule_showing" className="font-medium">
-                    Schedule showing after save
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="status" className="font-semibold">
+                    Current Buyer Status
                   </Label>
+                  <Select value={formData.status} onValueChange={(value) => handleInputChange("status", value)}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {STATUSES.map((status) => (
+                        <SelectItem key={status.value} value={status.value}>
+                          {status.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </CardContent>
             </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+                  <Star className="h-5 w-5 text-muted-foreground" /> Special Designations
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="vip" className="font-semibold">
+                        VIP Status
+                      </Label>
+                      <p className="text-sm text-muted-foreground">Mark as VIP for priority treatment</p>
+                    </div>
+                    <Switch
+                      id="vip"
+                      checked={formData.vip}
+                      onCheckedChange={(checked) => handleInputChange("vip", checked)}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="vetted" className="font-semibold">
+                        Vetted
+                      </Label>
+                      <p className="text-sm text-muted-foreground">Buyer has been verified/vetted</p>
+                    </div>
+                    <Switch
+                      id="vetted"
+                      checked={formData.vetted}
+                      onCheckedChange={(checked) => handleInputChange("vetted", checked)}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+                  <MessageSquare className="h-5 w-5 text-muted-foreground" /> Communication Preferences
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="can_receive_email" className="font-semibold">
+                        Can Receive Email
+                      </Label>
+                      <p className="text-sm text-muted-foreground">Allow email communications</p>
+                    </div>
+                    <Switch
+                      id="can_receive_email"
+                      checked={formData.can_receive_email}
+                      onCheckedChange={(checked) => handleInputChange("can_receive_email", checked)}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="can_receive_sms" className="font-semibold">
+                        Can Receive SMS
+                      </Label>
+                      <p className="text-sm text-muted-foreground">Allow text message communications</p>
+                    </div>
+                    <Switch
+                      id="can_receive_sms"
+                      checked={formData.can_receive_sms}
+                      onCheckedChange={(checked) => handleInputChange("can_receive_sms", checked)}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+                  <FileText className="h-5 w-5 text-muted-foreground" /> Additional Notes
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="notes" className="font-semibold">
+                    Notes
+                  </Label>
+                  <Textarea
+                    id="notes"
+                    value={formData.notes}
+                    onChange={(e) => handleInputChange("notes", e.target.value)}
+                    placeholder="Additional notes about this buyer..."
+                    rows={4}
+                    className="mt-1"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="flex items-center gap-2 pt-2">
+              <Switch
+                id="schedule_showing"
+                checked={scheduleShowing}
+                onCheckedChange={setScheduleShowing}
+              />
+              <Label htmlFor="schedule_showing" className="font-medium">
+                Schedule showing after save
+              </Label>
+            </div>
           </TabsContent>
         </Tabs>
 
