@@ -80,7 +80,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
   }
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen bg-background overflow-x-hidden">
       {/* Sidebar - responsive behavior */}
       <div className={`${sidebarOpen ? "block" : "hidden"} lg:block h-full`}>
         <Sidebar className="h-full" />
@@ -94,7 +94,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <Header toggleSidebar={toggleSidebar} />
-        <main className="flex-1 flex flex-col overflow-y-auto">{children}</main>
+        <main className="flex-1 flex flex-col overflow-y-auto overflow-x-hidden min-w-0">{children}</main>
       </div>
 
       <CommandDialog open={commandOpen} onOpenChange={setCommandOpen}>
