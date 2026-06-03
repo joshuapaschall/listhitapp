@@ -17,6 +17,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { supabase } from "@/lib/supabase"
 import type { Buyer, Property, OfferWithRelations } from "@/lib/supabase"
+import { normalizePhone, formatPhoneDisplay } from "@/lib/dedup-utils"
 import { createLogger } from "@/lib/logger"
 import TagSelector from "./tag-selector"
 import GroupTreeSelector from "./group-tree-selector"
@@ -216,9 +217,9 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
         lname: buyer.lname || "",
         full_name: buyer.full_name || "",
         email: buyer.email || "",
-        phone: buyer.phone || "",
-        phone2: buyer.phone2 || "",
-        phone3: buyer.phone3 || "",
+        phone: buyer.phone ? formatPhoneDisplay(buyer.phone) : "",
+        phone2: buyer.phone2 ? formatPhoneDisplay(buyer.phone2) : "",
+        phone3: buyer.phone3 ? formatPhoneDisplay(buyer.phone3) : "",
         company: buyer.company || "",
         mailing_address: buyer.mailing_address || "",
         mailing_city: buyer.mailing_city || "",
@@ -286,7 +287,7 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
     setLoading(true)
     try {
       const { full_name: _unused, ...restFormData } = formData
-      const updateData = {
+      const updateData: Record<string, any> = {
         ...restFormData,
         asking_price_min: formData.asking_price_min ? Number.parseFloat(formData.asking_price_min) : null,
         asking_price_max: formData.asking_price_max ? Number.parseFloat(formData.asking_price_max) : null,
@@ -308,6 +309,12 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
         property_interest: property ? property.id : null,
         updated_at: new Date().toISOString(),
       }
+
+      // Canonicalize phones to 10-digit national before saving (phone_norm is a
+      // generated column; display formatting happens via formatPhoneDisplay).
+      updateData.phone = normalizePhone(formData.phone) || null
+      updateData.phone2 = normalizePhone(formData.phone2) || null
+      updateData.phone3 = normalizePhone(formData.phone3) || null
 
       log("update", "Updating buyer with data:", updateData)
       const response = await fetch(`/api/buyers/${buyer.id}`, {
