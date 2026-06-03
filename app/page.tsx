@@ -866,7 +866,7 @@ function BuyersPageContent() {
 
   const getScoreColor = (score: number) => {
     if (score >= 90) return "text-green-600 bg-green-50"
-    if (score >= 70) return "text-blue-600 bg-blue-50"
+    if (score >= 70) return "text-foreground bg-muted"
     if (score >= 50) return "text-yellow-600 bg-yellow-50"
     return "text-red-600 bg-red-50"
   }
@@ -1093,7 +1093,7 @@ function BuyersPageContent() {
 
             {/* Enhanced Bulk Actions - More compact */}
               {selectedBuyers.length > 0 && (
-              <div className="bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-700 rounded-lg p-3 lg:p-4 mb-4">
+              <div className="bg-muted border border-border rounded-lg p-3 lg:p-4 mb-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-center space-x-2">
                     <Badge variant="secondary">{selectedBuyers.length} selected</Badge>
@@ -1558,12 +1558,12 @@ function BuyersPageContent() {
                         <div className="flex items-center space-x-2">
                           {buyer.can_receive_email && (
                             <span title="Can receive email">
-                              <Mail className="h-4 w-4 text-blue-500" />
+                              <Mail className="h-4 w-4 text-muted-foreground" />
                             </span>
                           )}
                           {buyer.can_receive_sms && (
                             <span title="Can receive SMS">
-                              <MessageSquare className="h-4 w-4 text-purple-500" />
+                              <MessageSquare className="h-4 w-4 text-muted-foreground" />
                             </span>
                           )}
                         </div>

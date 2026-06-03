@@ -35,17 +35,17 @@ const statusConfig: Record<KnownStatus, { label: string; className: string; icon
   },
   pending: {
     label: "Queued",
-    className: "bg-brand-tint text-brand dark:bg-brand/20 dark:text-brand",
+    className: "bg-muted/40 text-brand dark:bg-brand/20 dark:text-brand",
     icon: <Clock className="size-3" />,
   },
   processing: {
     label: "Sending",
-    className: "bg-brand-tint text-brand dark:bg-brand/20 dark:text-brand",
+    className: "bg-muted/40 text-brand dark:bg-brand/20 dark:text-brand",
     icon: <Loader2 className="size-3 animate-spin" />,
   },
   sending: {
     label: "Sending",
-    className: "bg-brand-tint text-brand dark:bg-brand/20 dark:text-brand",
+    className: "bg-muted/40 text-brand dark:bg-brand/20 dark:text-brand",
     icon: <Loader2 className="size-3 animate-spin" />,
   },
   sent: {

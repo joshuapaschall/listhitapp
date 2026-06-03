@@ -21,9 +21,9 @@ function formatUsd(value: number) {
 export default function ProfitZone({ data }: ProfitZoneProps) {
   const emptyTiles = ["Gross profit", "Net profit", "Avg assignment fee", "Marketing ROI"]
   const populatedTiles = [
-    { label: "Gross profit", value: formatUsd(data.grossProfit), className: "bg-brand-tint" },
-    { label: "Net profit", value: formatUsd(data.netProfit), className: "bg-brand-tint" },
-    { label: "Avg assignment fee", value: formatUsd(data.avgAssignmentFee), className: "bg-brand-tint" },
+    { label: "Gross profit", value: formatUsd(data.grossProfit), className: "bg-muted/40" },
+    { label: "Net profit", value: formatUsd(data.netProfit), className: "bg-muted/40" },
+    { label: "Avg assignment fee", value: formatUsd(data.avgAssignmentFee), className: "bg-muted/40" },
     {
       label: "Marketing ROI",
       value: data.marketingRoi !== null ? `${Math.round(data.marketingRoi)}×` : "—",

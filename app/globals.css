@@ -111,19 +111,19 @@
     @apply dark:bg-gray-950 shadow-lg;
   }
   .btn-primary {
-    @apply px-4 py-3 bg-sky-600 text-white hover:bg-sky-700 active:scale-95 active:shadow-none shadow-sm transition;
+    @apply px-4 py-3 bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95 active:shadow-none shadow-sm transition;
   }
   .btn-secondary {
-    @apply px-4 py-3 bg-sky-50 text-sky-700 hover:bg-sky-100 active:scale-95 active:shadow-none shadow-sm transition;
+    @apply px-4 py-3 bg-secondary text-secondary-foreground hover:bg-secondary/80 active:scale-95 active:shadow-none shadow-sm transition;
   }
   .btn-ghost {
-    @apply px-4 py-3 border border-gray-300 text-gray-700 hover:bg-gray-50 active:scale-95 active:shadow-none transition;
+    @apply px-4 py-3 border border-border text-foreground hover:bg-muted active:scale-95 active:shadow-none transition;
   }
   .chip {
     @apply rounded-full px-2 py-0.5 text-xs font-medium transition-opacity duration-150;
   }
   .chip-blue {
-    @apply bg-sky-100 text-sky-700 dark:bg-blue-900 dark:text-sky-100;
+    @apply bg-muted text-muted-foreground;
   }
   .chip-green {
     @apply bg-emerald-100 text-emerald-700;

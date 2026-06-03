@@ -137,8 +137,8 @@ export default function VoicemailGreetingEditor({
       )}
 
       <div className="flex gap-2">
-        <button className={`rounded px-3 py-1.5 text-sm ${tab === "ai" ? "bg-emerald-600 text-white" : "bg-gray-100"}`} onClick={() => setTab("ai")}>AI Voice</button>
-        <button className={`rounded px-3 py-1.5 text-sm ${tab === "record" ? "bg-emerald-600 text-white" : "bg-gray-100"}`} onClick={() => setTab("record")}>Record Your Own</button>
+        <button className={`rounded px-3 py-1.5 text-sm ${tab === "ai" ? "bg-primary text-primary-foreground" : "bg-gray-100"}`} onClick={() => setTab("ai")}>AI Voice</button>
+        <button className={`rounded px-3 py-1.5 text-sm ${tab === "record" ? "bg-primary text-primary-foreground" : "bg-gray-100"}`} onClick={() => setTab("record")}>Record Your Own</button>
       </div>
 
       {tab === "ai" ? (

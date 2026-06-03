@@ -671,7 +671,6 @@ export default function ImportBuyersModal({ onSuccess }: ImportBuyersModalProps)
                 disabled={
                   importing || Object.keys(mapping).filter((k) => mapping[k] && mapping[k] !== "none").length === 0
                 }
-                className="bg-green-600 hover:bg-green-700"
               >
                 {importing ? "Importing..." : `Import ${csvRows.length} Buyers`}
               </Button>

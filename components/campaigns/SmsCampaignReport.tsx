@@ -46,17 +46,17 @@ export default function SmsCampaignReport({ campaign, analytics }: any) {
   return <Tabs defaultValue="overview" className="space-y-5">
     <TabsList><TabsTrigger value="overview">Overview</TabsTrigger><TabsTrigger value="recipients">Recipients</TabsTrigger><TabsTrigger value="links">Links</TabsTrigger></TabsList>
     <TabsContent value="overview" className="space-y-5">
-      <Card className="overflow-hidden border-brand/20 bg-brand-tint dark:bg-brand/10">
+      <Card className="overflow-hidden border bg-muted/40 dark:bg-muted/40">
         <CardContent className="grid gap-5 p-6 md:grid-cols-[1fr_auto] md:items-center">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Primary KPI</p>
             <p className="mt-2 text-sm text-muted-foreground">Delivery rate</p>
-            <p className="text-5xl font-semibold tabular-nums text-brand md:text-6xl">{pct(r.deliveryRate)}</p>
+            <p className="text-5xl font-semibold tabular-nums text-foreground md:text-6xl">{pct(r.deliveryRate)}</p>
             <p className="mt-2 text-sm text-muted-foreground">{num(s.delivered)} delivered of {num(s.sent)} sent</p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-1">
-            <div className="rounded-xl border border-brand/20 bg-white/70 p-3 dark:bg-brand/15"><p className="text-xs uppercase tracking-wide text-muted-foreground">Reply rate</p><p className="mt-1 text-2xl font-semibold tabular-nums text-brand">{pct(r.replyRate)}</p></div>
-            <div className="rounded-xl border border-brand/20 bg-white/70 p-3 dark:bg-brand/15"><p className="text-xs uppercase tracking-wide text-muted-foreground">Click rate</p><p className="mt-1 text-2xl font-semibold tabular-nums text-brand">{pct(r.clickRate)}</p></div>
+            <div className="rounded-xl border bg-background p-3 dark:bg-muted/40"><p className="text-xs uppercase tracking-wide text-muted-foreground">Reply rate</p><p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{pct(r.replyRate)}</p></div>
+            <div className="rounded-xl border bg-background p-3 dark:bg-muted/40"><p className="text-xs uppercase tracking-wide text-muted-foreground">Click rate</p><p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{pct(r.clickRate)}</p></div>
           </div>
         </CardContent>
       </Card>
@@ -89,7 +89,7 @@ export default function SmsCampaignReport({ campaign, analytics }: any) {
         </CardContent>
       </Card>
 
-      <Card className="rounded-xl"><CardHeader><CardTitle>Funnel</CardTitle></CardHeader><CardContent className="space-y-3">{funnel.map((f: any, i: number) => { const step = i === 0 ? 100 : (f.value / Math.max(funnel[i - 1].value, 1)) * 100; return <div key={f.label} className="space-y-1.5"><div className="flex items-center justify-between text-sm"><span className="font-medium">{f.label}</span><span className="tabular-nums text-muted-foreground">{num(f.value)}{i === 0 ? "" : ` • ${pct(step)} from previous`}</span></div><div className="h-3 rounded-full bg-muted/70"><div className="h-3 rounded-full bg-gradient-to-r from-brand via-emerald-400 to-emerald-300 dark:from-brand dark:via-emerald-500 dark:to-emerald-400" style={{ width: `${(f.value / max) * 100}%` }} /></div></div> })}</CardContent></Card>
+      <Card className="rounded-xl"><CardHeader><CardTitle>Funnel</CardTitle></CardHeader><CardContent className="space-y-3">{funnel.map((f: any, i: number) => { const step = i === 0 ? 100 : (f.value / Math.max(funnel[i - 1].value, 1)) * 100; return <div key={f.label} className="space-y-1.5"><div className="flex items-center justify-between text-sm"><span className="font-medium">{f.label}</span><span className="tabular-nums text-muted-foreground">{num(f.value)}{i === 0 ? "" : ` • ${pct(step)} from previous`}</span></div><div className="h-3 rounded-full bg-muted/70"><div className="h-3 rounded-full bg-foreground/80 dark:bg-foreground/70" style={{ width: `${(f.value / max) * 100}%` }} /></div></div> })}</CardContent></Card>
 
       <Card className="rounded-xl"><CardHeader><CardTitle>Cost</CardTitle></CardHeader><CardContent className="grid gap-3 text-sm md:grid-cols-4"><div className="rounded-lg border p-3"><p className="text-xs uppercase tracking-wide text-muted-foreground">Total cost</p><p className="mt-1 text-xl font-semibold tabular-nums">{usd(s.total_cost_usd)}</p></div><div className="rounded-lg border p-3"><p className="text-xs uppercase tracking-wide text-muted-foreground">Cost per message</p><p className="mt-1 text-xl font-semibold tabular-nums">{usd(r.costPerMessage)}</p></div><div className="rounded-lg border p-3"><p className="text-xs uppercase tracking-wide text-muted-foreground">Total segments</p><p className="mt-1 text-xl font-semibold tabular-nums">{num(s.total_segments)}</p></div><div className="rounded-lg border p-3"><p className="text-xs uppercase tracking-wide text-muted-foreground">Avg segments</p><p className="mt-1 text-xl font-semibold tabular-nums">{Number(s.avg_segments || 0).toFixed(2)}</p></div><p className="md:col-span-4 text-xs text-muted-foreground">Billed by Telnyx on message finalization.</p></CardContent></Card>
 
