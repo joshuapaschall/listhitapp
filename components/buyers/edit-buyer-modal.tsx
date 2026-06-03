@@ -16,7 +16,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { supabase } from "@/lib/supabase"
-import type { Buyer, Property } from "@/lib/supabase"
+import type { Buyer, Property, OfferWithRelations } from "@/lib/supabase"
 import { createLogger } from "@/lib/logger"
 import TagSelector from "./tag-selector"
 import GroupTreeSelector from "./group-tree-selector"
@@ -31,6 +31,10 @@ import PropertySelector from "./property-selector"
 import { PropertyService } from "@/services/property-service"
 import ScheduleShowingModal from "@/components/showings/schedule-showing-modal"
 import { ShowingService } from "@/services/showing-service"
+import { OfferService } from "@/services/offer-service"
+import OfferCard from "@/components/offers/offer-card"
+import OfferDetailDrawer from "@/components/offers/offer-detail-drawer"
+import CreateOfferModal from "@/components/offers/CreateOfferModal"
 import { BuyerService } from "@/services/buyer-service"
 import { toast } from "sonner"
 import {
@@ -76,10 +80,21 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
   const [originalGroupIds, setOriginalGroupIds] = useState<string[]>([])
   const [property, setProperty] = useState<Property | null>(null)
   const [showScheduleModal, setShowScheduleModal] = useState(false)
+  const [showCreateOfferModal, setShowCreateOfferModal] = useState(false)
+  const [selectedOffer, setSelectedOffer] = useState<OfferWithRelations | null>(null)
+  const [offerDrawerOpen, setOfferDrawerOpen] = useState(false)
   const { data: showings = [], refetch: refetchShowings } = useQuery({
     queryKey: ["buyer-showings", buyer?.id],
     queryFn: () => ShowingService.getShowings({ buyerId: buyer!.id }),
     enabled: !!buyer && open,
+  })
+  const { data: offers = [], refetch: refetchOffers } = useQuery({
+    queryKey: ["buyer-offers", buyer?.id],
+    queryFn: () => OfferService.getOffers({ buyerId: buyer!.id }),
+    // Mirror the showings query: only fetch when the modal is open and a buyer
+    // exists. (Guards against the query firing for modals mounted-but-closed,
+    // e.g. inside the inbox conversation pane.)
+    enabled: !!buyer?.id && open,
   })
   const [formData, setFormData] = useState({
     // Contact Info
@@ -924,11 +939,29 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
                   </CardTitle>
                   <CardDescription>Track offers made and received</CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <div className="text-center py-8 text-muted-foreground">
-                    <DollarSign className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>Offers functionality will be implemented in a future update.</p>
-                    <p className="text-sm">This will include offer tracking, counteroffers, and deal management.</p>
+                <CardContent className="space-y-4">
+                  <div className="flex justify-end">
+                    <Button size="sm" onClick={() => setShowCreateOfferModal(true)}>
+                      <Plus className="h-4 w-4 mr-1" />
+                      New Offer
+                    </Button>
+                  </div>
+                  <div className="space-y-3">
+                    {offers.map((offer) => (
+                      <OfferCard
+                        key={offer.id}
+                        offer={offer}
+                        draggable={false}
+                        onClick={(o) => {
+                          setSelectedOffer(o)
+                          setOfferDrawerOpen(true)
+                        }}
+                      />
+                    ))}
+
+                    {offers.length === 0 && (
+                      <div className="text-center py-8 text-muted-foreground">No offers yet</div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -978,6 +1011,22 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
       onOpenChange={setShowScheduleModal}
       buyer={buyer}
       onSuccess={refetchShowings}
+    />
+    <CreateOfferModal
+      open={showCreateOfferModal}
+      onOpenChange={setShowCreateOfferModal}
+      buyer={buyer}
+      onSuccess={() => {
+        setShowCreateOfferModal(false)
+        refetchOffers()
+      }}
+    />
+    <OfferDetailDrawer
+      open={offerDrawerOpen}
+      onOpenChange={setOfferDrawerOpen}
+      offer={selectedOffer}
+      onSuccess={refetchOffers}
+      canManage
     />
     </>
   )
