@@ -973,7 +973,7 @@ function BuyersPageContent() {
   }
 
   return (
-    <div className="flex h-screen bg-background overflow-x-hidden">
+    <div className="flex h-full min-h-0 bg-background overflow-x-hidden">
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-40 xl:hidden" onClick={() => setSidebarOpen(false)} />
@@ -984,7 +984,7 @@ function BuyersPageContent() {
         className={`
         ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
         xl:translate-x-0 fixed xl:static inset-y-0 left-0 z-50
-        w-[15rem] xl:w-64 border-r bg-background transition-transform duration-300 ease-in-out
+        w-[15rem] xl:w-64 border-r bg-background transition-transform duration-300 ease-in-out shrink-0
       `}
       >
         <SmartGroupsSidebar
@@ -1461,9 +1461,9 @@ function BuyersPageContent() {
         </div>
 
         {/* Table - Horizontal scroll on smaller screens */}
-        <div className="flex-1 overflow-auto">
-          <div className="min-w-full overflow-x-auto">
-            <table className="w-full border-collapse min-w-full">
+        <div className="flex-1 min-h-0 min-w-0 overflow-y-auto">
+          <div className="min-w-0 overflow-x-auto">
+            <table className="w-max min-w-full border-collapse">
               <thead className="bg-muted/50 sticky top-0">
                 <tr>
                   <th className="p-3 text-left w-10 text-heading">
@@ -1481,7 +1481,7 @@ function BuyersPageContent() {
                   <th className="p-3 text-left text-heading">Locations</th>
                   <th className="p-3 text-left text-heading">Created</th>
                   <th className="p-3 text-left text-heading">Status</th>
-                  <th className="p-3 text-left text-heading w-16">Actions</th>
+                  <th className="p-3 text-left text-heading w-16 sticky right-0 z-20 bg-muted/50 border-l border-border">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -1596,7 +1596,7 @@ function BuyersPageContent() {
                       )
                       })()}
                     </td>
-                    <td className="p-3">
+                    <td className="p-3 sticky right-0 z-10 bg-background border-l border-border">
                       <div className="flex items-center space-x-1">
                         <Button
                           variant="ghost"

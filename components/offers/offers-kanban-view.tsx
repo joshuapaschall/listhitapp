@@ -167,7 +167,7 @@ export default function OffersKanbanView({ offers, isLoading, onRefetch, onOffer
   return (
     <>
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className="flex gap-4 overflow-x-auto pb-4">
+      <div className="flex gap-4 overflow-x-auto pb-4 min-w-0">
         {grouped.map((column) => (
           <KanbanColumn
             key={column.id}
