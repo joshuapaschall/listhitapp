@@ -51,6 +51,7 @@ const ICON_OPTIONS = [
 type IconValue = (typeof ICON_OPTIONS)[number]["value"]
 
 const COLOR_OPTIONS = [
+  { value: "#F0303A", label: "Brand" },
   { value: "#ef4444", label: "Red" },
   { value: "#f97316", label: "Orange" },
   { value: "#f59e0b", label: "Amber" },
@@ -141,7 +142,7 @@ export default function SmartGroupsSidebar({
     name: "",
     description: "",
     type: "manual",
-    color: "#3B82F6",
+    color: "#F0303A",
     icon: "users",
     folder: "",
   })
@@ -247,7 +248,7 @@ export default function SmartGroupsSidebar({
 
       await loadGroups() // Reload from database
       setShowCreateGroup(false)
-      setGroupForm({ name: "", description: "", type: "manual", color: "#3B82F6", icon: "users", folder: "" })
+      setGroupForm({ name: "", description: "", type: "manual", color: "#F0303A", icon: "users", folder: "" })
       toast.success("Group created")
       log("info", "Group created", { id: newGroup.id })
     } catch (err) {
@@ -276,7 +277,7 @@ export default function SmartGroupsSidebar({
 
       await loadGroups() // Reload from database
       setEditingGroup(null)
-      setGroupForm({ name: "", description: "", type: "manual", color: "#3B82F6", icon: "users", folder: "" })
+      setGroupForm({ name: "", description: "", type: "manual", color: "#F0303A", icon: "users", folder: "" })
       toast.success("Group updated")
       log("info", "Group updated", { id: editingGroup.id })
     } catch (err) {
@@ -423,7 +424,7 @@ export default function SmartGroupsSidebar({
 
   const getGroupIcon = (group: Group) => {
     const iconVal = group.criteria?.icon as IconValue | undefined
-    const color = group.color || "#3B82F6"
+    const color = group.color || "#F0303A"
 
     if (iconVal && ICON_COMPONENTS[iconVal]) {
       const Icon = ICON_COMPONENTS[iconVal]
@@ -457,7 +458,7 @@ export default function SmartGroupsSidebar({
     <Card className="sidebar-panel card-shadow sidebar-dark w-64 h-full flex flex-col">
       <CardHeader className="pb-3 flex-shrink-0">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">Smart Groups</CardTitle>
+          <CardTitle className="text-lg">Smart groups</CardTitle>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" title="Add new group or folder">
@@ -479,14 +480,14 @@ export default function SmartGroupsSidebar({
         <p className="text-sm text-muted-foreground">Organize your buyers</p>
 
         <div className="relative">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-2 h-4 w-4 text-muted-foreground" />
           <Input
             id="group-search"
             name="group-search"
             placeholder="Search groups..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
+            className="pl-9 h-8 text-sm"
           />
         </div>
       </CardHeader>
@@ -494,17 +495,18 @@ export default function SmartGroupsSidebar({
       <CardContent className="flex-1 overflow-y-auto p-4">
         <div className="space-y-2">
           <div
-            className={`flex items-center justify-between p-2 rounded-md hover:bg-muted cursor-pointer ${
-              selectedGroupId === "" ? "bg-muted" : ""
+            className={`flex items-center justify-between px-2 py-1.5 rounded-md cursor-pointer ${
+              selectedGroupId === "" ? "bg-brand/5 text-foreground" : "hover:bg-muted/60"
             }`}
+            style={selectedGroupId === "" ? { boxShadow: "inset 2px 0 0 #F0303A" } : undefined}
             onClick={() => onGroupSelect?.("")}
             title="Show all buyers"
           >
-            <div className="flex items-center space-x-2 flex-1">
-              <Users className="h-4 w-4" />
-              <span className="text-xs whitespace-nowrap">All Buyers</span>
+            <div className="flex items-center space-x-2 flex-1 min-w-0">
+              <Users className="h-4 w-4 shrink-0" />
+              <span className="text-sm whitespace-nowrap">All Buyers</span>
             </div>
-            <Badge variant="secondary" className="text-xs">{totalBuyerCount}</Badge>
+            <Badge variant="secondary" className="text-xs text-muted-foreground">{totalBuyerCount}</Badge>
           </div>
           {filteredFolders.map((folder) => (
             <div
@@ -518,10 +520,10 @@ export default function SmartGroupsSidebar({
                 setDragFolderId(null)
               }}
             >
-              <div className="flex items-center justify-between">
+              <div className="group flex items-center justify-between">
                 <Button
                   variant="ghost"
-                  className="flex-1 justify-start p-2 h-auto"
+                  className="flex-1 justify-start px-2 py-1.5 h-auto"
                   onClick={() => toggleFolder(folder.id)}
                   title={`${folder.expanded ? "Collapse" : "Expand"} ${folder.name}`}
                 >
@@ -535,7 +537,7 @@ export default function SmartGroupsSidebar({
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Folder options">
+                    <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity" title="Folder options">
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -558,7 +560,7 @@ export default function SmartGroupsSidebar({
                       folder.id !== "buyer-types" &&
                       folder.id !== "engagement-status" &&
                       folder.id !== "custom-groups" && (
-                        <DropdownMenuItem onClick={() => setFolderToDelete(folder)} className="text-red-600">
+                        <DropdownMenuItem onClick={() => setFolderToDelete(folder)} className="text-red-600 dark:text-red-400">
                           <Trash2 className="mr-2 h-4 w-4" />
                           Delete Folder
                         </DropdownMenuItem>
@@ -579,9 +581,10 @@ export default function SmartGroupsSidebar({
                   {folder.groups.map((group) => (
                     <div
                       key={group.id}
-                      className={`flex items-center justify-between p-2 rounded-md hover:bg-muted cursor-pointer ${
-                        selectedGroupId === group.id ? "bg-muted" : ""
+                      className={`group flex items-center justify-between px-2 py-1.5 rounded-md cursor-pointer ${
+                        selectedGroupId === group.id ? "bg-brand/5 text-foreground" : "hover:bg-muted/60"
                       }`}
+                      style={selectedGroupId === group.id ? { boxShadow: "inset 2px 0 0 #F0303A" } : undefined}
                       onClick={() => onGroupSelect?.(group.id)}
                       title={`Select ${group.name} group`}
                       draggable
@@ -592,17 +595,17 @@ export default function SmartGroupsSidebar({
                         setDragGroup(null)
                       }}
                     >
-                      <div className="flex items-center space-x-2 flex-1">
+                      <div className="flex items-center space-x-2 flex-1 min-w-0">
                         {getGroupIcon(group)}
-                        <span className="text-xs whitespace-nowrap">{group.name}</span>
+                        <span className="text-sm whitespace-nowrap">{group.name}</span>
                       </div>
                       <div className="flex items-center space-x-1">
-                        <Badge variant="secondary" className="text-xs">
+                        <Badge variant="secondary" className="text-xs text-muted-foreground">
                           {buyerCounts[group.id] || 0}
                         </Badge>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-6 w-6" title="Group options">
+                            <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity" title="Group options">
                               <MoreHorizontal className="h-3 w-3" />
                             </Button>
                           </DropdownMenuTrigger>
@@ -615,7 +618,7 @@ export default function SmartGroupsSidebar({
                                   name: group.name,
                                   description: group.description || "",
                                   type: group.type || "manual",
-                                  color: group.color || "#3B82F6",
+                                  color: group.color || "#F0303A",
                                   icon: (group.criteria?.icon as IconValue) || "users",
                                   folder: String(group.criteria?.folder || folder.id),
                                 })
@@ -629,7 +632,7 @@ export default function SmartGroupsSidebar({
                                 e.stopPropagation()
                                 setGroupToDelete(group)
                               }}
-                              className="text-red-600"
+                              className="text-red-600 dark:text-red-400"
                             >
                               <Trash2 className="mr-2 h-4 w-4" />
                               Delete
@@ -666,11 +669,11 @@ export default function SmartGroupsSidebar({
       <Dialog open={showCreateGroup} onOpenChange={setShowCreateGroup}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create New Group</DialogTitle>
+            <DialogTitle>Create group</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div>
-              <Label htmlFor="group-name">Group Name</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="group-name" className="text-xs text-muted-foreground">Name</Label>
               <Input
                 id="group-name"
                 value={groupForm.name}
@@ -678,8 +681,8 @@ export default function SmartGroupsSidebar({
                 placeholder="Enter group name"
               />
             </div>
-            <div>
-              <Label htmlFor="group-description">Description</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="group-description" className="text-xs text-muted-foreground">Description</Label>
               <Textarea
                 id="group-description"
                 value={groupForm.description}
@@ -687,8 +690,8 @@ export default function SmartGroupsSidebar({
                 placeholder="Enter group description"
               />
             </div>
-            <div>
-              <Label htmlFor="group-folder">Parent Folder</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="group-folder" className="text-xs text-muted-foreground">Parent folder</Label>
               <Select
                 value={groupForm.folder}
                 onValueChange={(value) => setGroupForm((prev) => ({ ...prev, folder: value }))}
@@ -705,56 +708,48 @@ export default function SmartGroupsSidebar({
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label htmlFor="group-color">Icon Color</Label>
-              <Select
-                value={groupForm.color}
-                onValueChange={(value) =>
-                  setGroupForm((prev) => ({ ...prev, color: value as ColorValue }))
-                }
-              >
-                <SelectTrigger id="group-color">
-                  <SelectValue placeholder="Select a color" />
-                </SelectTrigger>
-                <SelectContent>
-                  {COLOR_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value} className="flex items-center gap-2">
-                      <span
-                        className="h-4 w-4 rounded-full border"
-                        style={{ backgroundColor: opt.value }}
-                      />
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Icon color</Label>
+              <div className="flex flex-wrap gap-2">
+                {COLOR_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    title={opt.label}
+                    aria-label={`Color ${opt.label}`}
+                    onClick={() => setGroupForm((prev) => ({ ...prev, color: opt.value as ColorValue }))}
+                    className={`h-7 w-7 rounded-md ${groupForm.color === opt.value ? "ring-2 ring-offset-2 ring-foreground ring-offset-background" : ""}`}
+                    style={{ backgroundColor: opt.value }}
+                  />
+                ))}
+              </div>
             </div>
-            <div>
-              <Label htmlFor="group-icon">Icon</Label>
-              <Select
-                value={groupForm.icon}
-                onValueChange={(value) => setGroupForm((prev) => ({ ...prev, icon: value as IconValue }))}
-              >
-                <SelectTrigger id="group-icon">
-                  <SelectValue placeholder="Select an icon" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ICON_OPTIONS.map((opt) => {
-                    const Icon = opt.icon
-                    return (
-                      <SelectItem key={opt.value} value={opt.value} className="flex items-center gap-2">
-                        <Icon className="h-4 w-4" /> {opt.label}
-                      </SelectItem>
-                    )
-                  })}
-                </SelectContent>
-              </Select>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Icon</Label>
+              <div className="grid grid-cols-5 gap-2">
+                {ICON_OPTIONS.map((opt) => {
+                  const Icon = opt.icon
+                  const active = groupForm.icon === opt.value
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      title={opt.label}
+                      aria-label={`Icon ${opt.label}`}
+                      onClick={() => setGroupForm((prev) => ({ ...prev, icon: opt.value }))}
+                      className={`flex h-9 w-9 items-center justify-center rounded-md border ${active ? "border-brand bg-brand/5 text-brand" : "border-border text-muted-foreground hover:bg-muted"}`}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </button>
+                  )
+                })}
+              </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowCreateGroup(false)}>
+              <Button variant="ghost" onClick={() => setShowCreateGroup(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleCreateGroup}>Create Group</Button>
+              <Button variant="brand" onClick={handleCreateGroup}>Create group</Button>
             </DialogFooter>
           </div>
         </DialogContent>
@@ -764,11 +759,11 @@ export default function SmartGroupsSidebar({
       <Dialog open={!!editingGroup} onOpenChange={() => setEditingGroup(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Group</DialogTitle>
+            <DialogTitle>Edit group</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div>
-              <Label htmlFor="edit-group-name">Group Name</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-group-name" className="text-xs text-muted-foreground">Name</Label>
               <Input
                 id="edit-group-name"
                 value={groupForm.name}
@@ -776,8 +771,8 @@ export default function SmartGroupsSidebar({
                 placeholder="Enter group name"
               />
             </div>
-            <div>
-              <Label htmlFor="edit-group-description">Description</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-group-description" className="text-xs text-muted-foreground">Description</Label>
               <Textarea
                 id="edit-group-description"
                 value={groupForm.description}
@@ -785,8 +780,8 @@ export default function SmartGroupsSidebar({
                 placeholder="Enter group description"
               />
             </div>
-            <div>
-              <Label htmlFor="edit-group-folder">Parent Folder</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-group-folder" className="text-xs text-muted-foreground">Parent folder</Label>
               <Select
                 value={groupForm.folder}
                 onValueChange={(value) => setGroupForm((prev) => ({ ...prev, folder: value }))}
@@ -803,56 +798,48 @@ export default function SmartGroupsSidebar({
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label htmlFor="edit-group-color">Icon Color</Label>
-              <Select
-                value={groupForm.color}
-                onValueChange={(value) =>
-                  setGroupForm((prev) => ({ ...prev, color: value as ColorValue }))
-                }
-              >
-                <SelectTrigger id="edit-group-color">
-                  <SelectValue placeholder="Select a color" />
-                </SelectTrigger>
-                <SelectContent>
-                  {COLOR_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value} className="flex items-center gap-2">
-                      <span
-                        className="h-4 w-4 rounded-full border"
-                        style={{ backgroundColor: opt.value }}
-                      />
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Icon color</Label>
+              <div className="flex flex-wrap gap-2">
+                {COLOR_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    title={opt.label}
+                    aria-label={`Color ${opt.label}`}
+                    onClick={() => setGroupForm((prev) => ({ ...prev, color: opt.value as ColorValue }))}
+                    className={`h-7 w-7 rounded-md ${groupForm.color === opt.value ? "ring-2 ring-offset-2 ring-foreground ring-offset-background" : ""}`}
+                    style={{ backgroundColor: opt.value }}
+                  />
+                ))}
+              </div>
             </div>
-            <div>
-              <Label htmlFor="edit-group-icon">Icon</Label>
-              <Select
-                value={groupForm.icon}
-                onValueChange={(value) => setGroupForm((prev) => ({ ...prev, icon: value as IconValue }))}
-              >
-                <SelectTrigger id="edit-group-icon">
-                  <SelectValue placeholder="Select an icon" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ICON_OPTIONS.map((opt) => {
-                    const Icon = opt.icon
-                    return (
-                      <SelectItem key={opt.value} value={opt.value} className="flex items-center gap-2">
-                        <Icon className="h-4 w-4" /> {opt.label}
-                      </SelectItem>
-                    )
-                  })}
-                </SelectContent>
-              </Select>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Icon</Label>
+              <div className="grid grid-cols-5 gap-2">
+                {ICON_OPTIONS.map((opt) => {
+                  const Icon = opt.icon
+                  const active = groupForm.icon === opt.value
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      title={opt.label}
+                      aria-label={`Icon ${opt.label}`}
+                      onClick={() => setGroupForm((prev) => ({ ...prev, icon: opt.value }))}
+                      className={`flex h-9 w-9 items-center justify-center rounded-md border ${active ? "border-brand bg-brand/5 text-brand" : "border-border text-muted-foreground hover:bg-muted"}`}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </button>
+                  )
+                })}
+              </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setEditingGroup(null)}>
+              <Button variant="ghost" onClick={() => setEditingGroup(null)}>
                 Cancel
               </Button>
-              <Button onClick={handleEditGroup}>Save Changes</Button>
+              <Button variant="brand" onClick={handleEditGroup}>Save changes</Button>
             </DialogFooter>
           </div>
         </DialogContent>
@@ -862,11 +849,11 @@ export default function SmartGroupsSidebar({
       <Dialog open={showCreateFolder} onOpenChange={setShowCreateFolder}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create New Folder</DialogTitle>
+            <DialogTitle>Create folder</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div>
-              <Label htmlFor="folder-name">Folder Name</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="folder-name" className="text-xs text-muted-foreground">Name</Label>
               <Input
                 id="folder-name"
                 value={folderForm.name}
@@ -875,10 +862,10 @@ export default function SmartGroupsSidebar({
               />
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowCreateFolder(false)}>
+              <Button variant="ghost" onClick={() => setShowCreateFolder(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleCreateFolder}>Create Folder</Button>
+              <Button variant="brand" onClick={handleCreateFolder}>Create folder</Button>
             </DialogFooter>
           </div>
         </DialogContent>
@@ -888,11 +875,11 @@ export default function SmartGroupsSidebar({
       <Dialog open={showEditFolder} onOpenChange={setShowEditFolder}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Folder</DialogTitle>
+            <DialogTitle>Rename folder</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div>
-              <Label htmlFor="edit-folder-name">Folder Name</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-folder-name" className="text-xs text-muted-foreground">Name</Label>
               <Input
                 id="edit-folder-name"
                 value={folderForm.name}
@@ -901,10 +888,10 @@ export default function SmartGroupsSidebar({
               />
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowEditFolder(false)}>
+              <Button variant="ghost" onClick={() => setShowEditFolder(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleEditFolder}>Save Changes</Button>
+              <Button variant="brand" onClick={handleEditFolder}>Save changes</Button>
             </DialogFooter>
           </div>
         </DialogContent>
