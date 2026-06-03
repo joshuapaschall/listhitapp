@@ -82,7 +82,7 @@ describe("/api/calls/history", () => {
     fetchMock.mockClear()
   })
 
-  test("selects agent and recording confidence fields", async () => {
+  test("selects buyer join + recording fields, without the dead agent join", async () => {
     const request = new NextRequest("http://test/api/calls/history?page=1&pageSize=25")
 
     const response = await GET(request)
@@ -90,7 +90,10 @@ describe("/api/calls/history", () => {
 
     expect(response.status).toBe(200)
     expect(selectColumns).toContain("recording_confidence")
-    expect(selectColumns).toContain("user:profiles!calls_user_id_fkey")
+    // The profiles join used a non-existent calls_user_id_fkey relationship,
+    // which 500'd the whole query and emptied the call log. It must be gone.
+    expect(selectColumns).not.toContain("user:profiles!calls_user_id_fkey")
+    expect(selectColumns).toContain("buyer:buyers")
     expect(orderColumn).toBe("started_at:desc")
     expect(rangeArgs).toEqual([0, 24])
     expect(payload.calls[0].from_agent_id).toBe("agent-42")

@@ -33,11 +33,6 @@ export async function GET(request: NextRequest) {
         *,
         telnyx_recording_id,
         recording_confidence,
-        user:profiles!calls_user_id_fkey(
-          id,
-          email,
-          display_name
-        ),
         buyer:buyers(
           id,
           fname,
