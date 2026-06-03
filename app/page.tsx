@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect, useMemo, useRef } from "react"
-import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useDebounce } from "@/hooks/use-debounce"
 import { formatPhoneDisplay } from "@/lib/dedup-utils"
@@ -72,6 +71,7 @@ import { usePermissions } from "@/hooks/use-permissions"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { PROPERTY_TYPES } from "@/lib/constant"
 import { saveAudienceSnapshot } from "@/lib/campaign-audience"
+import CampaignChannelPicker from "@/components/campaigns/campaign-channel-picker"
 
 const ITEMS_PER_PAGE_OPTIONS = [10, 20, 50, 100]
 const DEFAULT_ITEMS_PER_PAGE = 50
@@ -265,6 +265,8 @@ function BuyersPageContent() {
   const [smsBuyer, setSmsBuyer] = useState<Buyer | null>(null)
   const [showSendEmailModal, setShowSendEmailModal] = useState(false)
   const [emailBuyer, setEmailBuyer] = useState<Buyer | null>(null)
+  const [campaignPickerOpen, setCampaignPickerOpen] = useState(false)
+  const [campaignPickerSource, setCampaignPickerSource] = useState<"header" | "selection">("header")
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [groupsCollapsed, setGroupsCollapsed] = useState(false)
 
@@ -908,23 +910,6 @@ function BuyersPageContent() {
     return "text-red-600 bg-red-50"
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "lead":
-        return "chip-blue"
-      case "qualified":
-        return "chip-green"
-      case "active":
-        return "chip-orange"
-      case "under_contract":
-        return "chip-blue"
-      case "closed":
-        return "chip-green"
-      default:
-        return "chip-blue"
-    }
-  }
-
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString()
   }
@@ -1130,10 +1115,8 @@ function BuyersPageContent() {
                   </DropdownMenuContent>
                   </DropdownMenu>
                 </Can>
-                <Button asChild className="btn-secondary" aria-label="Create a new marketing campaign">
-                  <Link href="/campaigns/new">
-                    <Target className="mr-1 h-4 w-4" /> Campaign
-                  </Link>
+                <Button variant="outline" aria-label="Create a new marketing campaign" onClick={() => { setCampaignPickerSource("header"); setCampaignPickerOpen(true) }}>
+                  <Target className="mr-1 h-4 w-4" /> Campaign
                 </Button>
               </div>
             </div>
@@ -1223,10 +1206,8 @@ function BuyersPageContent() {
                       </DropdownMenuContent>
                     </DropdownMenu>
 
-                    <Button asChild size="sm" className="btn-secondary" aria-label="Create campaign with selected buyers">
-                      <Link href={`/campaigns/new?buyers=${selectedBuyers.join(",")}`}>
-                        <Target className="mr-1 h-4 w-4" /> Campaign
-                      </Link>
+                    <Button variant="outline" size="sm" aria-label="Create campaign with selected buyers" onClick={() => { setCampaignPickerSource("selection"); setCampaignPickerOpen(true) }}>
+                      <Target className="mr-1 h-4 w-4" /> Campaign
                     </Button>
 
                     <Can permission="buyers.delete">
@@ -1501,7 +1482,6 @@ function BuyersPageContent() {
                   <th className="p-3 text-left text-heading">Score</th>
                   <th className="p-3 text-left text-heading">Tags</th>
                   <th className="p-3 text-left text-heading">Created</th>
-                  <th className="p-3 text-left text-heading">Status</th>
                   <th className="p-3 text-left text-heading w-16">Actions</th>
                 </tr>
               </thead>
@@ -1529,6 +1509,12 @@ function BuyersPageContent() {
                               <CheckCircle className="h-4 w-4 text-emerald-500" />
                             </span>
                           )}
+                          <span title={buyer.can_receive_email && !buyer.is_unsubscribed ? "Can receive email" : "Cannot receive email"}>
+                            <Mail className={`h-4 w-4 ${buyer.can_receive_email && !buyer.is_unsubscribed ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/40"}`} />
+                          </span>
+                          <span title={buyer.can_receive_sms && !buyer.is_unsubscribed ? "Can receive SMS" : "Cannot receive SMS"}>
+                            <MessageSquare className={`h-4 w-4 ${buyer.can_receive_sms && !buyer.is_unsubscribed ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/40"}`} />
+                          </span>
                         </div>
                       </div>
                       {buyer.company && <div className="text-xs text-secondary">{buyer.company}</div>}
@@ -1570,26 +1556,6 @@ function BuyersPageContent() {
                     </td>
                     <td className="p-3 text-sm text-secondary font-mono whitespace-nowrap">
                       {buyer.created_at ? formatDate(buyer.created_at) : "—"}
-                    </td>
-                    <td className="p-3 text-body">
-                      {(() => {
-                      const status = buyer.status ?? "lead"
-                      return (
-                      <div className="flex flex-col space-y-2">
-                        <span className={`${getStatusColor(status)} chip w-fit`}>
-                          {status.charAt(0).toUpperCase() + status.slice(1)}
-                        </span>
-                        <div className="flex items-center space-x-2">
-                          <span title={buyer.can_receive_email && !buyer.is_unsubscribed ? "Can receive email" : "Cannot receive email"}>
-                            <Mail className={`h-4 w-4 ${buyer.can_receive_email && !buyer.is_unsubscribed ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/40"}`} />
-                          </span>
-                          <span title={buyer.can_receive_sms && !buyer.is_unsubscribed ? "Can receive SMS" : "Cannot receive SMS"}>
-                            <MessageSquare className={`h-4 w-4 ${buyer.can_receive_sms && !buyer.is_unsubscribed ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/40"}`} />
-                          </span>
-                        </div>
-                      </div>
-                      )
-                      })()}
                     </td>
                     <td className="p-3">
                       <div className="flex items-center space-x-1">
@@ -1797,6 +1763,25 @@ function BuyersPageContent() {
         open={showSendEmailModal}
         onOpenChange={setShowSendEmailModal}
         buyer={emailBuyer}
+      />
+      <CampaignChannelPicker
+        open={campaignPickerOpen}
+        onOpenChange={setCampaignPickerOpen}
+        onSelect={(channel) => {
+          if (campaignPickerSource === "selection" && selectedBuyers.length > 0) {
+            saveAudienceSnapshot({
+              createdAt: new Date().toISOString(),
+              source: "buyers-filter",
+              channel,
+              buyerIds: selectedBuyers,
+              recipientCount: selectedBuyers.length,
+            })
+            router.push(`/campaigns?prefill=${channel}`)
+          } else {
+            router.push(`/campaigns/new?type=${channel}`)
+          }
+          setCampaignPickerOpen(false)
+        }}
       />
       <Dialog open={saveSegmentOpen} onOpenChange={setSaveSegmentOpen}>
         <DialogContent>
