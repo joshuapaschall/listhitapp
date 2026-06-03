@@ -38,8 +38,8 @@ export default function MainLayout({ children }: MainLayoutProps) {
   // Auto-open sidebar on larger screens
   useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth >= 1536) {
-        // 2xl breakpoint
+      if (window.innerWidth >= 1024) {
+        // lg breakpoint
         setSidebarOpen(true)
       } else {
         setSidebarOpen(false)
@@ -82,13 +82,13 @@ export default function MainLayout({ children }: MainLayoutProps) {
   return (
     <div className="flex h-screen bg-background">
       {/* Sidebar - responsive behavior */}
-      <div className={`${sidebarOpen ? "block" : "hidden"} 2xl:block h-full`}>
+      <div className={`${sidebarOpen ? "block" : "hidden"} lg:block h-full`}>
         <Sidebar className="h-full" />
       </div>
 
       {/* Mobile overlay */}
       {sidebarOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-40 2xl:hidden" onClick={() => setSidebarOpen(false)} />
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
       {/* Main Content */}

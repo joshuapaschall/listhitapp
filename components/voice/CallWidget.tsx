@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRightLeft, Grid, Mic, MicOff, Pause, Phone, PhoneIncoming, PhoneOff, Play } from "lucide-react";
+import { ArrowRightLeft, Grid, Mic, MicOff, Pause, PhoneIncoming, PhoneOff, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useCall } from "@/components/voice/CallProvider";
@@ -85,8 +85,7 @@ export function CallWidget() {
     </div>;
   }
 
-  return <>
-    <Button className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full shadow-lg bg-[hsl(var(--brand))] hover:bg-[hsl(var(--brand-hover))] text-white" size="icon" aria-label="Open dialer" onClick={() => setDialerOpen(true)}><Phone className="h-6 w-6" /></Button>
-    <Dialer open={dialerOpen} onOpenChange={setDialerOpen} />
-  </>;
+  // Launcher FAB removed — the dialer is opened from the header (openDialer).
+  // Keep the Dialer mounted here so that header button still has something to open.
+  return <Dialer open={dialerOpen} onOpenChange={setDialerOpen} />;
 }
