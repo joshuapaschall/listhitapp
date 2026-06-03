@@ -15,6 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { supabase } from "@/lib/supabase"
 import type { Buyer, Property, OfferWithRelations } from "@/lib/supabase"
 import { normalizePhone, formatPhoneDisplay } from "@/lib/dedup-utils"
@@ -384,32 +385,56 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
         <DialogContent className="max-w-3xl w-full p-0 gap-0 overflow-hidden flex flex-col h-[min(680px,90vh)]">
         <DialogHeader className="shrink-0 px-6 pt-5 pb-3 border-b">
           <DialogTitle className="text-base font-semibold tracking-tight">
-            Edit Buyer: {buyer.fname} {buyer.lname}
+            Edit buyer: {buyer.fname} {buyer.lname}
           </DialogTitle>
         </DialogHeader>
 
+        {(() => {
+          const stripName = formData.full_name || `${formData.fname} ${formData.lname}`.trim() || "Unnamed"
+          const stripInitials = stripName.split(" ").map((n) => n[0]).filter(Boolean).slice(0, 2).join("").toUpperCase()
+          return (
+            <div className="flex shrink-0 items-center gap-3 border-b bg-muted/40 px-6 py-3">
+              <Avatar className="h-9 w-9 shrink-0">
+                <AvatarFallback>{stripInitials || "—"}</AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium text-foreground">{stripName}</div>
+                <div className="truncate text-xs text-muted-foreground">
+                  {formData.email || "No email"} · {formData.phone || "No phone"}
+                </div>
+              </div>
+              <div className="ml-auto flex items-center gap-2">
+                <Badge variant="secondary" className="text-xs text-muted-foreground">Score {formData.score}</Badge>
+                {formData.status ? (
+                  <Badge variant="outline" className="text-xs capitalize">{formData.status}</Badge>
+                ) : null}
+              </div>
+            </div>
+          )
+        })()}
+
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
           <Tabs defaultValue="contact" className="flex flex-col flex-1 min-h-0">
-            <TabsList className="flex w-full justify-start gap-1 overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden shrink-0 mx-6 mt-3">
-              <TabsTrigger value="contact" className="text-xs shrink-0">
+            <TabsList className="inline-flex w-full gap-1 rounded-lg bg-muted p-1 overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden shrink-0 mx-6 mt-3">
+              <TabsTrigger value="contact" className="text-xs shrink-0 rounded-md text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm focus-visible:ring-1 focus-visible:ring-[hsl(var(--brand-ring))] focus-visible:ring-offset-0">
                 Contact
               </TabsTrigger>
-              <TabsTrigger value="location" className="text-xs shrink-0">
+              <TabsTrigger value="location" className="text-xs shrink-0 rounded-md text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm focus-visible:ring-1 focus-visible:ring-[hsl(var(--brand-ring))] focus-visible:ring-offset-0">
                 Location
               </TabsTrigger>
-              <TabsTrigger value="preferences" className="text-xs shrink-0">
+              <TabsTrigger value="preferences" className="text-xs shrink-0 rounded-md text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm focus-visible:ring-1 focus-visible:ring-[hsl(var(--brand-ring))] focus-visible:ring-offset-0">
                 Preferences
               </TabsTrigger>
-              <TabsTrigger value="status" className="text-xs shrink-0">
+              <TabsTrigger value="status" className="text-xs shrink-0 rounded-md text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm focus-visible:ring-1 focus-visible:ring-[hsl(var(--brand-ring))] focus-visible:ring-offset-0">
                 Status
               </TabsTrigger>
-              <TabsTrigger value="showings" className="text-xs shrink-0">
+              <TabsTrigger value="showings" className="text-xs shrink-0 rounded-md text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm focus-visible:ring-1 focus-visible:ring-[hsl(var(--brand-ring))] focus-visible:ring-offset-0">
                 Showings
               </TabsTrigger>
-              <TabsTrigger value="offers" className="text-xs shrink-0">
+              <TabsTrigger value="offers" className="text-xs shrink-0 rounded-md text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm focus-visible:ring-1 focus-visible:ring-[hsl(var(--brand-ring))] focus-visible:ring-offset-0">
                 Offers
               </TabsTrigger>
-              <TabsTrigger value="communications" className="text-xs shrink-0">
+              <TabsTrigger value="communications" className="text-xs shrink-0 rounded-md text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm focus-visible:ring-1 focus-visible:ring-[hsl(var(--brand-ring))] focus-visible:ring-offset-0">
                 Communications
               </TabsTrigger>
             </TabsList>
@@ -419,8 +444,8 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
             <TabsContent value="contact" className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-                    <User className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle className="flex items-center gap-2 text-sm font-medium tracking-tight">
+                    <User className="h-5 w-5 text-brand" />
                     Personal Information
                   </CardTitle>
                 </CardHeader>
@@ -463,8 +488,8 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
 
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-                    <Phone className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle className="flex items-center gap-2 text-sm font-medium tracking-tight">
+                    <Phone className="h-5 w-5 text-brand" />
                     Contact Details
                   </CardTitle>
                 </CardHeader>
@@ -507,8 +532,8 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
 
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-                    <MapPin className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle className="flex items-center gap-2 text-sm font-medium tracking-tight">
+                    <MapPin className="h-5 w-5 text-brand" />
                     Mailing Address
                   </CardTitle>
                 </CardHeader>
@@ -555,8 +580,8 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
             <TabsContent value="location" className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-                    <MapPin className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle className="flex items-center gap-2 text-sm font-medium tracking-tight">
+                    <MapPin className="h-5 w-5 text-brand" />
                     Target Locations
                   </CardTitle>
                   <CardDescription>
@@ -572,8 +597,8 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
 
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-                    <Home className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle className="flex items-center gap-2 text-sm font-medium tracking-tight">
+                    <Home className="h-5 w-5 text-brand" />
                     Property Interest
                   </CardTitle>
                 </CardHeader>
@@ -588,8 +613,8 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
             <TabsContent value="preferences" className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-                    <Home className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle className="flex items-center gap-2 text-sm font-medium tracking-tight">
+                    <Home className="h-5 w-5 text-brand" />
                     Property Types
                   </CardTitle>
                   <CardDescription>What types of properties are they interested in?</CardDescription>
@@ -623,8 +648,8 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
 
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-                    <DollarSign className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle className="flex items-center gap-2 text-sm font-medium tracking-tight">
+                    <DollarSign className="h-5 w-5 text-brand" />
                     Price Range
                   </CardTitle>
                 </CardHeader>
@@ -652,8 +677,8 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
 
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-                    <Home className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle className="flex items-center gap-2 text-sm font-medium tracking-tight">
+                    <Home className="h-5 w-5 text-brand" />
                     Property Specifications
                   </CardTitle>
                 </CardHeader>
@@ -718,8 +743,8 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
 
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-                    <DollarSign className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle className="flex items-center gap-2 text-sm font-medium tracking-tight">
+                    <DollarSign className="h-5 w-5 text-brand" />
                     Investment Criteria
                   </CardTitle>
                 </CardHeader>
@@ -766,8 +791,8 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
 
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-                    <DollarSign className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle className="flex items-center gap-2 text-sm font-medium tracking-tight">
+                    <DollarSign className="h-5 w-5 text-brand" />
                     Owner Finance / Rent to Own / Land Contract
                   </CardTitle>
                 </CardHeader>
@@ -816,8 +841,8 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
             <TabsContent value="status" className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-                    <FileText className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle className="flex items-center gap-2 text-sm font-medium tracking-tight">
+                    <FileText className="h-5 w-5 text-brand" />
                     Buyer Status & Classification
                   </CardTitle>
                 </CardHeader>
@@ -922,8 +947,8 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
 
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-                    <FileText className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle className="flex items-center gap-2 text-sm font-medium tracking-tight">
+                    <FileText className="h-5 w-5 text-brand" />
                     Tags & Notes
                   </CardTitle>
                 </CardHeader>
@@ -956,8 +981,8 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
             <TabsContent value="showings" className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-                    <Calendar className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle className="flex items-center gap-2 text-sm font-medium tracking-tight">
+                    <Calendar className="h-5 w-5 text-brand" />
                     Property Showings
                   </CardTitle>
                   <CardDescription>Track property showings and viewing history</CardDescription>
@@ -988,7 +1013,10 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
                     ))}
 
                     {showings.length === 0 && (
-                      <div className="text-center py-8 text-muted-foreground">No showings scheduled yet</div>
+                      <div className="flex flex-col items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+                        <Calendar className="h-8 w-8 opacity-50" />
+                        No showings scheduled yet
+                      </div>
                     )}
                   </div>
                 </CardContent>
@@ -999,8 +1027,8 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
             <TabsContent value="offers" className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-                    <DollarSign className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle className="flex items-center gap-2 text-sm font-medium tracking-tight">
+                    <DollarSign className="h-5 w-5 text-brand" />
                     Offers & Negotiations
                   </CardTitle>
                   <CardDescription>Track offers made and received</CardDescription>
@@ -1026,7 +1054,10 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
                     ))}
 
                     {offers.length === 0 && (
-                      <div className="text-center py-8 text-muted-foreground">No offers yet</div>
+                      <div className="flex flex-col items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+                        <DollarSign className="h-8 w-8 opacity-50" />
+                        No offers yet
+                      </div>
                     )}
                   </div>
                 </CardContent>
@@ -1037,8 +1068,8 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
             <TabsContent value="communications" className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-                    <MessageSquare className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle className="flex items-center gap-2 text-sm font-medium tracking-tight">
+                    <MessageSquare className="h-5 w-5 text-brand" />
                     Communication History
                   </CardTitle>
                   <CardDescription>Track all communications with this buyer</CardDescription>
@@ -1098,7 +1129,7 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={loading}>
+            <Button type="submit" variant="brand" disabled={loading}>
               {loading ? "Updating..." : "Update Buyer"}
             </Button>
           </div>
