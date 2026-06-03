@@ -26,6 +26,7 @@ import { useNotifications } from "@/hooks/use-notifications"
 import { useSession } from "@/hooks/use-session"
 import { useCall } from "@/components/voice/CallProvider"
 import SendEmailModal from "@/components/buyers/send-email-modal"
+import SendSmsModal from "@/components/buyers/send-sms-modal"
 
 interface HeaderProps {
   toggleSidebar: () => void
@@ -48,6 +49,7 @@ export function Header({ toggleSidebar }: HeaderProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [mounted, setMounted] = useState(false)
   const [emailOpen, setEmailOpen] = useState(false)
+  const [smsOpen, setSmsOpen] = useState(false)
   const { notifications, unreadCount, markAsRead } = useNotifications()
   const { user } = useSession()
   const { openDialer } = useCall()
@@ -88,7 +90,7 @@ export function Header({ toggleSidebar }: HeaderProps) {
         </div>
 
         <div className="flex items-center space-x-2">
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" onClick={() => setSmsOpen(true)}>
             <MessageSquare className="h-4 w-4" />
           </Button>
           <Button variant="ghost" size="sm" onClick={openDialer}>
@@ -173,6 +175,7 @@ export function Header({ toggleSidebar }: HeaderProps) {
         </div>
       </div>
       <SendEmailModal open={emailOpen} onOpenChange={setEmailOpen} buyer={null} />
+      <SendSmsModal open={smsOpen} onOpenChange={setSmsOpen} buyer={null} />
     </header>
   )
 }

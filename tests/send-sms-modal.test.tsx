@@ -12,6 +12,11 @@ vi.mock("@/hooks/use-session", () => ({
 // @ts-ignore
 global.URL.createObjectURL = vi.fn(() => "blob:mock")
 
+// The redesigned modal posts to /api/messages/send; mock fetch so the async
+// send path resolves cleanly after the (synchronous) upload call.
+// @ts-ignore
+global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) })
+
 vi.mock("../services/template-service", () => ({
   TemplateService: { listTemplates: vi.fn().mockResolvedValue([]), addTemplate: vi.fn() }
 }))
@@ -59,7 +64,8 @@ describe("SendSmsModal", () => {
   const exts = ALLOWED_MMS_EXTENSIONS
 
   test.each(exts)("uploads %s files", async (ext) => {
-    const buyer = { id: "b1" } as any
+    // A recipient value (phone) is now required to enable Send.
+    const buyer = { id: "b1", phone: "+15551234567" } as any
     render(<SendSmsModal open={true} onOpenChange={() => {}} buyer={buyer} />)
     const textarea = screen.getByRole("textbox") as HTMLTextAreaElement
     fireEvent.change(textarea, { target: { value: "Hi" } })
