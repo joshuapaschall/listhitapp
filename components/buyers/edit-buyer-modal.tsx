@@ -2,8 +2,9 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
+import { formatDistanceToNow } from "date-fns"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -34,6 +35,9 @@ import { OfferService } from "@/services/offer-service"
 import OfferCard from "@/components/offers/offer-card"
 import OfferDetailDrawer from "@/components/offers/offer-detail-drawer"
 import CreateOfferModal from "@/components/offers/CreateOfferModal"
+import SendEmailModal from "@/components/buyers/send-email-modal"
+import SendSmsModal from "@/components/buyers/send-sms-modal"
+import { CallButton } from "@/components/voice/CallButton"
 import { BuyerService } from "@/services/buyer-service"
 import { toast } from "sonner"
 import {
@@ -71,6 +75,20 @@ const SOURCES = [
   "Other",
 ]
 
+// Small presentational helpers for the Communications timeline.
+const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s)
+const fmtDuration = (sec: number | null) => {
+  if (!sec || sec <= 0) return ""
+  const m = Math.floor(sec / 60)
+  const s = sec % 60
+  return m > 0 ? `${m}m ${s}s` : `${s}s`
+}
+const relTime = (ts: string | null) => {
+  if (!ts) return ""
+  const d = new Date(ts)
+  return isNaN(d.getTime()) ? "" : formatDistanceToNow(d, { addSuffix: true })
+}
+
 export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }: EditBuyerModalProps) {
   const [loading, setLoading] = useState(false)
   const [groupIds, setGroupIds] = useState<string[]>([])
@@ -93,6 +111,50 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
     // e.g. inside the inbox conversation pane.)
     enabled: !!buyer?.id && open,
   })
+  const [showEmailModal, setShowEmailModal] = useState(false)
+  const [showSmsModal, setShowSmsModal] = useState(false)
+  const { data: buyerMessages = [], isLoading: messagesLoading } = useQuery({
+    queryKey: ["buyer-messages", buyer?.id],
+    queryFn: async () => {
+      const res = await fetch(`/api/buyers/${buyer!.id}/messages`)
+      const json = await res.json().catch(() => ({}))
+      return (json?.messages ?? []) as any[]
+    },
+    enabled: !!buyer?.id && open,
+  })
+  const { data: buyerCalls = [], isLoading: callsLoading } = useQuery({
+    queryKey: ["buyer-calls", buyer?.id],
+    queryFn: async () => {
+      const res = await fetch(`/api/calls/history?buyerId=${buyer!.id}&pageSize=50`)
+      const json = await res.json().catch(() => ({}))
+      return (json?.calls ?? []) as any[]
+    },
+    enabled: !!buyer?.id && open,
+  })
+  const commsLoading = messagesLoading || callsLoading
+  const commsTimeline = useMemo(() => {
+    const sms = (buyerMessages || []).map((m: any) => ({
+      id: `sms-${m.id}`,
+      type: "sms" as const,
+      ts: m.created_at as string | null,
+      direction: (m.direction as string) || "",
+      body: (m.body as string) || "",
+      status: (m.status as string) || "",
+      duration: null as number | null,
+    }))
+    const calls = (buyerCalls || []).map((c: any) => ({
+      id: `call-${c.id}`,
+      type: "call" as const,
+      ts: c.started_at as string | null,
+      direction: (c.direction as string) || "",
+      body: "",
+      status: (c.status as string) || "",
+      duration: (c.duration_seconds as number | null) ?? null,
+    }))
+    return [...sms, ...calls].sort(
+      (a, b) => new Date(b.ts || 0).getTime() - new Date(a.ts || 0).getTime(),
+    )
+  }, [buyerMessages, buyerCalls])
   const [formData, setFormData] = useState({
     // Contact Info
     fname: "",
@@ -321,26 +383,26 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
 
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
           <Tabs defaultValue="contact" className="flex flex-col flex-1 min-h-0">
-            <TabsList className="grid w-full grid-cols-7 shrink-0 mx-6 mt-3">
-              <TabsTrigger value="contact" className="text-xs">
+            <TabsList className="flex w-full justify-start gap-1 overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden shrink-0 mx-6 mt-3">
+              <TabsTrigger value="contact" className="text-xs shrink-0">
                 Contact
               </TabsTrigger>
-              <TabsTrigger value="location" className="text-xs">
+              <TabsTrigger value="location" className="text-xs shrink-0">
                 Location
               </TabsTrigger>
-              <TabsTrigger value="preferences" className="text-xs">
+              <TabsTrigger value="preferences" className="text-xs shrink-0">
                 Preferences
               </TabsTrigger>
-              <TabsTrigger value="status" className="text-xs">
+              <TabsTrigger value="status" className="text-xs shrink-0">
                 Status
               </TabsTrigger>
-              <TabsTrigger value="showings" className="text-xs">
+              <TabsTrigger value="showings" className="text-xs shrink-0">
                 Showings
               </TabsTrigger>
-              <TabsTrigger value="offers" className="text-xs">
+              <TabsTrigger value="offers" className="text-xs shrink-0">
                 Offers
               </TabsTrigger>
-              <TabsTrigger value="communications" className="text-xs">
+              <TabsTrigger value="communications" className="text-xs shrink-0">
                 Communications
               </TabsTrigger>
             </TabsList>
@@ -978,11 +1040,47 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
                   <Button variant="destructive" onClick={handleUnsubscribe}>
                     Unsubscribe from All
                   </Button>
-                  <div className="text-center py-8 text-muted-foreground">
-                    <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>Communications functionality will be implemented in a future update.</p>
-                    <p className="text-sm">This will include email history, SMS logs, and call records.</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setShowEmailModal(true)}>
+                      <Mail className="h-4 w-4 mr-1.5" /> Send Email
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setShowSmsModal(true)}>
+                      <MessageSquare className="h-4 w-4 mr-1.5" /> Send SMS
+                    </Button>
+                    <CallButton
+                      phone={buyer?.phone}
+                      name={buyer?.full_name || `${buyer?.fname ?? ""} ${buyer?.lname ?? ""}`.trim()}
+                      buyerId={buyer?.id}
+                    />
                   </div>
+                  {commsLoading ? (
+                    <p className="text-sm text-muted-foreground">Loading…</p>
+                  ) : commsTimeline.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">No communications yet.</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {commsTimeline.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center gap-3 rounded-md border border-border bg-muted/40 px-3 py-2"
+                        >
+                          {item.type === "sms" ? (
+                            <MessageSquare className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          ) : (
+                            <Phone className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          )}
+                          <p className="min-w-0 flex-1 truncate text-sm text-foreground">
+                            {item.type === "sms"
+                              ? `${cap(item.direction) || "Message"}${item.body ? ` · ${item.body.slice(0, 80)}` : ""}`
+                              : `${cap(item.direction) || "Call"}${item.status ? ` · ${cap(item.status)}` : ""}${
+                                  fmtDuration(item.duration) ? ` · ${fmtDuration(item.duration)}` : ""
+                                }`}
+                          </p>
+                          <span className="shrink-0 text-xs text-muted-foreground">{relTime(item.ts)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -1022,6 +1120,8 @@ export default function EditBuyerModal({ open, onOpenChange, buyer, onSuccess }:
       onSuccess={refetchOffers}
       canManage
     />
+    <SendEmailModal open={showEmailModal} onOpenChange={setShowEmailModal} buyer={buyer} />
+    <SendSmsModal open={showSmsModal} onOpenChange={setShowSmsModal} buyer={buyer} />
     </>
   )
 }

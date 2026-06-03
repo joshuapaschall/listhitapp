@@ -24,6 +24,7 @@ import ImportBuyersModal from "@/components/buyers/import-buyers-modal"
 import AddBuyerModal from "@/components/buyers/add-buyer-modal"
 import EditBuyerModal from "@/components/buyers/edit-buyer-modal"
 import SendSmsModal from "@/components/buyers/send-sms-modal"
+import SendEmailModal from "@/components/buyers/send-email-modal"
 import SmartGroupsSidebar from "@/components/buyers/smart-groups-sidebar"
 import BulkTagsDialog from "@/components/buyers/bulk-tags-dialog"
 import BulkGroupDialog from "@/components/buyers/bulk-group-dialog"
@@ -261,6 +262,8 @@ function BuyersPageContent() {
   const [editingBuyer, setEditingBuyer] = useState<Buyer | null>(null)
   const [showSendSmsModal, setShowSendSmsModal] = useState(false)
   const [smsBuyer, setSmsBuyer] = useState<Buyer | null>(null)
+  const [showSendEmailModal, setShowSendEmailModal] = useState(false)
+  const [emailBuyer, setEmailBuyer] = useState<Buyer | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [tagActionMode, setTagActionMode] = useState<"add" | "remove">("add")
   const [showTagDialog, setShowTagDialog] = useState(false)
@@ -707,6 +710,11 @@ function BuyersPageContent() {
   const handleSendSms = (buyer: Buyer) => {
     setSmsBuyer(buyer)
     setShowSendSmsModal(true)
+  }
+
+  const handleSendEmail = (buyer: Buyer) => {
+    setEmailBuyer(buyer)
+    setShowSendEmailModal(true)
   }
 
   const performDeleteBuyer = async () => {
@@ -1577,6 +1585,7 @@ function BuyersPageContent() {
                           variant="ghost"
                           size="sm"
                           className="h-8 w-8 p-0 group"
+                          onClick={() => handleSendEmail(buyer)}
                           aria-label={`Send email to ${formatName(buyer)}`}
                         >
                           <Mail className="h-4 w-4 text-gray-500 group-hover:text-sky-600 transition" />
@@ -1775,6 +1784,11 @@ function BuyersPageContent() {
           queryClient.invalidateQueries({ queryKey: ["buyerCountsByGroup"] })
           queryClient.invalidateQueries({ queryKey: ["totalBuyersCount"] })
         }}
+      />
+      <SendEmailModal
+        open={showSendEmailModal}
+        onOpenChange={setShowSendEmailModal}
+        buyer={emailBuyer}
       />
       <Dialog open={saveSegmentOpen} onOpenChange={setSaveSegmentOpen}>
         <DialogContent>

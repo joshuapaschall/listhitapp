@@ -457,7 +457,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
   return (
     <>
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <User className="h-5 w-5 text-blue-500" />
@@ -467,20 +467,20 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="contact" className="flex items-center gap-2">
+          <TabsList className="flex w-full justify-start gap-1 overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <TabsTrigger value="contact" className="flex items-center gap-2 shrink-0">
               <User className="h-4 w-4" />
               Contact Info
             </TabsTrigger>
-            <TabsTrigger value="location" className="flex items-center gap-2">
+            <TabsTrigger value="location" className="flex items-center gap-2 shrink-0">
               <MapPin className="h-4 w-4" />
               Location
             </TabsTrigger>
-            <TabsTrigger value="preferences" className="flex items-center gap-2">
+            <TabsTrigger value="preferences" className="flex items-center gap-2 shrink-0">
               <Home className="h-4 w-4" />
               Preferences
             </TabsTrigger>
-            <TabsTrigger value="status" className="flex items-center gap-2">
+            <TabsTrigger value="status" className="flex items-center gap-2 shrink-0">
               <Star className="h-4 w-4" />
               Status & Notes
             </TabsTrigger>
@@ -490,7 +490,6 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <span className="text-blue-400">📇</span>
                   <strong>Contact Information</strong>
                 </CardTitle>
                 <CardDescription>Basic contact information and buyer details</CardDescription>
@@ -498,7 +497,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
               <CardContent className="space-y-6">
                 {/* Personal Info Section */}
                 <div className="border-l-4 border-blue-500 pl-4">
-                  <h4 className="font-bold text-base mb-3 text-gray-800">Personal Information</h4>
+                  <h4 className="font-bold text-base mb-3 text-foreground">Personal Information</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="fname" className="font-semibold">
@@ -529,7 +528,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
 
                 {/* Contact Details Section */}
                 <div className="border-l-4 border-green-500 pl-4">
-                  <h4 className="font-bold text-base mb-3 text-gray-800">Contact Details</h4>
+                  <h4 className="font-bold text-base mb-3 text-foreground">Contact Details</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="phone" className="font-semibold">
@@ -562,7 +561,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
 
                 {/* Mailing Address Section */}
                 <div className="border-l-4 border-purple-500 pl-4">
-                  <h4 className="font-bold text-base mb-3 text-gray-800">Mailing Address</h4>
+                  <h4 className="font-bold text-base mb-3 text-foreground">Mailing Address</h4>
                   <div className="space-y-4">
                     <div>
                       <Label htmlFor="mailing_address" className="font-semibold">
@@ -619,7 +618,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
 
                 {/* Business Info Section */}
                 <div className="border-l-4 border-orange-500 pl-4">
-                  <h4 className="font-bold text-base mb-3 text-gray-800">Business Information</h4>
+                  <h4 className="font-bold text-base mb-3 text-foreground">Business Information</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="company" className="font-semibold">
@@ -651,7 +650,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
 
                 {/* Additional Info Section */}
                 <div className="border-l-4 border-red-500 pl-4">
-                  <h4 className="font-bold text-base mb-3 text-gray-800">Additional Information</h4>
+                  <h4 className="font-bold text-base mb-3 text-foreground">Additional Information</h4>
                   <div className="space-y-4">
                     <div>
                       <Label htmlFor="score" className="font-semibold">
@@ -713,7 +712,6 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <span className="text-red-400">📍</span>
                   <strong>Location Settings</strong>
                 </CardTitle>
                 <CardDescription>Target areas and specific properties where the buyer is interested</CardDescription>
@@ -721,7 +719,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
               <CardContent className="space-y-6">
                 {/* Target Locations Section */}
                 <div className="border-l-4 border-blue-500 pl-4">
-                  <h4 className="font-bold text-base mb-3 text-gray-800">Target Locations</h4>
+                  <h4 className="font-bold text-base mb-3 text-foreground">Target Locations</h4>
                   <div>
                     <Label className="font-semibold">Areas of Interest</Label>
                     <div className="mt-1">
@@ -736,7 +734,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
 
                 {/* Specific Property Interest Section */}
                 <div className="border-l-4 border-green-500 pl-4">
-                  <h4 className="font-bold text-base mb-3 text-gray-800">Specific Property Interest</h4>
+                  <h4 className="font-bold text-base mb-3 text-foreground">Specific Property Interest</h4>
                   <PropertySelector value={property} onChange={setProperty} />
                   <p className="text-sm text-muted-foreground mt-1">
                     Select the property this buyer is interested in
@@ -750,7 +748,6 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <span className="text-green-400">⚙️</span>
                   <strong>Property Preferences</strong>
                 </CardTitle>
                 <CardDescription>Buyer&apos;s property criteria and investment parameters</CardDescription>
@@ -758,7 +755,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
               <CardContent className="space-y-8">
                 {/* Property Types Section */}
                 <div className="border-l-4 border-blue-500 pl-4">
-                  <h4 className="font-bold text-base mb-3 text-gray-800">Property Types</h4>
+                  <h4 className="font-bold text-base mb-3 text-foreground">Property Types</h4>
                   <Label className="font-semibold">What types of properties are they interested in?</Label>
                   <div className="flex flex-wrap gap-2 mt-2">
                     {PROPERTY_TYPES.map((type) => (
@@ -776,7 +773,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
 
                 {/* Price Range Section */}
                 <div className="border-l-4 border-green-500 pl-4">
-                  <h4 className="font-bold text-base mb-3 text-gray-800">💰 Price Range</h4>
+                  <h4 className="font-bold text-base mb-3 text-foreground">Price Range</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="asking_price_min" className="font-semibold">
@@ -809,7 +806,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
 
                 {/* Property Specifications Section */}
                 <div className="border-l-4 border-purple-500 pl-4">
-                  <h4 className="font-bold text-base mb-3 text-gray-800">🏠 Property Specifications</h4>
+                  <h4 className="font-bold text-base mb-3 text-foreground">Property Specifications</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="year_built_min" className="font-semibold">
@@ -895,7 +892,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
 
                 {/* Investment Criteria Section */}
                 <div className="border-l-4 border-orange-500 pl-4">
-                  <h4 className="font-bold text-base mb-3 text-gray-800">📊 Investment Criteria</h4>
+                  <h4 className="font-bold text-base mb-3 text-foreground">Investment Criteria</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="min_arv" className="font-semibold">
@@ -955,8 +952,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
 
                 {/* Owner Finance Section */}
                 <div className="border-l-4 border-yellow-500 pl-4">
-                  <h4 className="font-bold text-base mb-3 text-gray-800 flex items-center gap-2">
-                    <span className="text-yellow-500">💰</span>
+                  <h4 className="font-bold text-base mb-3 text-foreground flex items-center gap-2">
                     Owner Finance / Rent to Own / Land Contract
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1022,7 +1018,6 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <span className="text-pink-500">⭐</span>
                   <strong>Buyer Status & Communication</strong>
                 </CardTitle>
                 <CardDescription>Set the buyer&apos;s status and communication preferences</CardDescription>
@@ -1030,7 +1025,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
               <CardContent className="space-y-6">
                 {/* Status Section */}
                 <div className="border-l-4 border-blue-500 pl-4">
-                  <h4 className="font-bold text-base mb-3 text-gray-800">Lead Status</h4>
+                  <h4 className="font-bold text-base mb-3 text-foreground">Lead Status</h4>
                   <div>
                     <Label htmlFor="status" className="font-semibold">
                       Current Buyer Status
@@ -1052,7 +1047,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
 
                 {/* Special Flags Section */}
                 <div className="border-l-4 border-green-500 pl-4">
-                  <h4 className="font-bold text-base mb-3 text-gray-800">Special Designations</h4>
+                  <h4 className="font-bold text-base mb-3 text-foreground">Special Designations</h4>
                   <div className="grid grid-cols-2 gap-6">
                     <div className="flex items-center justify-between">
                       <div>
@@ -1086,7 +1081,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
 
                 {/* Communication Preferences Section */}
                 <div className="border-l-4 border-purple-500 pl-4">
-                  <h4 className="font-bold text-base mb-3 text-gray-800">Communication Preferences</h4>
+                  <h4 className="font-bold text-base mb-3 text-foreground">Communication Preferences</h4>
                   <div className="grid grid-cols-2 gap-6">
                     <div className="flex items-center justify-between">
                       <div>
@@ -1120,7 +1115,7 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
 
                 {/* Notes Section */}
                 <div className="border-l-4 border-orange-500 pl-4">
-                  <h4 className="font-bold text-base mb-3 text-gray-800">Additional Notes</h4>
+                  <h4 className="font-bold text-base mb-3 text-foreground">Additional Notes</h4>
                   <div>
                     <Label htmlFor="notes" className="font-semibold">
                       Notes
