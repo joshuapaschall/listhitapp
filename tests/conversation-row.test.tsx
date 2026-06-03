@@ -10,7 +10,7 @@ process.env.TZ = "UTC"
 vi.useFakeTimers().setSystemTime(new Date("2024-01-01T00:10:00Z"))
 
 describe("ConversationRow", () => {
-  test("uses now context to set dot color", () => {
+  test("shows a brand dot when unread", () => {
     const thread = {
       id: "t1",
       updated_at: new Date(Date.now() - 3 * 60 * 1000).toISOString(),
@@ -22,10 +22,10 @@ describe("ConversationRow", () => {
     const { container } = render(<ConversationRow thread={thread} />)
 
     const dot = container.querySelector("span") as HTMLElement
-    expect(dot.className.includes("bg-blue-500")).toBe(true)
+    expect(dot.className.includes("bg-brand")).toBe(true)
   })
 
-  test("switches to red after 5 minutes", () => {
+  test("unread dot stays brand regardless of age (no freshness coloring)", () => {
     const thread = {
       id: "t2",
       updated_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
@@ -37,10 +37,11 @@ describe("ConversationRow", () => {
     const { container } = render(<ConversationRow thread={thread} />)
 
     const dot = container.querySelector("span") as HTMLElement
-    expect(dot.className.includes("bg-red-500")).toBe(true)
+    expect(dot.className.includes("bg-brand")).toBe(true)
+    expect(dot.className.includes("bg-red-500")).toBe(false)
   })
 
-  test("shows gray when read", () => {
+  test("no colored dot when read (spacer only)", () => {
     const thread = {
       id: "t3",
       updated_at: new Date().toISOString(),
@@ -52,7 +53,8 @@ describe("ConversationRow", () => {
     const { container } = render(<ConversationRow thread={thread} />)
 
     const dot = container.querySelector("span") as HTMLElement
-    expect(dot.className.includes("bg-gray-400")).toBe(true)
+    expect(dot.className.includes("bg-brand")).toBe(false)
+    expect(dot.className.includes("bg-gray-400")).toBe(false)
   })
 
   test("shows formatted timestamp", () => {

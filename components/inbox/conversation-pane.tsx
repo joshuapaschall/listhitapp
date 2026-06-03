@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import EmojiPicker from "emoji-picker-react";
 import { Can } from "@/components/auth/Can";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -218,7 +219,7 @@ function MediaAttachment({ url }: { url: string }) {
         src={src}
         preload="none"
         style={{ maxWidth: "100%" }}
-        className="rounded-xl w-full bg-white shadow"
+        className="rounded-xl w-full bg-muted"
       />
     )
   } else {
@@ -1220,7 +1221,19 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
   return (
     <div className="flex flex-col h-full min-h-0">
       <div className="border-b p-2 flex items-center justify-between sticky top-0 bg-background z-10">
-        <span className="font-medium">{name}</span>
+        <div className="flex min-w-0 items-center gap-2">
+          <Avatar className="h-8 w-8 shrink-0">
+            <AvatarFallback>{name.split(" ").map((n) => n[0]).filter(Boolean).slice(0, 2).join("").toUpperCase()}</AvatarFallback>
+          </Avatar>
+          <div className="min-w-0">
+            <div className="font-medium truncate">{name}</div>
+            {buyer && (buyer.phone || buyer.phone2 || buyer.phone3 || thread.phone_number) ? (
+              <div className="text-xs text-muted-foreground font-mono truncate">
+                {formatPhoneDisplay(buyer.phone || buyer.phone2 || buyer.phone3 || thread.phone_number || "")}
+              </div>
+            ) : null}
+          </div>
+        </div>
         <div className="flex items-center gap-2">
           <CallButton
             phone={buyer?.phone || buyer?.phone2 || buyer?.phone3 || thread.phone_number}
@@ -1238,7 +1251,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
           )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon">
+              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
                 <span className="sr-only">Actions</span>
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -1422,14 +1435,15 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           rows={3}
-          className="w-full min-h-[96px]"
+          className="w-full min-h-[96px] rounded-xl"
         />
         <div className="border-t pt-2 flex gap-2 flex-wrap">
           <DropdownMenu open={showEmoji} onOpenChange={setShowEmoji}>
             <DropdownMenuTrigger asChild>
               <Button
-                variant="outline"
+                variant="ghost"
                 size="icon"
+                className="h-8 w-8 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
                 title="Insert emoji"
                 aria-label="Insert emoji"
               >
@@ -1449,8 +1463,9 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
-                variant="outline"
+                variant="ghost"
                 size="icon"
+                className="h-8 w-8 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
                 title="Insert template"
                 aria-label="Insert template"
               >
@@ -1478,8 +1493,9 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
-                variant="outline"
+                variant="ghost"
                 size="icon"
+                className="h-8 w-8 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
                 title="Insert merge tag"
                 aria-label="Insert merge tag"
               >
@@ -1502,8 +1518,9 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
               <Button
                 aria-label="Add media"
                 title="Add media"
-                variant="outline"
+                variant="ghost"
                 size="icon"
+                className="h-8 w-8 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
               >
                 <ImageIcon className="h-4 w-4" />
               </Button>
@@ -1530,8 +1547,9 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
           <Button
             aria-label="Record voice"
             title="Record voice note"
-            variant="outline"
+            variant="ghost"
             size="icon"
+            className="h-8 w-8 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
             onClick={() => setShowRecorder(true)}
           >
             <Mic className="h-4 w-4" />
@@ -1539,8 +1557,9 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
           <Popover open={schedulePicker} onOpenChange={setSchedulePicker}>
             <PopoverTrigger asChild>
               <Button
-                variant="outline"
+                variant="ghost"
                 size="icon"
+                className="h-8 w-8 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
                 title="Schedule message"
                 aria-label="Schedule message"
               >
@@ -1605,7 +1624,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
                   <span className="block text-xs">{file.name}</span>
                 )}
                 <X
-                  className="h-4 w-4 absolute -right-2 -top-2 bg-white dark:bg-gray-800 rounded-full cursor-pointer"
+                  className="h-4 w-4 absolute -right-2 -top-2 bg-card border border-border rounded-full cursor-pointer"
                   onClick={() => removeAttachment(idx)}
                 />
               </div>

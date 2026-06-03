@@ -4,6 +4,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
+import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ConversationRow from "./conversation-row";
@@ -92,10 +93,7 @@ export default function ListPane({ onSelect, selectedId }: ListPaneProps) {
     <div className="sticky top-0 h-[calc(100vh-4rem)] flex flex-col border-r">
       {/* Tabs */}
       <Tabs value={tab} onValueChange={setTab} className="px-2 pt-2">
-        <TabsList
-          /* flex-wrap on very small screens, single line otherwise */
-          className="flex flex-wrap gap-2 border-b overflow-x-hidden sm:flex-nowrap"
-        >
+        <TabsList className="inline-flex w-full rounded-lg bg-muted p-1">
           {[
             ["inbox", "Inbox"],
             ["unread", "Unread"],
@@ -106,14 +104,7 @@ export default function ListPane({ onSelect, selectedId }: ListPaneProps) {
             <TabsTrigger
               key={value}
               value={value}
-              className="relative pb-2 px-1 text-sm min-w-fit
-                data-[state=active]:font-semibold
-                data-[state=active]:after:absolute
-                data-[state=active]:after:bottom-0
-                data-[state=active]:after:left-0
-                data-[state=active]:after:h-[2px]
-                data-[state=active]:after:w-full
-                data-[state=active]:after:bg-primary"
+              className="flex-1 rounded-md text-xs text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
             >
               {label}
             </TabsTrigger>
@@ -123,13 +114,17 @@ export default function ListPane({ onSelect, selectedId }: ListPaneProps) {
 
       {/* Search */}
       <div className="px-2 py-2">
-        <Input
-          id="thread-search"
-          name="thread-search"
-          placeholder="Search..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+        <div className="relative">
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            id="thread-search"
+            name="thread-search"
+            placeholder="Search..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
       </div>
 
       {/* Thread rows */}
