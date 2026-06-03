@@ -12,10 +12,10 @@ const MAX_BAR_HEIGHT = 64
 
 export default function DashboardFunnel({ data }: DashboardFunnelProps) {
   const stages = [
-    { label: "Buyers", value: data.buyers, className: "bg-brand/10 text-brand" },
-    { label: "Showings", value: data.showings, className: "bg-brand/35 text-brand" },
-    { label: "Offers", value: data.offers, className: "bg-brand/65 text-brand-foreground" },
-    { label: "Closed", value: data.closed, className: "bg-brand text-brand-foreground" },
+    { label: "Buyers", value: data.buyers, className: "bg-muted text-foreground" },
+    { label: "Showings", value: data.showings, className: "bg-muted-foreground/25 text-foreground" },
+    { label: "Offers", value: data.offers, className: "bg-foreground/70 text-background" },
+    { label: "Closed", value: data.closed, className: "bg-foreground text-background" },
   ]
   const maxValue = Math.max(...stages.map((stage) => stage.value), 0)
 

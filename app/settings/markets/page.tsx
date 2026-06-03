@@ -102,7 +102,7 @@ export default function MarketsPage() {
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {sortedMarkets.map((market) => (
             <Link key={market.id} href={`/settings/markets/${market.id}`} className="group">
-              <Card className="border-emerald-100 transition hover:border-emerald-300 hover:shadow-sm">
+              <Card className="border-border transition hover:border-foreground/30 hover:shadow-sm">
                 <CardContent className="space-y-4 p-6">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3">
@@ -114,19 +114,19 @@ export default function MarketsPage() {
                         <p className="text-sm text-muted-foreground">{market.numberCount} numbers</p>
                       </div>
                     </div>
-                    <ChevronRight className="text-muted-foreground transition group-hover:text-emerald-700" size={18} />
+                    <ChevronRight className="text-muted-foreground transition group-hover:text-foreground" size={18} />
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">{market.call_routing_mode ?? "browser_only"}</Badge>
+                    <Badge variant="outline" className="border-border bg-muted text-foreground">{market.call_routing_mode ?? "browser_only"}</Badge>
                     <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-700">{market.voicemail_greeting_source === "polly" ? "AI Voice" : market.voicemail_greeting_source === "recorded" ? "Recorded" : "Default greeting"}</Badge>
-                    <Badge className={market.purpose === "campaign" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-700"}>{market.purpose === "campaign" ? "Campaign" : "Main"}</Badge>
+                    <Badge className={market.purpose === "campaign" ? "bg-muted text-foreground" : "bg-slate-100 text-slate-700"}>{market.purpose === "campaign" ? "Campaign" : "Main"}</Badge>
                   </div>
                 </CardContent>
               </Card>
             </Link>
           ))}
-          <button className="rounded-xl border border-dashed border-emerald-200 bg-white p-6 text-left transition hover:border-emerald-400" onClick={() => setDialogOpen(true)}>
-            <div className="flex items-center gap-2 text-emerald-700"><Plus size={16} /> New market</div>
+          <button className="rounded-xl border border-dashed border-border bg-white p-6 text-left transition hover:border-foreground/30" onClick={() => setDialogOpen(true)}>
+            <div className="flex items-center gap-2 text-foreground"><Plus size={16} /> New market</div>
             <p className="mt-1 text-sm text-muted-foreground">Create another market for a new line of business.</p>
           </button>
         </div>

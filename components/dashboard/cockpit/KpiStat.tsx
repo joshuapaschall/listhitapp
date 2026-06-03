@@ -49,7 +49,7 @@ export default function KpiStat({ label, value, delta, sublabel, spark }: KpiSta
           <span
             className={cn(
               "rounded-md px-1.5 py-0.5 text-[11px] font-semibold leading-none tabular-nums",
-              delta >= 0 ? "bg-muted/40 text-brand" : "bg-destructive/10 text-destructive"
+              delta >= 0 ? "bg-muted/40 text-foreground" : "bg-destructive/10 text-destructive"
             )}
           >
             {delta >= 0 ? "↑" : "↓"} {Math.abs(Math.round(delta))}%

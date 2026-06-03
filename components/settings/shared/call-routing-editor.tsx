@@ -75,7 +75,7 @@ export default function CallRoutingEditor(props: Props) {
         {(["browser_only", "browser_first_then_forward", "forwarding_only"] as CallRoutingMode[]).map((value) => (
           <label
             key={value}
-            className={`cursor-pointer rounded-lg border p-3 transition ${mode === value ? "border-emerald-400 bg-emerald-50" : "border-gray-200 hover:border-emerald-500"}`}
+            className={`cursor-pointer rounded-lg border p-3 transition ${mode === value ? "border-foreground bg-muted" : "border-gray-200 hover:border-foreground/30"}`}
           >
             <input type="radio" className="sr-only" checked={mode === value} onChange={() => setMode(value)} />
             <p className="text-sm font-medium text-gray-900">{value.replaceAll("_", " ")}</p>
@@ -91,7 +91,7 @@ export default function CallRoutingEditor(props: Props) {
             value={forwarding}
             onChange={(e) => setForwarding(e.target.value)}
             placeholder="+15551234567"
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-foreground focus:outline-none focus:ring-2 focus:ring-foreground"
           />
         </div>
       )}
@@ -105,7 +105,7 @@ export default function CallRoutingEditor(props: Props) {
             max={60}
             value={timeout}
             onChange={(e) => setTimeoutValue(Math.max(5, Math.min(60, Number.parseInt(e.target.value || "5", 10))))}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-foreground focus:outline-none focus:ring-2 focus:ring-foreground"
           />
         </div>
       )}
@@ -115,7 +115,7 @@ export default function CallRoutingEditor(props: Props) {
           type="button"
           onClick={saveRouting}
           disabled={saving}
-          className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
+          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
         >
           {saving ? "Saving..." : "Save Routing"}
         </button>

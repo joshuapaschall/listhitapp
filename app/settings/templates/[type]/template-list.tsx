@@ -52,7 +52,7 @@ export default function TemplateList({ slug }: { slug: TemplateSlug }) {
           <h1 className="text-2xl font-bold tracking-tight">{config.label}</h1>
           <p className="text-sm text-muted-foreground">{config.description}</p>
         </div>
-        <Button asChild className="bg-[#059669] hover:bg-[#047857] focus-visible:ring-[#10B981]">
+        <Button asChild className="focus-visible:ring-[#10B981]">
           <Link href={`/settings/templates/${slug}/new`}>{config.cta}</Link>
         </Button>
       </div>
@@ -100,7 +100,7 @@ export default function TemplateList({ slug }: { slug: TemplateSlug }) {
             </div>
             <h2 className="text-lg font-semibold">No templates yet</h2>
             <p className="text-sm text-muted-foreground">Create your first {config.singular.toLowerCase()} to speed up outreach.</p>
-            <Button asChild className="bg-[#059669] hover:bg-[#047857] focus-visible:ring-[#10B981]">
+            <Button asChild className="focus-visible:ring-[#10B981]">
               <Link href={`/settings/templates/${slug}/new`}>{config.cta}</Link>
             </Button>
           </CardContent>

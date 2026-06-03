@@ -273,12 +273,12 @@ function UserRow({ user, onOpen }: { user: ApiUser; onOpen: () => void }) {
   return (
     <TableRow
       onClick={onOpen}
-      className="group cursor-pointer transition-colors hover:bg-emerald-50/60"
+      className="group cursor-pointer transition-colors hover:bg-muted"
     >
       <TableCell className="pl-6">
         <div className="flex items-center gap-3">
           <Avatar className="h-9 w-9">
-            <AvatarFallback className="bg-emerald-100 text-xs font-semibold text-emerald-700">
+            <AvatarFallback className="bg-muted text-xs font-semibold text-foreground">
               {initialsOf(user)}
             </AvatarFallback>
           </Avatar>
@@ -307,7 +307,7 @@ function UserRow({ user, onOpen }: { user: ApiUser; onOpen: () => void }) {
           : "—"}
       </TableCell>
       <TableCell>
-        <ChevronRight className="h-4 w-4 text-muted-foreground/40 transition-colors group-hover:text-emerald-600" />
+        <ChevronRight className="h-4 w-4 text-muted-foreground/40 transition-colors group-hover:text-foreground" />
       </TableCell>
     </TableRow>
   )
@@ -316,7 +316,7 @@ function UserRow({ user, onOpen }: { user: ApiUser; onOpen: () => void }) {
 function RoleBadge({ role }: { role: string }) {
   if (role === "admin") {
     return (
-      <Badge className="border-transparent bg-emerald-600 text-white hover:bg-emerald-600">
+      <Badge className="border-transparent bg-primary text-primary-foreground hover:bg-primary/90">
         Admin
       </Badge>
     )
@@ -369,8 +369,8 @@ function EmptyState({
 }) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50">
-        <UsersIcon className="h-6 w-6 text-emerald-600" />
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+        <UsersIcon className="h-6 w-6 text-muted-foreground" />
       </div>
       {hasUsers ? (
         <>
@@ -660,7 +660,7 @@ function PermissionEditorSheet({
             <div className="sticky top-0 z-10 border-b bg-background px-6 py-5">
               <div className="flex items-center gap-3">
                 <Avatar className="h-11 w-11">
-                  <AvatarFallback className="bg-emerald-100 font-semibold text-emerald-700">
+                  <AvatarFallback className="bg-muted font-semibold text-foreground">
                     {initialsOf(user)}
                   </AvatarFallback>
                 </Avatar>
@@ -728,8 +728,8 @@ function PermissionEditorSheet({
                         className={cn(
                           "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
                           active
-                            ? "border-emerald-600 bg-emerald-600 text-white"
-                            : "border-slate-200 bg-background text-slate-600 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700",
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-slate-200 bg-background text-slate-600 hover:border-foreground/30 hover:bg-muted hover:text-foreground",
                         )}
                       >
                         {busy && <Loader2 className="h-3 w-3 animate-spin" />}
@@ -742,13 +742,13 @@ function PermissionEditorSheet({
 
               {/* Admin banner */}
               {isAdmin && (
-                <div className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
-                  <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+                <div className="flex items-start gap-3 rounded-lg border border-border bg-muted p-4">
+                  <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
                   <div className="space-y-0.5">
-                    <p className="text-sm font-medium text-emerald-900">
+                    <p className="text-sm font-medium text-foreground">
                       Admins have unrestricted access
                     </p>
-                    <p className="text-xs text-emerald-700">
+                    <p className="text-xs text-foreground">
                       Individual permissions don&apos;t apply while this person is an admin.
                     </p>
                   </div>
@@ -866,7 +866,7 @@ function PermissionGroupCard({
                 checked={checked}
                 disabled={disabled || pending}
                 onCheckedChange={(value) => onToggle(entry.key, value)}
-                className="data-[state=checked]:bg-emerald-600"
+                className="data-[state=checked]:bg-primary"
                 aria-label={entry.label}
               />
             </div>

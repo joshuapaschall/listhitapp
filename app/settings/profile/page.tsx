@@ -168,7 +168,7 @@ export default function ProfileSettingsPage() {
                   <Button
                     type="submit"
                     disabled={saving}
-                    className="bg-[#059669] hover:bg-[#047857]"
+                    className=""
                   >
                     {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     Save profile
