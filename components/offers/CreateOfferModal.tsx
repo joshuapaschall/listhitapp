@@ -89,7 +89,7 @@ export default function CreateOfferModal({
         property_id: property.id,
         offer_type: offerType || null,
         offer_price: offerPrice ? Number(offerPrice) : null,
-        down_payment: downPayment ? Number(downPayment) : null,
+        down_payment: offerType === "cash" ? null : downPayment ? Number(downPayment) : null,
         monthly_payment: offerType === "cash" ? null : monthlyPayment ? Number(monthlyPayment) : null,
         earnest_money: earnestMoney ? Number(earnestMoney) : null,
         due_diligence_days: dueDiligenceDays ? Number(dueDiligenceDays) : null,
@@ -108,16 +108,28 @@ export default function CreateOfferModal({
     }
   }
 
+  const isCash = offerType === "cash"
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-xl" onOpenAutoFocus={(e) => e.preventDefault()}>
-        <DialogHeader>
-          <DialogTitle>Create Offer</DialogTitle>
-          <DialogDescription>Record a new offer from a buyer.</DialogDescription>
+      <DialogContent className="flex max-h-[85vh] max-w-xl flex-col gap-0 p-0" onOpenAutoFocus={(e) => e.preventDefault()}>
+        {/* Header */}
+        <DialogHeader className="space-y-0 border-b border-border px-5 py-4">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand/10 text-brand">
+              <Banknote className="h-4 w-4" />
+            </span>
+            <div>
+              <DialogTitle className="text-base">Create offer</DialogTitle>
+              <DialogDescription className="text-xs">Record a new offer from a buyer.</DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
-        <div className="space-y-4 py-2">
+
+        {/* Scrollable body */}
+        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
           <div className="space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Buyer & Property</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Buyer &amp; property</p>
             <div>
               <label className="mb-1.5 block text-sm font-medium">Buyer <span className="text-destructive">*</span></label>
               <BuyerSelector value={buyer} onChange={setBuyer} />
@@ -131,42 +143,37 @@ export default function CreateOfferModal({
           <Separator />
 
           <div className="space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Offer Details</p>
-            <div>
-              <label className="mb-1.5 block text-sm font-medium">Offer Type</label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setOfferType("cash")}
-                  className={cn(
-                    "flex items-center justify-center gap-2 rounded-lg border-2 px-4 py-2.5 text-sm font-medium transition-all",
-                    offerType === "cash"
-                      ? "border-primary bg-primary/5 text-primary"
-                      : "border-border bg-background text-muted-foreground hover:border-muted-foreground/50",
-                  )}
-                >
-                  <Banknote className="h-4 w-4" />
-                  Cash
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOfferType("financing")}
-                  className={cn(
-                    "flex items-center justify-center gap-2 rounded-lg border-2 px-4 py-2.5 text-sm font-medium transition-all",
-                    offerType === "financing"
-                      ? "border-primary bg-primary/5 text-primary"
-                      : "border-border bg-background text-muted-foreground hover:border-muted-foreground/50",
-                  )}
-                >
-                  <Building2 className="h-4 w-4" />
-                  Financing
-                </button>
-              </div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Offer details</p>
+
+            {/* Offer type — segmented control */}
+            <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
+              <button
+                type="button"
+                onClick={() => setOfferType("cash")}
+                className={cn(
+                  "flex items-center justify-center gap-2 rounded-md px-4 py-1.5 text-sm font-medium transition-all",
+                  isCash ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Banknote className="h-4 w-4" />
+                Cash
+              </button>
+              <button
+                type="button"
+                onClick={() => setOfferType("financing")}
+                className={cn(
+                  "flex items-center justify-center gap-2 rounded-md px-4 py-1.5 text-sm font-medium transition-all",
+                  !isCash ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Building2 className="h-4 w-4" />
+                Financing
+              </button>
             </div>
 
             <div>
               <label htmlFor="offer-price" className="mb-1.5 block text-sm font-medium">
-                Offer Price <span className="text-destructive">*</span>
+                Offer price <span className="text-destructive">*</span>
               </label>
               <div className="relative">
                 <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
@@ -183,24 +190,44 @@ export default function CreateOfferModal({
               </div>
             </div>
 
+            {/* Money fields — 2-col grid. Down/Monthly payment only for financing. */}
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="down-payment" className="mb-1.5 block text-sm font-medium">Down Payment</label>
-                <div className="relative">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
-                  <Input
-                    id="down-payment"
-                    type="text"
-                    inputMode="decimal"
-                    className="pl-7"
-                    placeholder="0"
-                    value={downPayment ? formatCurrencyInput(downPayment) : ""}
-                    onChange={(e) => setDownPayment(parseCurrencyInput(e.target.value))}
-                  />
+              {!isCash && (
+                <div>
+                  <label htmlFor="down-payment" className="mb-1.5 block text-sm font-medium">Down payment</label>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                    <Input
+                      id="down-payment"
+                      type="text"
+                      inputMode="decimal"
+                      className="pl-7"
+                      placeholder="0"
+                      value={downPayment ? formatCurrencyInput(downPayment) : ""}
+                      onChange={(e) => setDownPayment(parseCurrencyInput(e.target.value))}
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
+              {!isCash && (
+                <div>
+                  <label htmlFor="monthly-payment" className="mb-1.5 block text-sm font-medium">Monthly payment</label>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                    <Input
+                      id="monthly-payment"
+                      type="text"
+                      inputMode="decimal"
+                      className="pl-7"
+                      placeholder="0"
+                      value={monthlyPayment ? formatCurrencyInput(monthlyPayment) : ""}
+                      onChange={(e) => setMonthlyPayment(parseCurrencyInput(e.target.value))}
+                    />
+                  </div>
+                </div>
+              )}
               <div>
-                <label htmlFor="earnest-money" className="mb-1.5 block text-sm font-medium">Earnest Money</label>
+                <label htmlFor="earnest-money" className="mb-1.5 block text-sm font-medium">Earnest money</label>
                 <div className="relative">
                   <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
                   <Input
@@ -214,29 +241,8 @@ export default function CreateOfferModal({
                   />
                 </div>
               </div>
-            </div>
-
-            {offerType !== "cash" && (
               <div>
-                <label htmlFor="monthly-payment" className="mb-1.5 block text-sm font-medium">Monthly Payment</label>
-                <div className="relative">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
-                  <Input
-                    id="monthly-payment"
-                    type="text"
-                    inputMode="decimal"
-                    className="pl-7"
-                    placeholder="0"
-                    value={monthlyPayment ? formatCurrencyInput(monthlyPayment) : ""}
-                    onChange={(e) => setMonthlyPayment(parseCurrencyInput(e.target.value))}
-                  />
-                </div>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="dd-period" className="mb-1.5 block text-sm font-medium">Due Diligence Period</label>
+                <label htmlFor="dd-period" className="mb-1.5 block text-sm font-medium">Due diligence</label>
                 <div className="relative">
                   <Input
                     id="dd-period"
@@ -251,7 +257,7 @@ export default function CreateOfferModal({
                 </div>
               </div>
               <div>
-                <label htmlFor="closing-date" className="mb-1.5 block text-sm font-medium">Proposed Closing</label>
+                <label htmlFor="closing-date" className="mb-1.5 block text-sm font-medium">Proposed closing</label>
                 <Input
                   id="closing-date"
                   type="date"
@@ -281,7 +287,7 @@ export default function CreateOfferModal({
                 {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(Number(offerPrice))}
               </span>
               {" "}
-              <span className="text-muted-foreground">{offerType === "cash" ? "Cash" : "Financing"}</span>
+              <span className="text-muted-foreground">{isCash ? "Cash" : "Financing"}</span>
               {proposedClosingDate && (
                 <>
                   {" · "}
@@ -291,9 +297,11 @@ export default function CreateOfferModal({
             </div>
           )}
         </div>
-        <DialogFooter>
+
+        {/* Footer */}
+        <DialogFooter className="border-t border-border px-5 py-3">
           <Button variant="outline" onClick={handleClose} disabled={loading}>Cancel</Button>
-          <Button onClick={handleSubmit} disabled={loading || !buyer || !property || !offerPrice}>{loading ? "Submitting..." : "Submit Offer"}</Button>
+          <Button variant="brand" onClick={handleSubmit} disabled={loading || !buyer || !property || !offerPrice}>{loading ? "Submitting..." : "Create offer"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
