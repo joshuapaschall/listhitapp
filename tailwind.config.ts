@@ -21,11 +21,11 @@ const config: Config = {
     extend: {
       colors: {
         brand: {
-          DEFAULT: "#059669",
-          hover: "#047857",
-          tint: "#ECFDF5",
+          DEFAULT: "#F0303A",
+          hover: "#D5232C",
+          tint: "#FDECEC",
           fg: "#FFFFFF",
-          ring: "#10B981",
+          ring: "#F0303A",
         },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -60,6 +60,10 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+      },
+      fontFamily: {
+        sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
+        mono: ["var(--font-mono)", "ui-monospace", "monospace"],
       },
       borderRadius: {
         lg: "var(--radius)",

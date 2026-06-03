@@ -5,67 +5,67 @@
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --foreground: 240 6% 6%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 240 6% 6%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 0 0% 98%;
-    --brand: 152 76% 31%;
+    --popover-foreground: 240 6% 6%;
+    --primary: 240 6% 10%;            /* near-black = primary ACTION */
+    --primary-foreground: 0 0% 100%;
+    --brand: 357 87% 56%;             /* #F0303A logo red = ACCENT only */
     --brand-foreground: 0 0% 100%;
-    --brand-hover: 158 64% 25%;
-    --brand-tint: 152 81% 96%;
-    --brand-ring: 158 64% 39%;
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222.2 84% 4.9%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 142 71% 45%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --radius: 0.5rem;
-    --chart-1: 152 76% 31%;
-    --chart-2: 199 89% 48%;
-    --chart-3: 38 92% 50%;
-    --chart-4: 262 83% 58%;
-    --chart-5: 340 75% 55%;
+    --brand-hover: 357 75% 48%;
+    --brand-tint: 357 90% 96%;
+    --brand-ring: 357 87% 56%;
+    --secondary: 240 5% 96%;
+    --secondary-foreground: 240 6% 10%;
+    --muted: 240 5% 96%;
+    --muted-foreground: 240 4% 46%;
+    --accent: 240 5% 96%;             /* neutral hover/selected (was green) */
+    --accent-foreground: 240 6% 10%;
+    --destructive: 357 78% 52%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 6% 91%;
+    --input: 240 6% 91%;
+    --ring: 357 87% 56%;              /* red focus ring */
+    --radius: 0.625rem;
+    --chart-1: 357 87% 56%;
+    --chart-2: 240 5% 65%;
+    --chart-3: 240 6% 35%;
+    --chart-4: 220 55% 55%;
+    --chart-5: 152 42% 42%;
   }
 
   .dark {
-    --background: 240 5% 10%;
-    --foreground: 210 40% 98%;
-    --card: 240 5% 12%;
-    --card-foreground: 210 40% 98%;
-    --popover: 240 4% 16%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 209 100% 50%;
-    --primary-foreground: 0 0% 98%;
-    --brand: 152 76% 31%;
+    --background: 240 7% 4%;
+    --foreground: 240 9% 96%;
+    --card: 240 6% 8%;
+    --card-foreground: 240 9% 96%;
+    --popover: 240 6% 10%;
+    --popover-foreground: 240 9% 96%;
+    --primary: 0 0% 98%;              /* near-white = primary action on dark (Vercel/Linear) */
+    --primary-foreground: 240 6% 10%;
+    --brand: 357 100% 63%;
     --brand-foreground: 0 0% 100%;
-    --brand-hover: 158 64% 25%;
-    --brand-tint: 152 81% 96%;
-    --brand-ring: 158 64% 39%;
-    --secondary: 240 4% 20%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 240 4% 25%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 180 70% 40%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 72% 50%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 240 5% 26%;
-    --input: 240 5% 26%;
-    --ring: 212 91% 69%;
-    --chart-1: 152 69% 45%;
-    --chart-2: 199 89% 60%;
-    --chart-3: 38 92% 58%;
-    --chart-4: 262 83% 68%;
-    --chart-5: 340 75% 62%;
+    --brand-hover: 357 85% 55%;
+    --brand-tint: 357 35% 14%;
+    --brand-ring: 357 100% 63%;
+    --secondary: 240 5% 12%;
+    --secondary-foreground: 240 9% 96%;
+    --muted: 240 5% 14%;
+    --muted-foreground: 240 5% 64%;
+    --accent: 240 5% 14%;
+    --accent-foreground: 240 9% 96%;
+    --destructive: 357 85% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 6% 16%;
+    --input: 240 6% 16%;
+    --ring: 357 100% 63%;
+    --chart-1: 357 100% 63%;
+    --chart-2: 240 5% 55%;
+    --chart-3: 240 6% 70%;
+    --chart-4: 220 60% 62%;
+    --chart-5: 152 45% 50%;
   }
 }
 
