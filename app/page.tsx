@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef } from "react"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useDebounce } from "@/hooks/use-debounce"
+import { formatPhoneDisplay } from "@/lib/dedup-utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -1515,7 +1516,7 @@ function BuyersPageContent() {
                     <td className="p-3 max-w-[12rem] truncate text-body">
                       {buyer.email || "No email"}
                     </td>
-                    <td className="p-3 font-mono text-sm whitespace-nowrap text-body">{buyer.phone || "No phone"}</td>
+                    <td className="p-3 font-mono text-sm whitespace-nowrap text-body">{buyer.phone ? formatPhoneDisplay(buyer.phone) : "No phone"}</td>
                     <td className="p-3 text-body">
                       <Badge
                         className={`${getScoreColor(buyer.score ?? 0)} border-0`}

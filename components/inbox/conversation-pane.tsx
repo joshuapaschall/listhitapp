@@ -42,7 +42,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { insertText, cn, renderTemplate } from "@/lib/utils";
 import { calculateSmsSegments } from "@/lib/sms-utils";
-import { formatPhoneE164, normalizePhone } from "@/lib/dedup-utils";
+import { formatPhoneE164, normalizePhone, formatPhoneDisplay } from "@/lib/dedup-utils";
 import {
   supabase,
   type MessageThread,
@@ -1145,7 +1145,7 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
 
   const name = buyer
     ? buyer.full_name || `${buyer.fname || ""} ${buyer.lname || ""}`.trim() || "Unnamed"
-    : thread.phone_number ?? "";
+    : thread.phone_number ? formatPhoneDisplay(thread.phone_number) : "";
   const { segments: smsSegments, remaining } = calculateSmsSegments(input);
   const selectValue = selectedDid || preferredFrom || undefined;
 
