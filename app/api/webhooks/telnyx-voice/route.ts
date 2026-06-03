@@ -290,6 +290,7 @@ export async function POST(req: Request) {
       }
 
       // Persist the PSTN leg to the calls table (idempotent on call_sid).
+      let callerBlockedAt: string | null = null;
       try {
         const remote = direction === "incoming" ? String(payload?.from ?? "") : toRaw;
         const digits = remote.replace(/\D/g, "");
@@ -301,8 +302,9 @@ export async function POST(req: Request) {
             .flatMap((d) => [`phone_norm.eq.${d}`, `phone2_norm.eq.${d}`, `phone3_norm.eq.${d}`])
             .join(",");
           const { data: b } = await supabaseAdmin
-            .from("buyers").select("id").or(orFilter).limit(1).maybeSingle();
+            .from("buyers").select("id, blocked_at").or(orFilter).limit(1).maybeSingle();
           buyerId = b?.id ?? null;
+          callerBlockedAt = (b as any)?.blocked_at ?? null;
         }
         if (callControlId) {
           await supabaseAdmin.from("calls").upsert(
@@ -335,6 +337,13 @@ export async function POST(req: Request) {
           hasForwardingNumber: Boolean(routing.forwardingNumber),
           browserRingTimeout: routing.browserRingTimeoutSeconds,
         });
+
+        // Bidirectional block: drop an inbound call from a blocked buyer before
+        // any answer/routing/voicemail.
+        if (callerBlockedAt) {
+          await hangup(callControlId);
+          return NextResponse.json({ ok: true, blocked: true });
+        }
 
         await answer(callControlId);
 
