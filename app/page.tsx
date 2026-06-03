@@ -71,14 +71,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { PROPERTY_TYPES } from "@/lib/constant"
 import { saveAudienceSnapshot } from "@/lib/campaign-audience"
 
-const quickFilters = [
-  { label: "VIP", key: "vip" },
-  { label: "Hot Leads", key: "hot" },
-  { label: "New This Week", key: "new" },
-  { label: "High Score", key: "highScore" },
-]
-
-
 const ITEMS_PER_PAGE_OPTIONS = [10, 20, 50, 100]
 const DEFAULT_ITEMS_PER_PAGE = 50
 const log = createLogger("page")
@@ -103,7 +95,6 @@ interface FilterState {
 const fetchBuyers = async (
   page: number,
   filters: FilterState,
-  quickFilters: string[] = [],
   groupId?: string,
   perPage = DEFAULT_ITEMS_PER_PAGE,
 ) => {
@@ -151,24 +142,6 @@ const fetchBuyers = async (
     query = query.eq("can_receive_sms", false)
   }
 
-  if (quickFilters.includes("vip")) {
-    query = query.eq("vip", true)
-  }
-
-  if (quickFilters.includes("hot")) {
-    query = query.gte("score", 85)
-  }
-
-  if (quickFilters.includes("new")) {
-    const sevenDaysAgo = new Date()
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-    query = query.gte("created_at", sevenDaysAgo.toISOString())
-  }
-
-  if (quickFilters.includes("highScore")) {
-    query = query.gte("score", 90)
-  }
-
   log("fetchBuyers", "Executing database query...")
   const { data, error, count } = await query
 
@@ -206,7 +179,6 @@ const fetchTags = async (): Promise<Tag[]> => {
 // Fetch all buyer IDs matching current filters
 const fetchBuyerIds = async (
   filters: FilterState,
-  quickFilters: string[] = [],
   groupId?: string,
 ) => {
   let query: any = supabase.from("buyers")
@@ -247,24 +219,6 @@ const fetchBuyerIds = async (
     query = query.eq("can_receive_sms", false)
   }
 
-  if (quickFilters.includes("vip")) {
-    query = query.eq("vip", true)
-  }
-
-  if (quickFilters.includes("hot")) {
-    query = query.gte("score", 85)
-  }
-
-  if (quickFilters.includes("new")) {
-    const sevenDaysAgo = new Date()
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-    query = query.gte("created_at", sevenDaysAgo.toISOString())
-  }
-
-  if (quickFilters.includes("highScore")) {
-    query = query.gte("score", 90)
-  }
-
   const { data, error } = await query
 
   if (error) {
@@ -301,7 +255,6 @@ function BuyersPageContent() {
   // UI state
   const [selectedBuyers, setSelectedBuyers] = useState<string[]>([])
   const [allSelected, setAllSelected] = useState(false)
-  const [activeQuickFilters, setActiveQuickFilters] = useState<string[]>([])
   const [showAddBuyerModal, setShowAddBuyerModal] = useState(false)
   const [selectedGroupId, setSelectedGroupId] = useState<string>("")
   const [showEditBuyerModal, setShowEditBuyerModal] = useState(false)
@@ -355,14 +308,12 @@ function BuyersPageContent() {
       currentPage,
       itemsPerPage,
       { ...filters, search: debouncedSearch },
-      activeQuickFilters,
       selectedGroupId,
     ],
     queryFn: () =>
       fetchBuyers(
         currentPage,
         { ...filters, search: debouncedSearch },
-        activeQuickFilters,
         selectedGroupId,
         itemsPerPage,
       ),
@@ -491,14 +442,12 @@ function BuyersPageContent() {
           currentPage + 1,
           itemsPerPage,
           { ...filters, search: debouncedSearch },
-          activeQuickFilters,
           selectedGroupId,
         ],
         queryFn: () =>
           fetchBuyers(
             currentPage + 1,
             { ...filters, search: debouncedSearch },
-            activeQuickFilters,
             selectedGroupId,
             itemsPerPage,
           ),
@@ -512,7 +461,6 @@ function BuyersPageContent() {
     debouncedSearch,
     selectedGroupId,
     queryClient,
-    activeQuickFilters,
     itemsPerPage,
     canViewBuyers,
   ])
@@ -534,7 +482,6 @@ function BuyersPageContent() {
     filters.createdAfter,
     filters.createdBefore,
     filters.propertyType,
-    activeQuickFilters,
     selectedGroupId,
     itemsPerPage,
   ])
@@ -553,7 +500,6 @@ function BuyersPageContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           filters: { ...filters, search: debouncedSearch },
-          quickFilters: activeQuickFilters,
           groupId: selectedGroupId || undefined,
           buyerIds: allSelected ? undefined : selectedBuyers,
         }),
@@ -786,7 +732,6 @@ function BuyersPageContent() {
   const handleSelectAllResults = async () => {
     const ids = await fetchBuyerIds(
       { ...filters, search: debouncedSearch },
-      activeQuickFilters,
       selectedGroupId,
     )
     setSelectedBuyers(ids)
@@ -815,12 +760,6 @@ function BuyersPageContent() {
     }
   }
 
-  const toggleQuickFilter = (filterKey: string) => {
-    setActiveQuickFilters((prev: string[]) =>
-      prev.includes(filterKey) ? prev.filter((f: string) => f !== filterKey) : [...prev, filterKey],
-    )
-  }
-
   const clearAllFilters = () => {
     setFilters({
       search: "",
@@ -837,7 +776,6 @@ function BuyersPageContent() {
       createdBefore: "",
       propertyType: "any",
     })
-    setActiveQuickFilters([])
     setSelectedGroupId("")
   }
 
@@ -860,7 +798,6 @@ function BuyersPageContent() {
   const handleCreateCampaignForFilteredBuyers = async (channel: "email" | "sms") => {
     const ids = await fetchBuyerIds(
       { ...filters, search: debouncedSearch },
-      activeQuickFilters,
       selectedGroupId,
     )
     saveAudienceSnapshot({
@@ -1267,23 +1204,6 @@ function BuyersPageContent() {
                 </div>
               </div>
             )}
-
-            {/* Quick Filters - More compact */}
-            <div className="flex flex-wrap gap-2 mb-4">
-              {quickFilters.map((filter) => (
-                <Button
-                  key={filter.key}
-                  variant={activeQuickFilters.includes(filter.key) ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => toggleQuickFilter(filter.key)}
-                  className="h-7 text-xs"
-                  aria-label={`Filter by ${filter.label}`}
-                >
-                  {filter.label}
-                  {activeQuickFilters.includes(filter.key) && <X className="ml-1 h-3 w-3" />}
-                </Button>
-              ))}
-            </div>
 
             {/* Filters - More responsive grid */}
             <div className="space-y-4">
@@ -1733,7 +1653,7 @@ function BuyersPageContent() {
               <p className="text-sm text-secondary">
                 {totalCount === 0 ? "Add your first buyer to get started" : "Try adjusting your filters"}
               </p>
-              {(Object.values(filters).some((v) => v !== "" && v !== "any") || activeQuickFilters.length > 0) && (
+              {Object.values(filters).some((v) => v !== "" && v !== "any") && (
                 <Button variant="outline" className="mt-4" onClick={clearAllFilters}>
                   Clear All Filters
                 </Button>
