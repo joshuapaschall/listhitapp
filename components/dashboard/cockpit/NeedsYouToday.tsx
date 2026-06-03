@@ -24,7 +24,7 @@ export default function NeedsYouToday({ data }: TodayProps) {
       value: data.unreadReplies,
       href: "/inbox",
       icon: MessageSquare,
-      tileClassName: "bg-brand-tint text-brand",
+      tileClassName: "bg-muted/40 text-brand",
     },
     {
       label: "Offers awaiting",

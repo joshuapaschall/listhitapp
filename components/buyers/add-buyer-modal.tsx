@@ -1204,12 +1204,12 @@ export default function AddBuyerModal({ open, onOpenChange, onSuccessAction, onE
 
           <div>
             {!isLastTab ? (
-              <Button onClick={handleNext} className="bg-blue-600 hover:bg-blue-700">
+              <Button onClick={handleNext}>
                 Next
                 <ChevronRight className="ml-2 h-4 w-4" />
               </Button>
             ) : (
-              <Button onClick={() => handleSubmit()} disabled={loading} className="bg-emerald-600 hover:bg-emerald-700">
+              <Button onClick={() => handleSubmit()} disabled={loading}>
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

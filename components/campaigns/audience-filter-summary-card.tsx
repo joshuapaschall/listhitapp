@@ -52,7 +52,7 @@ export default function AudienceFilterSummaryCard({ snapshot, onPreview, onAdjus
     <div className="bg-card border rounded-lg p-4">
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
-          <div className="bg-brand-tint w-8 h-8 rounded-full flex items-center justify-center">
+          <div className="bg-muted/40 w-8 h-8 rounded-full flex items-center justify-center">
             <Filter className="h-4 w-4 text-brand" />
           </div>
           <div>
@@ -61,7 +61,7 @@ export default function AudienceFilterSummaryCard({ snapshot, onPreview, onAdjus
           </div>
         </div>
         <div className="text-right">
-          <p className="text-2xl font-semibold text-brand">{snapshot.recipientCount}</p>
+          <p className="text-2xl font-semibold text-foreground">{snapshot.recipientCount}</p>
           <p className="text-xs text-muted-foreground">recipients</p>
         </div>
       </div>

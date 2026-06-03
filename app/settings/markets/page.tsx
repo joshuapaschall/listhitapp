@@ -97,7 +97,7 @@ export default function MarketsPage() {
           ))}
         </div>
       ) : sortedMarkets.length === 0 ? (
-        <Card><CardContent className="space-y-4 p-8 text-center"><p className="text-lg font-medium">No markets yet</p><p className="text-sm text-muted-foreground">Create your first market to organize numbers and apply shared routing.</p><Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => setDialogOpen(true)}>Create first market</Button></CardContent></Card>
+        <Card><CardContent className="space-y-4 p-8 text-center"><p className="text-lg font-medium">No markets yet</p><p className="text-sm text-muted-foreground">Create your first market to organize numbers and apply shared routing.</p><Button onClick={() => setDialogOpen(true)}>Create first market</Button></CardContent></Card>
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {sortedMarkets.map((market) => (
@@ -149,7 +149,7 @@ function MarketCreateDialog(props: {
 }) {
   return (
     <Dialog open={props.dialogOpen} onOpenChange={props.setDialogOpen}>
-      <DialogTrigger asChild><Button className="bg-emerald-600 hover:bg-emerald-700">New market</Button></DialogTrigger>
+      <DialogTrigger asChild><Button>New market</Button></DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Create market</DialogTitle>
@@ -165,7 +165,7 @@ function MarketCreateDialog(props: {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => props.setDialogOpen(false)}>Cancel</Button>
-          <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={props.onCreate} disabled={props.creating}>{props.creating ? "Creating..." : "Create market"}</Button>
+          <Button onClick={props.onCreate} disabled={props.creating}>{props.creating ? "Creating..." : "Create market"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -23,7 +23,7 @@ function formatStatus(status: string | null) {
 
 function statusClassName(status: string | null) {
   if (status === "available") {
-    return "border-transparent bg-brand-tint text-brand hover:bg-brand-tint"
+    return "border-transparent bg-muted/40 text-brand hover:bg-muted/40"
   }
 
   if (status === "under_contract") {
