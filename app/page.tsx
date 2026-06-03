@@ -49,7 +49,7 @@ import {
   X,
   Edit,
   Loader2,
-  MapPin,
+  PanelLeftClose, PanelLeftOpen,
   Users,
   Tags,
   UserPlus,
@@ -266,6 +266,17 @@ function BuyersPageContent() {
   const [showSendEmailModal, setShowSendEmailModal] = useState(false)
   const [emailBuyer, setEmailBuyer] = useState<Buyer | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [groupsCollapsed, setGroupsCollapsed] = useState(false)
+
+  // Persist the Smart Groups collapsed state (mirrors the main Sidebar pattern).
+  useEffect(() => {
+    const stored = localStorage.getItem("listhit.buyers.groupsCollapsed")
+    if (stored !== null) setGroupsCollapsed(stored === "true")
+  }, [])
+
+  useEffect(() => {
+    localStorage.setItem("listhit.buyers.groupsCollapsed", String(groupsCollapsed))
+  }, [groupsCollapsed])
   const [tagActionMode, setTagActionMode] = useState<"add" | "remove">("add")
   const [showTagDialog, setShowTagDialog] = useState(false)
   const [groupActionMode, setGroupActionMode] = useState<
@@ -985,7 +996,8 @@ function BuyersPageContent() {
         className={`
         ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
         xl:translate-x-0 fixed xl:static inset-y-0 left-0 z-50
-        w-[15rem] xl:w-64 border-r bg-background transition-transform duration-300 ease-in-out shrink-0
+        w-[15rem] border-r bg-background transition-all duration-300 ease-in-out shrink-0
+        ${groupsCollapsed ? "xl:w-0 xl:overflow-hidden xl:border-0 xl:opacity-0 xl:p-0" : "xl:w-64"}
       `}
       >
         <SmartGroupsSidebar
@@ -1012,6 +1024,15 @@ function BuyersPageContent() {
                   aria-label="Open sidebar menu"
                 >
                   <Menu className="h-5 w-5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setGroupsCollapsed((v) => !v)}
+                  className="hidden xl:inline-flex p-2 mr-1"
+                  aria-label="Toggle smart groups"
+                >
+                  {groupsCollapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
                 </Button>
                 <h1 className="text-xl lg:text-2xl font-bold">👥 Buyers</h1>
                 <Badge variant="secondary" className="text-sm">
@@ -1479,10 +1500,9 @@ function BuyersPageContent() {
                   <th className="p-3 text-left text-heading">Phone</th>
                   <th className="p-3 text-left text-heading">Score</th>
                   <th className="p-3 text-left text-heading">Tags</th>
-                  <th className="p-3 text-left text-heading">Locations</th>
                   <th className="p-3 text-left text-heading">Created</th>
                   <th className="p-3 text-left text-heading">Status</th>
-                  <th className="p-3 text-left text-heading w-16 sticky right-0 z-20 bg-muted/50 border-l border-border">Actions</th>
+                  <th className="p-3 text-left text-heading w-16">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -1548,28 +1568,6 @@ function BuyersPageContent() {
                         )}
                       </div>
                     </td>
-                    <td className="p-3 text-body">
-                      <div className="flex flex-wrap gap-1 max-w-40">
-                        {buyer.locations?.slice(0, 2).map((location: string, index: number) => (
-                          <span
-                            key={index}
-                            className="chip chip-blue flex items-center gap-1"
-                            title={location}
-                          >
-                            <MapPin className="h-3 w-3" />
-                            {location}
-                          </span>
-                        ))}
-                        {buyer.locations && buyer.locations.length > 2 && (
-                          <span
-                            className="chip chip-blue"
-                            title={`${buyer.locations.length - 2} more locations`}
-                          >
-                            +{buyer.locations.length - 2}
-                          </span>
-                        )}
-                      </div>
-                    </td>
                     <td className="p-3 text-sm text-secondary font-mono whitespace-nowrap">
                       {buyer.created_at ? formatDate(buyer.created_at) : "—"}
                     </td>
@@ -1597,7 +1595,7 @@ function BuyersPageContent() {
                       )
                       })()}
                     </td>
-                    <td className="p-3 sticky right-0 z-10 bg-background border-l border-border">
+                    <td className="p-3">
                       <div className="flex items-center space-x-1">
                         <Button
                           variant="ghost"
