@@ -16,10 +16,10 @@ interface CampaignChannelPickerProps {
 }
 
 const cardClass =
-  "group flex h-full cursor-pointer flex-col rounded-lg border border-border bg-background p-6 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-[hsl(var(--brand))] hover:bg-[hsl(var(--brand-tint))] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand-ring))] focus-visible:ring-offset-2"
+  "group flex h-full cursor-pointer flex-col rounded-lg border border-border bg-background p-6 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-brand hover:bg-muted/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
 
 const chipClass =
-  "mb-4 flex size-11 items-center justify-center rounded-full bg-[hsl(var(--brand-tint))] text-[hsl(var(--brand))]"
+  "mb-4 flex size-11 items-center justify-center rounded-full bg-muted/40 text-brand"
 
 export default function CampaignChannelPicker({
   open,

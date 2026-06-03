@@ -16,7 +16,7 @@ export default function QuickActionButtons() {
   return (
     <>
       <div className="flex gap-2 flex-wrap">
-        <Button size="sm" onClick={() => setShowAddBuyer(true)}>
+        <Button size="sm" variant="brand" onClick={() => setShowAddBuyer(true)}>
           <UserPlus className="mr-2 h-4 w-4" /> Add Buyer
         </Button>
         <Button asChild size="sm" variant="secondary">

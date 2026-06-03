@@ -9,10 +9,10 @@ interface DashboardFunnelProps {
 
 export default function DashboardFunnel({ data }: DashboardFunnelProps) {
   const stages = [
-    { label: "Buyers", value: data.buyers, fill: "bg-foreground/15" },
-    { label: "Showings", value: data.showings, fill: "bg-foreground/35" },
-    { label: "Offers", value: data.offers, fill: "bg-foreground/60" },
-    { label: "Closed", value: data.closed, fill: "bg-foreground" },
+    { label: "Buyers", value: data.buyers, fill: "bg-brand/25" },
+    { label: "Showings", value: data.showings, fill: "bg-brand/45" },
+    { label: "Offers", value: data.offers, fill: "bg-brand/70" },
+    { label: "Closed", value: data.closed, fill: "bg-brand" },
   ]
   const maxValue = Math.max(data.buyers, data.showings, data.offers, data.closed, 0)
   const overallRate = data.buyers > 0 ? Math.round((data.closed / data.buyers) * 100) : 0
@@ -28,7 +28,7 @@ export default function DashboardFunnel({ data }: DashboardFunnelProps) {
         </div>
         <div className="text-right">
           <div className="text-[11px] text-muted-foreground">Buyer → close</div>
-          <div className="text-lg font-semibold text-foreground tabular-nums">{overallRate}%</div>
+          <div className="text-lg font-semibold text-brand tabular-nums">{overallRate}%</div>
         </div>
       </div>
 

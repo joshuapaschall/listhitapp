@@ -32,7 +32,7 @@ import type {
   TrendWithDelta,
   UnsubscribeTrend,
 } from "@/services/dashboard-service"
-import { useQuery } from "@tanstack/react-query"
+import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { useSession } from "@/hooks/use-session"
 
 type DashboardPayload = {
@@ -154,6 +154,10 @@ export default function DashboardPage() {
   const { data: dashboardData = null } = useQuery({
     queryKey: ["dashboard", range],
     queryFn: () => fetchDashboard(range),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,
   })
 
   const kpis = dashboardData?.kpis ?? EMPTY_KPIS
@@ -177,7 +181,7 @@ export default function DashboardPage() {
 
   return (
     <MainLayout>
-      <div className="min-h-full bg-muted/40 p-4 sm:p-6 space-y-5">
+      <div className="min-h-full bg-muted/40 p-4 sm:p-6 space-y-4">
         <DashboardGreeting briefing={briefing} name={firstName}>
           <ToggleTimeRange value={range} onChange={handleRangeChange} />
         </DashboardGreeting>
@@ -204,11 +208,16 @@ export default function DashboardPage() {
           />
           <KpiStat label="Close rate" value={`${Math.round(kpis.closeRate)}%`} sublabel="accepted / created" />
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3.5">
+          <div className="lg:col-span-2">
+            <DashboardFunnel data={funnel} />
+          </div>
           <LiveDealsPanel deals={liveDeals} />
-          <NeedsYouToday data={needsYouToday} />
         </div>
-        <DashboardFunnel data={funnel} />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
+          <NeedsYouToday data={needsYouToday} />
+          <ProfitZone data={profit} />
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <ChannelCard
             title="Email"
@@ -242,7 +251,6 @@ export default function DashboardPage() {
           />
         </div>
         <ActivityTrend textTrends={textTrends} callTrends={callTrends} emailTrends={emailTrends} />
-        <ProfitZone data={profit} />
         <RecentActivity items={activity} />
         {dashboardData?.kpis ? <AllMetricsDrawer kpis={kpis} /> : null}
       </div>
