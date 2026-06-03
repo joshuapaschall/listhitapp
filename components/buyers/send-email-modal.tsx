@@ -1,18 +1,14 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog"
+import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
+import { Send, Trash2, X } from "lucide-react"
 import type { Buyer } from "@/lib/supabase"
 import { toast } from "sonner"
+import RecipientPicker, { type RecipientValue } from "@/components/messaging/recipient-picker"
 
 interface SendEmailModalProps {
   open: boolean
@@ -21,18 +17,25 @@ interface SendEmailModalProps {
   onSuccess?: () => void
 }
 
+const buyerName = (b: Buyer) => b.full_name || `${b.fname || ""} ${b.lname || ""}`.trim() || "Unnamed"
+
 export default function SendEmailModal({ open, onOpenChange, buyer, onSuccess }: SendEmailModalProps) {
-  const [to, setTo] = useState("")
+  const [recipient, setRecipient] = useState<RecipientValue | null>(null)
   const [subject, setSubject] = useState("")
   const [body, setBody] = useState("")
   const [sending, setSending] = useState(false)
 
+  // Prefill the recipient from the passed buyer (or clear it for the header case).
   useEffect(() => {
-    if (open) setTo(buyer?.email || "")
-  }, [open, buyer?.email])
+    if (!open) return
+    if (buyer) setRecipient({ buyerId: buyer.id, value: buyer.email || "", label: buyerName(buyer) })
+    else setRecipient(null)
+  }, [open, buyer])
+
+  const to = recipient?.value?.trim() || ""
 
   const reset = () => {
-    setTo("")
+    setRecipient(null)
     setSubject("")
     setBody("")
   }
@@ -42,7 +45,7 @@ export default function SendEmailModal({ open, onOpenChange, buyer, onSuccess }:
     onOpenChange(false)
   }
 
-  const canSend = !!to.trim() && !!subject.trim() && !!body.trim() && !sending
+  const canSend = !!to && !!subject.trim() && !!body.trim() && !sending
 
   const handleSubmit = async () => {
     if (!canSend) return
@@ -69,30 +72,70 @@ export default function SendEmailModal({ open, onOpenChange, buyer, onSuccess }:
 
   return (
     <Dialog open={open} onOpenChange={(o) => (o ? onOpenChange(true) : handleClose())}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Send Email</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3">
-          <div>
-            <label className="block text-sm font-medium mb-1">To</label>
-            <Input value={to} onChange={(e) => setTo(e.target.value)} placeholder="name@example.com" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Subject</label>
-            <Input value={subject} onChange={(e) => setSubject(e.target.value)} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Body</label>
-            <Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={6} />
-          </div>
+      <DialogContent className="max-w-xl p-0 gap-0 overflow-hidden [&>button.absolute]:hidden">
+        {/* Header strip */}
+        <div className="flex items-center justify-between bg-muted px-4 py-2.5">
+          <span className="text-sm font-medium text-foreground">New message</span>
+          <button
+            type="button"
+            onClick={handleClose}
+            aria-label="Close"
+            className="rounded p-1 text-muted-foreground hover:bg-background hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
-        <DialogFooter className="mt-4">
-          <Button variant="outline" onClick={handleClose}>Cancel</Button>
-          <Button onClick={handleSubmit} disabled={!canSend}>
-            {sending ? "Sending..." : "Send"}
+
+        <div className="px-4">
+          {/* From */}
+          <div className="flex items-center gap-2 border-b border-border py-2.5 text-sm">
+            <span className="w-14 shrink-0 text-muted-foreground">From</span>
+            <span className="truncate text-muted-foreground">Your connected email</span>
+          </div>
+
+          {/* To */}
+          <div className="flex items-start gap-2 border-b border-border py-2.5">
+            <span className="w-14 shrink-0 pt-2 text-sm text-muted-foreground">To</span>
+            <div className="min-w-0 flex-1">
+              <RecipientPicker mode="email" value={recipient} onChange={setRecipient} />
+            </div>
+          </div>
+
+          {/* Subject */}
+          <Input
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+            placeholder="Subject"
+            aria-label="Subject"
+            className="h-10 rounded-none border-0 border-b border-border px-0 text-sm focus-visible:ring-0 focus-visible:ring-offset-0"
+          />
+
+          {/* Body */}
+          <Textarea
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            placeholder="Compose your message…"
+            aria-label="Message body"
+            className="min-h-[220px] resize-none rounded-none border-0 px-0 py-3 text-sm focus-visible:ring-0 focus-visible:ring-offset-0"
+          />
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between border-t border-border px-4 py-3">
+          <Button variant="brand" onClick={handleSubmit} disabled={!canSend} className="gap-1.5">
+            <Send className="h-4 w-4" />
+            {sending ? "Sending…" : "Send"}
           </Button>
-        </DialogFooter>
+          <button
+            type="button"
+            onClick={handleClose}
+            aria-label="Discard draft"
+            title="Discard"
+            className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
       </DialogContent>
     </Dialog>
   )

@@ -25,6 +25,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { useNotifications } from "@/hooks/use-notifications"
 import { useSession } from "@/hooks/use-session"
 import { useCall } from "@/components/voice/CallProvider"
+import SendEmailModal from "@/components/buyers/send-email-modal"
 
 interface HeaderProps {
   toggleSidebar: () => void
@@ -46,6 +47,7 @@ function getUserInitials(name?: string | null, email?: string | null) {
 export function Header({ toggleSidebar }: HeaderProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [mounted, setMounted] = useState(false)
+  const [emailOpen, setEmailOpen] = useState(false)
   const { notifications, unreadCount, markAsRead } = useNotifications()
   const { user } = useSession()
   const { openDialer } = useCall()
@@ -92,7 +94,7 @@ export function Header({ toggleSidebar }: HeaderProps) {
           <Button variant="ghost" size="sm" onClick={openDialer}>
             <Phone className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" onClick={() => setEmailOpen(true)}>
             <Mail className="h-4 w-4" />
           </Button>
           {mounted && (
@@ -170,6 +172,7 @@ export function Header({ toggleSidebar }: HeaderProps) {
           </DropdownMenu>
         </div>
       </div>
+      <SendEmailModal open={emailOpen} onOpenChange={setEmailOpen} buyer={null} />
     </header>
   )
 }
