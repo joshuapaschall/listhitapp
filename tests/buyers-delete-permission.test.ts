@@ -39,6 +39,37 @@ function createPermissionClient() {
         }
       }
 
+      // Writes now run through the session-aware client from requireOrgContext().
+      if (table === "buyer_groups") {
+        return {
+          delete: () => ({
+            eq: () => ({
+              in: async (_column: string, ids: string[]) => {
+                state.deletedGroupIds.push(...ids)
+                return { data: null, error: null }
+              },
+            }),
+          }),
+        }
+      }
+
+      if (table === "buyers") {
+        return {
+          update: () => ({
+            eq: () => ({
+              in: (_column: string, ids: string[]) => ({
+                is: () => ({
+                  select: async () => {
+                    state.hiddenBuyerIds.push(...ids)
+                    return { data: ids.map((id) => ({ id })), error: null }
+                  },
+                }),
+              }),
+            }),
+          }),
+        }
+      }
+
       throw new Error(`Unexpected route client table ${table}`)
     },
   }
@@ -48,43 +79,24 @@ vi.mock("@supabase/auth-helpers-nextjs", () => ({
   createRouteHandlerClient: () => createPermissionClient(),
 }))
 
-vi.mock("@/lib/supabase", () => ({
-  supabase: {
+// resolveOrgIdForUser (inside requireOrgContext) reads org_id from supabaseAdmin.profiles.
+vi.mock("@/lib/supabase", () => {
+  const supabaseAdmin = {
     from: (table: string) => {
-      if (table === "buyer_groups") {
+      if (table === "profiles") {
         return {
-          delete: () => ({
-            in: async (_column: string, ids: string[]) => {
-              state.deletedGroupIds.push(...ids)
-              return { data: null, error: null }
-            },
-          }),
-        }
-      }
-
-      if (table === "buyers") {
-        return {
-          update: () => ({
-            in: async (_column: string, ids: string[]) => {
-              state.hiddenBuyerIds.push(...ids)
-              return { data: null, error: null }
-            },
-          }),
           select: () => ({
-            eq: (_column: string, id: string) => ({
-              single: async () => ({
-                data: state.buyers.find((buyer) => buyer.id === id) ?? null,
-                error: null,
-              }),
+            eq: () => ({
+              maybeSingle: async () => ({ data: { org_id: "org-1" }, error: null }),
             }),
           }),
         }
       }
-
-      throw new Error(`Unexpected service client table ${table}`)
+      throw new Error(`Unexpected admin client table ${table}`)
     },
-  },
-}))
+  }
+  return { supabase: supabaseAdmin, supabaseAdmin }
+})
 
 const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }))
 vi.stubGlobal("fetch", fetchMock)

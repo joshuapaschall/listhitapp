@@ -684,13 +684,16 @@ function BuyersPageContent() {
 
   const performBulkDelete = async () => {
     try {
-      await fetch("/api/buyers/bulk-delete", {
+      const res = await fetch("/api/buyers/bulk-delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids: selectedBuyers }),
-      }).then((r) => {
-        if (!r.ok) throw new Error("bulk delete failed")
       })
+      if (!res.ok) throw new Error("bulk delete failed")
+      const json = await res.json().catch(() => ({}))
+      if (typeof json.deleted === "number" && json.deleted === 0) {
+        throw new Error("no buyers were deleted")
+      }
       queryClient.invalidateQueries({ queryKey: ["buyers"] })
       queryClient.invalidateQueries({ queryKey: ["buyerCountsByGroup"] })
       queryClient.invalidateQueries({ queryKey: ["totalBuyersCount"] })
@@ -753,11 +756,14 @@ function BuyersPageContent() {
   const performDeleteBuyer = async () => {
     if (!buyerToDelete) return
     try {
-      await fetch(`/api/buyers/${buyerToDelete.id}/delete`, {
+      const res = await fetch(`/api/buyers/${buyerToDelete.id}/delete`, {
         method: "POST",
-      }).then((r) => {
-        if (!r.ok) throw new Error("delete failed")
       })
+      if (!res.ok) throw new Error("delete failed")
+      const json = await res.json().catch(() => ({}))
+      if (typeof json.deleted === "number" && json.deleted === 0) {
+        throw new Error("no buyers were deleted")
+      }
       queryClient.invalidateQueries({ queryKey: ["buyers"] })
       queryClient.invalidateQueries({ queryKey: ["buyerCountsByGroup"] })
       queryClient.invalidateQueries({ queryKey: ["totalBuyersCount"] })
