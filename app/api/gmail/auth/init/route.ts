@@ -13,7 +13,7 @@ const SCOPES = [
   "https://www.googleapis.com/auth/userinfo.profile",
 ].join(" ")
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const cookieStore = cookies()
   const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
   const {
@@ -42,6 +42,10 @@ export async function GET() {
     include_granted_scopes: "true",
     state,
   })
+
+  // Optional: pre-select a specific Google account when reconnecting.
+  const loginHint = request.nextUrl.searchParams.get("login_hint")
+  if (loginHint) params.set("login_hint", loginHint)
 
   const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`
   const response = NextResponse.redirect(authUrl)
