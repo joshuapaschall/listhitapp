@@ -17,6 +17,14 @@ interface TemplateEditorProps {
   id?: string
 }
 
+// Matches the campaign composer's merge-field set exactly.
+const MERGE_TAGS = [
+  { label: "First name", value: "{{first_name}}" },
+  { label: "Last name", value: "{{last_name}}" },
+  { label: "Phone", value: "{{phone}}" },
+  { label: "Email", value: "{{email}}" },
+]
+
 interface TemplateInitialData {
   name: string
   message: string
@@ -91,6 +99,8 @@ export default function TemplateEditor({ slug, mode, id }: TemplateEditorProps) 
         channel={config.type}
         initial={initial ? { name: initial.name, message: initial.message } : undefined}
         onSubmit={handleTextTemplateSubmit}
+        mergeTags={MERGE_TAGS}
+        enableEmojiPicker
       />
     </div>
   )
