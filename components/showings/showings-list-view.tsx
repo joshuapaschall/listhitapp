@@ -37,12 +37,14 @@ interface ShowingsListViewProps {
   onEdit: (showing: ShowingWithRelations) => void
   onDelete: (showing: ShowingWithRelations) => void
   onBuyerClick: (buyer: Buyer) => void
+  onText: (buyer: Buyer) => void
+  onCancel: (showing: ShowingWithRelations) => void
   isLoading: boolean
 }
 
 const ITEMS_PER_PAGE = 10
 
-export default function ShowingsListView({ showings, onEdit, onDelete, onBuyerClick, isLoading }: ShowingsListViewProps) {
+export default function ShowingsListView({ showings, onEdit, onDelete, onBuyerClick, onText, onCancel, isLoading }: ShowingsListViewProps) {
   const [currentPage, setCurrentPage] = useState(1)
 
   useEffect(() => {
@@ -61,7 +63,7 @@ export default function ShowingsListView({ showings, onEdit, onDelete, onBuyerCl
         {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
         {!isLoading && pagedShowings.length === 0 && <p className="text-sm text-muted-foreground">No showings found.</p>}
         {pagedShowings.map((showing) => (
-          <ShowingCard key={showing.id} showing={showing} onEdit={onEdit} onDelete={onDelete} onBuyerClick={onBuyerClick} />
+          <ShowingCard key={showing.id} showing={showing} onEdit={onEdit} onDelete={onDelete} onBuyerClick={onBuyerClick} onText={onText} onCancel={onCancel} />
         ))}
       </div>
 
@@ -106,12 +108,12 @@ export default function ShowingsListView({ showings, onEdit, onDelete, onBuyerCl
                       <button
                         type="button"
                         onClick={() => onBuyerClick(showing.buyers as Buyer)}
-                        className="inline-flex items-center gap-2 hover:text-primary"
+                        className="inline-flex items-center gap-2 hover:text-brand"
                       >
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand/10 text-xs font-semibold text-brand">
                           {initials}
                         </span>
-                        <span className="text-sm font-medium">{buyerName || "Unnamed Buyer"}</span>
+                        <span className="text-sm font-medium text-foreground">{buyerName || "Unnamed buyer"}</span>
                       </button>
                     ) : (
                       <span className="text-muted-foreground">—</span>
@@ -119,7 +121,7 @@ export default function ShowingsListView({ showings, onEdit, onDelete, onBuyerCl
                   </TableCell>
                   <TableCell>
                     {showing.properties ? (
-                      <Link href={`/properties/edit/${showing.properties.id}`} className="text-blue-600 hover:underline">
+                      <Link href={`/properties/edit/${showing.properties.id}`} className="text-sm text-muted-foreground hover:text-foreground hover:underline">
                         {showing.properties.address}
                       </Link>
                     ) : (
@@ -129,7 +131,7 @@ export default function ShowingsListView({ showings, onEdit, onDelete, onBuyerCl
                   <TableCell>
                     <ShowingStatusBadge status={showing.status} />
                   </TableCell>
-                  <TableCell className="max-w-[200px] truncate">{showing.notes || "—"}</TableCell>
+                  <TableCell className="max-w-[200px] truncate text-sm text-muted-foreground">{showing.notes || "—"}</TableCell>
                   <TableCell>
                     <Can permission="showings.manage">
                       <DropdownMenu>
@@ -140,8 +142,12 @@ export default function ShowingsListView({ showings, onEdit, onDelete, onBuyerCl
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => onEdit(showing)}>Edit</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => onDelete(showing)}>Delete</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => onEdit(showing)}>Reschedule</DropdownMenuItem>
+                          {showing.buyers ? <DropdownMenuItem onClick={() => onBuyerClick(showing.buyers as Buyer)}>View buyer</DropdownMenuItem> : null}
+                          {showing.status !== "canceled" && showing.status !== "completed" ? (
+                            <DropdownMenuItem onClick={() => onCancel(showing)}>Cancel</DropdownMenuItem>
+                          ) : null}
+                          <DropdownMenuItem onClick={() => onDelete(showing)} className="text-destructive focus:text-destructive">Delete</DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </Can>
