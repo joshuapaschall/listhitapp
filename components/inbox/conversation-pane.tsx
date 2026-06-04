@@ -20,9 +20,8 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { TemplateService } from "@/services/template-service";
+import TemplatePicker from "@/components/templates/template-picker";
 import {
   Popover,
   PopoverTrigger,
@@ -33,14 +32,13 @@ import {
   Mic,
   Image as ImageIcon,
   Tag,
-  Clipboard,
+  Zap,
   Smile,
   Clock,
   X,
   AlertCircle,
 } from "lucide-react";
 import Image from "next/image";
-import Link from "next/link";
 import { insertText, cn, renderTemplate } from "@/lib/utils";
 import { calculateSmsSegments } from "@/lib/sms-utils";
 import { formatPhoneE164, normalizePhone, formatPhoneDisplay } from "@/lib/dedup-utils";
@@ -49,7 +47,6 @@ import {
   type MessageThread,
   type Message,
   type Buyer,
-  type TemplateRecord,
 } from "@/lib/supabase";
 import EditBuyerModal from "@/components/buyers/edit-buyer-modal";
 import AddBuyerModal from "@/components/buyers/add-buyer-modal";
@@ -317,7 +314,6 @@ interface LocalMessage extends Message {
 export default function ConversationPane({ thread }: ConversationPaneProps) {
   const [messages, setMessages] = useState<LocalMessage[]>([]);
   const [input, setInput] = useState("");
-  const [templates, setTemplates] = useState<TemplateRecord[]>([]);
   const myMergeContext = useMyMergeContext();
   const [showEmoji, setShowEmoji] = useState(false);
   const [attachments, setAttachments] = useState<File[]>([]);
@@ -347,20 +343,6 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
   const manualDidRef = useRef(false);
   const dismissedBannerIdRef = useRef<string | null>(null);
   const [showQuickReplyModal, setShowQuickReplyModal] = useState(false);
-
-  const loadQuickReplies = useCallback(async () => {
-    try {
-      const list = await TemplateService.listTemplates("quick_reply");
-      setTemplates(list);
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to load quick replies");
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadQuickReplies();
-  }, [loadQuickReplies]);
 
   useEffect(() => {
     const loadVoiceNumbers = async () => {
@@ -1460,36 +1442,24 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
               />
             </DropdownMenuContent>
           </DropdownMenu>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+          <TemplatePicker
+            type="quick_reply"
+            manageHref="/settings/templates/quick-reply"
+            onNew={() => setShowQuickReplyModal(true)}
+            resolvePreview={(message) => renderTemplate(message, mergeContext.buyer, mergeContext.agent)}
+            onSelect={(t) => setInput(renderTemplate(t.message, mergeContext.buyer, mergeContext.agent))}
+            trigger={
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-                title="Insert template"
-                aria-label="Insert template"
+                title="Quick replies"
+                aria-label="Quick replies"
               >
-                <Clipboard className="h-4 w-4" />
+                <Zap className="h-4 w-4" />
               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              {templates.map((t) => (
-                <DropdownMenuItem
-                  key={t.id}
-                  onSelect={() => setInput(t.message)}
-                >
-                  {t.name}
-                </DropdownMenuItem>
-              ))}
-              {templates.length > 0 && <DropdownMenuSeparator />}
-              <DropdownMenuItem onSelect={() => setShowQuickReplyModal(true)}>
-                New quick reply…
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/settings/templates/quick-reply">Manage templates…</Link>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            }
+          />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -1742,9 +1712,8 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
       <QuickReplyModal
         open={showQuickReplyModal}
         onOpenChange={setShowQuickReplyModal}
-        onCreated={(tpl) => {
-          setTemplates((prev) => [tpl, ...prev])
-          void loadQuickReplies()
+        onCreated={() => {
+          /* The quick-replies picker re-fetches each time it opens. */
         }}
         mergeTags={mergeTags}
       />

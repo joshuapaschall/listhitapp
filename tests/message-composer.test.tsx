@@ -17,6 +17,9 @@ vi.mock("@/components/ui/popover", () => ({
   PopoverTrigger: ({ children }: any) => <div>{children}</div>,
   PopoverContent: ({ children }: any) => <div>{children}</div>,
 }))
+// The quick-replies picker isn't under test here; stub it out so its (inline,
+// under the popover mock) search box doesn't shadow the message textbox.
+vi.mock("@/components/templates/template-picker", () => ({ default: () => null }))
 
 vi.mock("../services/template-service", () => ({
   TemplateService: { listTemplates: vi.fn().mockResolvedValue([]), addTemplate: vi.fn() }

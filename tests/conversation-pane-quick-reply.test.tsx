@@ -24,6 +24,13 @@ vi.mock("@/components/ui/dropdown-menu", () => ({
   ),
   DropdownMenuSeparator: () => null,
 }))
+// Radix popover doesn't open via fireEvent in jsdom — render it inline so the
+// quick-replies picker content mounts (and fetches templates) immediately.
+vi.mock("@/components/ui/popover", () => ({
+  Popover: ({ children }: any) => <div>{children}</div>,
+  PopoverTrigger: ({ children }: any) => <div>{children}</div>,
+  PopoverContent: ({ children }: any) => <div>{children}</div>,
+}))
 
 vi.mock("../services/template-service", () => {
   return { TemplateService: { listTemplates: listTemplatesMock, addTemplate: vi.fn() } }
@@ -73,11 +80,9 @@ describe("ConversationPane quick replies", () => {
       </QueryClientProvider>
     )
 
-    await waitFor(() => expect(listTemplatesMock).toHaveBeenCalled())
-    expect(listTemplatesMock).toHaveBeenCalledWith("quick_reply")
+    await waitFor(() => expect(listTemplatesMock).toHaveBeenCalledWith("quick_reply"))
 
-    fireEvent.click(screen.getByLabelText("Insert template"))
-    fireEvent.click(screen.getByText("Quick 1"))
+    fireEvent.click(await screen.findByText("Quick 1"))
 
     const textarea = screen.getAllByRole("textbox")[0] as HTMLTextAreaElement
     expect(textarea.value).toBe("Quick message")
@@ -96,8 +101,7 @@ describe("ConversationPane quick replies", () => {
 
     await waitFor(() => expect(listTemplatesMock).toHaveBeenCalled())
 
-    fireEvent.click(screen.getByLabelText("Insert template"))
-    const manageLink = screen.getByText("Manage templates…").closest("a")
+    const manageLink = (await screen.findByText("Manage")).closest("a")
     expect(manageLink).toHaveAttribute("href", "/settings/templates/quick-reply")
   })
 })

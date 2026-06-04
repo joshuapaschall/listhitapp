@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import EmojiPicker from "emoji-picker-react"
-import { ChevronDown, Mail, Phone, Smile, User, UserRound } from "lucide-react"
+import { ChevronDown, Clipboard, Mail, Phone, Smile, User, UserRound } from "lucide-react"
 import AssistantButton from "@/components/chat-assistant-button"
 import SmsPhonePreview from "@/components/campaigns/sms-phone-preview"
+import TemplatePicker from "@/components/templates/template-picker"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -111,6 +112,18 @@ export default function SmsComposerPanel({ message, onMessageChange, buyerIds, r
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        <TemplatePicker
+          type="sms"
+          manageHref="/settings/templates/sms"
+          onSelect={(t) => insertToken(t.message)}
+          trigger={
+            <Button size="sm" variant="outline" type="button" className="gap-2 text-brand hover:text-brand">
+              <Clipboard className="h-3.5 w-3.5" />
+              Insert template
+            </Button>
+          }
+        />
 
         {/* ChatAssistantButton */}
         <AssistantButton onInsert={(text) => onMessageChange(text.slice(0, 1530))} />

@@ -192,7 +192,7 @@ export default function TemplateForm({
               <div className="rounded-xl border border-border bg-muted/30 p-3">
                 <p className="mb-2 text-xs font-medium text-muted-foreground">Preview</p>
                 <div className="flex justify-end">
-                  <div className="max-w-[80%] whitespace-pre-wrap break-words rounded-2xl rounded-br-sm bg-brand px-3 py-2 text-sm text-white">
+                  <div className="max-w-[80%] whitespace-pre-wrap break-words rounded-2xl rounded-br-sm px-3 py-2 text-sm text-white" style={{ backgroundColor: "#0A84FF" }}>
                     {previewText || "Your message preview will appear here."}
                   </div>
                 </div>
