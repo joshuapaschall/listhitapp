@@ -52,14 +52,14 @@ export function NotificationItem({ notification, onDismiss, compact = false }: N
       return
     }
     if (notification.metadata?.buyer_id) {
-      router.push("/")
+      router.push("/buyers")
       return
     }
     if (notification.type.startsWith("showing_")) {
       router.push("/showings")
       return
     }
-    router.push("/")
+    router.push("/buyers")
   }
 
   return (
