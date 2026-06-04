@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useSearchParams } from "next/navigation"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   Calendar,
   CalendarIcon,
@@ -15,6 +15,7 @@ import {
 import MainLayout from "@/components/layout/main-layout"
 import { Can } from "@/components/auth/Can"
 import EditBuyerModal from "@/components/buyers/edit-buyer-modal"
+import SendSmsModal from "@/components/buyers/send-sms-modal"
 import ScheduleShowingModal from "@/components/showings/schedule-showing-modal"
 import EditShowingModal from "@/components/showings/edit-showing-modal"
 import DeleteShowingModal from "@/components/showings/delete-showing-modal"
@@ -22,17 +23,18 @@ import ShowingsCalendarView from "@/components/showings/showings-calendar-view"
 import ShowingsListView from "@/components/showings/showings-list-view"
 import { ShowingService } from "@/services/showing-service"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { usePermissions } from "@/hooks/use-permissions"
+import { toast } from "sonner"
 import type { Buyer, ShowingWithRelations } from "@/lib/supabase"
 
 const STATUSES = ["all", "scheduled", "completed", "canceled", "rescheduled"]
 
 export default function ShowingsPage() {
   const { can, loading: permissionsLoading } = usePermissions()
+  const queryClient = useQueryClient()
   const params = useSearchParams()
   const defaultOpen = params.get("new") === "1"
   const [statusFilter, setStatusFilter] = useState<string>("all")
@@ -44,6 +46,8 @@ export default function ShowingsPage() {
   const [selectedShowing, setSelectedShowing] = useState<ShowingWithRelations | null>(null)
   const [showEditShowing, setShowEditShowing] = useState(false)
   const [showDeleteShowing, setShowDeleteShowing] = useState(false)
+  const [showSendSmsModal, setShowSendSmsModal] = useState(false)
+  const [smsBuyer, setSmsBuyer] = useState<Buyer | null>(null)
 
   const { data: showings = [], isLoading, refetch } = useQuery({
     queryKey: ["showings", statusFilter, startDate, endDate],
@@ -77,6 +81,22 @@ export default function ShowingsPage() {
     setShowEditModal(true)
   }
 
+  const handleText = (buyer: Buyer) => {
+    setSmsBuyer(buyer)
+    setShowSendSmsModal(true)
+  }
+
+  const handleCancelShowing = async (showing: ShowingWithRelations) => {
+    try {
+      await ShowingService.updateShowing(showing.id, { status: "canceled" })
+      await queryClient.invalidateQueries({ queryKey: ["showings"] })
+      toast.success("Showing canceled")
+    } catch (err) {
+      console.error("Error canceling showing:", err)
+      toast.error("Failed to cancel showing")
+    }
+  }
+
   if (permissionsLoading) {
     return (
       <MainLayout>
@@ -105,52 +125,52 @@ export default function ShowingsPage() {
             <p className="mt-1 text-sm text-muted-foreground">Manage property showings and appointments</p>
           </div>
           <Can permission="showings.manage">
-            <Button onClick={() => setShowScheduleModal(true)}>
+            <Button variant="brand" onClick={() => setShowScheduleModal(true)}>
               <Plus className="mr-2 h-4 w-4" />
-              Schedule Showing
+              Schedule showing
             </Button>
           </Can>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <Card className="p-4">
-            <div className="mb-4 flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">Upcoming</p>
-              <Calendar className="h-4 w-4 text-muted-foreground" />
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="rounded-md bg-muted/50 p-4">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <Calendar className="h-3.5 w-3.5" />
+              <p className="text-xs">Upcoming</p>
             </div>
-            <p className="text-2xl font-bold">{upcoming}</p>
-          </Card>
-          <Card className="p-4">
-            <div className="mb-4 flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">Completed</p>
-              <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
+            <p className="mt-1.5 text-[22px] font-medium text-blue-600 dark:text-blue-400">{upcoming}</p>
+          </div>
+          <div className="rounded-md bg-muted/50 p-4">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              <p className="text-xs">Completed</p>
             </div>
-            <p className="text-2xl font-bold">{completed}</p>
-          </Card>
-          <Card className="p-4">
-            <div className="mb-4 flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">Cancelled</p>
-              <XCircle className="h-4 w-4 text-muted-foreground" />
+            <p className="mt-1.5 text-[22px] font-medium text-emerald-600 dark:text-emerald-400">{completed}</p>
+          </div>
+          <div className="rounded-md bg-muted/50 p-4">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <XCircle className="h-3.5 w-3.5" />
+              <p className="text-xs">Cancelled</p>
             </div>
-            <p className="text-2xl font-bold">{cancelled}</p>
-          </Card>
-          <Card className="p-4">
-            <div className="mb-4 flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">Rescheduled</p>
-              <RefreshCw className="h-4 w-4 text-muted-foreground" />
+            <p className="mt-1.5 text-[22px] font-medium text-foreground">{cancelled}</p>
+          </div>
+          <div className="rounded-md bg-muted/50 p-4">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <RefreshCw className="h-3.5 w-3.5" />
+              <p className="text-xs">Rescheduled</p>
             </div>
-            <p className="text-2xl font-bold">{rescheduled}</p>
-          </Card>
+            <p className="mt-1.5 text-[22px] font-medium text-amber-600 dark:text-amber-400">{rescheduled}</p>
+          </div>
         </div>
 
         <Tabs defaultValue="list" className="w-full">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <TabsList>
-              <TabsTrigger value="calendar">
+            <TabsList className="inline-flex h-auto gap-1 rounded-lg bg-muted p-1">
+              <TabsTrigger value="calendar" className="rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
                 <CalendarIcon className="mr-2 h-4 w-4" />
                 Calendar
               </TabsTrigger>
-              <TabsTrigger value="list">
+              <TabsTrigger value="list" className="rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">
                 <List className="mr-2 h-4 w-4" />
                 List
               </TabsTrigger>
@@ -158,7 +178,7 @@ export default function ShowingsPage() {
 
             <div className="flex flex-wrap items-center gap-2">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-40">
+                <SelectTrigger className="h-9 w-40">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -173,14 +193,14 @@ export default function ShowingsPage() {
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-40"
+                className="h-9 w-40"
                 aria-label="Start date"
               />
               <Input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-40"
+                className="h-9 w-40"
                 aria-label="End date"
               />
             </div>
@@ -192,6 +212,8 @@ export default function ShowingsPage() {
               onEdit={handleEdit}
               onDelete={handleDelete}
               onBuyerClick={handleBuyerClick}
+              onText={handleText}
+              onCancel={handleCancelShowing}
             />
           </TabsContent>
 
@@ -201,6 +223,8 @@ export default function ShowingsPage() {
               onEdit={handleEdit}
               onDelete={handleDelete}
               onBuyerClick={handleBuyerClick}
+              onText={handleText}
+              onCancel={handleCancelShowing}
               isLoading={isLoading}
             />
           </TabsContent>
@@ -212,6 +236,7 @@ export default function ShowingsPage() {
           buyer={selectedBuyer}
           onSuccess={refetch}
         />
+        <SendSmsModal open={showSendSmsModal} onOpenChange={setShowSendSmsModal} buyer={smsBuyer} />
         <Can permission="showings.manage">
           <EditShowingModal
             open={showEditShowing}
