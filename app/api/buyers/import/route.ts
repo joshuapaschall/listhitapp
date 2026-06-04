@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requirePermission } from "@/lib/permissions/server"
 import { requireOrgContext } from "@/lib/auth/org-context"
+import { supabaseAdmin } from "@/lib/supabase"
+import { normalizePhone } from "@/lib/dedup-utils"
+import { suppressBuyerSms } from "@/lib/sms/suppress"
 
 type ImportUpdate = {
   id: string
@@ -35,13 +38,37 @@ export async function POST(req: NextRequest) {
         const { data, error } = await supabase
           .from("buyers")
           .insert(rows)
-          .select("id")
+          .select("id, phone")
 
         if (error) {
           return NextResponse.json({ error: error.message }, { status: 500 })
         }
 
         insertedIds.push(...((data ?? []) as { id: string }[]).map((buyer) => buyer.id))
+
+        // Pre-suppress any imported buyer whose number is already on the org's
+        // DNC blocklist. Non-blocking — never fail the import on it.
+        try {
+          const inserted = (data ?? []) as { id: string; phone?: string | null }[]
+          const phoneToId = new Map<string, string>()
+          for (const b of inserted) {
+            const normalized = normalizePhone(b.phone)
+            if (normalized) phoneToId.set(normalized, b.id)
+          }
+          if (phoneToId.size) {
+            const { data: dncRows } = await supabaseAdmin
+              .from("dnc_phones")
+              .select("normalized_phone")
+              .eq("org_id", orgId)
+              .in("normalized_phone", Array.from(phoneToId.keys()))
+            for (const row of dncRows ?? []) {
+              const matchedId = phoneToId.get((row as { normalized_phone: string }).normalized_phone)
+              if (matchedId) await suppressBuyerSms(matchedId, "imported_dnc")
+            }
+          }
+        } catch (presupErr) {
+          console.error("[buyers/import] DNC pre-suppression failed (non-blocking)", presupErr)
+        }
       }
     }
 

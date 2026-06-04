@@ -30,12 +30,18 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     }
 
 
+    const now = new Date().toISOString()
     const { error: upd } = await supabase
       .from("buyers")
       .update({
         can_receive_sms: false,
         can_receive_email: false,
         email_suppressed: true,
+        sms_suppressed: true,
+        sms_suppressed_at: now,
+        sms_suppressed_reason: "unsubscribe",
+        is_unsubscribed: true,
+        unsubscribed_at: now,
       })
       .eq("id", id)
     console.log("Supabase unsubscribe update", { id, error: upd })

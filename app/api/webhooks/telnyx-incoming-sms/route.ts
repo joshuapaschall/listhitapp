@@ -16,6 +16,7 @@ import { processTelnyxStatusEvent } from "@/lib/telnyx-status-processor"
 import { classifyInboundSms } from "@/lib/sms/opt-keywords"
 import { matchNegativeKeyword } from "@/lib/sms/negative-keywords"
 import { suppressBuyerSms } from "@/lib/sms/suppress"
+import { recordDncPhone } from "@/lib/dnc/phones"
 
 export const runtime = "nodejs"
 
@@ -251,6 +252,7 @@ export async function POST(request: NextRequest) {
               if (match.action === "dnc") {
                 // SMS channel only — the reply arrived by SMS.
                 await suppressBuyerSms(buyerId, `keyword:"${match.keyword}"`)
+                await recordDncPhone(supabaseAdmin, orgId, from, "keyword", `keyword:"${match.keyword}"`)
               }
             } else if (threadState?.filtered_at && !overridden) {
               // Auto-resurface: they messaged again with no matching keyword.
@@ -292,14 +294,18 @@ export async function POST(request: NextRequest) {
   }
 
   if (isStop && buyerIds.length) {
-    const { error: updErr } = await supabaseAdmin
-      .from("buyers")
-      .update({ can_receive_sms: false })
-      .in("id", buyerIds)
-
-    if (updErr) {
-      console.error("❌ STOP update error", updErr)
-      return new NextResponse("Supabase error", { status: 500 })
+    // STOP suppresses SMS with a reason and records the number on the DNC
+    // blocklist. Non-blocking — never fail the webhook on it.
+    try {
+      for (const stopBuyerId of buyerIds) {
+        await suppressBuyerSms(stopBuyerId, "stop_reply")
+        const stopOrgId = buyerOrgById.get(stopBuyerId) ?? null
+        if (stopOrgId) {
+          await recordDncPhone(supabaseAdmin, stopOrgId, from, "stop", "stop_reply")
+        }
+      }
+    } catch (stopErr) {
+      console.error("[telnyx-incoming-sms] STOP DNC recording failed (non-blocking)", stopErr)
     }
   }
 
