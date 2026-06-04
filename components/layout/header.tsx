@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { PopoverAnchor } from "@radix-ui/react-popover"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useNotifications } from "@/hooks/use-notifications"
 import { useSession } from "@/hooks/use-session"
@@ -67,7 +68,7 @@ export function Header({ toggleSidebar }: HeaderProps) {
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchLoading, setSearchLoading] = useState(false)
   const [activeIndex, setActiveIndex] = useState(-1)
-  const searchRef = useRef<HTMLDivElement>(null)
+  const searchAnchorRef = useRef<HTMLDivElement>(null)
   const [mounted, setMounted] = useState(false)
   const [emailOpen, setEmailOpen] = useState(false)
   const [smsOpen, setSmsOpen] = useState(false)
@@ -114,17 +115,6 @@ export function Header({ toggleSidebar }: HeaderProps) {
     return () => clearTimeout(timer)
   }, [searchQuery])
 
-  // Close the results dropdown on outside click.
-  useEffect(() => {
-    const onDocMouseDown = (e: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
-        setSearchOpen(false)
-      }
-    }
-    document.addEventListener("mousedown", onDocMouseDown)
-    return () => document.removeEventListener("mousedown", onDocMouseDown)
-  }, [])
-
   const goToBuyer = (id: string) => {
     router.push(`/inbox?buyerId=${id}`)
     setSearchQuery("")
@@ -159,28 +149,41 @@ export function Header({ toggleSidebar }: HeaderProps) {
         </Button>
 
         <div className="flex flex-1 items-center space-x-4">
-          <div ref={searchRef} className="relative max-w-md flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-muted-foreground" />
-            <Input
-              id="global-search"
-              name="global-search"
-              placeholder="Search buyers by name, phone, or email..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onFocus={() => searchQuery.trim().length >= 2 && setSearchOpen(true)}
-              onKeyDown={onSearchKeyDown}
-              className="pl-10"
-              autoComplete="off"
-              role="combobox"
-              aria-expanded={searchOpen}
-              aria-controls="global-search-results"
-            />
-            {searchOpen && (
-              <div
-                id="global-search-results"
-                role="listbox"
-                className="absolute z-50 mt-1 w-full overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-md"
-              >
+          <Popover open={searchOpen} onOpenChange={setSearchOpen}>
+            <PopoverAnchor asChild>
+              <div ref={searchAnchorRef} className="relative max-w-md flex-1">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-muted-foreground" />
+                <Input
+                  id="global-search"
+                  name="global-search"
+                  placeholder="Search buyers by name, phone, or email..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onFocus={() => searchQuery.trim().length >= 2 && setSearchOpen(true)}
+                  onKeyDown={onSearchKeyDown}
+                  className="pl-10"
+                  autoComplete="off"
+                  role="combobox"
+                  aria-expanded={searchOpen}
+                  aria-controls="global-search-results"
+                />
+              </div>
+            </PopoverAnchor>
+            <PopoverContent
+              id="global-search-results"
+              align="start"
+              sideOffset={4}
+              // Portaled to body so it's never clipped, and above the call widget (z-50).
+              className="z-[60] overflow-hidden p-0"
+              style={{ width: "var(--radix-popover-trigger-width)" }}
+              // Keep keyboard focus in the input — don't let the popover steal it.
+              onOpenAutoFocus={(e) => e.preventDefault()}
+              // Don't treat clicks back into the search input (the anchor) as "outside".
+              onInteractOutside={(e) => {
+                if (searchAnchorRef.current?.contains(e.target as Node)) e.preventDefault()
+              }}
+            >
+              <div role="listbox">
                 {searchLoading ? (
                   <div className="flex items-center gap-2 px-3 py-3 text-sm text-muted-foreground">
                     <Loader2 className="h-4 w-4 animate-spin" /> Searching…
@@ -219,8 +222,8 @@ export function Header({ toggleSidebar }: HeaderProps) {
                   </ul>
                 )}
               </div>
-            )}
-          </div>
+            </PopoverContent>
+          </Popover>
         </div>
 
         <div className="flex items-center space-x-2">

@@ -24,10 +24,13 @@ export class BuyerService {
 
     // Apply filters
     if (filters?.search) {
-      const encoded = encodeURIComponent(filters.search)
-      query = query.or(
-        `fname.ilike.%${encoded}%,lname.ilike.%${encoded}%,email.ilike.%${encoded}%,phone.ilike.%${encoded}%`,
-      )
+      // Sanitize PostgREST OR-list delimiters (don't URL-encode — that corrupts the ilike pattern).
+      const safe = filters.search.trim().replace(/[,()]/g, " ").replace(/\s+/g, " ").trim()
+      if (safe) {
+        query = query.or(
+          `fname.ilike.%${safe}%,lname.ilike.%${safe}%,email.ilike.%${safe}%,phone.ilike.%${safe}%`,
+        )
+      }
     }
 
     // Attribute predicates flow through the one shared engine primitive so this
@@ -244,14 +247,41 @@ export class BuyerService {
 
   // Search buyers by name, email, or phone
   static async searchBuyers(query: string) {
-    const encoded = encodeURIComponent(query)
-      const { data, error } = await supabase
+    const raw = query.trim()
+    // Strip PostgREST OR-list delimiters so they can't break the filter syntax.
+    const safe = raw.replace(/[,()]/g, " ").replace(/\s+/g, " ").trim()
+    const digits = raw.replace(/\D/g, "")
+    const tokens = safe.split(" ").filter(Boolean)
+
+    if (!safe && digits.length < 3) return [] as Buyer[]
+
+    const ors: string[] = []
+    if (safe) {
+      ors.push(`full_name.ilike.%${safe}%`, `email.ilike.%${safe}%`)
+      if (tokens.length === 1) {
+        ors.push(`fname.ilike.%${tokens[0]}%`, `lname.ilike.%${tokens[0]}%`)
+      } else if (tokens.length >= 2) {
+        const first = tokens[0]
+        const last = tokens[tokens.length - 1]
+        ors.push(`and(fname.ilike.%${first}%,lname.ilike.%${last}%)`)
+        ors.push(`and(fname.ilike.%${last}%,lname.ilike.%${first}%)`)
+      }
+    }
+    if (digits.length >= 3) {
+      ors.push(
+        `phone_norm.ilike.%${digits}%`,
+        `phone2_norm.ilike.%${digits}%`,
+        `phone3_norm.ilike.%${digits}%`,
+      )
+    }
+
+    if (!ors.length) return [] as Buyer[]
+
+    const { data, error } = await supabase
       .from("buyers")
       .select("id, fname, lname, full_name, email, phone")
       .is("deleted_at", null)
-      .or(
-        `fname.ilike.%${encoded}%,lname.ilike.%${encoded}%,full_name.ilike.%${encoded}%,email.ilike.%${encoded}%,phone.ilike.%${encoded}%`,
-      )
+      .or(ors.join(","))
       .order("full_name", { ascending: true })
       .limit(20)
 

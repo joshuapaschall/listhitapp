@@ -306,6 +306,10 @@ export async function POST(req: Request) {
           buyerId = b?.id ?? null;
           callerBlockedAt = (b as any)?.blocked_at ?? null;
         }
+        // Stamp the owning org so the org-scoped lookup can see this row under RLS.
+        // Null-safe: if we can't resolve it, leave it null (mirrors calls/record).
+        const orgDid = direction === "incoming" ? toRaw : String(payload?.from ?? "");
+        const callOrgId = await resolveOrgFromDid(orgDid);
         if (callControlId) {
           await supabaseAdmin.from("calls").upsert(
             {
@@ -316,6 +320,7 @@ export async function POST(req: Request) {
               status: "initiated",
               webrtc: true,
               buyer_id: buyerId,
+              org_id: callOrgId,
               call_session_id: payload.call_session_id ?? null,
             },
             { onConflict: "call_sid" }
