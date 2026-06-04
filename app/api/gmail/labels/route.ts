@@ -4,6 +4,11 @@ import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { getActiveAccount } from "@/services/gmail-tokens"
 import { assertServer } from "@/utils/assert-server"
 import { requirePermission } from "@/lib/permissions/server"
+import {
+  isGmailReconnectError,
+  isGmailReconnectResponse,
+  gmailReconnectResponse,
+} from "@/lib/gmail/reconnect"
 
 assertServer()
 
@@ -47,14 +52,19 @@ export async function GET(_req: NextRequest) {
   const denied = await requirePermission(supabase, "gmail.access")
   if (denied) return denied
 
+  let accountEmail: string | null = null
   try {
     const { accessToken, email } = await getActiveAccount(user.id)
+    accountEmail = email ?? null
     const listRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/labels", {
       headers: { Authorization: `Bearer ${accessToken}` },
     })
     if (!listRes.ok) {
       const body = await listRes.text()
       console.error("Gmail labels.list failed:", listRes.status, body)
+      if (isGmailReconnectResponse(listRes.status, body)) {
+        return gmailReconnectResponse(accountEmail)
+      }
       return NextResponse.json({ error: "Failed to list labels" }, { status: 500 })
     }
 
@@ -140,6 +150,9 @@ export async function GET(_req: NextRequest) {
   } catch (err: any) {
     if (err.message === "Gmail token not found") {
       return NextResponse.json({ error: "No active Gmail account" }, { status: 404 })
+    }
+    if (isGmailReconnectError(err)) {
+      return gmailReconnectResponse(accountEmail)
     }
     console.error("Failed to fetch labels:", err)
     return NextResponse.json({ error: "Failed to fetch labels" }, { status: 500 })
