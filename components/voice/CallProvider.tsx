@@ -285,14 +285,15 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     };
   }, [canMakeReceiveCalls, permissionsLoading, reportPresence]);
 
-  const dialInternal = useCallback(async (destination: string, callerIdNumber?: string) => {
+  const dialInternal = useCallback(async (
+    destination: string,
+    opts?: { buyerId?: string | null; from?: string | null },
+  ) => {
     if (!device) throw new Error("Phone not ready");
-    const fallbackFrom =
-      process.env.NEXT_PUBLIC_DEFAULT_OUTBOUND_DID ||
-      process.env.NEXT_PUBLIC_FROM_NUMBER ||
-      "";
-    const from = (callerIdNumber || fallbackFrom).trim();
-    if (!from) throw new Error("No caller ID number configured");
+    // `from` is sent ONLY when the user explicitly picked a caller ID; otherwise
+    // the server resolves it (sticky → default app-assigned number).
+    const explicitFrom = (opts?.from || "").trim();
+    const buyerId = opts?.buyerId ?? null;
 
     // Receptionist model: the SERVER places the outbound call. It dials the
     // prospect (A-leg) and this browser (B-leg), then bridges them. The browser
@@ -307,7 +308,11 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       res = await fetch("/api/calls", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: destination, from }),
+        body: JSON.stringify({
+          to: destination,
+          buyerId,
+          ...(explicitFrom ? { from: explicitFrom } : {}),
+        }),
         cache: "no-store",
       });
     } catch (e) {
@@ -340,11 +345,11 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   }, [device]);
 
   const connectCall = useCallback(async (number: string, callerIdNumber?: string) => {
-    await dialInternal(number, callerIdNumber);
+    await dialInternal(number, { from: callerIdNumber });
   }, [dialInternal]);
 
   const makeCall = useCallback(async (destination: string, buyerId?: string, fromNumber?: string) => {
-    await dialInternal(destination, fromNumber);
+    await dialInternal(destination, { buyerId, from: fromNumber });
     return { ok: true, buyerId: buyerId || null };
   }, [dialInternal]);
 

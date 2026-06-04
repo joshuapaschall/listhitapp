@@ -40,6 +40,9 @@ export function Dialer({ open, onOpenChange }: { open: boolean; onOpenChange: (o
   const [selectedBuyer, setSelectedBuyer] = useState<Buyer | null>(null);
   const [number, setNumber] = useState("");
   const [from, setFrom] = useState("");
+  // True only once the user actively changes the caller-ID picker; the auto-shown
+  // default is for display and is NOT forced onto the server.
+  const [manualFrom, setManualFrom] = useState(false);
   const [dialing, setDialing] = useState(false);
   const debouncedSearch = useDebounce(search, 300);
 
@@ -86,11 +89,14 @@ export function Dialer({ open, onOpenChange }: { open: boolean; onOpenChange: (o
     setDialing(true);
     try {
       setCurrentContact({ name: selectedBuyer?.full_name || search || undefined, number: to });
-      await makeCall(to, selectedBuyer?.id, from || undefined);
+      // Pass `from` only when the user manually picked it; otherwise the server resolves
+      // the sticky / default app-assigned caller ID.
+      await makeCall(to, selectedBuyer?.id, manualFrom ? (from || undefined) : undefined);
       onOpenChange(false);
       setNumber("");
       setSearch("");
       setSelectedBuyer(null);
+      setManualFrom(false);
     } finally {
       setDialing(false);
     }
@@ -162,7 +168,7 @@ export function Dialer({ open, onOpenChange }: { open: boolean; onOpenChange: (o
           {/* From (sender) */}
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">From</span>
-            <Select value={from} onValueChange={setFrom}>
+            <Select value={from} onValueChange={(v) => { setFrom(v); setManualFrom(true); }}>
               <SelectTrigger className="h-9 flex-1 font-mono">
                 <SelectValue placeholder="Select from number" />
               </SelectTrigger>
