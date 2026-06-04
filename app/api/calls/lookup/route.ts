@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
         .from("calls")
         .select("call_sid")
         .eq("direction", "inbound")
-        .in("status", ["initiated", "answered"])
+        .in("status", ["initiated", "ringing", "answered"])
         .or(orFilter)
         .order("started_at", { ascending: false })
         .limit(1)
@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
       .from("calls")
       .select("call_sid, from_number, buyer_id")
       .eq("direction", "inbound")
-      .in("status", ["initiated", "answered"])
+      .in("status", ["initiated", "ringing", "answered"])
       .order("started_at", { ascending: false })
       .limit(1)
       .maybeSingle();
