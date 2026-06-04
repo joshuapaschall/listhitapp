@@ -86,28 +86,10 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Save caller ID mapping for future calls if this is a new buyer-number combination
-    if (buyerId) {
-      try {
-        const { data: existing } = await supabaseAdmin
-          .from("buyer_sms_senders")
-          .select("from_number")
-          .eq("buyer_id", buyerId)
-          .maybeSingle()
+    // Calls never write the SMS sticky store — it is owned exclusively by the SMS
+    // send paths via recordStickyFrom.
 
-        if (!existing?.from_number) {
-          await supabaseAdmin.from("buyer_sms_senders").insert({
-            buyer_id: buyerId,
-            from_number: formattedFrom,
-            org_id: orgId,
-          })
-        }
-      } catch (err) {
-        console.warn("Failed to save caller ID mapping:", err)
-      }
-    }
-
-    return new Response(JSON.stringify({ 
+    return new Response(JSON.stringify({
       success: true, 
       callId: data.id,
       callSid: data.call_sid 

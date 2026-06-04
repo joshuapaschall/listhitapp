@@ -34,6 +34,14 @@ vi.mock("../lib/supabase", () => {
               mappings.push(...rows)
               return { data: rows, error: null }
             },
+            // recordStickyFrom upserts onConflict buyer_id (dedup by buyer).
+            upsert: (row: any) => {
+              const r = Array.isArray(row) ? row[0] : row
+              const idx = mappings.findIndex((m) => m.buyer_id === r.buyer_id)
+              if (idx >= 0) mappings[idx] = { ...mappings[idx], ...r }
+              else mappings.push(r)
+              return { data: r, error: null }
+            },
           }
         }
         if (table === "message_threads") {
@@ -54,7 +62,9 @@ vi.mock("../lib/supabase", () => {
                   return { data: existing, error: null }
                 }
               })
-            })
+            }),
+            // recordStickyFrom updates preferred_from_number by thread id.
+            update: () => ({ eq: async () => ({ data: null, error: null }) }),
           }
         }
         if (table === "messages") {

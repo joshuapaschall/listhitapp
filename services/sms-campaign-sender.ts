@@ -8,6 +8,7 @@ import { insertNotification } from "@/lib/notifications"
 import { evaluateSmsCampaignSafety, type SmsSafetyVerdict } from "@/lib/sms/sms-safety-guard"
 import { isWithinQuietHours, nextSendTime, SMS_CAMPAIGN_MPM } from "@/lib/sms/area-code-timezone"
 import { suppressBuyerSms } from "@/lib/sms/suppress"
+import { resolveOutboundFrom, recordStickyFrom } from "@/lib/sender/sticky-sender"
 import { ensurePublicMediaUrls } from "@/utils/mms.server"
 
 const log = createLogger("sms-campaign-sender")
@@ -208,19 +209,13 @@ async function sendSingleCampaignSms({
   const formatted = formatPhoneE164(toNumber)
   if (!formatted) throw new Error(`Invalid phone number: ${toNumber}`)
 
-  let fromNumber: string | null = null
-  try {
-    const { data } = await supabaseAdmin
-      .from("buyer_sms_senders")
-      .select("from_number")
-      .eq("buyer_id", buyerId)
-      .maybeSingle()
-    if (data?.from_number) {
-      fromNumber = formatPhoneE164(data.from_number) || data.from_number
-    }
-  } catch (err) {
-    console.error("Failed to fetch sticky sender", err)
-  }
+  // Deterministic caller ID via the shared resolver (sticky → DEFAULT_OUTBOUND_DID).
+  const fromNumber = await resolveOutboundFrom({
+    client: supabaseAdmin,
+    buyerId,
+    threadId: null,
+    explicitFrom: null,
+  })
 
   let finalMediaUrls: string[] | undefined
   if (mediaUrls?.length) {
@@ -279,18 +274,6 @@ async function sendSingleCampaignSms({
   const from = typeof data.from === "string" ? data.from : data.from?.phone_number || ""
   log("sms", "Queued", { to: formatted, sid: data.id })
 
-  if (!fromNumber && from && buyerId) {
-    try {
-      const normalized = formatPhoneE164(from) || from
-      await supabaseAdmin
-        .from("buyer_sms_senders")
-        .insert([{ buyer_id: buyerId, from_number: normalized }])
-      fromNumber = normalized
-    } catch (err) {
-      console.error("Failed to save sticky sender", err)
-    }
-  }
-
   const { data: thread } = await supabaseAdmin
     .from("message_threads")
     .upsert(
@@ -316,6 +299,17 @@ async function sendSingleCampaignSms({
       provider_id: data.id,
       is_bulk: true,
       media_urls: finalMediaUrls?.length ? finalMediaUrls : null,
+    })
+  }
+
+  // Single sticky writer (both stores) — the number actually sent.
+  const sentFrom = formatPhoneE164(from) || fromNumber
+  if (buyerId && sentFrom) {
+    await recordStickyFrom({
+      client: supabaseAdmin,
+      buyerId,
+      threadId: thread?.id ?? null,
+      from: sentFrom,
     })
   }
 

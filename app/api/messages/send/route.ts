@@ -6,6 +6,7 @@ import { normalizePhone, formatPhoneE164 } from "@/lib/dedup-utils"
 import { ensurePublicMediaUrls } from "@/utils/mms.server"
 import { TELNYX_API_URL, telnyxHeaders } from "@/lib/telnyx"
 import { getTelnyxApiKey } from "@/lib/voice-env"
+import { resolveOutboundFrom, recordStickyFrom } from "@/lib/sender/sticky-sender"
 
 export async function POST(request: NextRequest) {
   const { user, orgId, supabase } = await requireOrgContext()
@@ -124,86 +125,19 @@ export async function POST(request: NextRequest) {
     thread = data
   }
 
-  let fromDid: string | null = null
-  if (overrideFrom) {
-    const owned = normalizePhone(overrideFrom)
-    if (owned) {
-      let ok = false
-      const formattedOwned = formatPhoneE164(owned)
-      if (formattedOwned) {
-        const { data: inbound, error: inboundErr } = await supabase
-          .from("inbound_numbers")
-          .select("e164")
-          .eq("enabled", true)
-          .in("e164", [formattedOwned])
-        if (!inboundErr && inbound && inbound.length) {
-          ok = true
-        }
-      }
-      if (!ok) {
-        const matchValues = Array.from(
-          new Set(
-            [owned, formattedOwned].filter(
-              (num): num is string => typeof num === "string",
-            ),
-          ),
-        )
-        if (matchValues.length) {
-          const { data: voice, error: voiceErr } = await supabase
-            .from("voice_numbers")
-            .select("phone_number")
-            .in("phone_number", matchValues)
-          if (!voiceErr && voice && voice.length) {
-            ok = true
-          }
-        }
-      }
-      if (ok) fromDid = owned
-    }
-  }
+  const replyFrom = await resolveOutboundFrom({
+    client: supabase,
+    buyerId,
+    threadId: thread?.id,
+    explicitFrom: overrideFrom,
+  })
 
-  if (!fromDid && thread?.preferred_from_number) {
-    const norm = normalizePhone(thread.preferred_from_number)
-    if (norm) fromDid = norm
-  }
-
-  if (!fromDid && thread?.id) {
-    const { data: lastIn, error } = await supabase
-      .from("messages")
-      .select("to_number")
-      .eq("thread_id", thread.id)
-      .eq("direction", "inbound")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    if (error) {
-      console.error("Failed to inspect inbound history", error)
-    }
-    const norm = normalizePhone(lastIn?.to_number)
-    if (norm) fromDid = norm
-  }
-
-  if (!fromDid && buyerId) {
-    const { data: sticky } = await supabase
-      .from("buyer_sms_senders")
-      .select("from_number")
-      .eq("buyer_id", buyerId)
-      .maybeSingle()
-    const norm = normalizePhone(sticky?.from_number)
-    if (norm) fromDid = norm
-  }
-
-  if (!fromDid && process.env.DEFAULT_OUTBOUND_DID) {
-    fromDid = normalizePhone(process.env.DEFAULT_OUTBOUND_DID)
-  }
-
-  if (!fromDid) {
+  if (!replyFrom) {
     return new Response(JSON.stringify({ error: "No from number resolved" }), {
       status: 400,
     })
   }
 
-  const replyFrom = formatPhoneE164(fromDid)!
   const isMms = !!(finalMediaUrls && finalMediaUrls.length)
 
   const payload: Record<string, any> = {
@@ -262,23 +196,18 @@ export async function POST(request: NextRequest) {
   try {
     const data = await scheduleSMS(carrier, body, sendRequest)
 
+    // Ensure the thread exists. The sticky from-number (preferred_from_number) is
+    // written once, by recordStickyFrom below — the single source of truth.
     const ensureThread = async () => {
       if (thread?.id) {
-        const needsUpdate = thread.preferred_from_number !== replyFrom
         const { data, error } = await supabase
           .from("message_threads")
-          .update({
-            updated_at: new Date().toISOString(),
-            preferred_from_number: replyFrom,
-          })
+          .update({ updated_at: new Date().toISOString() })
           .eq("id", thread.id)
           .select("id, preferred_from_number")
           .single()
         if (error || !data) throw error || new Error("Thread update failed")
         thread = data
-        if (!needsUpdate && data.preferred_from_number !== replyFrom) {
-          thread = { ...data, preferred_from_number: replyFrom }
-        }
         return data
       }
 
@@ -293,7 +222,6 @@ export async function POST(request: NextRequest) {
               unread: true,
               updated_at: new Date().toISOString(),
               deleted_at: null,
-              preferred_from_number: replyFrom,
               org_id: orgId,
             },
             { onConflict: "phone_number" },
@@ -317,7 +245,6 @@ export async function POST(request: NextRequest) {
             phone_number: digits,
             campaign_id: null,
             updated_at: new Date().toISOString(),
-            preferred_from_number: replyFrom,
             org_id: orgId,
           },
           { onConflict: "buyer_id,phone_number" },
@@ -352,6 +279,14 @@ export async function POST(request: NextRequest) {
         status: 500,
       })
     }
+
+    // Single sticky writer — keeps buyer_sms_senders + thread.preferred_from_number in lockstep.
+    await recordStickyFrom({
+      client: supabase,
+      buyerId,
+      threadId: activeThread.id,
+      from: replyFrom,
+    })
 
     return new Response(JSON.stringify({ sid: data.id }), { status: 200 })
   } catch (err: any) {
