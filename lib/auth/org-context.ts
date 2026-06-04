@@ -24,13 +24,9 @@ export async function resolveOrgIdForUser(userId: string): Promise<string | null
     console.warn("[org-context] Falling back after profiles.org_id lookup failed", error)
   }
 
-  const { data: row } = await supabaseAdmin
-    .from("inbound_numbers")
-    .select("org_id")
-    .limit(1)
-    .maybeSingle()
-
-  return row?.org_id ?? resolveDefaultOrgId()
+  // No org on the profile — fall back to the env-controlled default ONLY. Never
+  // borrow an org from a data table (that could assign a user to another tenant).
+  return resolveDefaultOrgId()
 }
 
 export async function requireOrgContext() {

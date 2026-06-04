@@ -47,7 +47,11 @@ function createAdminQuery(table: string) {
     eq: () => query,
     in: () => query,
     order: () => Promise.resolve({ data: [], error: null }),
-    maybeSingle: async () => ({ data: table === "inbound_numbers" ? { org_id: "org-1" } : null, error: null }),
+    maybeSingle: async () => ({
+      // Every real user has a profiles.org_id; model that so resolveOrgIdForUser resolves.
+      data: table === "inbound_numbers" || table === "profiles" ? { org_id: "org-1" } : null,
+      error: null,
+    }),
     single: async () => ({ data: null, error: null }),
     insert: () => query,
     update: () => query,

@@ -1,5 +1,19 @@
 import { NextRequest } from "next/server"
 
+vi.mock("next/headers", () => ({
+  cookies: () => ({ get: vi.fn(), set: vi.fn(), delete: vi.fn() }),
+}))
+
+const authState = vi.hoisted(() => ({
+  user: { id: "user-1" } as { id: string } | null,
+}))
+
+vi.mock("@supabase/auth-helpers-nextjs", () => ({
+  createRouteHandlerClient: () => ({
+    auth: { getUser: async () => ({ data: { user: authState.user }, error: null }) },
+  }),
+}))
+
 let POST: any
 const fetchMock = vi.fn()
 // @ts-ignore
@@ -8,6 +22,7 @@ global.fetch = fetchMock
 describe("chat route", () => {
   beforeEach(async () => {
     fetchMock.mockReset()
+    authState.user = { id: "user-1" }
     process.env.OPENAI_API_KEY = "key"
     vi.resetModules()
     POST = (await import("../app/api/chat/route")).POST
@@ -26,6 +41,17 @@ describe("chat route", () => {
     const body = await res.json()
     expect(fetchMock).toHaveBeenCalled()
     expect(body).toEqual({ content: "Hi" })
+  })
+
+  test("rejects unauthenticated requests", async () => {
+    authState.user = null
+    const req = new NextRequest("http://test", {
+      method: "POST",
+      body: JSON.stringify({ messages: [{ role: "user", content: "Hello" }] }),
+    })
+    const res = await POST(req)
+    expect(res.status).toBe(401)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   test("validates input", async () => {
