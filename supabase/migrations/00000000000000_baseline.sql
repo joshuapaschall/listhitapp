@@ -15,7 +15,7 @@
 --   1. Postgres extensions  -> added explicitly below.
 --   2. The trigger on auth.users that creates a profile row on signup
 --      (handle_new_user lives in public, but its trigger is on the auth schema)
---      -> see the clearly-marked TODO block at the very bottom of this file.
+--      -> restored at the very bottom of this file.
 -- =============================================================================
 
 -- ---- Required extensions (not included in a public-only dump) ----------------
@@ -6350,18 +6350,12 @@ CREATE POLICY voice_numbers_org_update ON public.voice_numbers FOR UPDATE TO aut
 
 
 
--- =============================================================================
--- TODO (must fill before this baseline is complete): auth.users signup trigger
--- =============================================================================
--- The function public.handle_new_user() is defined above, but the TRIGGER that
--- fires it on INSERT into auth.users is NOT captured by a public-only dump.
--- Run this in the Supabase SQL editor and paste the result here, replacing this
--- comment block with the actual CREATE TRIGGER statement(s):
---
---   select pg_get_triggerdef(t.oid) || ';'
---   from pg_trigger t
---   where t.tgrelid = 'auth.users'::regclass and not t.tgisinternal;
---
--- (Typically:  create trigger on_auth_user_created after insert on auth.users
---              for each row execute function public.handle_new_user();)
--- =============================================================================
+-- ---- auth.users signup trigger (captured from production 2026-06-04) ---------
+-- Creates a public.profiles row whenever a new auth user signs up. The function
+-- public.handle_new_user() is defined above; this trigger lives on the auth
+-- schema, so it is NOT part of a public-only dump and is restored here.
+-- (Function name is schema-qualified because this file runs with an empty
+--  search_path; the raw pg_get_triggerdef output omitted the schema.)
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
