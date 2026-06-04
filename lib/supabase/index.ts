@@ -314,12 +314,20 @@ export interface MessageThread {
   created_at?: string
   updated_at?: string
   deleted_at?: string | null
+  filtered_at?: string | null
+  filtered_keyword_id?: string | null
+  filter_overridden?: boolean
 }
 
 export interface NegativeKeyword {
   id: string
   keyword: string
+  match_type: "exact" | "phrase"
+  action: "hide" | "dnc"
+  is_system: boolean
+  org_id?: string
   created_at?: string
+  updated_at?: string
 }
 
 export interface AIPrompt {

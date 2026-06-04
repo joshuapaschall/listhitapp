@@ -1,77 +1,50 @@
-import { supabase } from "@/lib/supabase"
 import type { NegativeKeyword } from "@/lib/supabase"
 
-export class KeywordService {
-  static async listKeywords() {
-    const { data, error } = await supabase
-      .from("negative_keywords")
-      .select("*")
-      .order("created_at", { ascending: false })
-
-    if (error) {
-      console.error("Error fetching keywords:", error)
-      throw error
-    }
-
-    return (data || []) as NegativeKeyword[]
-  }
-
-  static async getKeyword(id: string) {
-    const { data, error } = await supabase
-      .from("negative_keywords")
-      .select("*")
-      .eq("id", id)
-      .maybeSingle()
-
-    if (error && error.message !== "Row not found") {
-      console.error("Error fetching keyword:", error)
-      throw error
-    }
-
-    return data as NegativeKeyword | null
-  }
-
-  static async addKeyword(keyword: Partial<NegativeKeyword>) {
-    const { data, error } = await supabase
-      .from("negative_keywords")
-      .insert([keyword])
-      .select()
-      .single()
-
-    if (error) {
-      console.error("Error adding keyword:", error)
-      throw error
-    }
-
-    return data as NegativeKeyword
-  }
-
-  static async updateKeyword(id: string, updates: Partial<NegativeKeyword>) {
-    const { data, error } = await supabase
-      .from("negative_keywords")
-      .update(updates)
-      .eq("id", id)
-      .select()
-      .single()
-
-    if (error) {
-      console.error("Error updating keyword:", error)
-      throw error
-    }
-
-    return data as NegativeKeyword
-  }
-
-  static async deleteKeyword(id: string) {
-    const { error } = await supabase
-      .from("negative_keywords")
-      .delete()
-      .eq("id", id)
-
-    if (error) {
-      console.error("Error deleting keyword:", error)
-      throw error
-    }
-  }
+export interface KeywordInput {
+  keyword: string
+  matchType: "exact" | "phrase"
+  action: "hide" | "dnc"
 }
 
+async function readJson(res: Response) {
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    throw new Error((data as any)?.error || "Request failed")
+  }
+  return data
+}
+
+export class KeywordService {
+  static async listKeywords(): Promise<NegativeKeyword[]> {
+    const res = await fetch("/api/negative-keywords", { cache: "no-store" })
+    return (await readJson(res)) as NegativeKeyword[]
+  }
+
+  static async getKeyword(id: string): Promise<NegativeKeyword | null> {
+    const list = await this.listKeywords()
+    return list.find((k) => k.id === id) ?? null
+  }
+
+  static async addKeyword(input: KeywordInput): Promise<NegativeKeyword> {
+    const res = await fetch("/api/negative-keywords", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    })
+    return (await readJson(res)) as NegativeKeyword
+  }
+
+  static async updateKeyword(id: string, input: Partial<KeywordInput>): Promise<NegativeKeyword> {
+    const res = await fetch(`/api/negative-keywords/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    })
+    return (await readJson(res)) as NegativeKeyword
+  }
+
+  static async deleteKeyword(id: string): Promise<void> {
+    const res = await fetch(`/api/negative-keywords/${id}`, { method: "DELETE" })
+    await readJson(res)
+  }
+}

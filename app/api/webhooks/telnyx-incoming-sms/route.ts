@@ -14,6 +14,8 @@ import { TELNYX_API_URL, telnyxHeaders, verifyTelnyxRequest } from "@/lib/telnyx
 import { upsertAnonThread } from "@/services/thread-utils"
 import { processTelnyxStatusEvent } from "@/lib/telnyx-status-processor"
 import { classifyInboundSms } from "@/lib/sms/opt-keywords"
+import { matchNegativeKeyword } from "@/lib/sms/negative-keywords"
+import { suppressBuyerSms } from "@/lib/sms/suppress"
 
 export const runtime = "nodejs"
 
@@ -124,7 +126,7 @@ export async function POST(request: NextRequest) {
 
   const { data: buyers, error: buyerErr } = await supabaseAdmin
     .from("buyers")
-    .select("id, can_receive_sms, blocked_at")
+    .select("id, can_receive_sms, blocked_at, org_id")
     .or(orClause)
 
   if (buyerErr) {
@@ -140,6 +142,9 @@ export async function POST(request: NextRequest) {
 
   const buyerIds = buyers?.map((b) => b.id) ?? []
   const targetIds = buyerIds.length ? buyerIds : [null]
+  const buyerOrgById = new Map<string, string | null>(
+    (buyers ?? []).map((b) => [b.id, (b as any).org_id ?? null]),
+  )
   let helpReplyThread: { id: string; buyerId: string } | null = null
 
   for (const buyerId of targetIds) {
@@ -209,6 +214,60 @@ export async function POST(request: NextRequest) {
 
     if (intent === "help" && buyerId && !helpReplyThread) {
       helpReplyThread = { id: thread.id, buyerId }
+    }
+
+    // Negative-keyword / STOP soft-filtering for the inbox Filtered tab.
+    // Real buyers only (skip anon threads). Non-blocking: never fail the webhook.
+    if (buyerId) {
+      try {
+        const orgId = buyerOrgById.get(buyerId) ?? null
+        if (orgId) {
+          const { data: threadState } = await supabaseAdmin
+            .from("message_threads")
+            .select("filtered_at, filter_overridden")
+            .eq("id", thread.id)
+            .maybeSingle()
+          const overridden = threadState?.filter_overridden === true
+          const nowIso = new Date().toISOString()
+
+          if (isStop) {
+            // STOP is owned by the carrier classifier; here we just tuck the
+            // thread into Filtered. No keyword matching for STOP messages.
+            if (!overridden) {
+              await supabaseAdmin
+                .from("message_threads")
+                .update({ filtered_at: nowIso, filtered_keyword_id: null })
+                .eq("id", thread.id)
+            }
+          } else {
+            const match = await matchNegativeKeyword(supabaseAdmin, orgId, text)
+            if (match) {
+              if (!overridden) {
+                await supabaseAdmin
+                  .from("message_threads")
+                  .update({ filtered_at: nowIso, filtered_keyword_id: match.keywordId })
+                  .eq("id", thread.id)
+              }
+              if (match.action === "dnc") {
+                // SMS channel only — the reply arrived by SMS.
+                await suppressBuyerSms(buyerId, `keyword:"${match.keyword}"`)
+              }
+            } else if (threadState?.filtered_at && !overridden) {
+              // Auto-resurface: they messaged again with no matching keyword.
+              // The thread upsert already set unread: true, so it returns as unread.
+              await supabaseAdmin
+                .from("message_threads")
+                .update({ filtered_at: null, filtered_keyword_id: null })
+                .eq("id", thread.id)
+            }
+          }
+        }
+      } catch (filterErr) {
+        console.error(
+          "[telnyx-incoming-sms] negative-keyword filtering failed (non-blocking)",
+          filterErr,
+        )
+      }
     }
 
     // A.5 — Tag the inbound back to its originating campaign

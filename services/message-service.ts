@@ -3,6 +3,7 @@ import { supabase, type Buyer, type MessageThread } from "@/lib/supabase"
 export interface ThreadWithBuyer extends MessageThread {
   buyers?: Buyer | null
   last_message?: string | null
+  filtered_keyword?: string | null
 }
 export async function listInboxThreads(
   opts: { starred?: boolean; unread?: boolean } = {},
@@ -14,6 +15,8 @@ export async function listInboxThreads(
     )
     .is("deleted_at", null)
     .is("messages.deleted_at", null)
+    // Filtered threads (negative-keyword / STOP) live in the Filtered tab only.
+    .is("filtered_at", null)
     .order("updated_at", { ascending: false })
     .order("created_at", { foreignTable: "messages", ascending: false })
     .limit(1, { foreignTable: "messages" })
@@ -37,6 +40,56 @@ export async function listInboxThreads(
         last_message: messages?.[0]?.body ?? null,
       } as ThreadWithBuyer
     })
+}
+
+export async function listFilteredThreads(): Promise<ThreadWithBuyer[]> {
+  const query = supabase
+    .from("message_threads")
+    .select(
+      "*, buyers(id,fname,lname,full_name), messages(direction,is_bulk,body,created_at)",
+    )
+    .is("deleted_at", null)
+    .is("messages.deleted_at", null)
+    .not("filtered_at", "is", null)
+    .order("filtered_at", { ascending: false })
+    .order("created_at", { foreignTable: "messages", ascending: false })
+    .limit(1, { foreignTable: "messages" })
+
+  const { data, error } = await query
+  if (error) throw error
+
+  const threads = (data || []).map((t: any) => {
+    const { messages, ...rest } = t
+    return {
+      ...rest,
+      last_message: messages?.[0]?.body ?? null,
+    } as ThreadWithBuyer
+  })
+
+  // Best-effort: resolve the matched keyword text for the row chip.
+  const keywordIds = Array.from(
+    new Set(threads.map((t) => t.filtered_keyword_id).filter(Boolean)),
+  ) as string[]
+  if (keywordIds.length) {
+    const { data: kws } = await supabase
+      .from("negative_keywords")
+      .select("id,keyword")
+      .in("id", keywordIds)
+    const byId = new Map((kws || []).map((k: any) => [k.id, k.keyword]))
+    threads.forEach((t) => {
+      t.filtered_keyword = t.filtered_keyword_id ? byId.get(t.filtered_keyword_id) ?? null : null
+    })
+  }
+
+  return threads
+}
+
+export async function restoreFilteredThread(threadId: string): Promise<void> {
+  const { error } = await supabase
+    .from("message_threads")
+    .update({ filter_overridden: true, filtered_at: null, filtered_keyword_id: null })
+    .eq("id", threadId)
+  if (error) throw error
 }
 
 export async function listSentThreads(
