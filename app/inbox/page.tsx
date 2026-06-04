@@ -53,7 +53,7 @@ function InboxPageContent() {
 
   return (
     <MainLayout>
-      <div className="grid h-[calc(100dvh-4rem)] overflow-hidden grid-cols-[minmax(20rem,22rem)_1fr]">
+      <div className="grid h-[calc(100dvh-4rem)] overflow-hidden grid-cols-[minmax(22rem,24rem)_1fr]">
         <div className="border-r">
           <ListPane onSelect={setThread} selectedId={thread?.id} />
         </div>

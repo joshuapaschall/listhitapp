@@ -107,7 +107,7 @@ export default function ListPane({ onSelect, selectedId }: ListPaneProps) {
     <div className="sticky top-0 h-[calc(100vh-4rem)] flex flex-col border-r">
       {/* Tabs */}
       <Tabs value={tab} onValueChange={setTab} className="px-2 pt-2">
-        <TabsList className="inline-flex w-full rounded-lg bg-muted p-1">
+        <TabsList className="inline-flex w-full rounded-lg bg-muted p-0.5">
           {[
             ["inbox", "Inbox"],
             ["unread", "Unread"],
@@ -119,7 +119,7 @@ export default function ListPane({ onSelect, selectedId }: ListPaneProps) {
             <TabsTrigger
               key={value}
               value={value}
-              className="flex-1 rounded-md text-xs text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+              className="flex-1 whitespace-nowrap rounded-md px-1.5 py-1 text-[11px] text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
             >
               {label}
             </TabsTrigger>
