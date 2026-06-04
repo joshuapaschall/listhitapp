@@ -48,6 +48,12 @@ const moneyToNumber = (value: string) => {
 const formatMoneyInput = (value: number | null | undefined) =>
   value == null ? "" : String(Math.round(value)).replace(/\B(?=(\d{3})+(?!\d))/g, ",")
 
+const columnCurrency = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 0,
+})
+
 function KanbanColumn({ id, label, color, offers, onOfferClick, canManage }: {
   id: string
   label: string
@@ -57,23 +63,29 @@ function KanbanColumn({ id, label, color, offers, onOfferClick, canManage }: {
   canManage: boolean
 }) {
   const { setNodeRef, isOver } = useDroppable({ id, disabled: !canManage })
+  const columnTotal = offers.reduce((sum, offer) => sum + (offer.offer_price || 0), 0)
 
   return (
-    <div className="flex flex-col min-w-[280px] w-[280px]">
-      <div className="flex items-center gap-2 px-3 py-2">
-        <div className={cn("h-2.5 w-2.5 rounded-full", color)} />
-        <span className="text-sm font-semibold">{label}</span>
-        <span className="ml-auto text-xs text-muted-foreground">{offers.length}</span>
+    <div className="flex w-[210px] min-w-[170px] flex-col">
+      <div className="border-b border-border px-2 pb-2">
+        <div className="flex items-center gap-2">
+          <div className={cn("h-2.5 w-2.5 rounded-full", color)} />
+          <span className="text-sm font-semibold text-foreground">{label}</span>
+          <span className="ml-auto text-xs text-muted-foreground">{offers.length}</span>
+        </div>
+        <p className="mt-0.5 pl-[18px] text-xs text-muted-foreground">{columnCurrency.format(columnTotal)}</p>
       </div>
       <div
         ref={setNodeRef}
         className={cn(
-          "flex flex-1 flex-col gap-2 overflow-y-auto rounded-lg bg-muted/30 p-2 min-h-[360px]",
-          isOver && "ring-2 ring-primary/30",
+          "mt-2 flex flex-1 flex-col gap-2 overflow-y-auto rounded-lg bg-muted/30 p-2 min-h-[360px]",
+          isOver && "ring-2 ring-brand/30",
         )}
       >
         {offers.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">No offers</p>
+          <div className="m-1 flex flex-1 items-center justify-center rounded-lg border border-dashed border-border py-8 text-center text-xs text-muted-foreground">
+            No offers yet
+          </div>
         ) : (
           offers.map((offer) => <OfferCard key={offer.id} offer={offer} onClick={onOfferClick} draggable={canManage} />)
         )}

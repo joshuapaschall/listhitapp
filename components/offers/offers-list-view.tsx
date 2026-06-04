@@ -53,14 +53,14 @@ export default function OffersListView({ offers, isLoading, onOfferClick }: Offe
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Date</TableHead>
               <TableHead>Buyer</TableHead>
               <TableHead>Property</TableHead>
-              <TableHead>Offer Price</TableHead>
+              <TableHead>Offer price</TableHead>
+              <TableHead>Spread</TableHead>
               <TableHead>Type</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Closing Date</TableHead>
-              <TableHead className="w-16">Actions</TableHead>
+              <TableHead>Submitted</TableHead>
+              <TableHead className="w-16 text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -71,43 +71,59 @@ export default function OffersListView({ offers, isLoading, onOfferClick }: Offe
             )}
             {!isLoading && pagedOffers.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8}>No offers found.</TableCell>
+                <TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">No offers found.</TableCell>
               </TableRow>
             )}
             {pagedOffers.map((offer) => {
               const buyerName = offer.buyers?.full_name || `${offer.buyers?.fname || ""} ${offer.buyers?.lname || ""}`.trim() || "Unnamed"
+              const initials = `${offer.buyers?.fname?.[0] || ""}${offer.buyers?.lname?.[0] || ""}`.toUpperCase() || "?"
               const offerType = (offer.offer_type || "financing").toLowerCase()
               const status = offer.status || "submitted"
+              const buyPrice = offer.properties?.buy_price
+              const spread = buyPrice == null ? null : (offer.accepted_price ?? offer.offer_price ?? 0) - buyPrice
               const statusClass = status === "submitted"
-                ? "bg-blue-500 hover:bg-blue-500/90"
+                ? "bg-blue-500/10 text-blue-600 dark:text-blue-400"
                 : status === "countered"
-                  ? "bg-amber-500 hover:bg-amber-500/90"
+                  ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
                   : status === "accepted"
-                    ? "bg-green-500 hover:bg-green-500/90"
+                    ? "bg-green-500/10 text-green-600 dark:text-green-400"
                     : status === "closed"
-                      ? "bg-purple-500 hover:bg-purple-500/90"
+                      ? "bg-purple-500/10 text-purple-600 dark:text-purple-400"
                       : status === "rejected"
-                        ? "bg-red-500 hover:bg-red-500/90"
-                        : "bg-gray-500 hover:bg-gray-500/90"
+                        ? "bg-red-500/10 text-red-600 dark:text-red-400"
+                        : "bg-muted text-muted-foreground"
 
               return (
-                <TableRow key={offer.id}>
-                  <TableCell className="whitespace-nowrap text-sm">{offer.created_at ? new Date(offer.created_at).toLocaleDateString() : "—"}</TableCell>
-                  <TableCell>{buyerName}</TableCell>
-                  <TableCell>{offer.properties?.address || "—"}</TableCell>
-                  <TableCell>{currencyFormatter.format(offer.offer_price || 0)}</TableCell>
+                <TableRow key={offer.id} className="cursor-pointer" onClick={() => onOfferClick(offer)}>
                   <TableCell>
-                    <Badge className={offerType === "cash" ? "bg-green-500 hover:bg-green-500/90" : "bg-blue-500 hover:bg-blue-500/90"}>{offerType === "cash" ? "Cash" : "Financing"}</Badge>
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand/10 text-xs font-semibold text-brand">{initials}</div>
+                      <span className="truncate text-sm text-foreground">{buyerName}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{offer.properties?.address || "—"}</TableCell>
+                  <TableCell className="text-sm font-medium">{currencyFormatter.format(offer.offer_price || 0)}</TableCell>
+                  <TableCell className="text-sm">
+                    {spread == null ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : (
+                      <span className={spread >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}>
+                        {spread >= 0 ? "+" : "−"}{currencyFormatter.format(Math.abs(spread))}
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell>
-                    <Badge className={statusClass}>{status}</Badge>
+                    <Badge variant="secondary" className="font-normal">{offerType === "cash" ? "Cash" : "Financing"}</Badge>
                   </TableCell>
-                  <TableCell className="whitespace-nowrap text-sm">
-                    {offer.proposed_closing_date
-                      ? new Date(offer.proposed_closing_date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                  <TableCell>
+                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium capitalize ${statusClass}`}>{status}</span>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                    {offer.created_at
+                      ? new Date(offer.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
                       : "—"}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon" className="h-8 w-8">
