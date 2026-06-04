@@ -4,6 +4,7 @@ import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 
 import { requirePermission } from "@/lib/permissions/server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { resolveOrgIdForUser } from "@/lib/auth/org-context"
 
 export const runtime = "nodejs"
 
@@ -14,6 +15,11 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     const denied = await requirePermission(supabase, "calls.recordings")
     if (denied) return denied
 
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const orgId = await resolveOrgIdForUser(user.id)
+    if (!orgId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
     const { id } = params
     if (!id) {
       return NextResponse.json({ error: "Recording id required" }, { status: 400 })
@@ -23,6 +29,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
       .from("calls")
       .select("recording_url, status, from_number, to_number, started_at")
       .eq("call_sid", id)
+      .eq("org_id", orgId)
       .single()
 
     if (error || !call?.recording_url) {

@@ -65,23 +65,32 @@ vi.mock("@/lib/telnyx/credentials", () => ({
 vi.mock("@/lib/supabase", () => ({
   supabaseAdmin: {
     from: (table: string) => {
-      if (table !== "calls") throw new Error(`Unexpected admin table ${table}`)
-      return {
-        select: () => ({
-          eq: () => ({
-            single: async () => ({
-              data: {
-                recording_url: "recordings/call-1.mp3",
-                status: "completed",
-                from_number: "+15555550100",
-                to_number: "+15555550123",
-                started_at: "2026-05-31T12:00:00.000Z",
-              },
-              error: null,
+      if (table === "profiles") {
+        // Every real user has a profiles.org_id; model that so resolveOrgIdForUser resolves.
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: { org_id: "org-A" }, error: null }),
             }),
           }),
+        }
+      }
+      if (table !== "calls") throw new Error(`Unexpected admin table ${table}`)
+      // The route now chains .eq("call_sid", id).eq("org_id", orgId), so eq must be chainable.
+      const query: any = {
+        eq: () => query,
+        single: async () => ({
+          data: {
+            recording_url: "recordings/call-1.mp3",
+            status: "completed",
+            from_number: "+15555550100",
+            to_number: "+15555550123",
+            started_at: "2026-05-31T12:00:00.000Z",
+          },
+          error: null,
         }),
       }
+      return { select: () => query }
     },
     storage: {
       from: () => ({

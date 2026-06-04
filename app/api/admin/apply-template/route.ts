@@ -3,6 +3,7 @@ import { cookies } from "next/headers"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { supabaseAdmin } from "@/lib/supabase"
 import { requirePermission } from "@/lib/permissions/server"
+import { resolveOrgIdForUser } from "@/lib/auth/org-context"
 import { PERMISSION_KEYS } from "@/lib/permissions/keys"
 import {
   grantsForTemplate,
@@ -25,6 +26,18 @@ export async function POST(request: NextRequest) {
   if (!TEMPLATE_IDS.has(templateId)) {
     return NextResponse.json({ error: "Invalid template" }, { status: 400 })
   }
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const orgId = await resolveOrgIdForUser(user.id)
+  if (!orgId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const { data: target } = await supabaseAdmin
+    .from("profiles")
+    .select("org_id")
+    .eq("id", userId)
+    .maybeSingle()
+  if (!target) return NextResponse.json({ error: "Not found" }, { status: 404 })
+  if (target.org_id !== orgId) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const grants = new Set(grantsForTemplate(templateId as PermissionTemplateId))
   const rows = PERMISSION_KEYS.map((permissionKey) => ({

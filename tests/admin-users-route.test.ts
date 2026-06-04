@@ -14,6 +14,8 @@ const state = vi.hoisted(() => ({
   // Admin client data + captured writes
   adminProfiles: [] as any[],
   adminPermissions: [] as any[],
+  // org_id by profile id — drives resolveOrgIdForUser + the apply-template target lookup.
+  profileOrgById: {} as Record<string, string>,
   profileUpserts: [] as any[],
   permissionUpserts: [] as any[][],
   createUserCalls: [] as any[],
@@ -77,26 +79,50 @@ vi.mock("@/lib/supabase", () => {
     },
     from: (table: string) => {
       if (table === "profiles") {
+        const makeSelect = () => {
+          const filters: Record<string, any> = {}
+          const query: any = {
+            eq: (column: string, value: any) => {
+              filters[column] = value
+              return query
+            },
+            // resolveOrgIdForUser / apply-template target: org_id looked up by profile id.
+            maybeSingle: async () => {
+              const org = state.profileOrgById[filters.id]
+              return { data: org ? { org_id: org } : null, error: null }
+            },
+            // GET list: profiles are org-scoped via .eq("org_id", orgId).
+            order: async () => {
+              const rows = state.adminProfiles.filter(
+                (profile) => filters.org_id === undefined || profile.org_id === filters.org_id,
+              )
+              return { data: rows, error: null }
+            },
+          }
+          return query
+        }
         return {
           upsert: async (row: any) => {
             state.profileUpserts.push(row)
             return { error: null }
           },
-          select: () => ({
-            order: async () => ({ data: state.adminProfiles, error: null }),
-          }),
+          select: () => makeSelect(),
         }
       }
       if (table === "permissions") {
-        const selectQuery: any = {
-          then: (resolve: any) => resolve({ data: state.adminPermissions, error: null }),
+        const makeSelect = () => {
+          const query: any = {
+            in: () => query,
+            then: (resolve: any) => resolve({ data: state.adminPermissions, error: null }),
+          }
+          return query
         }
         return {
           upsert: async (rows: any[]) => {
             state.permissionUpserts.push(rows)
             return { error: null }
           },
-          select: () => selectQuery,
+          select: () => makeSelect(),
         }
       }
       throw new Error(`Unexpected admin-client table ${table}`)
@@ -129,6 +155,8 @@ describe("admin users routes", () => {
     state.callerPermissions = []
     state.adminProfiles = []
     state.adminPermissions = []
+    // Caller admin-1 and the default apply-template target u1 share org-A.
+    state.profileOrgById = { "admin-1": "org-A", u1: "org-A" }
     state.profileUpserts = []
     state.permissionUpserts = []
     state.createUserCalls = []
@@ -154,6 +182,7 @@ describe("admin users routes", () => {
           display_name: "Alice Agent",
           role: "user",
           created_at: "2026-01-01T00:00:00.000Z",
+          org_id: "org-A",
         },
       ]
       state.adminPermissions = [
@@ -172,6 +201,21 @@ describe("admin users routes", () => {
         role: "user",
         permissions: ["buyers.view"],
       })
+    })
+
+    test("excludes profiles belonging to another org", async () => {
+      asAdmin()
+      state.adminProfiles = [
+        { id: "u1", email: "alice@example.com", role: "user", org_id: "org-A" },
+        { id: "u2", email: "mallory@other.com", role: "user", org_id: "org-B" },
+      ]
+
+      const res = await getUsers()
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body.users).toHaveLength(1)
+      expect(body.users[0].id).toBe("u1")
+      expect(body.users.map((u: any) => u.id)).not.toContain("u2")
     })
 
     test("is allowed for a non-admin holding users.manage", async () => {
