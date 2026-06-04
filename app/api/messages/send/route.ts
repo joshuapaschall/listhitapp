@@ -212,27 +212,52 @@ export async function POST(request: NextRequest) {
       }
 
       if (buyerId == null) {
-        const res = await supabase
+        // Anon threads are org-scoped via a partial unique index that can't be an
+        // onConflict target — use an org-scoped select-then-insert (23505-resilient).
+        const selectAnon = () =>
+          supabase
+            .from("message_threads")
+            .select("id, preferred_from_number")
+            .eq("phone_number", digits)
+            .is("buyer_id", null)
+            .eq("org_id", orgId)
+            .limit(1)
+            .maybeSingle()
+
+        const insertRes = await supabase
           .from("message_threads")
-          .upsert(
-            {
-              buyer_id: null,
-              phone_number: digits,
-              campaign_id: null,
-              unread: true,
-              updated_at: new Date().toISOString(),
-              deleted_at: null,
-              org_id: orgId,
-            },
-            { onConflict: "phone_number" },
-          )
+          .insert({
+            buyer_id: null,
+            phone_number: digits,
+            campaign_id: null,
+            unread: true,
+            updated_at: new Date().toISOString(),
+            deleted_at: null,
+            org_id: orgId,
+          })
           .select("id, preferred_from_number")
           .single()
-        if (res.error || !res.data)
-          throw res.error || new Error("Thread upsert failed")
+
+        let row = insertRes.data
+        if (insertRes.error) {
+          if ((insertRes.error as { code?: string }).code === "23505") {
+            const { data: raced } = await selectAnon()
+            if (raced) {
+              const upd = await supabase
+                .from("message_threads")
+                .update({ updated_at: new Date().toISOString() })
+                .eq("id", raced.id)
+                .select("id, preferred_from_number")
+                .single()
+              row = upd.data
+            }
+          }
+          if (!row) throw insertRes.error || new Error("Thread upsert failed")
+        }
+
         thread = {
-          id: res.data.id,
-          preferred_from_number: res.data.preferred_from_number,
+          id: row!.id,
+          preferred_from_number: row!.preferred_from_number,
         }
         return thread
       }

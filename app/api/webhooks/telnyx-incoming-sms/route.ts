@@ -146,6 +146,21 @@ export async function POST(request: NextRequest) {
   const buyerOrgById = new Map<string, string | null>(
     (buyers ?? []).map((b) => [b.id, (b as any).org_id ?? null]),
   )
+
+  // For an anonymous thread (no buyer match) resolve the owning org from the inbound
+  // DID (the number that was texted) so the thread is org-scoped. Null if unresolved.
+  const inboundDidE164 = to ? formatPhoneE164(to) : null
+  let anonOrgId: string | null = null
+  if (!buyerIds.length && inboundDidE164) {
+    const { data: didRow } = await supabaseAdmin
+      .from("inbound_numbers")
+      .select("org_id")
+      .eq("e164", inboundDidE164)
+      .eq("enabled", true)
+      .maybeSingle()
+    anonOrgId = didRow?.org_id ?? null
+  }
+
   let helpReplyThread: { id: string; buyerId: string } | null = null
 
   for (const buyerId of targetIds) {
@@ -186,7 +201,7 @@ export async function POST(request: NextRequest) {
           )
           .select("id")
           .single()
-      : await upsertAnonThread(fromDigits, preferredDid)
+      : await upsertAnonThread(fromDigits, preferredDid, anonOrgId)
 
     if (threadErr || !thread) {
       console.error("❌ Thread upsert error", threadErr)
