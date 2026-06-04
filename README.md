@@ -152,6 +152,18 @@ Sends are queue-backed (`sms_campaign_queue`, `email_campaign_queue`) with leasi
 - **Mapbox** — maps and address autocomplete/geocoding.
 - **DeBounce** — email validation on public buyer signup.
 
+### Telnyx webhook configuration
+
+In the Telnyx dashboard, point your numbers' webhooks at these routes (replace `<BASE_URL>` with your deployed URL):
+
+| Telnyx setting | URL | Handles |
+| --- | --- | --- |
+| Voice — Answer URL + Webhook URL | `<BASE_URL>/api/webhooks/telnyx-voice` | inbound/outbound call events, recordings, voicemail |
+| Messaging — inbound | `<BASE_URL>/api/webhooks/telnyx-incoming-sms` | inbound SMS/MMS and STOP/opt-out events |
+| Messaging — delivery status | `<BASE_URL>/api/webhooks/telnyx-status` | delivery receipts and call status updates |
+
+SMS throughput is paced by `lib/sms-rate-limiter.ts`; tune it with `TELNYX_GLOBAL_MPS` (overall messages/sec), `TELNYX_CARRIER_MPS` (per-carrier messages/sec), and `TELNYX_TMO_DAILY_LIMIT` (daily T-Mobile segment cap).
+
 ## Multi-tenancy & security
 
 ListHit is multi-tenant with defense-in-depth:
