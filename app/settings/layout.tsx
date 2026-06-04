@@ -38,6 +38,11 @@ const navItems: Array<{ href: string; label: string; description: string; permis
     description: "Filter out spammy or unwanted phrases",
   },
   {
+    href: "/settings/dnc",
+    label: "Do Not Contact",
+    description: "Everyone who opted out by text, email, keyword, or that you added by hand.",
+  },
+  {
     href: "/settings/email-domains",
     label: "Email Domains",
     description: "Verify sender domains and manage from-addresses",

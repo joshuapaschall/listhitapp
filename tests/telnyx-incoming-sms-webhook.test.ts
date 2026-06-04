@@ -84,8 +84,19 @@ vi.mock("../lib/supabase", () => {
             in: (_col: string, ids: string[]) => {
               buyers = buyers.map(b => ids.includes(b.id) ? { ...b, ...data } : b)
               return { error: null }
+            },
+            // suppressBuyerSms / suppressBuyerEmail update a single buyer by id.
+            eq: async (_col: string, id: string) => {
+              buyers = buyers.map(b => b.id === id ? { ...b, ...data } : b)
+              return { error: null }
             }
           })
+        }
+      }
+      if (table === "dnc_phones") {
+        return {
+          upsert: async () => ({ error: null }),
+          delete: () => ({ eq: () => ({ eq: async () => ({ error: null }) }) }),
         }
       }
       if (table === "campaign_recipients") {

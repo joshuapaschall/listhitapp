@@ -111,6 +111,10 @@ export interface Buyer {
   email_suppressed_reason?: string | null
   email_bounced_at?: string | null
   email_complained_at?: string | null
+  sms_suppressed?: boolean | null
+  sms_suppressed_at?: string | null
+  sms_suppressed_reason?: string | null
+  unsubscribed_at?: string | null
   blocked_at?: string | null
   blocked_reason?: string | null
   deleted_at?: string | null

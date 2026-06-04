@@ -52,7 +52,8 @@ import EditBuyerModal from "@/components/buyers/edit-buyer-modal";
 import AddBuyerModal from "@/components/buyers/add-buyer-modal";
 import { toast } from "sonner";
 import useHotkeys from "@/hooks/use-hotkeys";
-import { BuyerService } from "@/services/buyer-service";
+import AddToDncModal from "@/components/dnc/add-to-dnc-modal";
+import ConfirmDialog from "@/components/ui/confirm-dialog";
 import { type ThreadWithBuyer, restoreFilteredThread } from "@/services/message-service";
 import {
   ALLOWED_MMS_EXTENSIONS,
@@ -358,6 +359,9 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
   const manualDidRef = useRef(false);
   const dismissedBannerIdRef = useRef<string | null>(null);
   const [showQuickReplyModal, setShowQuickReplyModal] = useState(false);
+  const [showDnc, setShowDnc] = useState(false);
+  const [showBlockConfirm, setShowBlockConfirm] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     const loadVoiceNumbers = async () => {
@@ -1181,20 +1185,6 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
     }
   };
 
-  const handleUnsubscribe = async () => {
-    if (!thread || !thread.buyer_id) return;
-    try {
-      await BuyerService.unsubscribeBuyer(thread.buyer_id);
-      setBuyer((b) =>
-        b ? { ...b, can_receive_sms: false, can_receive_email: false } : b,
-      );
-      toast.success("Buyer unsubscribed");
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to unsubscribe");
-    }
-  };
-
   const handleDelete = async () => {
     if (!thread) return;
     const ts = new Date().toISOString();
@@ -1264,14 +1254,16 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
               {buyer?.blocked_at ? (
                 <DropdownMenuItem onSelect={handleUnblock}>Unblock</DropdownMenuItem>
               ) : (
-                <DropdownMenuItem onSelect={handleBlock}>Block</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setShowBlockConfirm(true)}>Block</DropdownMenuItem>
               )}
-              <DropdownMenuItem onSelect={handleUnsubscribe}>
-                Unsubscribe
-              </DropdownMenuItem>
+              {buyer ? (
+                <DropdownMenuItem onSelect={() => setShowDnc(true)}>
+                  Add to DNC
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuItem
                 className="text-destructive focus:bg-destructive/20"
-                onSelect={handleDelete}
+                onSelect={() => setShowDeleteConfirm(true)}
               >
                 Delete
               </DropdownMenuItem>
@@ -1699,6 +1691,34 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
         onSuccess={() => {
           if (buyer) setBuyer(buyer);
         }}
+      />
+      {buyer ? (
+        <AddToDncModal
+          open={showDnc}
+          onOpenChange={setShowDnc}
+          buyer={buyer}
+          onAdded={() =>
+            setBuyer((b) => (b ? { ...b, can_receive_sms: false, sms_suppressed: true } : b))
+          }
+        />
+      ) : null}
+      <ConfirmDialog
+        open={showBlockConfirm}
+        onOpenChange={setShowBlockConfirm}
+        destructive
+        title={`Block ${name}?`}
+        description="Blocking stops outbound AND inbound SMS/calls for this contact. You can reverse it any time from this menu."
+        actionText="Block"
+        onConfirm={handleBlock}
+      />
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        destructive
+        title="Delete this conversation?"
+        description="This hides the thread from your inbox. The buyer record stays, and the conversation is recoverable."
+        actionText="Delete"
+        onConfirm={handleDelete}
       />
       <AddBuyerModal
         open={showAdd}

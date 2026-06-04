@@ -33,10 +33,17 @@ describe("buyer unsubscribe route", () => {
     const req = new NextRequest("http://test", { method: "POST" })
     const res = await POST(req, { params: { id: "1" } })
     expect(res.status).toBe(200)
-    expect(h.updateMock).toHaveBeenCalledWith({
-      can_receive_sms: false,
-      can_receive_email: false,
-      email_suppressed: true,
-    })
+    expect(h.updateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        can_receive_sms: false,
+        can_receive_email: false,
+        email_suppressed: true,
+        sms_suppressed: true,
+        sms_suppressed_reason: "unsubscribe",
+        is_unsubscribed: true,
+        sms_suppressed_at: expect.any(String),
+        unsubscribed_at: expect.any(String),
+      }),
+    )
   })
 })
