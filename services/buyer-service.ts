@@ -59,6 +59,8 @@ export class BuyerService {
     propertyType?: string
     minPrice?: number
     maxPrice?: number
+    tags?: string[]
+    dealType?: "cash" | "creative"
   }) {
     let query = supabase.from("buyers").select("*").is("deleted_at", null)
 
@@ -74,11 +76,22 @@ export class BuyerService {
       query = query.overlaps("property_type", [filters.propertyType])
     }
 
-    if (filters.minPrice !== undefined) {
-      query = query.gte("asking_price_max", filters.minPrice)
+    // Tag-based fit is best-effort (tags are free-form) — prefer buyers whose
+    // tags overlap the property's tags / chosen buyer-fit hint.
+    if (filters.tags && filters.tags.length > 0) {
+      query = query.overlaps("tags", filters.tags)
     }
-    if (filters.maxPrice !== undefined) {
-      query = query.lte("asking_price_min", filters.maxPrice)
+
+    // Creative deals: buyers' budget range is cash-oriented, so the price range
+    // would wrongly exclude creative-finance buyers. Match on location +
+    // property_type + tag overlap only for those.
+    if (filters.dealType !== "creative") {
+      if (filters.minPrice !== undefined) {
+        query = query.gte("asking_price_max", filters.minPrice)
+      }
+      if (filters.maxPrice !== undefined) {
+        query = query.lte("asking_price_min", filters.maxPrice)
+      }
     }
 
     const { data, error } = await query.order("created_at", { ascending: false })

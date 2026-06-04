@@ -148,8 +148,15 @@ export interface Property {
   longitude?: number | null
   price?: number | null
   buy_price?: number | null
+  deal_type?: string | null
+  finance_subtype?: string | null
   down_payment?: number | null
   monthly_payment?: number | null
+  interest_rate?: number | null
+  term_months?: number | null
+  balloon_months?: number | null
+  existing_loan_balance?: number | null
+  lockbox_code?: string | null
   earnest_money?: number | null
   bedrooms?: number | null
   bathrooms?: number | null
