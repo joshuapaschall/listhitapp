@@ -4,9 +4,10 @@ import { useMemo, useState } from "react"
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
 import Image from "next/image"
-import { Grid3X3, Home, LinkIcon, List, Pencil, Eye } from "lucide-react"
+import { Bath, Bed, Building2, CheckCircle2, Clock, DollarSign, Grid3X3, Home, LinkIcon, List, Pencil, Ruler, Eye } from "lucide-react"
 import { PropertyService } from "@/services/property-service"
 import type { Property, PropertyImage } from "@/lib/supabase"
+import { cn } from "@/lib/utils"
 import MainLayout from "@/components/layout/main-layout"
 import { Can } from "@/components/auth/Can"
 import { useDebounce } from "@/hooks/use-debounce"
@@ -56,10 +57,32 @@ const usdFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 })
 
+const compactUsdFormatter = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  notation: "compact",
+  maximumFractionDigits: 1,
+})
+
 const statusStyles: Record<string, string> = {
   available: "bg-emerald-100 text-emerald-800 hover:bg-emerald-100",
   under_contract: "bg-amber-100 text-amber-800 hover:bg-amber-100",
   sold: "bg-blue-100 text-blue-800 hover:bg-blue-100",
+}
+
+const FINANCE_SUBTYPE_LABEL: Record<string, string> = {
+  owner_finance: "Owner finance",
+  subject_to: "Subject-to",
+  land_contract: "Land contract",
+}
+
+// Deal-type badge: creative → finance-subtype label (purple), cash → neutral.
+const dealBadge = (p: Property) => {
+  if (p.deal_type === "creative") {
+    const label = (p.finance_subtype && FINANCE_SUBTYPE_LABEL[p.finance_subtype]) || "Creative"
+    return { label, className: "bg-purple-500/10 text-purple-600 dark:text-purple-400" }
+  }
+  return { label: "Cash", className: "bg-muted text-muted-foreground" }
 }
 
 const statusLabel = (status?: string | null) => {
@@ -70,6 +93,22 @@ const statusLabel = (status?: string | null) => {
 const formatPrice = (value?: number | null) => {
   if (!value) return "-"
   return usdFormatter.format(value)
+}
+
+function SpreadChip({ spread }: { spread: number }) {
+  return (
+    <span
+      className={cn(
+        "rounded-full px-2 py-0.5 text-xs font-medium",
+        spread >= 0
+          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+          : "bg-red-500/10 text-red-600 dark:text-red-400",
+      )}
+    >
+      {spread >= 0 ? "+" : "−"}
+      {usdFormatter.format(Math.abs(spread))}
+    </span>
+  )
 }
 
 export default function PropertiesPage() {
@@ -153,8 +192,11 @@ export default function PropertiesPage() {
   const stats = useMemo(() => {
     const available = properties.filter((p) => p.status === "available").length
     const underContract = properties.filter((p) => p.status === "under_contract").length
-    const sold = properties.filter((p) => p.status === "sold").length
-    return { available, underContract, sold }
+    // Inventory value = sum of price across non-sold (available + under_contract) properties.
+    const inventoryValue = properties
+      .filter((p) => p.status !== "sold")
+      .reduce((sum, p) => sum + (p.price || 0), 0)
+    return { available, underContract, inventoryValue }
   }, [properties])
 
   const toggleSelectAll = () => {
@@ -229,31 +271,69 @@ export default function PropertiesPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Card><CardContent className="p-4"><p className="text-sm text-muted-foreground">Total Properties</p><p className="text-2xl font-bold">{totalCount}</p></CardContent></Card>
-          <Card><CardContent className="p-4"><p className="text-sm text-muted-foreground">Available</p><p className="text-2xl font-bold text-emerald-600">{stats.available}</p></CardContent></Card>
-          <Card><CardContent className="p-4"><p className="text-sm text-muted-foreground">Under Contract</p><p className="text-2xl font-bold text-amber-600">{stats.underContract}</p></CardContent></Card>
-          <Card><CardContent className="p-4"><p className="text-sm text-muted-foreground">Sold</p><p className="text-2xl font-bold text-blue-600">{stats.sold}</p></CardContent></Card>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="rounded-md bg-muted/50 p-4">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <Building2 className="h-3.5 w-3.5" />
+              <p className="text-xs">Total properties</p>
+            </div>
+            <p className="mt-1.5 text-[22px] font-medium text-foreground">{totalCount}</p>
+          </div>
+          <div className="rounded-md bg-muted/50 p-4">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              <p className="text-xs">Available</p>
+            </div>
+            <p className="mt-1.5 text-[22px] font-medium text-emerald-600 dark:text-emerald-400">{stats.available}</p>
+          </div>
+          <div className="rounded-md bg-muted/50 p-4">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <Clock className="h-3.5 w-3.5" />
+              <p className="text-xs">Under contract</p>
+            </div>
+            <p className="mt-1.5 text-[22px] font-medium text-amber-600 dark:text-amber-400">{stats.underContract}</p>
+          </div>
+          <div className="rounded-md bg-muted/50 p-4">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <DollarSign className="h-3.5 w-3.5" />
+              <p className="text-xs">Inventory value</p>
+            </div>
+            <p className="mt-1.5 text-[22px] font-medium text-foreground">{compactUsdFormatter.format(stats.inventoryValue)}</p>
+          </div>
         </div>
 
-        <div className="rounded-lg border p-3">
+        <div className="rounded-lg border border-border p-3">
           <div className="flex flex-wrap items-end gap-2">
-            <div><label className="mb-1 block text-sm">Status</label><Select value={statusFilter} onValueChange={(v) => { setCurrentPage(1); setStatusFilter(v) }}><SelectTrigger className="w-40"><SelectValue placeholder="Status" /></SelectTrigger><SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{s === "all" ? "All" : statusLabel(s)}</SelectItem>)}</SelectContent></Select></div>
-            <div><label htmlFor="property-search" className="mb-1 block text-sm">Search</label><Input id="property-search" placeholder="Address, city, state, or zip" value={search} onChange={(e) => { setCurrentPage(1); setSearch(e.target.value) }} className="w-56" /></div>
-            <div><label htmlFor="city-filter" className="mb-1 block text-sm">City</label><Input id="city-filter" value={cityFilter} onChange={(e) => { setCurrentPage(1); setCityFilter(e.target.value) }} className="w-40" /></div>
-            <div><label htmlFor="min-price" className="mb-1 block text-sm">Min Price</label><Input id="min-price" type="number" value={minPrice} onChange={(e) => { setCurrentPage(1); setMinPrice(e.target.value) }} className="w-36" /></div>
-            <div><label htmlFor="max-price" className="mb-1 block text-sm">Max Price</label><Input id="max-price" type="number" value={maxPrice} onChange={(e) => { setCurrentPage(1); setMaxPrice(e.target.value) }} className="w-36" /></div>
+            <div><label className="mb-1 block text-xs text-muted-foreground">Status</label><Select value={statusFilter} onValueChange={(v) => { setCurrentPage(1); setStatusFilter(v) }}><SelectTrigger className="h-9 w-40"><SelectValue placeholder="Status" /></SelectTrigger><SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{s === "all" ? "All" : statusLabel(s)}</SelectItem>)}</SelectContent></Select></div>
+            <div><label htmlFor="property-search" className="mb-1 block text-xs text-muted-foreground">Search</label><Input id="property-search" placeholder="Address, city, state, or zip" value={search} onChange={(e) => { setCurrentPage(1); setSearch(e.target.value) }} className="h-9 w-56" /></div>
+            <div><label htmlFor="city-filter" className="mb-1 block text-xs text-muted-foreground">City</label><Input id="city-filter" value={cityFilter} onChange={(e) => { setCurrentPage(1); setCityFilter(e.target.value) }} className="h-9 w-40" /></div>
+            <div><label htmlFor="min-price" className="mb-1 block text-xs text-muted-foreground">Min price</label><Input id="min-price" type="number" value={minPrice} onChange={(e) => { setCurrentPage(1); setMinPrice(e.target.value) }} className="h-9 w-36" /></div>
+            <div><label htmlFor="max-price" className="mb-1 block text-xs text-muted-foreground">Max price</label><Input id="max-price" type="number" value={maxPrice} onChange={(e) => { setCurrentPage(1); setMaxPrice(e.target.value) }} className="h-9 w-36" /></div>
             {activeFilterCount > 0 && (
-              <Button variant="outline" onClick={clearFilters}>
+              <Button variant="outline" className="h-9" onClick={clearFilters}>
                 Clear filters
-                <Badge className="ml-2 rounded-full bg-blue-600 px-2 py-0 text-xs text-white hover:bg-blue-600">
+                <Badge className="ml-2 rounded-full bg-brand px-2 py-0 text-xs text-white hover:bg-brand">
                   {activeFilterCount}
                 </Badge>
               </Button>
             )}
-            <div className="ml-auto flex items-center gap-1 rounded-md border p-1">
-              <Button size="icon" variant={viewMode === "grid" ? "default" : "ghost"} onClick={() => setViewMode("grid")}><Grid3X3 className="h-4 w-4" /></Button>
-              <Button size="icon" variant={viewMode === "list" ? "default" : "ghost"} onClick={() => setViewMode("list")}><List className="h-4 w-4" /></Button>
+            <div className="ml-auto flex items-center gap-1 rounded-lg bg-muted p-1">
+              <button
+                type="button"
+                onClick={() => setViewMode("grid")}
+                aria-label="Grid view"
+                className={cn("flex h-7 w-7 items-center justify-center rounded-md", viewMode === "grid" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+              >
+                <Grid3X3 className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("list")}
+                aria-label="List view"
+                className={cn("flex h-7 w-7 items-center justify-center rounded-md", viewMode === "list" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+              >
+                <List className="h-4 w-4" />
+              </button>
             </div>
           </div>
         </div>
@@ -271,11 +351,19 @@ export default function PropertiesPage() {
                 const images = (property.property_images || []).slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
                 const featured = images.find((img) => img.is_featured)
                 const firstImage = (featured || images[0])?.image_url
+                const isCreative = property.deal_type === "creative"
+                const spread = property.buy_price != null && property.price != null ? property.price - property.buy_price : null
+                const badge = dealBadge(property)
+                const termsLine = [
+                  property.monthly_payment != null ? `${usdFormatter.format(property.monthly_payment)}/mo` : null,
+                  property.interest_rate != null ? `${property.interest_rate}%` : null,
+                ].filter(Boolean).join(" · ")
                 return (
-                  <Card key={property.id} className="group cursor-pointer overflow-hidden" onClick={() => openDetails(property.id)}>
+                  <Card key={property.id} className="group cursor-pointer overflow-hidden border-border" onClick={() => openDetails(property.id)}>
                     <div className="relative h-48 w-full bg-muted">
-                      {firstImage ? <Image src={firstImage} alt={property.address || "Property"} fill className="object-cover" sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" /> : <div className="flex h-full items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200"><Home className="h-8 w-8 text-slate-500" /></div>}
-                      <Badge className={`absolute right-2 top-2 ${statusStyles[property.status || ""] || ""}`}>{statusLabel(property.status)}</Badge>
+                      {firstImage ? <Image src={firstImage} alt={property.address || "Property"} fill className="object-cover" sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" /> : <div className="flex h-full items-center justify-center bg-muted"><Home className="h-8 w-8 text-muted-foreground" /></div>}
+                      <Badge className={`absolute left-2 top-2 ${statusStyles[property.status || ""] || ""}`}>{statusLabel(property.status)}</Badge>
+                      <span className={cn("absolute right-2 top-2 rounded-full px-2 py-0.5 text-xs font-medium", badge.className)}>{badge.label}</span>
                       <div className="absolute inset-0 hidden items-center justify-center gap-2 bg-black/35 group-hover:flex">
                         <Button size="icon" variant="secondary" onClick={(e) => { e.stopPropagation(); openDetails(property.id) }}><Eye className="h-4 w-4" /></Button>
                         <Can permission="properties.manage">
@@ -286,16 +374,38 @@ export default function PropertiesPage() {
                     </div>
                     <CardContent className="space-y-2 p-4">
                       <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="font-semibold">{property.address || "-"}</div>
-                          <div className="text-sm text-muted-foreground">{[property.city, property.state, property.zip].filter(Boolean).join(", ") || "-"}</div>
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium text-foreground">{property.address || "-"}</div>
+                          <div className="truncate text-sm text-muted-foreground">{[property.city, property.state, property.zip].filter(Boolean).join(", ") || "-"}</div>
                         </div>
                         <Can permission="properties.manage">
                           <Checkbox checked={selectedIds.includes(property.id)} onCheckedChange={() => toggleSelect(property.id)} onClick={(e) => e.stopPropagation()} />
                         </Can>
                       </div>
-                      <div className="text-lg font-bold">{formatPrice(property.price)}</div>
-                      <div className="inline-flex rounded-full bg-muted px-3 py-1 text-xs">{`${property.bedrooms || 0} bd • ${property.bathrooms || 0} ba • ${(property.sqft || 0).toLocaleString()} sqft`}</div>
+
+                      {isCreative ? (
+                        <div>
+                          <div className="text-lg font-semibold text-foreground">{formatPrice(property.price)}</div>
+                          {termsLine ? <div className="text-xs text-muted-foreground">{termsLine}</div> : null}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-semibold text-foreground">{formatPrice(property.price)}</span>
+                          {spread != null ? <SpreadChip spread={spread} /> : null}
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1"><Bed className="h-3.5 w-3.5" />{property.bedrooms || 0}</span>
+                        <span className="flex items-center gap-1"><Bath className="h-3.5 w-3.5" />{property.bathrooms || 0}</span>
+                        <span className="flex items-center gap-1"><Ruler className="h-3.5 w-3.5" />{(property.sqft || 0).toLocaleString()}</span>
+                      </div>
+
+                      {property.disposition_strategy ? (
+                        <div className="border-t border-border pt-2">
+                          <span className="inline-flex rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">{property.disposition_strategy}</span>
+                        </div>
+                      ) : null}
                     </CardContent>
                   </Card>
                 )
@@ -305,24 +415,28 @@ export default function PropertiesPage() {
         ) : (
           <div className="rounded-md border">
             <Table>
-              <TableHeader><TableRow><TableHead className="w-10"><Can permission="properties.manage"><Checkbox checked={selectedIds.length === properties.length && properties.length > 0} onCheckedChange={toggleSelectAll} /></Can></TableHead><TableHead>Property</TableHead><TableHead>Price</TableHead><TableHead>Specs</TableHead><TableHead>Status</TableHead><TableHead className="w-40">Actions</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead className="w-10"><Can permission="properties.manage"><Checkbox checked={selectedIds.length === properties.length && properties.length > 0} onCheckedChange={toggleSelectAll} /></Can></TableHead><TableHead>Property</TableHead><TableHead>Price</TableHead><TableHead>Spread</TableHead><TableHead>Deal type</TableHead><TableHead>Specs</TableHead><TableHead>Status</TableHead><TableHead className="w-40">Actions</TableHead></TableRow></TableHeader>
               <TableBody>
                 {properties.map((property) => {
                   const images = (property.property_images || []).slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
                   const featured = images.find((img) => img.is_featured)
                   const firstImage = (featured || images[0])?.image_url
+                  const spread = property.buy_price != null && property.price != null ? property.price - property.buy_price : null
+                  const badge = dealBadge(property)
                   return (
                     <TableRow key={property.id}>
                       <TableCell><Can permission="properties.manage"><Checkbox checked={selectedIds.includes(property.id)} onCheckedChange={() => toggleSelect(property.id)} /></Can></TableCell>
-                      <TableCell><div className="flex items-center gap-3"><div className="relative h-16 w-16 overflow-hidden rounded-md bg-muted">{firstImage ? <Image src={firstImage} alt={property.address || "Property"} fill className="object-cover" sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" /> : <div className="flex h-full items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200"><Home className="h-5 w-5 text-slate-500" /></div>}</div><div><div className="font-medium">{property.address}</div><div className="text-sm text-muted-foreground">{[property.city, property.state, property.zip].filter(Boolean).join(", ")}</div></div></div></TableCell>
+                      <TableCell><div className="flex items-center gap-3"><div className="relative h-16 w-16 overflow-hidden rounded-md bg-muted">{firstImage ? <Image src={firstImage} alt={property.address || "Property"} fill className="object-cover" sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" /> : <div className="flex h-full items-center justify-center bg-muted"><Home className="h-5 w-5 text-muted-foreground" /></div>}</div><div><div className="font-medium">{property.address}</div><div className="text-sm text-muted-foreground">{[property.city, property.state, property.zip].filter(Boolean).join(", ")}</div></div></div></TableCell>
                       <TableCell>{formatPrice(property.price)}</TableCell>
+                      <TableCell>{spread == null ? <span className="text-muted-foreground">—</span> : <span className={spread >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}>{spread >= 0 ? "+" : "−"}{usdFormatter.format(Math.abs(spread))}</span>}</TableCell>
+                      <TableCell><span className={cn("inline-flex rounded-full px-2 py-0.5 text-xs font-medium", badge.className)}>{badge.label}</span></TableCell>
                       <TableCell>{`${property.bedrooms || 0} bd • ${property.bathrooms || 0} ba • ${(property.sqft || 0).toLocaleString()} sqft`}</TableCell>
                       <TableCell><Badge className={statusStyles[property.status || ""] || ""}>{statusLabel(property.status)}</Badge></TableCell>
                       <TableCell><div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => openDetails(property.id)}>View</Button><Can permission="properties.manage"><Button asChild size="sm" variant="outline"><Link href={`/properties/edit/${property.id}`}>Edit</Link></Button></Can></div></TableCell>
                     </TableRow>
                   )
                 })}
-                {!isLoading && properties.length === 0 && <TableRow><TableCell colSpan={6}>No properties found.</TableCell></TableRow>}
+                {!isLoading && properties.length === 0 && <TableRow><TableCell colSpan={8}>No properties found.</TableCell></TableRow>}
               </TableBody>
             </Table>
           </div>
