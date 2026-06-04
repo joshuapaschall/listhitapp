@@ -13,6 +13,11 @@ vi.mock("@/lib/supabase-browser", () => ({
   supabaseBrowser: () => ({ auth: { signOut: signOutMock } }),
 }))
 
+// Header's global search uses the app router for /inbox?buyerId navigation.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
+}))
+
 // Header consumes useCall(); return a no-op proxy.
 vi.mock("@/components/voice/CallProvider", () => ({
   CallProvider: ({ children }: any) => children,

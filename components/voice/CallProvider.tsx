@@ -75,8 +75,10 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const suppressUntilRef = useRef<number>(0);
   const bridgeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const customerLegIdRef = useRef<string | null>(null);
   useEffect(() => { activeCallRef.current = activeCall; }, [activeCall]);
   useEffect(() => { incomingCallRef.current = incomingCall; }, [incomingCall]);
+  useEffect(() => { customerLegIdRef.current = customerLegId; }, [customerLegId]);
 
 
   const reportPresence = useCallback((presenceStatus: "online" | "offline", useBeacon = false) => {
@@ -358,6 +360,26 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     // detects the unanswered transfer (call_rejected) and routes the caller to voicemail on
     // the surviving PSTN A-leg. Ring-timeout is handled the same way server-side.
     try { (call as any)?.hangup?.(); } catch {}
+
+    // The SDK hangup only ends the browser leg. In the receptionist model the far
+    // PSTN leg (outbound prospect or inbound customer) keeps ringing/connected
+    // unless we tear it down server-side. Fire-and-forget hangup on every known
+    // far-leg control id.
+    const farLegIds = Array.from(
+      new Set(
+        [prospectCallControlIdRef.current, customerLegIdRef.current].filter(
+          (id): id is string => Boolean(id),
+        ),
+      ),
+    );
+    for (const id of farLegIds) {
+      try {
+        fetch(`/api/calls/${encodeURIComponent(id)}/hangup`, { method: "POST" }).catch(() => {});
+      } catch {}
+    }
+    prospectCallControlIdRef.current = null;
+    setCustomerLegId(null);
+
     setActiveCall(null);
     setIncomingCall(null);
     setStatus("idle");

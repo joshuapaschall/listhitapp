@@ -172,15 +172,15 @@ describe("gmail routes", () => {
     expect(data.threads[0].id).toBe("t1")
   })
 
-  test("threads route propagates auth message", async () => {
+  test("threads route returns reconnect on auth failure", async () => {
     supabase = buildSupabase([])
     listThreads.mockRejectedValue(new Error("Failed to authenticate with Gmail. Check your credentials."))
     const { GET } = await import("../app/api/gmail/threads/route")
     const req = new NextRequest("http://test")
     const res = await GET(req)
     const data = await res.json()
-    expect(res.status).toBe(500)
-    expect(data.error).toMatch(/authenticate with Gmail/i)
+    expect(res.status).toBe(409)
+    expect(data.reconnect).toBe(true)
   })
 
   test("send route sends message", async () => {

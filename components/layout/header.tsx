@@ -1,11 +1,16 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import { useRouter } from "next/navigation"
 import { useQuery } from "@tanstack/react-query"
-import { Bell, LogOut, Mail, Menu, MessageSquare, Phone, Search, Settings, User } from "lucide-react"
+import { Bell, Loader2, LogOut, Mail, Menu, MessageSquare, Phone, Search, Settings, User } from "lucide-react"
 
 import { LogoutButton } from "@/components/auth/LogoutButton"
+import { BuyerService } from "@/services/buyer-service"
+import { formatPhoneDisplay } from "@/lib/dedup-utils"
+import { cn } from "@/lib/utils"
+import type { Buyer } from "@/lib/supabase"
 import { NotificationItem } from "@/components/notifications/notification-item"
 import ThemeToggle from "@/components/theme-toggle"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -45,8 +50,24 @@ function getUserInitials(name?: string | null, email?: string | null) {
   return source.slice(0, 2).toUpperCase()
 }
 
+const buyerLabel = (b: Buyer) =>
+  b.full_name || `${b.fname || ""} ${b.lname || ""}`.trim() || "Unnamed buyer"
+
+const buyerInitials = (b: Buyer) => {
+  const name = buyerLabel(b)
+  const parts = name.split(/\s+/).filter(Boolean)
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase()
+  return name.slice(0, 2).toUpperCase()
+}
+
 export function Header({ toggleSidebar }: HeaderProps) {
+  const router = useRouter()
   const [searchQuery, setSearchQuery] = useState("")
+  const [searchResults, setSearchResults] = useState<Buyer[]>([])
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchLoading, setSearchLoading] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(-1)
+  const searchRef = useRef<HTMLDivElement>(null)
   const [mounted, setMounted] = useState(false)
   const [emailOpen, setEmailOpen] = useState(false)
   const [smsOpen, setSmsOpen] = useState(false)
@@ -68,6 +89,68 @@ export function Header({ toggleSidebar }: HeaderProps) {
     setMounted(true)
   }, [])
 
+  // Debounced buyer search (~250ms). Searches once the query is 2+ chars.
+  useEffect(() => {
+    const q = searchQuery.trim()
+    if (q.length < 2) {
+      setSearchResults([])
+      setSearchLoading(false)
+      setSearchOpen(false)
+      return
+    }
+    setSearchLoading(true)
+    setSearchOpen(true)
+    const timer = setTimeout(async () => {
+      try {
+        const rows = await BuyerService.searchBuyers(q)
+        setSearchResults((rows || []).slice(0, 8))
+        setActiveIndex(-1)
+      } catch {
+        setSearchResults([])
+      } finally {
+        setSearchLoading(false)
+      }
+    }, 250)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
+  // Close the results dropdown on outside click.
+  useEffect(() => {
+    const onDocMouseDown = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setSearchOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", onDocMouseDown)
+    return () => document.removeEventListener("mousedown", onDocMouseDown)
+  }, [])
+
+  const goToBuyer = (id: string) => {
+    router.push(`/inbox?buyerId=${id}`)
+    setSearchQuery("")
+    setSearchResults([])
+    setSearchOpen(false)
+    setActiveIndex(-1)
+  }
+
+  const onSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Escape") {
+      setSearchOpen(false)
+      return
+    }
+    if (!searchOpen || searchResults.length === 0) return
+    if (e.key === "ArrowDown") {
+      e.preventDefault()
+      setActiveIndex((i) => Math.min(i + 1, searchResults.length - 1))
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault()
+      setActiveIndex((i) => Math.max(i - 1, 0))
+    } else if (e.key === "Enter" && activeIndex >= 0) {
+      e.preventDefault()
+      goToBuyer(searchResults[activeIndex].id)
+    }
+  }
+
   return (
     <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex h-16 items-center px-4 md:px-6">
@@ -76,16 +159,67 @@ export function Header({ toggleSidebar }: HeaderProps) {
         </Button>
 
         <div className="flex flex-1 items-center space-x-4">
-          <div className="relative max-w-md flex-1">
+          <div ref={searchRef} className="relative max-w-md flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-muted-foreground" />
             <Input
               id="global-search"
               name="global-search"
-              placeholder="Search buyers, properties, deals..."
+              placeholder="Search buyers by name, phone, or email..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={() => searchQuery.trim().length >= 2 && setSearchOpen(true)}
+              onKeyDown={onSearchKeyDown}
               className="pl-10"
+              autoComplete="off"
+              role="combobox"
+              aria-expanded={searchOpen}
+              aria-controls="global-search-results"
             />
+            {searchOpen && (
+              <div
+                id="global-search-results"
+                role="listbox"
+                className="absolute z-50 mt-1 w-full overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-md"
+              >
+                {searchLoading ? (
+                  <div className="flex items-center gap-2 px-3 py-3 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Searching…
+                  </div>
+                ) : searchResults.length === 0 ? (
+                  <div className="px-3 py-3 text-sm text-muted-foreground">No matches</div>
+                ) : (
+                  <ul className="max-h-80 overflow-y-auto py-1">
+                    {searchResults.map((b, i) => {
+                      const secondary = [formatPhoneDisplay(b.phone || "") || b.phone, b.email]
+                        .filter(Boolean)
+                        .join(" · ")
+                      return (
+                        <li key={b.id} role="option" aria-selected={i === activeIndex}>
+                          <button
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => goToBuyer(b.id)}
+                            onMouseEnter={() => setActiveIndex(i)}
+                            className={cn(
+                              "flex w-full items-center gap-3 px-3 py-2 text-left",
+                              i === activeIndex ? "bg-muted" : "hover:bg-muted",
+                            )}
+                          >
+                            <Avatar className="h-8 w-8 shrink-0">
+                              <AvatarFallback className="text-xs">{buyerInitials(b)}</AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-sm font-semibold text-foreground">{buyerLabel(b)}</div>
+                              <div className="truncate text-xs text-muted-foreground">{secondary || "No contact info"}</div>
+                            </div>
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

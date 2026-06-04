@@ -26,6 +26,25 @@ const CONNECT_ERRORS: Record<string, string> = {
   no_refresh_token: "Google did not return a refresh token. Please try again.",
 }
 
+// Thrown by the threads/labels queries when the API answers 409 { reconnect: true }.
+class GmailReconnectError extends Error {
+  reconnect = true as const
+  email: string | null
+  constructor(message: string, email: string | null) {
+    super(message)
+    this.name = "GmailReconnectError"
+    this.email = email
+  }
+}
+
+async function readGmailResponse(res: Response) {
+  const json = await res.json().catch(() => null)
+  if (res.status === 409 && json?.reconnect) {
+    throw new GmailReconnectError(json?.error || "Gmail needs to be reconnected.", json?.email ?? null)
+  }
+  return json
+}
+
 export default function GmailPage() {
   const PAGE_SIZE = 50
   const [selectedThread, setSelectedThread] = useState<string | null>(null)
@@ -56,12 +75,13 @@ export default function GmailPage() {
 
   const hasActiveAccount = accounts.some((account) => account.is_active)
 
-  const { data: labelData } = useQuery<LabelsResponse>({
+  const { data: labelData, error: labelError } = useQuery<LabelsResponse>({
     queryKey: ["gmail-labels"],
     queryFn: async () => {
       const res = await fetch("/api/gmail/labels")
-      if (!res.ok) throw new Error("Failed labels")
-      return res.json()
+      const json = await readGmailResponse(res)
+      if (!res.ok) throw new Error(json?.error || "Failed labels")
+      return json as LabelsResponse
     },
     enabled: !permissionsLoading && canAccessGmail && hasActiveAccount,
     staleTime: 30 * 1000,
@@ -103,7 +123,7 @@ export default function GmailPage() {
       if (currentPageToken) params.set("pageToken", currentPageToken)
       if (debouncedSearch) params.set("q", debouncedSearch)
       const res = await fetch(`/api/gmail/threads?${params.toString()}`)
-      const json = await res.json().catch(() => null)
+      const json = await readGmailResponse(res)
       if (!res.ok) throw new Error(json?.error || "Failed to load threads")
       return json as ThreadsResponse
     },
@@ -207,6 +227,16 @@ export default function GmailPage() {
 
   if (!hasActiveAccount) {
     return <MainLayout><div className="flex h-full items-center justify-center p-8"><div className="w-full max-w-md space-y-6 rounded-2xl border bg-card p-10 text-center shadow-sm"><div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10"><Mail className="h-8 w-8 text-primary" /></div><div className="space-y-2"><h2 className="text-2xl font-semibold tracking-tight">Connect your Gmail</h2><p className="text-sm text-muted-foreground">Connect a Gmail account to see your inbox, send replies, and link emails to buyers.</p></div><Button asChild size="lg" className="w-full"><a href="/api/gmail/auth/init">Connect Gmail</a></Button>{accounts.length > 0 && <p className="text-xs text-muted-foreground">{accounts.length} disconnected account{accounts.length === 1 ? "" : "s"} - reconnect to use it.</p>}</div></div></MainLayout>
+  }
+
+  // Token issued without enough scope, or refresh expired: actionable reconnect
+  // state instead of a dead red "Failed to authenticate" banner.
+  const reconnectInfo =
+    (error instanceof GmailReconnectError && error) ||
+    (labelError instanceof GmailReconnectError && labelError) ||
+    null
+  if (reconnectInfo) {
+    return <MainLayout><div className="flex h-full items-center justify-center p-8"><div className="w-full max-w-md space-y-6 rounded-2xl border bg-card p-10 text-center shadow-sm"><div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10"><Mail className="h-8 w-8 text-primary" /></div><div className="space-y-2"><h2 className="text-2xl font-semibold tracking-tight">Reconnect your Gmail</h2><p className="text-sm text-muted-foreground">Gmail needs to be reconnected — your access expired or scopes changed.{reconnectInfo.email ? ` (${reconnectInfo.email})` : ""}</p></div><Button asChild size="lg" className="w-full"><a href="/api/gmail/auth/init">Reconnect Gmail</a></Button></div></div></MainLayout>
   }
 
   return (

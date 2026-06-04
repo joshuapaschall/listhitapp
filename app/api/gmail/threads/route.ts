@@ -4,6 +4,7 @@ import { cookies } from "next/headers"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { assertServer } from "@/utils/assert-server"
 import { requirePermission } from "@/lib/permissions/server"
+import { isGmailReconnectError, gmailReconnectResponse } from "@/lib/gmail/reconnect"
 
 assertServer()
 
@@ -62,6 +63,9 @@ export async function GET(request: NextRequest) {
     }))
   } catch (err) {
     console.error("Failed to list threads", err)
+    if (isGmailReconnectError(err)) {
+      return gmailReconnectResponse(null)
+    }
     return new Response(
       JSON.stringify({ error: err instanceof Error ? err.message : "error" }),
       { status: 500 },
