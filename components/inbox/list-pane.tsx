@@ -13,6 +13,8 @@ import {
   listInboxThreads,
   listSentThreads,
   listAutosentMessages,
+  listFilteredThreads,
+  restoreFilteredThread,
   type ThreadWithBuyer,
   type AutosentMessage,
 } from "@/services/message-service";
@@ -47,6 +49,8 @@ export default function ListPane({ onSelect, selectedId }: ListPaneProps) {
           return listSentThreads({ auto: false });
         case "autosent":
           return listAutosentMessages();
+        case "filtered":
+          return listFilteredThreads();
         default:
           return listInboxThreads();
       }
@@ -72,6 +76,16 @@ export default function ListPane({ onSelect, selectedId }: ListPaneProps) {
     getScrollElement: () => parentRef.current,
     estimateSize: () => 64,
   });
+
+  const handleRestore = async (threadId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await restoreFilteredThread(threadId);
+      queryClient.invalidateQueries({ queryKey: ["message-threads"] });
+    } catch (err) {
+      console.error("Failed to restore filtered thread", err);
+    }
+  };
 
   /* ---------- realtime invalidate ---------- */
   useEffect(() => {
@@ -100,6 +114,7 @@ export default function ListPane({ onSelect, selectedId }: ListPaneProps) {
             ["starred", "Starred"],
             ["sent", "Sent"],
             ["autosent", "Autosent"],
+            ["filtered", "Filtered"],
           ].map(([value, label]) => (
             <TabsTrigger
               key={value}
@@ -145,6 +160,26 @@ export default function ListPane({ onSelect, selectedId }: ListPaneProps) {
                     selected={selectedId === (item as AutosentMessage).message_threads?.id}
                     onSelect={onSelect}
                   />
+                ) : tab === "filtered" ? (
+                  <div>
+                    <ConversationRow
+                      thread={item as ThreadWithBuyer}
+                      selected={selectedId === (item as ThreadWithBuyer).id}
+                      onSelect={onSelect}
+                    />
+                    <div className="flex items-center justify-between gap-2 px-3 pb-2 -mt-1">
+                      <span className="inline-flex max-w-[60%] truncate rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand">
+                        {(item as ThreadWithBuyer).filtered_keyword || "Filtered"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => handleRestore((item as ThreadWithBuyer).id, e)}
+                        className="rounded-md px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                      >
+                        Restore
+                      </button>
+                    </div>
+                  </div>
                 ) : (
                   <ConversationRow
                     thread={item as ThreadWithBuyer}

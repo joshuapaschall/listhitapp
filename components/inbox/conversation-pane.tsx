@@ -53,7 +53,7 @@ import AddBuyerModal from "@/components/buyers/add-buyer-modal";
 import { toast } from "sonner";
 import useHotkeys from "@/hooks/use-hotkeys";
 import { BuyerService } from "@/services/buyer-service";
-import { type ThreadWithBuyer } from "@/services/message-service";
+import { type ThreadWithBuyer, restoreFilteredThread } from "@/services/message-service";
 import {
   ALLOWED_MMS_EXTENSIONS,
   MAX_MMS_SIZE,
@@ -332,6 +332,21 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
   const [uploadType, setUploadType] = useState<"photo" | "video" | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
+  const [filterRestored, setFilterRestored] = useState(false);
+  useEffect(() => {
+    setFilterRestored(false);
+  }, [thread?.id]);
+  const showFilteredBanner = !!thread?.filtered_at && !filterRestored;
+  const handleRestoreFilter = async () => {
+    if (!thread) return;
+    setFilterRestored(true);
+    try {
+      await restoreFilteredThread(thread.id);
+      queryClient.invalidateQueries({ queryKey: ["message-threads"] });
+    } catch (err) {
+      console.error("Failed to restore filtered thread", err);
+    }
+  };
   const [selectedDid, setSelectedDid] = useState<string | null>(
     normalizeDid(thread?.preferred_from_number),
   );
@@ -1264,6 +1279,14 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
           </DropdownMenu>
         </div>
       </div>
+      {showFilteredBanner ? (
+        <div className="flex items-center justify-between gap-2 border-b bg-muted/40 px-4 py-2 text-sm">
+          <span className="text-muted-foreground">Filtered by keyword — Restore to inbox</span>
+          <Button variant="outline" size="sm" onClick={handleRestoreFilter}>
+            Restore
+          </Button>
+        </div>
+      ) : null}
       <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2">
         {messages.map((m) => {
           if (m.direction === "event") {
