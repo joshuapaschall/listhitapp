@@ -3,6 +3,7 @@ import { createLogger } from "@/lib/logger"
 import { scheduleSMS, lookupCarrier } from "@/lib/sms-rate-limiter"
 import { normalizePhone, formatPhoneE164 } from "@/lib/dedup-utils"
 import { TELNYX_API_URL, getTelnyxApiKey } from "@/lib/voice-env"
+import { resolveOutboundFrom, recordStickyFrom } from "@/lib/sender/sticky-sender"
 import { ensurePublicMediaUrls } from "@/utils/mms.server"
 export { sendEmailCampaign } from "./campaign-sender"
 
@@ -42,22 +43,6 @@ export async function sendCampaignSMS({ buyerId, to, body, mediaUrls, dryRun, ca
 
   const url = `${TELNYX_API_URL}/messages`
 
-  let fromNumber: string | null = null
-  if (!isTest && buyerId) {
-    try {
-      const { data } = await supabaseAdmin
-        .from("buyer_sms_senders")
-        .select("from_number")
-        .eq("buyer_id", buyerId)
-        .maybeSingle()
-      if (data?.from_number) {
-        fromNumber = formatPhoneE164(data.from_number) || data.from_number
-      }
-    } catch (err) {
-      console.error("Failed to fetch sticky sender", err)
-    }
-  }
-
   const results: SmsSendResult[] = []
 
   let finalMediaUrls: string[] | undefined
@@ -76,6 +61,14 @@ export async function sendCampaignSMS({ buyerId, to, body, mediaUrls, dryRun, ca
     const formatted = formatPhoneE164(num)
     if (!formatted) throw new Error(`Invalid phone number: ${num}`)
     const carrier = (await lookupCarrier(formatted)) || "unknown"
+    // Deterministic caller ID, resolved per recipient so a sticky recorded for an
+    // earlier recipient in this batch is reused (sticky → DEFAULT_OUTBOUND_DID).
+    const fromNumber = await resolveOutboundFrom({
+      client: supabaseAdmin,
+      buyerId,
+      threadId: null,
+      explicitFrom: null,
+    })
     const payload: Record<string, any> = {
       to: formatted,
       text: body,
@@ -116,18 +109,6 @@ export async function sendCampaignSMS({ buyerId, to, body, mediaUrls, dryRun, ca
       const from = typeof data.from === "string" ? data.from : data.from?.phone_number || ""
       log("sms", "Sent", { to: formatted, sid: data.id })
 
-      if (!fromNumber && from && !isTest && buyerId) {
-        try {
-          const normalized = formatPhoneE164(from) || from
-          await supabaseAdmin
-            .from("buyer_sms_senders")
-            .insert([{ buyer_id: buyerId, from_number: normalized }])
-          fromNumber = normalized
-        } catch (err) {
-          console.error("Failed to save sticky sender", err)
-        }
-      }
-
       return { id: data.id, from }
     }
 
@@ -161,6 +142,17 @@ export async function sendCampaignSMS({ buyerId, to, body, mediaUrls, dryRun, ca
             provider_id: data.id,
             is_bulk: true,
             media_urls: finalMediaUrls?.length ? finalMediaUrls : null,
+          })
+        }
+
+        // Single sticky writer (both stores) — the number actually sent. Non-test only.
+        const sentFrom = formatPhoneE164(data.from) || fromNumber
+        if (buyerId && sentFrom) {
+          await recordStickyFrom({
+            client: supabaseAdmin,
+            buyerId,
+            threadId: thread?.id ?? null,
+            from: sentFrom,
           })
         }
       }

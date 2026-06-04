@@ -982,7 +982,8 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
             buyerId: thread.buyer_id,
             threadId: thread.id,
             to: thread.phone_number,
-            from: currentFrom || undefined,
+            // Only override the server's sticky resolution when the user manually picked a number.
+            from: manualDidRef.current ? (selectedDid || undefined) : undefined,
             body,
             mediaUrls,
             sendAt,
@@ -1052,7 +1053,8 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
           buyerId: thread.buyer_id,
           threadId: thread.id,
           to: thread.phone_number,
-          from: currentFrom || undefined,
+          // Only override the server's sticky resolution when the user manually picked a number.
+          from: manualDidRef.current ? (selectedDid || undefined) : undefined,
           body: pending.body,
           mediaUrls,
         }),
@@ -1110,7 +1112,8 @@ export default function ConversationPane({ thread }: ConversationPaneProps) {
           buyerId: thread.buyer_id,
           threadId: thread.id,
           to: thread.phone_number,
-          from: retryFrom || undefined,
+          // Only override the server's sticky resolution when the user manually picked a number.
+          from: manualDidRef.current ? (selectedDid || undefined) : undefined,
           body: msg.body,
           mediaUrls: msg.media_urls || [],
         }),

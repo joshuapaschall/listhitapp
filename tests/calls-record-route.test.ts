@@ -102,12 +102,11 @@ describe("/api/calls/record", () => {
         webrtc: true
       })
     )
-    expect(senderMappings).toEqual([
-      { buyer_id: "buyer-1", from_number: "+19998887777", org_id: null }
-    ])
+    // Calls never write the SMS sticky store (owned by the SMS send paths).
+    expect(senderMappings).toEqual([])
   })
 
-  test("derives org_id from the DID and stamps it on the call + sender records", async () => {
+  test("derives org_id from the DID and stamps it on the call (never the sticky store)", async () => {
     voiceNumberOrgByPhone = { "+19998887777": "org-42" }
 
     const request = new NextRequest("http://test", {
@@ -129,9 +128,8 @@ describe("/api/calls/record", () => {
     )
     expect(insertedCalls).toHaveLength(1)
     expect(insertedCalls[0].org_id).toBe("org-42")
-    expect(senderMappings).toEqual([
-      { buyer_id: "buyer-1", from_number: "+19998887777", org_id: "org-42" }
-    ])
+    // Calls never write the SMS sticky store, even when org resolves.
+    expect(senderMappings).toEqual([])
   })
 
   test("does not fail the webhook when the DID cannot be resolved to an org", async () => {
