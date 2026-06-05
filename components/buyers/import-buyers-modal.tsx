@@ -19,11 +19,12 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Card, CardContent } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { FileUp, AlertCircle } from "lucide-react"
+import { FileUp, AlertCircle, Check, Loader2, CheckCircle2 } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { supabase } from "@/lib/supabase"
 import { createLogger } from "@/lib/logger"
 
@@ -57,6 +58,9 @@ const FIELD_MAPPINGS = [
   { db: "source", label: "Source" },
   { db: "status", label: "Status" },
 ]
+
+// Wizard phases shown in the stepper header. Index maps 1:1 to the `step` state.
+const PHASES = ["Upload", "Map fields", "Organize", "Done"] as const
 
 
 // Helper functions for parsing data
@@ -448,6 +452,8 @@ export default function ImportBuyersModal({ onSuccess }: ImportBuyersModalProps)
     setImporting(true)
     setImportProgress(0)
     setError("")
+    // Move to the Importing → Done phase so the progress bar is visible.
+    setStep(3)
 
     try {
       const result = await importBuyersFromCsv(
@@ -467,10 +473,12 @@ export default function ImportBuyersModal({ onSuccess }: ImportBuyersModalProps)
       setExtraLocations([])
       setExtraPropertyTypes([])
       setGroupIds([])
-      setStep(2)
+      // Stay on step 3 to show the success screen.
     } catch (err: any) {
       console.error("Import error:", err)
       setError(err.message || "Import failed")
+      // Return to Organize so the error shows alongside the form.
+      setStep(2)
     } finally {
       setImporting(false)
     }
@@ -488,6 +496,29 @@ export default function ImportBuyersModal({ onSuccess }: ImportBuyersModalProps)
     document.body.removeChild(link)
   }
 
+  const mappedCount = Object.keys(mapping).filter((k) => mapping[k] && mapping[k] !== "none").length
+
+  const stepDescriptions = [
+    "Upload a CSV file with your buyer data.",
+    "Match your CSV columns to the correct fields.",
+    "Add tags, locations, property types and groups to every imported buyer.",
+    importing ? "Importing your buyers — this may take a moment." : "Your import is complete.",
+  ]
+
+  const handleBack = () => {
+    if (step === 0) {
+      setOpen(false)
+    } else {
+      setStep(step - 1)
+    }
+  }
+
+  const handleClose = () => {
+    setOpen(false)
+    setStep(0)
+    if (onSuccess) onSuccess()
+  }
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <Can permission="buyers.import">
@@ -499,111 +530,144 @@ export default function ImportBuyersModal({ onSuccess }: ImportBuyersModalProps)
       </Can>
 
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        {step === 0 ? (
-          <>
-            <DialogHeader>
-              <DialogTitle>Import Buyers</DialogTitle>
-              <DialogDescription>
-                Upload a CSV file with your buyer data. You&apos;ll be able to map fields in the next step.
-              </DialogDescription>
-            </DialogHeader>
+        <DialogHeader>
+          <DialogTitle>Import buyers</DialogTitle>
+          <DialogDescription>{stepDescriptions[step]}</DialogDescription>
+        </DialogHeader>
 
-            <div className="grid gap-6 py-4">
-              <Card className="border-dashed border-2 border-green-300 bg-green-50/50 hover:bg-green-50 transition-colors cursor-pointer">
-                <CardContent className="pt-6 text-center">
-                  <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={handleFileChange} />
-                  <FileUp className="mx-auto h-12 w-12 text-green-600 mb-4" />
-                  <h3 className="text-lg font-medium text-green-800 mb-2">Import Buyers from CSV</h3>
-                  <p className="text-sm text-green-600 mb-6">
-                    Drag CSV file here or click to browse • Supports: Name, Email, Phone, Tags, Locations
-                  </p>
-                  <div className="flex justify-center space-x-4">
-                    <Button
-                      variant="outline"
-                      className="border-green-300 text-green-700 hover:bg-green-100"
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      Select File
-                    </Button>
-                    <Button variant="ghost" className="text-green-600 hover:bg-green-100" onClick={downloadTemplate}>
-                      Download Template
-                    </Button>
+        {/* Stepper */}
+        <div className="flex items-center gap-1.5 py-2">
+          {PHASES.map((label, i) => {
+            const completed = i < step
+            const active = i === step
+            return (
+              <div key={label} className="flex flex-1 items-center gap-1.5">
+                <div className="flex items-center gap-2 whitespace-nowrap">
+                  <div
+                    className={cn(
+                      "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-medium",
+                      completed
+                        ? "bg-[#16a34a] text-white"
+                        : active
+                          ? "bg-brand text-white"
+                          : "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {completed ? <Check className="h-3.5 w-3.5" /> : i + 1}
                   </div>
-                </CardContent>
-              </Card>
-
-              {error && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertTitle>Error</AlertTitle>
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-            </div>
-          </>
-        ) : step === 1 ? (
-          <>
-            <DialogHeader>
-              <DialogTitle>Import {csvRows.length} Buyers</DialogTitle>
-              <DialogDescription>Map your CSV columns to the correct fields.</DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-4">
-              <div>
-                <h4 className="font-semibold mb-1">Mapping Template</h4>
-                <div className="flex items-center gap-2">
-                  <Select value={selectedTemplate} onValueChange={loadTemplate}>
-                    <SelectTrigger className="w-40">
-                      <SelectValue placeholder="Select" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {templates.map((t) => (
-                        <SelectItem key={t.name} value={t.name}>
-                          {t.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <input
-                    type="text"
-                    value={templateName}
-                    onChange={(e) => setTemplateName(e.target.value)}
-                    placeholder="Template name"
-                    className="border px-2 py-1 rounded-md text-sm"
-                  />
-                  <Button size="sm" onClick={handleSaveTemplate} disabled={!templateName}>
-                    Save
-                  </Button>
-                  {selectedTemplate && (
-                    <>
-                      <Button size="sm" variant="outline" onClick={handleRenameTemplate}>
-                        Rename
-                      </Button>
-                      <Button size="sm" variant="destructive" onClick={handleDeleteTemplate}>
-                        Delete
-                      </Button>
-                    </>
-                  )}
+                  <span
+                    className={cn(
+                      "hidden text-sm sm:inline",
+                      active ? "font-medium text-foreground" : "text-muted-foreground",
+                    )}
+                  >
+                    {label}
+                  </span>
                 </div>
+                {i < PHASES.length - 1 && <div className="h-px flex-1 bg-border" />}
               </div>
+            )
+          })}
+        </div>
 
-              <h3 className="text-lg font-semibold">Map CSV Columns</h3>
+        {/* Step 0 — Upload */}
+        {step === 0 && (
+          <div className="grid gap-6 py-2">
+            <div
+              className="cursor-pointer rounded-lg border-2 border-dashed border-border bg-muted/40 p-8 text-center transition-colors hover:bg-muted/70"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={handleFileChange} />
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand/10">
+                <FileUp className="h-7 w-7 text-brand" />
+              </div>
+              <h3 className="mb-1 text-base font-medium text-foreground">Import buyers from CSV</h3>
+              <p className="mb-6 text-sm text-muted-foreground">
+                Drag a CSV here or click to browse · Supports name, email, phone, tags, locations
+              </p>
+              <div className="flex justify-center gap-3">
+                <Button
+                  variant="brand"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    fileInputRef.current?.click()
+                  }}
+                >
+                  Select file
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    downloadTemplate()
+                  }}
+                >
+                  Download template
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
-              <div className="border rounded-md">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b bg-muted/50">
-                      <th className="text-left p-2 font-medium">App Field</th>
-                      <th className="text-left p-2 font-medium">Your CSV Column</th>
-                      <th className="text-left p-2 font-medium">Sample Data</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {FIELD_MAPPINGS.map(({ db, label, type }) => (
-                      <tr key={db} className="border-b last:border-0">
-                        <td className="p-2">
+        {/* Step 1 — Map fields */}
+        {step === 1 && (
+          <div className="space-y-4 py-2">
+            <div className="rounded-lg border border-border bg-muted/30 p-3">
+              <h4 className="mb-2 text-sm font-medium">Mapping template</h4>
+              <div className="flex flex-wrap items-center gap-2">
+                <Select value={selectedTemplate} onValueChange={loadTemplate}>
+                  <SelectTrigger className="w-44">
+                    <SelectValue placeholder="Load a template" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {templates.map((t) => (
+                      <SelectItem key={t.name} value={t.name}>
+                        {t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  type="text"
+                  value={templateName}
+                  onChange={(e) => setTemplateName(e.target.value)}
+                  placeholder="Template name"
+                  className="h-9 w-44"
+                />
+                <Button size="sm" onClick={handleSaveTemplate} disabled={!templateName}>
+                  Save
+                </Button>
+                {selectedTemplate && (
+                  <>
+                    <Button size="sm" variant="outline" onClick={handleRenameTemplate}>
+                      Rename
+                    </Button>
+                    <Button size="sm" variant="destructive" onClick={handleDeleteTemplate}>
+                      Delete
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="overflow-hidden rounded-lg border border-border">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-muted/50 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    <th className="p-3">App field</th>
+                    <th className="p-3">Your CSV column</th>
+                    <th className="p-3">Sample</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {FIELD_MAPPINGS.map(({ db, label, type }) => {
+                    const sample =
+                      mapping[db] && csvRows.length > 0 ? String(csvRows[0][mapping[db]] || "") : ""
+                    return (
+                      <tr key={db} className="border-b border-border last:border-0">
+                        <td className="p-3">
                           <div className="flex items-center gap-2">
-                            <span className="font-medium">{label}</span>
+                            <span className="font-medium text-foreground">{label}</span>
                             {type && (
                               <Badge variant="outline" className="text-xs">
                                 {type === "array" ? "list" : type}
@@ -611,16 +675,16 @@ export default function ImportBuyersModal({ onSuccess }: ImportBuyersModalProps)
                             )}
                           </div>
                         </td>
-                        <td className="p-2">
+                        <td className="p-3">
                           <Select
                             value={mapping[db] || "none"}
                             onValueChange={(value) => handleMappingChange(db, value)}
                           >
-                            <SelectTrigger>
-                              <SelectValue placeholder="-- Not mapped --" />
+                            <SelectTrigger className="h-9">
+                              <SelectValue placeholder="Not mapped" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="none">-- Not mapped --</SelectItem>
+                              <SelectItem value="none">Not mapped</SelectItem>
                               {headers.map((header) => (
                                 <SelectItem key={header} value={header}>
                                   {header}
@@ -629,124 +693,139 @@ export default function ImportBuyersModal({ onSuccess }: ImportBuyersModalProps)
                             </SelectContent>
                           </Select>
                         </td>
-                        <td className="p-2 text-sm text-muted-foreground">
-                          {mapping[db] && csvRows.length > 0 ? (
-                            <span className="font-mono bg-muted px-2 py-1 rounded">
-                              {String(csvRows[0][mapping[db]] || "").slice(0, 30)}
-                              {String(csvRows[0][mapping[db]] || "").length > 30 ? "..." : ""}
+                        <td className="p-3">
+                          {sample ? (
+                            <span className="inline-block max-w-[16rem] truncate rounded-md bg-muted px-2 py-1 font-mono text-xs text-muted-foreground align-middle">
+                              {sample.slice(0, 30)}
+                              {sample.length > 30 ? "…" : ""}
                             </span>
                           ) : (
-                            "No preview"
+                            <span className="text-xs text-muted-foreground">No preview</span>
                           )}
                         </td>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
 
-              <div className="text-sm text-muted-foreground">
-                <p>
-                  <strong>Note:</strong> For best results, map as many fields as possible. Tags and Locations should be
-                  comma-separated values.
-                </p>
-              </div>
+            <p className="text-sm text-muted-foreground">
+              For best results, map as many fields as possible. Tags and locations should be comma-separated values.
+            </p>
+          </div>
+        )}
 
-              <div className="grid gap-4 mt-4">
-                <div>
-                  <h4 className="font-semibold mb-1">Add Tags</h4>
-                  <TagSelector value={extraTags} onChange={setExtraTags} />
-                </div>
+        {/* Step 2 — Organize */}
+        {step === 2 && (
+          <div className="grid gap-5 py-2">
+            <div>
+              <h4 className="mb-1.5 text-sm font-medium">Add tags</h4>
+              <TagSelector value={extraTags} onChange={setExtraTags} />
+            </div>
 
-                <div>
-                  <h4 className="font-semibold mb-1">Add Locations</h4>
-                  <LocationSelector value={extraLocations} onChange={setExtraLocations} />
-                </div>
+            <div>
+              <h4 className="mb-1.5 text-sm font-medium">Add locations</h4>
+              <LocationSelector value={extraLocations} onChange={setExtraLocations} />
+            </div>
 
-                <div>
-                  <h4 className="font-semibold mb-1">Add Property Types</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {PROPERTY_TYPES.map((type) => (
-                      <Badge
-                        key={type}
-                        variant={extraPropertyTypes.includes(type) ? "default" : "outline"}
-                        className="cursor-pointer"
-                        onClick={() =>
-                          setExtraPropertyTypes((prev) =>
-                            prev.includes(type)
-                              ? prev.filter((t) => t !== type)
-                              : [...prev, type]
-                          )
-                        }
-                      >
-                        {type}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <h4 className="font-semibold mb-1">Assign to Groups</h4>
-                  <GroupTreeSelector value={groupIds} onChange={setGroupIds} />
-                </div>
+            <div>
+              <h4 className="mb-1.5 text-sm font-medium">Add property types</h4>
+              <div className="flex flex-wrap gap-2">
+                {PROPERTY_TYPES.map((type) => {
+                  const selected = extraPropertyTypes.includes(type)
+                  return (
+                    <Badge
+                      key={type}
+                      variant={selected ? "default" : "outline"}
+                      className={cn(
+                        "cursor-pointer",
+                        selected && "bg-brand text-white hover:bg-brand-hover",
+                      )}
+                      onClick={() =>
+                        setExtraPropertyTypes((prev) =>
+                          prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type],
+                        )
+                      }
+                    >
+                      {type}
+                    </Badge>
+                  )
+                })}
               </div>
             </div>
 
-            {error && (
-              <Alert variant="destructive" className="mt-4">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Error</AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
+            <div>
+              <h4 className="mb-1.5 text-sm font-medium">Assign to groups</h4>
+              <GroupTreeSelector value={groupIds} onChange={setGroupIds} />
+            </div>
+          </div>
+        )}
 
-            {importing && (
-              <div className="mt-4 space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Importing buyers...</span>
-                  <span>{importProgress}%</span>
+        {/* Step 3 — Importing → Done */}
+        {step === 3 && (
+          <div className="py-6">
+            {importing ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-sm text-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin text-brand" />
+                  <span>Importing buyers…</span>
+                  <span className="ml-auto text-muted-foreground">{importProgress}%</span>
                 </div>
                 <Progress value={importProgress} className="h-2" />
               </div>
+            ) : (
+              <div className="flex flex-col items-center gap-3 text-center">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#16a34a]/10">
+                  <CheckCircle2 className="h-8 w-8 text-[#16a34a]" />
+                </div>
+                <h3 className="text-base font-medium text-foreground">Import complete</h3>
+                <p className="text-sm text-muted-foreground">
+                  {importResult.inserted} new buyers created · {importResult.updated} existing buyers updated.
+                </p>
+              </div>
             )}
+          </div>
+        )}
 
-            <DialogFooter className="mt-6">
-              <Button variant="outline" onClick={() => setOpen(false)} disabled={importing}>
-                Cancel
+        {/* Error (not shown on the Done screen) */}
+        {error && step !== 3 && (
+          <Alert variant="destructive" className="mt-2">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        {/* Footer */}
+        {step < 3 && (
+          <DialogFooter className="mt-6 flex items-center sm:justify-between">
+            <Button variant="ghost" onClick={handleBack} disabled={importing}>
+              {step === 0 ? "Cancel" : "Back"}
+            </Button>
+            <span className="text-xs text-muted-foreground">Step {step + 1} of 3</span>
+            {step === 2 ? (
+              <Button variant="brand" onClick={handleImport} disabled={importing || mappedCount === 0}>
+                Import {csvRows.length} buyers
               </Button>
+            ) : (
               <Button
-                onClick={handleImport}
-                disabled={
-                  importing || Object.keys(mapping).filter((k) => mapping[k] && mapping[k] !== "none").length === 0
-                }
+                variant="brand"
+                onClick={() => setStep(step + 1)}
+                disabled={(step === 0 && csvRows.length === 0) || (step === 1 && mappedCount === 0)}
               >
-                {importing ? "Importing..." : `Import ${csvRows.length} Buyers`}
+                Next
               </Button>
-            </DialogFooter>
-          </>
-        ) : (
-          <>
-            <DialogHeader>
-              <DialogTitle>Import Complete</DialogTitle>
-            </DialogHeader>
+            )}
+          </DialogFooter>
+        )}
 
-            <div className="space-y-4 py-4">
-              <p className="text-sm">{importResult.inserted} new buyers created.</p>
-              <p className="text-sm">{importResult.updated} existing buyers updated.</p>
-            </div>
-
-            <DialogFooter className="mt-6">
-              <Button
-                onClick={() => {
-                  setOpen(false)
-                  setStep(0)
-                  if (onSuccess) onSuccess()
-                }}
-              >
-                Close
-              </Button>
-            </DialogFooter>
-          </>
+        {step === 3 && !importing && (
+          <DialogFooter className="mt-6">
+            <Button variant="brand" onClick={handleClose}>
+              Close
+            </Button>
+          </DialogFooter>
         )}
       </DialogContent>
     </Dialog>
