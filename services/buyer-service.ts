@@ -213,10 +213,7 @@ export class BuyerService {
 
   // Get buyer counts for all groups
   static async getBuyerCountsByGroup() {
-    const { data, error } = await supabase
-      .from("buyer_groups")
-      .select("group_id, buyers!inner(id)")
-      .is("buyers.deleted_at", null)
+    const { data, error } = await supabase.rpc("get_buyer_counts_by_group")
 
     if (error) {
       log("error", "Failed to get buyer counts", { error })
@@ -224,8 +221,8 @@ export class BuyerService {
     }
 
     const counts: Record<string, number> = {}
-    ;(data || []).forEach((row) => {
-      counts[row.group_id] = (counts[row.group_id] || 0) + 1
+    ;(data || []).forEach((row: { group_id: string; count: number }) => {
+      counts[row.group_id] = Number(row.count)
     })
     return counts
   }
