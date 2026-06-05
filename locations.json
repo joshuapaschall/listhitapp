@@ -187516,5 +187516,251 @@
     "state": "Texas",
     "state_id": "TX",
     "county": "Starr"
+  },
+  {
+    "city": "Bonaire",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Houston"
+  },
+  {
+    "city": "Cassville",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Bartow"
+  },
+  {
+    "city": "Chula",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Tift"
+  },
+  {
+    "city": "Clyo",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Effingham"
+  },
+  {
+    "city": "Elko",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Houston"
+  },
+  {
+    "city": "Ellabell",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Bryan"
+  },
+  {
+    "city": "Ellenwood",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Clayton"
+  },
+  {
+    "city": "Fortson",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Harris"
+  },
+  {
+    "city": "Haddock",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Jones"
+  },
+  {
+    "city": "Hartsfield",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Colquitt"
+  },
+  {
+    "city": "Kathleen",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Houston"
+  },
+  {
+    "city": "La Fayette",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Walker"
+  },
+  {
+    "city": "Lakemont",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Rabun"
+  },
+  {
+    "city": "Lebanon",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Cherokee"
+  },
+  {
+    "city": "Lizella",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Bibb"
+  },
+  {
+    "city": "Marble Hill",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Pickens"
+  },
+  {
+    "city": "Mauk",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Taylor"
+  },
+  {
+    "city": "Mc Caysville",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Fannin"
+  },
+  {
+    "city": "Mc Rae",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Telfair"
+  },
+  {
+    "city": "Meldrim",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Effingham"
+  },
+  {
+    "city": "Midland",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Muscogee"
+  },
+  {
+    "city": "Morris",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Quitman"
+  },
+  {
+    "city": "Murrayville",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Hall"
+  },
+  {
+    "city": "Oakfield",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Worth"
+  },
+  {
+    "city": "Oakman",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Gordon"
+  },
+  {
+    "city": "Rabun Gap",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Rabun"
+  },
+  {
+    "city": "Red Oak",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Fulton"
+  },
+  {
+    "city": "Rex",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Clayton"
+  },
+  {
+    "city": "Rising Fawn",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Dade"
+  },
+  {
+    "city": "Rocky Face",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Whitfield"
+  },
+  {
+    "city": "Rydal",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Bartow"
+  },
+  {
+    "city": "Saint Marys",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Camden"
+  },
+  {
+    "city": "Saint Simons Island",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Glynn"
+  },
+  {
+    "city": "Sapelo Island",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "McIntosh"
+  },
+  {
+    "city": "Sautee Nacoochee",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "White"
+  },
+  {
+    "city": "Sea Island",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Glynn"
+  },
+  {
+    "city": "Silver Creek",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Floyd"
+  },
+  {
+    "city": "Suches",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Union"
+  },
+  {
+    "city": "Tate",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Pickens"
+  },
+  {
+    "city": "Townsend",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "McIntosh"
+  },
+  {
+    "city": "Winston",
+    "state": "Georgia",
+    "state_id": "GA",
+    "county": "Douglas"
   }
 ]
