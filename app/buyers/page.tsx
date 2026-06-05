@@ -234,21 +234,6 @@ const fetchBuyerIds = async (
   return (data || []).map((row: any) => row.id) as string[]
 }
 
-const fetchBuyersByIds = async (ids: string[]): Promise<Buyer[]> => {
-  if (ids.length === 0) return []
-  const { data, error } = await supabase
-    .from("buyers")
-    .select("*")
-    .in("id", ids)
-
-  if (error) {
-    log("error", "Failed to fetch buyers by ids", { error })
-    throw error
-  }
-
-  return (data || []) as Buyer[]
-}
-
 function BuyersPageContent() {
   const queryClient = useQueryClient()
   const router = useRouter()
