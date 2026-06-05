@@ -34,7 +34,25 @@ import {
   Trash2,
   FolderPlus,
   Tag,
+  GripVertical,
 } from "lucide-react"
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core"
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 
 const ICON_OPTIONS = [
   { value: "users", label: "Users", icon: Users },
@@ -114,6 +132,97 @@ interface GroupFolder {
   name: string
   groups: Group[]
   expanded: boolean
+}
+
+// A single draggable/sortable group row. Only the GripVertical handle starts a
+// drag (via {...attributes} {...listeners}); the rest of the row keeps its
+// click-to-select behavior.
+function SortableGroupItem({
+  group,
+  isSelected,
+  count,
+  icon,
+  onSelect,
+  onEdit,
+  onDelete,
+}: {
+  group: Group
+  isSelected: boolean
+  count: number
+  icon: React.ReactNode
+  onSelect: () => void
+  onEdit: () => void
+  onDelete: () => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: group.id })
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : undefined,
+    ...(isSelected ? { boxShadow: "inset 2px 0 0 #F0303A" } : {}),
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`group flex items-center justify-between px-2 py-1.5 rounded-md cursor-pointer ${
+        isSelected ? "bg-brand/5 text-foreground" : "hover:bg-muted/60"
+      }`}
+      onClick={onSelect}
+      title={`Select ${group.name} group`}
+    >
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        <button
+          type="button"
+          className="shrink-0 cursor-grab touch-none text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+          aria-label={`Drag to reorder ${group.name}`}
+          onClick={(e) => e.stopPropagation()}
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+        {icon}
+        <span className="text-sm min-w-0 flex-1 truncate" title={group.name}>{group.name}</span>
+      </div>
+      <div className="flex items-center space-x-1">
+        <Badge variant="secondary" className="text-xs text-muted-foreground shrink-0">
+          {count}
+        </Badge>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity" title="Group options">
+              <MoreHorizontal className="h-3 w-3" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuItem
+              onClick={(e) => {
+                e.stopPropagation()
+                onEdit()
+              }}
+            >
+              <Edit className="mr-2 h-4 w-4" />
+              Edit
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={(e) => {
+                e.stopPropagation()
+                onDelete()
+              }}
+              className="text-red-600 dark:text-red-400"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
+  )
 }
 
 // Remove the placeholderGroups and use real data
@@ -369,6 +478,30 @@ export default function SmartGroupsSidebar({
     setDragFolderId(null)
   }
 
+  // @dnd-kit sensors: pointer needs a 5px move so a normal click still selects
+  // the group, keyboard sensor enables accessible reordering.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+
+  // Reorder groups within their folder. The folder doesn't change, so no DB
+  // call is needed — organizeFolders re-applies the saved groupOrder on reload.
+  const handleGroupDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    setFolders((prev) => {
+      const updated = prev.map((folder) => {
+        const oldIndex = folder.groups.findIndex((g) => g.id === active.id)
+        const newIndex = folder.groups.findIndex((g) => g.id === over.id)
+        if (oldIndex === -1 || newIndex === -1) return folder
+        return { ...folder, groups: arrayMove(folder.groups, oldIndex, newIndex) }
+      })
+      saveFolderSettings(updated)
+      return updated
+    })
+  }
+
   const moveGroup = async (
     source: { id: string; folderId: string },
     target: { id: string; folderId: string } | { folderId: string; id?: string },
@@ -577,70 +710,39 @@ export default function SmartGroupsSidebar({
                     setDragGroup(null)
                   }}
                 >
-                  {folder.groups.map((group) => (
-                    <div
-                      key={group.id}
-                      className={`group flex items-center justify-between px-2 py-1.5 rounded-md cursor-pointer ${
-                        selectedGroupId === group.id ? "bg-brand/5 text-foreground" : "hover:bg-muted/60"
-                      }`}
-                      style={selectedGroupId === group.id ? { boxShadow: "inset 2px 0 0 #F0303A" } : undefined}
-                      onClick={() => onGroupSelect?.(group.id)}
-                      title={`Select ${group.name} group`}
-                      draggable
-                      onDragStart={() => setDragGroup({ id: group.id, folderId: folder.id })}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={() => {
-                        if (dragGroup) moveGroup(dragGroup, { id: group.id, folderId: folder.id })
-                        setDragGroup(null)
-                      }}
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleGroupDragEnd}
+                  >
+                    <SortableContext
+                      items={folder.groups.map((g) => g.id)}
+                      strategy={verticalListSortingStrategy}
                     >
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        {getGroupIcon(group)}
-                        <span className="text-sm min-w-0 flex-1 truncate" title={group.name}>{group.name}</span>
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        <Badge variant="secondary" className="text-xs text-muted-foreground shrink-0">
-                          {buyerCounts[group.id] || 0}
-                        </Badge>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity" title="Group options">
-                              <MoreHorizontal className="h-3 w-3" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent>
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setEditingGroup(group)
-                                setGroupForm({
-                                  name: group.name,
-                                  description: group.description || "",
-                                  type: group.type || "manual",
-                                  color: group.color || "#F0303A",
-                                  icon: (group.criteria?.icon as IconValue) || "users",
-                                  folder: String(group.criteria?.folder || folder.id),
-                                })
-                              }}
-                            >
-                              <Edit className="mr-2 h-4 w-4" />
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setGroupToDelete(group)
-                              }}
-                              className="text-red-600 dark:text-red-400"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </div>
-                  ))}
+                      {folder.groups.map((group) => (
+                        <SortableGroupItem
+                          key={group.id}
+                          group={group}
+                          isSelected={selectedGroupId === group.id}
+                          count={buyerCounts[group.id] || 0}
+                          icon={getGroupIcon(group)}
+                          onSelect={() => onGroupSelect?.(group.id)}
+                          onEdit={() => {
+                            setEditingGroup(group)
+                            setGroupForm({
+                              name: group.name,
+                              description: group.description || "",
+                              type: group.type || "manual",
+                              color: group.color || "#F0303A",
+                              icon: (group.criteria?.icon as IconValue) || "users",
+                              folder: String(group.criteria?.folder || folder.id),
+                            })
+                          }}
+                          onDelete={() => setGroupToDelete(group)}
+                        />
+                      ))}
+                    </SortableContext>
+                  </DndContext>
                 </div>
               )}
             </div>
