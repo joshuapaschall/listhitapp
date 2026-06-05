@@ -135,13 +135,13 @@ const fetchBuyers = async (
   query = applyAttributeConditions(query, attributeConditions as AttributeCondition[])
 
   if (filters.canReceiveEmail === "yes") {
-    query = query.eq("can_receive_email", true)
+    query = query.eq("can_receive_email", true).not("email_norm", "is", null)
   } else if (filters.canReceiveEmail === "no") {
     query = query.eq("can_receive_email", false)
   }
 
   if (filters.canReceiveSMS === "yes") {
-    query = query.eq("can_receive_sms", true)
+    query = query.eq("can_receive_sms", true).not("phone_norm", "is", null)
   } else if (filters.canReceiveSMS === "no") {
     query = query.eq("can_receive_sms", false)
   }
@@ -212,13 +212,13 @@ const fetchBuyerIds = async (
   query = applyAttributeConditions(query, attributeConditions as AttributeCondition[])
 
   if (filters.canReceiveEmail === "yes") {
-    query = query.eq("can_receive_email", true)
+    query = query.eq("can_receive_email", true).not("email_norm", "is", null)
   } else if (filters.canReceiveEmail === "no") {
     query = query.eq("can_receive_email", false)
   }
 
   if (filters.canReceiveSMS === "yes") {
-    query = query.eq("can_receive_sms", true)
+    query = query.eq("can_receive_sms", true).not("phone_norm", "is", null)
   } else if (filters.canReceiveSMS === "no") {
     query = query.eq("can_receive_sms", false)
   }
@@ -911,13 +911,6 @@ function BuyersPageContent() {
     router.push(`/campaigns/new?audience=${encodeAudienceParam(filterMapping.definition)}`)
   }
 
-  const getScoreColor = (score: number) => {
-    if (score >= 90) return "text-emerald-700 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-950/50"
-    if (score >= 70) return "text-foreground bg-muted"
-    if (score >= 50) return "text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-950/50"
-    return "text-red-700 bg-red-50 dark:text-red-300 dark:bg-red-950/50"
-  }
-
   const formatName = (buyer: Buyer) => {
     if (buyer.full_name) return buyer.full_name
     if (buyer.fname && buyer.lname) return `${buyer.fname} ${buyer.lname}`
@@ -1380,7 +1373,7 @@ function BuyersPageContent() {
             {/* Header row */}
             <div
               className="grid items-center gap-2 sticky top-0 z-10 border-b border-border bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground"
-              style={{ gridTemplateColumns: "34px minmax(0,1.7fr) 56px minmax(0,1fr) 72px 132px" }}
+              style={{ gridTemplateColumns: "34px minmax(0,1.6fr) minmax(0,1fr) minmax(0,1.3fr) minmax(0,1fr) 72px 132px" }}
             >
               <div>
                 <Checkbox
@@ -1390,8 +1383,9 @@ function BuyersPageContent() {
                 />
               </div>
               <div>Name</div>
-              <div>Score</div>
               <div>Tags</div>
+              <div>Locations</div>
+              <div>Property types</div>
               <div>Created</div>
               <div className="text-right">Actions</div>
             </div>
@@ -1410,7 +1404,7 @@ function BuyersPageContent() {
                 <div
                   key={buyer.id}
                   className={`grid items-center gap-2 border-b border-border px-3 py-2 hover:bg-muted/40 ${selectedBuyers.includes(buyer.id) ? "bg-brand/5" : ""}`}
-                  style={{ gridTemplateColumns: "34px minmax(0,1.7fr) 56px minmax(0,1fr) 72px 132px" }}
+                  style={{ gridTemplateColumns: "34px minmax(0,1.6fr) minmax(0,1fr) minmax(0,1.3fr) minmax(0,1fr) 72px 132px" }}
                 >
                   <div>
                     <Checkbox
@@ -1427,7 +1421,15 @@ function BuyersPageContent() {
                     </Avatar>
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span className="truncate text-sm font-medium text-foreground">{formatName(buyer)}</span>
+                        {(() => {
+                          const name = formatName(buyer)
+                          const noName = name === "No Name"
+                          return (
+                            <span className={`truncate text-sm font-medium ${noName ? "text-muted-foreground italic" : "text-foreground"}`}>
+                              {name}
+                            </span>
+                          )
+                        })()}
                         {buyer.vip && (
                           <span title="VIP Client"><Star className="h-3.5 w-3.5 shrink-0 fill-amber-500 text-amber-500" /></span>
                         )}
@@ -1437,12 +1439,16 @@ function BuyersPageContent() {
                         {buyer.blocked_at && (
                           <span title="Blocked"><Ban className="h-3.5 w-3.5 shrink-0 text-red-600 dark:text-red-400" /></span>
                         )}
-                        <span title={buyer.can_receive_email && !buyer.is_unsubscribed ? "Can receive email" : "Cannot receive email"}>
-                          <Mail className={`h-3.5 w-3.5 shrink-0 ${buyer.can_receive_email && !buyer.is_unsubscribed ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/40"}`} />
-                        </span>
-                        <span title={buyer.can_receive_sms && !buyer.is_unsubscribed ? "Can receive SMS" : "Cannot receive SMS"}>
-                          <MessageSquare className={`h-3.5 w-3.5 shrink-0 ${buyer.can_receive_sms && !buyer.is_unsubscribed ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/40"}`} />
-                        </span>
+                        {buyer.email && (
+                          <span title={buyer.can_receive_email && !buyer.is_unsubscribed ? "Can receive email" : "Cannot receive email"}>
+                            <Mail className={`h-3.5 w-3.5 shrink-0 ${buyer.can_receive_email && !buyer.is_unsubscribed ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/40"}`} />
+                          </span>
+                        )}
+                        {buyer.phone && (
+                          <span title={buyer.can_receive_sms && !buyer.is_unsubscribed ? "Can receive SMS" : "Cannot receive SMS"}>
+                            <MessageSquare className={`h-3.5 w-3.5 shrink-0 ${buyer.can_receive_sms && !buyer.is_unsubscribed ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/40"}`} />
+                          </span>
+                        )}
                       </div>
                       <div className="truncate text-xs text-muted-foreground">
                         <span className="font-mono">{buyer.phone ? formatPhoneDisplay(buyer.phone) : "No phone"}</span>
@@ -1450,13 +1456,6 @@ function BuyersPageContent() {
                         {buyer.email || "No email"}
                       </div>
                     </div>
-                  </div>
-
-                  {/* Score */}
-                  <div>
-                    <Badge className={`${getScoreColor(buyer.score ?? 0)} border-0`} title={`Buyer score: ${buyer.score ?? 0}/100`}>
-                      {buyer.score}
-                    </Badge>
                   </div>
 
                   {/* Tags */}
@@ -1473,6 +1472,54 @@ function BuyersPageContent() {
                     )}
                   </div>
 
+                  {/* Locations */}
+                  <div className="flex items-center gap-1 overflow-hidden">
+                    {(() => {
+                      const locations = buyer.locations ?? []
+                      if (locations.length === 0) {
+                        return <span className="text-xs text-muted-foreground">—</span>
+                      }
+                      // Statewide-Georgia backfilled contacts carry every GA city; show a
+                      // single chip instead of an unreadable wall of cities.
+                      if (locations.length > 100) {
+                        return (
+                          <span className="whitespace-nowrap rounded-md border border-border bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                            Georgia · statewide
+                          </span>
+                        )
+                      }
+                      return (
+                        <>
+                          {locations.slice(0, 3).map((location: string, index: number) => (
+                            <span key={index} title={location} className="whitespace-nowrap rounded-md border border-border bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                              {location}
+                            </span>
+                          ))}
+                          {locations.length > 3 && (
+                            <span title={`${locations.length - 3} more locations`} className="whitespace-nowrap rounded-md border border-border bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                              +{locations.length - 3} more
+                            </span>
+                          )}
+                        </>
+                      )
+                    })()}
+                  </div>
+
+                  {/* Property types */}
+                  <div className="flex items-center gap-1 overflow-hidden">
+                    {(() => {
+                      const propertyTypes = buyer.property_type ?? []
+                      if (propertyTypes.length === 0) {
+                        return <span className="text-xs text-muted-foreground">—</span>
+                      }
+                      return propertyTypes.map((type: string, index: number) => (
+                        <span key={index} title={type} className="whitespace-nowrap rounded-md border border-border bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                          {type}
+                        </span>
+                      ))
+                    })()}
+                  </div>
+
                   {/* Created */}
                   <div className="text-xs text-muted-foreground">
                     {buyer.created_at
@@ -1482,25 +1529,31 @@ function BuyersPageContent() {
 
                   {/* Actions */}
                   <div className="flex items-center justify-end gap-0.5">
-                    <CallButton phone={buyer.phone} name={formatName(buyer)} buyerId={buyer.id} size="icon" variant="ghost" />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-                      onClick={() => handleSendSms(buyer)}
-                      aria-label={`Text ${formatName(buyer)}`}
-                    >
-                      <MessageSquare className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-                      onClick={() => handleSendEmail(buyer)}
-                      aria-label={`Email ${formatName(buyer)}`}
-                    >
-                      <Mail className="h-4 w-4" />
-                    </Button>
+                    {buyer.phone && (
+                      <CallButton phone={buyer.phone} name={formatName(buyer)} buyerId={buyer.id} size="icon" variant="ghost" />
+                    )}
+                    {buyer.phone && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                        onClick={() => handleSendSms(buyer)}
+                        aria-label={`Text ${formatName(buyer)}`}
+                      >
+                        <MessageSquare className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {buyer.email && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                        onClick={() => handleSendEmail(buyer)}
+                        aria-label={`Email ${formatName(buyer)}`}
+                      >
+                        <Mail className="h-4 w-4" />
+                      </Button>
+                    )}
                     <Can permission="buyers.edit">
                       <Button
                         variant="ghost"
