@@ -35,6 +35,7 @@ import {
   replaceGroupsForBuyers,
   clearAllGroupsForBuyers,
 } from "@/lib/group-service"
+import { bulkUpdateBuyerTags, getBuyerTagCounts, type BuyerTagCount } from "@/lib/tag-service"
 import MainLayout from "@/components/layout/main-layout"
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
@@ -283,6 +284,8 @@ function BuyersPageContent() {
   }, [groupsCollapsed])
   const [tagActionMode, setTagActionMode] = useState<"add" | "remove">("add")
   const [showTagDialog, setShowTagDialog] = useState(false)
+  const [removeTagOptions, setRemoveTagOptions] = useState<BuyerTagCount[]>([])
+  const [removeTagsLoading, setRemoveTagsLoading] = useState(false)
   const [groupActionMode, setGroupActionMode] = useState<
     "add" | "remove" | "move"
   >("add")
@@ -547,34 +550,7 @@ function BuyersPageContent() {
   // Bulk actions
   const handleBulkAddTags = async (tagsToAdd: string[]) => {
     try {
-      const missingIds = selectedBuyers.filter(
-        (id) => !buyers.find((b: Buyer) => b.id === id),
-      )
-      const extraBuyers = await fetchBuyersByIds(missingIds)
-      const buyersToUpdate = [
-        ...buyers.filter((b: Buyer) => selectedBuyers.includes(b.id)),
-        ...extraBuyers,
-      ]
-
-      for (const buyer of buyersToUpdate) {
-        const currentTags = buyer.tags || []
-        const newTags = [...new Set([...currentTags, ...tagsToAdd])]
-
-        const response = await fetch(`/api/buyers/${buyer.id}/tags`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tags: newTags }),
-        })
-
-        if (response.status === 403) {
-          toast.error("You don't have permission to edit buyers.")
-          return
-        }
-
-        if (!response.ok) throw new Error("Failed to update buyer tags")
-      }
-
-      // Invalidate queries to refresh data
+      await bulkUpdateBuyerTags(selectedBuyers, { add: tagsToAdd })
       queryClient.invalidateQueries({ queryKey: ["buyers"] })
       queryClient.invalidateQueries({ queryKey: ["buyerCountsByGroup"] })
       queryClient.invalidateQueries({ queryKey: ["totalBuyersCount"] })
@@ -588,33 +564,7 @@ function BuyersPageContent() {
 
   const handleBulkRemoveTags = async (tagsToRemove: string[]) => {
     try {
-      const missingIds = selectedBuyers.filter(
-        (id) => !buyers.find((b: Buyer) => b.id === id),
-      )
-      const extraBuyers = await fetchBuyersByIds(missingIds)
-      const buyersToUpdate = [
-        ...buyers.filter((b: Buyer) => selectedBuyers.includes(b.id)),
-        ...extraBuyers,
-      ]
-
-      for (const buyer of buyersToUpdate) {
-        const currentTags = buyer.tags || []
-        const newTags = currentTags.filter((tag: string) => !tagsToRemove.includes(tag))
-
-        const response = await fetch(`/api/buyers/${buyer.id}/tags`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tags: newTags }),
-        })
-
-        if (response.status === 403) {
-          toast.error("You don't have permission to edit buyers.")
-          return
-        }
-
-        if (!response.ok) throw new Error("Failed to update buyer tags")
-      }
-
+      await bulkUpdateBuyerTags(selectedBuyers, { remove: tagsToRemove })
       queryClient.invalidateQueries({ queryKey: ["buyers"] })
       queryClient.invalidateQueries({ queryKey: ["buyerCountsByGroup"] })
       queryClient.invalidateQueries({ queryKey: ["totalBuyersCount"] })
@@ -1143,16 +1093,22 @@ function BuyersPageContent() {
                           }}
                         >
                           <Plus className="mr-2 h-4 w-4" />
-                          Add Tags
+                          Add tags…
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => {
                             setTagActionMode("remove")
+                            setRemoveTagOptions([])
+                            setRemoveTagsLoading(true)
                             setShowTagDialog(true)
+                            getBuyerTagCounts(selectedBuyers)
+                              .then(setRemoveTagOptions)
+                              .catch(() => toast.error("Couldn't load tags for this selection"))
+                              .finally(() => setRemoveTagsLoading(false))
                           }}
                         >
                           <X className="mr-2 h-4 w-4" />
-                          Remove Tags
+                          Remove specific tags…
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -1180,7 +1136,7 @@ function BuyersPageContent() {
                           }}
                         >
                           <UserMinus className="mr-2 h-4 w-4" />
-                          Remove from Group
+                          Remove from a group…
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => {
@@ -1801,6 +1757,8 @@ function BuyersPageContent() {
         onOpenChange={setShowTagDialog}
         mode={tagActionMode}
         onSubmit={tagActionMode === "add" ? handleBulkAddTags : handleBulkRemoveTags}
+        availableTags={removeTagOptions}
+        loadingTags={removeTagsLoading}
       />
       <BulkGroupDialog
         open={showGroupDialog}
