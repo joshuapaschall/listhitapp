@@ -105,24 +105,25 @@ export async function getBuyerGroups(buyerId: string) {
 
 export async function addBuyersToGroups(buyerIds: string[], groupIds: string[]) {
   try {
-    const { data: existing } = await supabase
-      .from("buyer_groups")
-      .select("buyer_id,group_id")
-      .in("buyer_id", buyerIds)
-      .in("group_id", groupIds)
-
-    const existingSet = new Set(
-      (existing || []).map((r: any) => `${r.buyer_id}:${r.group_id}`),
-    )
+    // Build a de-duplicated set of {buyer_id, group_id} pairs in memory. buyerIds
+    // can contain repeats, so dedupe via a Set of `${b}:${g}` keys. We do NOT
+    // pre-check existing membership with a SELECT (that read is silently capped at
+    // 1000 rows, so on large lists it misses existing pairs and re-inserts them,
+    // violating buyer_groups_pkey). Instead upsert and ignore conflicts.
+    const seen = new Set<string>()
     const entries: { buyer_id: string; group_id: string }[] = []
     for (const b of buyerIds) {
       for (const g of groupIds) {
         const key = `${b}:${g}`
-        if (!existingSet.has(key)) entries.push({ buyer_id: b, group_id: g })
+        if (seen.has(key)) continue
+        seen.add(key)
+        entries.push({ buyer_id: b, group_id: g })
       }
     }
     if (entries.length) {
-      const { error } = await supabase.from("buyer_groups").insert(entries)
+      const { error } = await supabase
+        .from("buyer_groups")
+        .upsert(entries, { onConflict: "buyer_id,group_id", ignoreDuplicates: true })
       if (error) throw error
     }
   } catch (err) {
