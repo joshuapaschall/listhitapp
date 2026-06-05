@@ -236,8 +236,8 @@ export function applyAttributeFilter(query: any, cond: AttributeCondition, spec:
   switch (spec.valueType) {
     case "text[]": {
       const arr = asStringArray(cond.value)
-      if (op === "contains") return query.overlaps(col, arr) // has ANY
-      if (op === "contains_all") return query.contains(col, arr) // has ALL (@>)
+      if (op === "contains") return query.filter(col, "ov", toPgArrayLiteral(arr)) // has ANY
+      if (op === "contains_all") return query.filter(col, "cs", toPgArrayLiteral(arr)) // has ALL (@>)
       if (op === "not_contains") return query.not(col, "ov", toPgArrayLiteral(arr)) // has NONE
       return query
     }
