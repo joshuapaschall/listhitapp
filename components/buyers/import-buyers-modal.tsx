@@ -306,11 +306,11 @@ export async function importBuyersFromCsv(
 
     }
 
-    for (const u of updates) {
+    if (updates.length) {
       const response = await fetch("/api/buyers/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ updates: [{ id: u.id, data: u.data }] }),
+        body: JSON.stringify({ updates: updates.map((u) => ({ id: u.id, data: u.data })) }),
       })
 
       if (response.status === 403) {
@@ -322,8 +322,10 @@ export async function importBuyersFromCsv(
         throw new Error(result?.error || "Failed to update imported buyer")
       }
 
-      insertedIds.push(u.id)
-      totalUpdated += 1
+      const result = await response.json().catch(() => ({}))
+      const updatedIds = (result?.updatedIds || []) as string[]
+      insertedIds.push(...updatedIds)
+      totalUpdated += updatedIds.length
 
     }
 
