@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import Link from "next/link"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Mail, MessageSquare, Reply, Sparkles, Trash2 } from "lucide-react"
@@ -8,10 +8,12 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import ConfirmInputDialog from "@/components/ui/confirm-input-dialog"
+import TemplateAuditDialog from "@/components/templates/template-audit-dialog"
 import type { TemplateSlug } from "../template-types"
 import { templateNav, templateTypeConfig } from "../template-types"
 import { TemplateService } from "@/services/template-service"
 import { calculateSmsSegments } from "@/lib/sms-utils"
+import { analyzeMessage } from "@/lib/sms-cost-guard"
 import { cn } from "@/lib/utils"
 
 // Split a preview string so {{merge_tokens}} can be rendered as brand chips.
@@ -37,9 +39,15 @@ export default function TemplateList({ slug }: { slug: TemplateSlug }) {
     queryKey: ["templates", config.type],
     queryFn: () => TemplateService.listTemplates(config.type),
   })
-  const templates = data || []
+  const templates = useMemo(() => data || [], [data])
   const [deleting, setDeleting] = useState<string | null>(null)
   const [templateToDelete, setTemplateToDelete] = useState<{ id: string; name: string } | null>(null)
+  const [auditOpen, setAuditOpen] = useState(false)
+  const isSms = config.type === "sms"
+  const flaggedCount = useMemo(
+    () => (isSms ? templates.filter((t) => analyzeMessage(t.message || "").canSave).length : 0),
+    [isSms, templates],
+  )
 
   const handleDelete = async () => {
     if (!templateToDelete) return
@@ -60,7 +68,6 @@ export default function TemplateList({ slug }: { slug: TemplateSlug }) {
   }
 
   const channelIcon = slug === "email" ? Mail : slug === "quick-reply" ? Reply : MessageSquare
-  const isSms = config.type === "sms"
 
   return (
     <div className="space-y-6 p-4 md:p-6">
@@ -92,6 +99,20 @@ export default function TemplateList({ slug }: { slug: TemplateSlug }) {
           )
         })}
       </div>
+
+      {isSms && flaggedCount > 0 && (
+        <div className="flex flex-col gap-3 rounded-lg border border-brand/30 bg-brand/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-2">
+            <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
+            <p className="text-sm text-foreground">
+              {flaggedCount} {flaggedCount === 1 ? "template" : "templates"} can be optimized to send for less
+            </p>
+          </div>
+          <Button variant="brand" size="sm" onClick={() => setAuditOpen(true)}>
+            Review &amp; optimize
+          </Button>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -189,6 +210,15 @@ export default function TemplateList({ slug }: { slug: TemplateSlug }) {
         actionText="Delete"
         onConfirm={handleDelete}
       />
+
+      {isSms && (
+        <TemplateAuditDialog
+          templates={templates}
+          open={auditOpen}
+          onOpenChange={setAuditOpen}
+          onApplied={() => queryClient.invalidateQueries({ queryKey: ["templates", config.type] })}
+        />
+      )}
     </div>
   )
 }
