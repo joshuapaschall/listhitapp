@@ -1275,7 +1275,7 @@ function BuyersPageContent() {
                     <SelectContent>
                       <SelectItem value="any">Any property type</SelectItem>
                       {PROPERTY_TYPES.map((type: string) => (
-                        <SelectItem key={type} value={type.toLowerCase()}>
+                        <SelectItem key={type} value={type}>
                           {type}
                         </SelectItem>
                       ))}
