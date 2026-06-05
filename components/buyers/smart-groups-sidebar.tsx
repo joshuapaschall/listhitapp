@@ -139,6 +139,7 @@ interface GroupFolder {
 // click-to-select behavior.
 function SortableGroupItem({
   group,
+  folderId,
   isSelected,
   count,
   icon,
@@ -147,6 +148,7 @@ function SortableGroupItem({
   onDelete,
 }: {
   group: Group
+  folderId: string
   isSelected: boolean
   count: number
   icon: React.ReactNode
@@ -155,7 +157,7 @@ function SortableGroupItem({
   onDelete: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: group.id })
+    useSortable({ id: group.id, data: { type: "group", folderId } })
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -225,6 +227,90 @@ function SortableGroupItem({
   )
 }
 
+// A draggable/sortable folder. Only the GripVertical handle starts a drag; the
+// header keeps its expand/collapse and menu behavior. `children` holds the
+// expanded group list (its own nested SortableContext).
+function SortableFolder({
+  folder,
+  onToggle,
+  onEdit,
+  onAddGroup,
+  onDelete,
+  children,
+}: {
+  folder: GroupFolder
+  onToggle: () => void
+  onEdit: () => void
+  onAddGroup: () => void
+  onDelete?: () => void
+  children: React.ReactNode
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: folder.id, data: { type: "folder" } })
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : undefined,
+  }
+
+  return (
+    <div ref={setNodeRef} style={style} className="space-y-1">
+      <div className="group flex items-center justify-between">
+        <button
+          type="button"
+          className="shrink-0 cursor-grab touch-none px-1 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+          aria-label={`Drag to reorder ${folder.name}`}
+          onClick={(e) => e.stopPropagation()}
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+        <Button
+          variant="ghost"
+          className="flex-1 justify-start px-2 py-1.5 h-auto"
+          onClick={onToggle}
+          title={`${folder.expanded ? "Collapse" : "Expand"} ${folder.name}`}
+        >
+          {folder.expanded ? (
+            <ChevronDown className="h-4 w-4 mr-2" />
+          ) : (
+            <ChevronRight className="h-4 w-4 mr-2" />
+          )}
+          <Folder className="h-4 w-4 mr-2" />
+          <span className="font-medium text-sm whitespace-nowrap">{folder.name}</span>
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity" title="Folder options">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onEdit}>
+              <Edit className="mr-2 h-4 w-4" />
+              Edit Folder
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onAddGroup}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Group to Folder
+            </DropdownMenuItem>
+            {onDelete && (
+              <DropdownMenuItem onClick={onDelete} className="text-red-600 dark:text-red-400">
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete Folder
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {folder.expanded && children}
+    </div>
+  )
+}
+
 // Remove the placeholderGroups and use real data
 export default function SmartGroupsSidebar({
   onGroupSelect,
@@ -242,7 +328,6 @@ export default function SmartGroupsSidebar({
   const [showEditFolder, setShowEditFolder] = useState(false)
   const [editingGroup, setEditingGroup] = useState<Group | null>(null)
   const [editingFolder, setEditingFolder] = useState<GroupFolder | null>(null)
-  const [dragFolderId, setDragFolderId] = useState<string | null>(null)
   const [dragGroup, setDragGroup] = useState<{ id: string; folderId: string } | null>(null)
   const [groupToDelete, setGroupToDelete] = useState<Group | null>(null)
   const [folderToDelete, setFolderToDelete] = useState<GroupFolder | null>(null)
@@ -463,21 +548,6 @@ export default function SmartGroupsSidebar({
     })
   }
 
-  const moveFolder = (sourceId: string, targetId: string) => {
-    if (sourceId === targetId) return
-    setFolders((prev) => {
-      const updated = [...prev]
-      const fromIdx = updated.findIndex((f) => f.id === sourceId)
-      const toIdx = updated.findIndex((f) => f.id === targetId)
-      if (fromIdx === -1 || toIdx === -1) return prev
-      const [moved] = updated.splice(fromIdx, 1)
-      updated.splice(toIdx, 0, moved)
-      saveFolderSettings(updated)
-      return updated
-    })
-    setDragFolderId(null)
-  }
-
   // @dnd-kit sensors: pointer needs a 5px move so a normal click still selects
   // the group, keyboard sensor enables accessible reordering.
   const sensors = useSensors(
@@ -485,21 +555,40 @@ export default function SmartGroupsSidebar({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
 
-  // Reorder groups within their folder. The folder doesn't change, so no DB
-  // call is needed — organizeFolders re-applies the saved groupOrder on reload.
-  const handleGroupDragEnd = (event: DragEndEvent) => {
+  // Single drag-end handler for the whole sidebar. Folder order persists by
+  // array index (saveFolderSettings); within-folder group order persists via
+  // each folder's groupOrder, both re-applied by organizeFolders on reload.
+  const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
     if (!over || active.id === over.id) return
-    setFolders((prev) => {
-      const updated = prev.map((folder) => {
-        const oldIndex = folder.groups.findIndex((g) => g.id === active.id)
-        const newIndex = folder.groups.findIndex((g) => g.id === over.id)
-        if (oldIndex === -1 || newIndex === -1) return folder
-        return { ...folder, groups: arrayMove(folder.groups, oldIndex, newIndex) }
+    const type = active.data.current?.type
+
+    if (type === "folder") {
+      setFolders((prev) => {
+        const oldIndex = prev.findIndex((f) => f.id === active.id)
+        const newIndex = prev.findIndex((f) => f.id === over.id)
+        if (oldIndex === -1 || newIndex === -1) return prev
+        const reordered = arrayMove(prev, oldIndex, newIndex)
+        saveFolderSettings(reordered)
+        return reordered
       })
-      saveFolderSettings(updated)
-      return updated
-    })
+      return
+    }
+
+    if (type === "group") {
+      // Only reorder when active and over groups live in the SAME folder; the
+      // folder containing both is the one where both indices resolve.
+      setFolders((prev) => {
+        const updated = prev.map((folder) => {
+          const oldIndex = folder.groups.findIndex((g) => g.id === active.id)
+          const newIndex = folder.groups.findIndex((g) => g.id === over.id)
+          if (oldIndex === -1 || newIndex === -1) return folder
+          return { ...folder, groups: arrayMove(folder.groups, oldIndex, newIndex) }
+        })
+        saveFolderSettings(updated)
+        return updated
+      })
+    }
   }
 
   const moveGroup = async (
@@ -641,79 +730,44 @@ export default function SmartGroupsSidebar({
             </div>
             <Badge variant="secondary" className="text-xs text-muted-foreground">{totalBuyerCount}</Badge>
           </div>
-          {filteredFolders.map((folder) => (
-            <div
-              key={folder.id}
-              className="space-y-1"
-              draggable
-              onDragStart={() => setDragFolderId(folder.id)}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={() => {
-                if (dragFolderId) moveFolder(dragFolderId, folder.id)
-                setDragFolderId(null)
-              }}
+          {/* One DndContext for the whole sidebar handles BOTH folder reorder
+              and within-folder group reorder (nesting DndContext is discouraged;
+              nesting SortableContext under a single DndContext is supported). */}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={filteredFolders.map((f) => f.id)}
+              strategy={verticalListSortingStrategy}
             >
-              <div className="group flex items-center justify-between">
-                <Button
-                  variant="ghost"
-                  className="flex-1 justify-start px-2 py-1.5 h-auto"
-                  onClick={() => toggleFolder(folder.id)}
-                  title={`${folder.expanded ? "Collapse" : "Expand"} ${folder.name}`}
-                >
-                  {folder.expanded ? (
-                    <ChevronDown className="h-4 w-4 mr-2" />
-                  ) : (
-                    <ChevronRight className="h-4 w-4 mr-2" />
-                  )}
-                  <Folder className="h-4 w-4 mr-2" />
-                  <span className="font-medium text-sm whitespace-nowrap">{folder.name}</span>
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity" title="Folder options">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      onClick={() => {
-                        setEditingFolder(folder)
-                        setFolderForm({ name: folder.name })
-                        setShowEditFolder(true)
-                      }}
-                    >
-                      <Edit className="mr-2 h-4 w-4" />
-                      Edit Folder
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setShowCreateGroup(true)}>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Add Group to Folder
-                    </DropdownMenuItem>
-                    {folder.id !== "priority-segments" &&
-                      folder.id !== "buyer-types" &&
-                      folder.id !== "custom-groups" && (
-                        <DropdownMenuItem onClick={() => setFolderToDelete(folder)} className="text-red-600 dark:text-red-400">
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Delete Folder
-                        </DropdownMenuItem>
-                      )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-
-              {folder.expanded && (
-                <div
-                  className="ml-6 space-y-1"
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={() => {
-                    if (dragGroup) moveGroup(dragGroup, { folderId: folder.id })
-                    setDragGroup(null)
+              {filteredFolders.map((folder) => (
+                <SortableFolder
+                  key={folder.id}
+                  folder={folder}
+                  onToggle={() => toggleFolder(folder.id)}
+                  onEdit={() => {
+                    setEditingFolder(folder)
+                    setFolderForm({ name: folder.name })
+                    setShowEditFolder(true)
                   }}
+                  onAddGroup={() => setShowCreateGroup(true)}
+                  onDelete={
+                    folder.id !== "priority-segments" &&
+                    folder.id !== "buyer-types" &&
+                    folder.id !== "custom-groups"
+                      ? () => setFolderToDelete(folder)
+                      : undefined
+                  }
                 >
-                  <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={handleGroupDragEnd}
+                  <div
+                    className="ml-6 space-y-1"
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => {
+                      if (dragGroup) moveGroup(dragGroup, { folderId: folder.id })
+                      setDragGroup(null)
+                    }}
                   >
                     <SortableContext
                       items={folder.groups.map((g) => g.id)}
@@ -723,6 +777,7 @@ export default function SmartGroupsSidebar({
                         <SortableGroupItem
                           key={group.id}
                           group={group}
+                          folderId={folder.id}
                           isSelected={selectedGroupId === group.id}
                           count={buyerCounts[group.id] || 0}
                           icon={getGroupIcon(group)}
@@ -742,11 +797,11 @@ export default function SmartGroupsSidebar({
                         />
                       ))}
                     </SortableContext>
-                  </DndContext>
-                </div>
-              )}
-            </div>
-          ))}
+                  </div>
+                </SortableFolder>
+              ))}
+            </SortableContext>
+          </DndContext>
         </div>
       </CardContent>
 
