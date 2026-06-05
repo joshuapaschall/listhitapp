@@ -33,6 +33,7 @@ import {
   Edit,
   Trash2,
   FolderPlus,
+  Tag,
 } from "lucide-react"
 
 const ICON_OPTIONS = [
@@ -179,7 +180,6 @@ export default function SmartGroupsSidebar({
     const baseFolders: GroupFolder[] = [
       { id: "priority-segments", name: "Priority Segments", groups: [], expanded: true },
       { id: "buyer-types", name: "Buyer Types", groups: [], expanded: true },
-      { id: "engagement-status", name: "Engagement Status", groups: [], expanded: false },
       { id: "custom-groups", name: "Custom Groups", groups: [], expanded: true },
     ]
 
@@ -439,7 +439,7 @@ export default function SmartGroupsSidebar({
     if (name.includes("cash")) return <DollarSign className="h-4 w-4" style={{ color }} />
     if (name.includes("wholesale")) return <Users className="h-4 w-4" style={{ color }} />
     if (name.includes("cold")) return <UserX className="h-4 w-4" style={{ color }} />
-    return <Users className="h-4 w-4" style={{ color }} />
+    return <Tag className="h-4 w-4" style={{ color }} />
   }
 
   const filteredFolders = folders
@@ -447,7 +447,7 @@ export default function SmartGroupsSidebar({
       ...folder,
       groups: folder.groups.filter((group) => group.name.toLowerCase().includes(searchQuery.toLowerCase())),
     }))
-    .filter((folder) => folder.groups.length > 0 || searchQuery === "")
+    .filter((folder) => folder.groups.length > 0)
 
   const groupTotal = Object.values(buyerCounts).reduce((a, b) => a + b, 0)
   const totalBuyerCount = typeof totalBuyers === "number" ? totalBuyers : groupTotal
@@ -558,7 +558,6 @@ export default function SmartGroupsSidebar({
                     </DropdownMenuItem>
                     {folder.id !== "priority-segments" &&
                       folder.id !== "buyer-types" &&
-                      folder.id !== "engagement-status" &&
                       folder.id !== "custom-groups" && (
                         <DropdownMenuItem onClick={() => setFolderToDelete(folder)} className="text-red-600 dark:text-red-400">
                           <Trash2 className="mr-2 h-4 w-4" />
@@ -595,12 +594,12 @@ export default function SmartGroupsSidebar({
                         setDragGroup(null)
                       }}
                     >
-                      <div className="flex items-center space-x-2 flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
                         {getGroupIcon(group)}
-                        <span className="text-sm whitespace-nowrap">{group.name}</span>
+                        <span className="text-sm min-w-0 flex-1 truncate" title={group.name}>{group.name}</span>
                       </div>
                       <div className="flex items-center space-x-1">
-                        <Badge variant="secondary" className="text-xs text-muted-foreground">
+                        <Badge variant="secondary" className="text-xs text-muted-foreground shrink-0">
                           {buyerCounts[group.id] || 0}
                         </Badge>
                         <DropdownMenu>
