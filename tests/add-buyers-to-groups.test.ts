@@ -8,18 +8,15 @@ vi.mock("@/lib/supabase", () => {
     from: (table: string) => {
       if (table === "buyer_groups") {
         return {
-          select: () => ({
-            in: (col1: string, vals1: any[]) => ({
-              in: (col2: string, vals2: any[]) => {
-                const data = buyerGroups.filter(
-                  (bg) => vals1.includes(bg[col1]) && vals2.includes(bg[col2]),
-                )
-                return Promise.resolve({ data, error: null })
-              },
-            }),
-          }),
-          insert: (rows: any[]) => {
-            buyerGroups.push(...rows)
+          // Models upsert(onConflict: "buyer_id,group_id", ignoreDuplicates: true):
+          // rows that collide with an existing (buyer_id, group_id) pair are skipped.
+          upsert: (rows: any[], _opts?: any) => {
+            for (const r of rows) {
+              const exists = buyerGroups.some(
+                (bg) => bg.buyer_id === r.buyer_id && bg.group_id === r.group_id,
+              )
+              if (!exists) buyerGroups.push(r)
+            }
             return Promise.resolve({ error: null })
           },
         }

@@ -175,14 +175,60 @@ export async function importBuyersFromCsv(
 
   log("import", "Buyers to insert:", buyersToInsert.slice(0, 2))
 
+  // Collapse to at most one record per person within this single import. A CSV can
+  // list the same person across multiple rows (e.g. one row per geotag); inserting
+  // each separately violates the buyers unique constraint and aborts the whole
+  // import. Merge duplicates in memory instead, keying on normalized email AND
+  // normalized phone so a match on either field unifies the records.
+  const ARRAY_FIELDS = ["tags", "locations", "property_type"] as const
+  const collapsedBuyers: Record<string, any>[] = []
+  const collapseMap: Record<string, Record<string, any>> = {}
+
+  for (const row of buyersToInsert) {
+    const email = normalizeEmail(row.email)
+    const phone = normalizePhone(row.phone)
+    const kept =
+      (email && collapseMap["e:" + email]) ||
+      (phone && collapseMap["p:" + phone]) ||
+      null
+
+    if (kept) {
+      // Union the multi-value fields so no geotags/tags are lost on merge.
+      for (const field of ARRAY_FIELDS) {
+        if (row[field] != null) {
+          kept[field] = mergeUnique(kept[field], row[field] as any[])
+        }
+      }
+      // Fill any empty scalar field on the kept record from this row.
+      for (const [key, val] of Object.entries(row)) {
+        if ((ARRAY_FIELDS as readonly string[]).includes(key)) continue
+        if (val === null || val === undefined || val === "") continue
+        const current = kept[key]
+        if (current === null || current === undefined || current === "") {
+          kept[key] = val
+        }
+      }
+    } else {
+      collapsedBuyers.push(row)
+    }
+
+    // Register both the email and phone of the kept record. The kept record may
+    // have just gained an email/phone from a merged row, so re-register each time.
+    const target = kept || row
+    const tEmail = normalizeEmail(target.email)
+    const tPhone = normalizePhone(target.phone)
+    if (tEmail) collapseMap["e:" + tEmail] = target
+    if (tPhone) collapseMap["p:" + tPhone] = target
+  }
+
   const BATCH_SIZE = 50
   let processedCount = 0
   const insertedIds: string[] = []
   let totalInserted = 0
   let totalUpdated = 0
 
-  for (let i = 0; i < buyersToInsert.length; i += BATCH_SIZE) {
-    const batch = buyersToInsert.slice(i, i + BATCH_SIZE)
+  for (let i = 0; i < collapsedBuyers.length; i += BATCH_SIZE) {
+    const batch = collapsedBuyers.slice(i, i + BATCH_SIZE)
 
     const emails = Array.from(new Set(batch.map((b) => b.email).filter(Boolean)))
     const phones = Array.from(new Set(batch.map((b) => b.phone).filter(Boolean)))
@@ -282,7 +328,7 @@ export async function importBuyersFromCsv(
     }
 
     processedCount += batch.length
-    if (onProgress) onProgress(Math.round((processedCount / buyersToInsert.length) * 100))
+    if (onProgress) onProgress(Math.round((processedCount / collapsedBuyers.length) * 100))
   }
 
   if (groupIds.length && insertedIds.length) {
