@@ -1,6 +1,7 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useMemo } from "react"
+import { useQuery } from "@tanstack/react-query"
 import { supabase } from "@/lib/supabase"
 import { isPermissionKey, type PermissionKey } from "@/lib/permissions/keys"
 import { useSession } from "./use-session"
@@ -13,81 +14,64 @@ type ProfileRow = {
   role: string | null
 }
 
+type PermissionsData = {
+  role: string
+  granted: PermissionKey[]
+}
+
 export function usePermissions() {
   const { user, loading: sessionLoading } = useSession()
-  const [role, setRole] = useState("user")
-  const [granted, setGranted] = useState<Set<PermissionKey>>(() => new Set())
-  const [permissionsLoading, setPermissionsLoading] = useState(true)
+  const userId = user?.id
+  const enabled = !sessionLoading && !!userId
 
-  useEffect(() => {
-    let active = true
+  // React Query backs the fetch so every <Can> block and usePermissions()
+  // caller on a page shares one cached, deduped result instead of each firing
+  // its own pair of Supabase queries on mount. Keyed by user.id (not the user
+  // object) so a token refresh returning an identical user does not refetch.
+  const query = useQuery<PermissionsData>({
+    queryKey: ["permissions", userId],
+    enabled,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const [profileResult, permissionsResult] = await Promise.all([
+        supabase.from("profiles").select("role").eq("id", userId!).maybeSingle<ProfileRow>(),
+        supabase
+          .from("permissions")
+          .select("permission_key")
+          .eq("user_id", userId!)
+          .eq("granted", true),
+      ])
 
-    if (sessionLoading) {
-      setPermissionsLoading(true)
-      return () => {
-        active = false
-      }
-    }
-
-    if (!user) {
-      setRole("user")
-      setGranted(new Set())
-      setPermissionsLoading(false)
-      return () => {
-        active = false
-      }
-    }
-
-    setPermissionsLoading(true)
-
-    Promise.all([
-      supabase.from("profiles").select("role").eq("id", user.id).maybeSingle<ProfileRow>(),
-      supabase
-        .from("permissions")
-        .select("permission_key")
-        .eq("user_id", user.id)
-        .eq("granted", true),
-    ])
-      .then(([profileResult, permissionsResult]) => {
-        if (!active) return
-
-        const nextGranted = new Set<PermissionKey>()
-        for (const row of (permissionsResult.data ?? []) as PermissionRow[]) {
-          if (row.permission_key && isPermissionKey(row.permission_key)) {
-            nextGranted.add(row.permission_key)
-          }
+      const grantedKeys: PermissionKey[] = []
+      for (const row of (permissionsResult.data ?? []) as PermissionRow[]) {
+        if (row.permission_key && isPermissionKey(row.permission_key)) {
+          grantedKeys.push(row.permission_key)
         }
+      }
 
-        setRole(profileResult.data?.role ?? "user")
-        setGranted(nextGranted)
-      })
-      .catch((error) => {
-        console.error("Permission lookup failed", error)
-        if (!active) return
-        setRole("user")
-        setGranted(new Set())
-      })
-      .finally(() => {
-        if (active) setPermissionsLoading(false)
-      })
+      return { role: profileResult.data?.role ?? "user", granted: grantedKeys }
+    },
+  })
 
-    return () => {
-      active = false
-    }
-    // Depend on the user id (not the object): a new-but-identical user
-    // reference from a token refresh must not re-run the permission fetch.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionLoading, user?.id])
-
-  const loading = sessionLoading || permissionsLoading
+  const role = query.data?.role ?? "user"
   const isAdmin = role === "admin" || role === "owner"
+
+  const granted = useMemo(
+    () => new Set<PermissionKey>(query.data?.granted ?? []),
+    [query.data],
+  )
+
+  // Loading while the session resolves, or while an enabled query is still
+  // fetching its first result. With no user the query stays disabled, so this
+  // settles to false once the session has loaded.
+  const loading = sessionLoading || (enabled && query.isLoading)
 
   const can = useCallback(
     (key: PermissionKey) => {
       if (loading) return false
       return isAdmin || granted.has(key)
     },
-    [granted, isAdmin, loading]
+    [granted, isAdmin, loading],
   )
 
   return useMemo(
@@ -97,6 +81,6 @@ export function usePermissions() {
       can,
       isAdmin,
     }),
-    [can, isAdmin, loading, role]
+    [can, isAdmin, loading, role],
   )
 }
