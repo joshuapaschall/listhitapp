@@ -74,11 +74,15 @@ describe("importBuyersFromCsv", () => {
           return { ok: true, status: 200, json: async () => ({ insertedIds: recs.map((r: any) => r.id) }) }
         }
         if (body.updates) {
+          const updatedIds: string[] = []
           for (const u of body.updates) {
             const idx = buyers.findIndex((b) => b.id === u.id)
-            if (idx !== -1) buyers[idx] = { ...buyers[idx], ...u.data }
+            if (idx !== -1) {
+              buyers[idx] = { ...buyers[idx], ...u.data }
+              updatedIds.push(u.id)
+            }
           }
-          return { ok: true, status: 200, json: async () => ({}) }
+          return { ok: true, status: 200, json: async () => ({ updatedIds }) }
         }
       }
       return { ok: true, status: 200, json: async () => ({}) }
