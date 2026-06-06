@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requirePermission } from "@/lib/permissions/server"
 import { requireOrgContext } from "@/lib/auth/org-context"
 import { supabaseAdmin } from "@/lib/supabase"
-import { normalizePhone } from "@/lib/dedup-utils"
+import { normalizePhone, hasContactInfo } from "@/lib/dedup-utils"
 import { suppressBuyerSms } from "@/lib/sms/suppress"
 
 type ImportUpdate = {
@@ -31,14 +31,15 @@ export async function POST(req: NextRequest) {
 
       if (buyers.length) {
         // Strip any client-supplied org_id and stamp the server-resolved org on every row.
-        const rows = buyers.map((buyer: Record<string, any>) => {
-          const { org_id: _ignoredOrgId, ...rest } = buyer ?? {}
-          return { ...rest, org_id: orgId }
-        })
-        const { data, error } = await supabase
-          .from("buyers")
-          .insert(rows)
-          .select("id, phone")
+        const rows = buyers
+          .map((buyer: Record<string, any>) => {
+            const { org_id: _ignoredOrgId, ...rest } = buyer ?? {}
+            return { ...rest, org_id: orgId }
+          })
+          .filter((row) => hasContactInfo(row as any))
+        const { data, error } = rows.length
+          ? await supabase.from("buyers").insert(rows).select("id, phone")
+          : { data: [] as { id: string }[], error: null }
 
         if (error) {
           return NextResponse.json({ error: error.message }, { status: 500 })

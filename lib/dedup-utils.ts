@@ -19,6 +19,19 @@ export function normalizePhone(phone?: string | number | null): string | null {
   return digits || null;
 }
 
+export function hasContactInfo(b: {
+  email?: string | null
+  phone?: string | null
+  phone2?: string | null
+  phone3?: string | null
+}): boolean {
+  const email = (b.email ?? "").trim()
+  const phoneDigits = [b.phone, b.phone2, b.phone3]
+    .map((p) => (p ?? "").replace(/[^0-9]/g, ""))
+    .join("")
+  return email.length > 0 || phoneDigits.length > 0
+}
+
 export function formatPhoneE164(phone?: string | number | null): string | null {
   if (phone == null) return null;
   const raw = String(phone).trim();

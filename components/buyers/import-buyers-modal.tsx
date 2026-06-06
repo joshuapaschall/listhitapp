@@ -30,7 +30,7 @@ import { createLogger } from "@/lib/logger"
 
 const log = createLogger("import-buyers-modal")
 
-import { normalizeEmail, normalizePhone, mergeUnique } from "@/lib/dedup-utils"
+import { normalizeEmail, normalizePhone, mergeUnique, hasContactInfo } from "@/lib/dedup-utils"
 import TagSelector from "./tag-selector"
 import { PROPERTY_TYPES } from "@/lib/constant"
 import LocationSelector from "./location-selector"
@@ -95,7 +95,7 @@ export async function importBuyersFromCsv(
   extraPropertyTypes: string[],
   groupIds: string[],
   onProgress?: (pct: number) => void,
-): Promise<{ inserted: number; updated: number }> {
+): Promise<{ inserted: number; updated: number; skipped: number }> {
   log("import", "Starting import with mapping:", mapping)
 
   const { data: existingTags, error: tagFetchError } = await supabase
@@ -225,14 +225,18 @@ export async function importBuyersFromCsv(
     if (tPhone) collapseMap["p:" + tPhone] = target
   }
 
+  // Contactability gate: never import a buyer with neither an email nor a phone.
+  const contactableBuyers = collapsedBuyers.filter(hasContactInfo)
+  const skippedNoContact = collapsedBuyers.length - contactableBuyers.length
+
   const BATCH_SIZE = 50
   let processedCount = 0
   const insertedIds: string[] = []
   let totalInserted = 0
   let totalUpdated = 0
 
-  for (let i = 0; i < collapsedBuyers.length; i += BATCH_SIZE) {
-    const batch = collapsedBuyers.slice(i, i + BATCH_SIZE)
+  for (let i = 0; i < contactableBuyers.length; i += BATCH_SIZE) {
+    const batch = contactableBuyers.slice(i, i + BATCH_SIZE)
 
     const emails = Array.from(new Set(batch.map((b) => b.email).filter(Boolean)))
     const phones = Array.from(new Set(batch.map((b) => b.phone).filter(Boolean)))
@@ -334,14 +338,14 @@ export async function importBuyersFromCsv(
     }
 
     processedCount += batch.length
-    if (onProgress) onProgress(Math.round((processedCount / collapsedBuyers.length) * 100))
+    if (onProgress) onProgress(Math.round((processedCount / contactableBuyers.length) * 100))
   }
 
   if (groupIds.length && insertedIds.length) {
     await addBuyersToGroups(insertedIds, groupIds)
   }
 
-  return { inserted: totalInserted, updated: totalUpdated }
+  return { inserted: totalInserted, updated: totalUpdated, skipped: skippedNoContact }
 }
 
 interface ImportBuyersModalProps {
@@ -364,7 +368,7 @@ export default function ImportBuyersModal({ onSuccess }: ImportBuyersModalProps)
   const [importing, setImporting] = useState(false)
   const [importProgress, setImportProgress] = useState(0)
   const [error, setError] = useState("")
-  const [importResult, setImportResult] = useState<{ inserted: number; updated: number }>({ inserted: 0, updated: 0 })
+  const [importResult, setImportResult] = useState<{ inserted: number; updated: number; skipped: number }>({ inserted: 0, updated: 0, skipped: 0 })
   const fileInputRef = useRef<HTMLInputElement>(null)
 
 
@@ -782,6 +786,7 @@ export default function ImportBuyersModal({ onSuccess }: ImportBuyersModalProps)
                 <h3 className="text-base font-medium text-foreground">Import complete</h3>
                 <p className="text-sm text-muted-foreground">
                   {importResult.inserted} new buyers created · {importResult.updated} existing buyers updated.
+                  {importResult.skipped > 0 && ` · ${importResult.skipped} skipped (no email or phone)`}
                 </p>
               </div>
             )}
