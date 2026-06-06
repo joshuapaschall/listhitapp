@@ -120,7 +120,10 @@
     @apply px-4 py-3 border border-border text-foreground hover:bg-muted active:scale-95 active:shadow-none transition;
   }
   .chip {
-    @apply rounded-full px-2 py-0.5 text-xs font-medium transition-opacity duration-150;
+    @apply inline-flex items-center gap-1 rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground transition-colors duration-150;
+  }
+  .chip-exclude {
+    @apply border-destructive/30 bg-destructive/10 text-destructive;
   }
   .chip-blue {
     @apply bg-muted text-muted-foreground;
