@@ -677,7 +677,7 @@ export default function SmartGroupsSidebar({
   const activeGroups = groups.length
 
   return (
-    <Card className="sidebar-panel card-shadow sidebar-dark w-64 h-full flex flex-col">
+    <Card className="sidebar-panel card-shadow sidebar-dark w-72 h-full flex flex-col">
       <CardHeader className="pb-3 flex-shrink-0">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg">Smart groups</CardTitle>

@@ -1332,7 +1332,7 @@ function BuyersPageContent() {
             {/* Header row */}
             <div
               className="grid items-center gap-2 sticky top-0 z-10 border-b border-border bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground"
-              style={{ gridTemplateColumns: "34px minmax(0,1.6fr) minmax(0,1fr) minmax(0,1.3fr) minmax(0,1fr) 72px 132px" }}
+              style={{ gridTemplateColumns: "34px minmax(0,2fr) minmax(0,1fr) minmax(0,1.2fr) minmax(0,0.9fr) 92px 132px" }}
             >
               <div>
                 <Checkbox
@@ -1345,7 +1345,7 @@ function BuyersPageContent() {
               <div>Tags</div>
               <div>Locations</div>
               <div>Property types</div>
-              <div>Created</div>
+              <div className="flex items-center self-stretch border-l border-border pl-3">Created</div>
               <div className="text-right">Actions</div>
             </div>
 
@@ -1363,7 +1363,7 @@ function BuyersPageContent() {
                 <div
                   key={buyer.id}
                   className={`grid items-center gap-2 border-b border-border px-3 py-2 hover:bg-muted/40 ${selectedBuyers.includes(buyer.id) ? "bg-brand/5" : ""}`}
-                  style={{ gridTemplateColumns: "34px minmax(0,1.6fr) minmax(0,1fr) minmax(0,1.3fr) minmax(0,1fr) 72px 132px" }}
+                  style={{ gridTemplateColumns: "34px minmax(0,2fr) minmax(0,1fr) minmax(0,1.2fr) minmax(0,0.9fr) 92px 132px" }}
                 >
                   <div>
                     <Checkbox
@@ -1480,7 +1480,7 @@ function BuyersPageContent() {
                   </div>
 
                   {/* Created */}
-                  <div className="text-xs text-muted-foreground">
+                  <div className="flex items-center self-stretch border-l border-border pl-3 text-xs text-muted-foreground">
                     {buyer.created_at
                       ? new Date(buyer.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })
                       : "—"}
