@@ -935,8 +935,8 @@ function BuyersPageContent() {
         className={`
         ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
         xl:translate-x-0 fixed xl:static inset-y-0 left-0 z-50
-        w-[15rem] border-r bg-background transition-all duration-300 ease-in-out shrink-0
-        ${groupsCollapsed ? "xl:w-0 xl:overflow-hidden xl:border-0 xl:opacity-0 xl:p-0" : "xl:w-64"}
+        w-72 border-r bg-background transition-all duration-300 ease-in-out shrink-0
+        ${groupsCollapsed ? "xl:w-0 xl:overflow-hidden xl:border-0 xl:opacity-0 xl:p-0" : "xl:w-72"}
       `}
       >
         <SmartGroupsSidebar
@@ -1198,7 +1198,7 @@ function BuyersPageContent() {
               </div>
 
               {/* Row B — Location / Include / Exclude / Property Type on one row */}
-              <div className="flex gap-2">
+              <div className="flex gap-2 relative z-20">
                 <div className="flex-1 min-w-0">
                   <LocationFilterSelector
                     selectedLocations={filters.selectedLocations || []}

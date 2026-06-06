@@ -55,7 +55,7 @@ export default function LocationFilterSelector({
             className="border-0 focus:ring-0 p-0 h-8"
           />
           {open && searchValue.length > 1 && (
-            <div className="absolute left-0 top-full z-10 w-full bg-popover border rounded-md shadow-md mt-1">
+            <div className="absolute left-0 top-full z-50 w-full bg-popover border rounded-md shadow-md mt-1">
               <LocationSuggestionList
                 query={searchValue}
                 suggestions={suggestions}
