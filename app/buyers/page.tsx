@@ -15,7 +15,6 @@ import { supabase } from "@/lib/supabase"
 import type { Buyer, Tag } from "@/lib/supabase"
 import { createLogger } from "@/lib/logger"
 import { filterStateToDefinition } from "@/lib/segments/filter-mapping"
-import { encodeAudienceParam } from "@/lib/segments/audience-handoff"
 import { applyAttributeConditions } from "@/lib/segments/apply-filters"
 import type { AttributeCondition } from "@/lib/segments/types"
 import { BuyerService } from "@/services/buyer-service"
@@ -96,6 +95,63 @@ interface FilterState {
   propertyType: string
 }
 
+const applyBuyerFilterPredicates = (query: any, filters: FilterState) => {
+  if (filters.search) {
+    const encoded = encodeURIComponent(filters.search)
+    query = query.or(
+      `fname.ilike.%${encoded}%,lname.ilike.%${encoded}%,email.ilike.%${encoded}%,phone.ilike.%${encoded}%`,
+    )
+  }
+  const { conditions } = filterStateToDefinition(filters).definition
+  query = applyAttributeConditions(query, conditions as AttributeCondition[])
+  if (filters.canReceiveEmail === "yes") {
+    query = query.eq("can_receive_email", true).not("email_norm", "is", null)
+  } else if (filters.canReceiveEmail === "no") {
+    query = query.eq("can_receive_email", false)
+  }
+  if (filters.canReceiveSMS === "yes") {
+    query = query.eq("can_receive_sms", true).not("phone_norm", "is", null)
+  } else if (filters.canReceiveSMS === "no") {
+    query = query.eq("can_receive_sms", false)
+  }
+  return query
+}
+
+const applyEmailEligibility = (query: any) =>
+  query
+    .not("email_norm", "is", null)
+    .not("can_receive_email", "is", false)
+    .not("email_suppressed", "is", true)
+    .not("is_unsubscribed", "is", true)
+    .is("blocked_at", null)
+
+const applySmsEligibility = (query: any) =>
+  query
+    .not("phone_norm", "is", null)
+    .not("can_receive_sms", "is", false)
+    .not("sms_suppressed", "is", true)
+    .is("blocked_at", null)
+
+const fetchChannelCounts = async (filters: FilterState, groupId?: string) => {
+  const base = () => {
+    let q: any = supabase.from("buyers")
+    if (groupId) {
+      q = q
+        .select("id, buyer_groups!inner(group_id)", { count: "exact", head: true })
+        .eq("buyer_groups.group_id", groupId)
+    } else {
+      q = q.select("id", { count: "exact", head: true })
+    }
+    q = q.is("deleted_at", null)
+    return applyBuyerFilterPredicates(q, filters)
+  }
+  const [emailRes, smsRes] = await Promise.all([
+    applyEmailEligibility(base()),
+    applySmsEligibility(base()),
+  ])
+  return { emailable: emailRes.count || 0, textable: smsRes.count || 0 }
+}
+
 // Server-side filtering and pagination
 const fetchBuyers = async (
   page: number,
@@ -120,32 +176,7 @@ const fetchBuyers = async (
     .range((page - 1) * perPage, page * perPage - 1)
     .order("created_at", { ascending: false })
 
-  // Apply server-side filters
-  if (filters.search) {
-    const encoded = encodeURIComponent(filters.search)
-    query = query.or(
-      `fname.ilike.%${encoded}%,lname.ilike.%${encoded}%,email.ilike.%${encoded}%,phone.ilike.%${encoded}%`,
-    )
-  }
-
-  // Attribute predicates flow through the one shared engine primitive
-  // (filterStateToDefinition → applyAttributeConditions) so the Buyers list, the
-  // segment engine, and the campaign/buyer services apply IDENTICAL filters.
-  // Tags → contains_all (has ALL), created range → inclusive between (gte+lte).
-  const { conditions: attributeConditions } = filterStateToDefinition(filters).definition
-  query = applyAttributeConditions(query, attributeConditions as AttributeCondition[])
-
-  if (filters.canReceiveEmail === "yes") {
-    query = query.eq("can_receive_email", true).not("email_norm", "is", null)
-  } else if (filters.canReceiveEmail === "no") {
-    query = query.eq("can_receive_email", false)
-  }
-
-  if (filters.canReceiveSMS === "yes") {
-    query = query.eq("can_receive_sms", true).not("phone_norm", "is", null)
-  } else if (filters.canReceiveSMS === "no") {
-    query = query.eq("can_receive_sms", false)
-  }
+  query = applyBuyerFilterPredicates(query, filters)
 
   log("fetchBuyers", "Executing database query...")
   const { data, error, count } = await query
@@ -185,6 +216,7 @@ const fetchTags = async (): Promise<Tag[]> => {
 const fetchBuyerIds = async (
   filters: FilterState,
   groupId?: string,
+  channel?: "email" | "sms",
 ) => {
   let query: any = supabase.from("buyers")
 
@@ -197,32 +229,10 @@ const fetchBuyerIds = async (
   }
 
   query = query.is("deleted_at", null)
-  // Apply same filters as fetchBuyers
-  if (filters.search) {
-    const encoded = encodeURIComponent(filters.search)
-    query = query.or(
-      `fname.ilike.%${encoded}%,lname.ilike.%${encoded}%,email.ilike.%${encoded}%,phone.ilike.%${encoded}%`,
-    )
-  }
+  query = applyBuyerFilterPredicates(query, filters)
 
-  // Attribute predicates flow through the one shared engine primitive
-  // (filterStateToDefinition → applyAttributeConditions) so the Buyers list, the
-  // segment engine, and the campaign/buyer services apply IDENTICAL filters.
-  // Tags → contains_all (has ALL), created range → inclusive between (gte+lte).
-  const { conditions: attributeConditions } = filterStateToDefinition(filters).definition
-  query = applyAttributeConditions(query, attributeConditions as AttributeCondition[])
-
-  if (filters.canReceiveEmail === "yes") {
-    query = query.eq("can_receive_email", true).not("email_norm", "is", null)
-  } else if (filters.canReceiveEmail === "no") {
-    query = query.eq("can_receive_email", false)
-  }
-
-  if (filters.canReceiveSMS === "yes") {
-    query = query.eq("can_receive_sms", true).not("phone_norm", "is", null)
-  } else if (filters.canReceiveSMS === "no") {
-    query = query.eq("can_receive_sms", false)
-  }
+  if (channel === "email") query = applyEmailEligibility(query)
+  else if (channel === "sms") query = applySmsEligibility(query)
 
   const { data, error } = await query
 
@@ -303,6 +313,22 @@ function BuyersPageContent() {
   const debouncedSearch = useDebounce(filters.search)
   const canViewBuyers = isAdmin || can("buyers.view")
 
+  const filtersActive = Boolean(
+    filters.search ||
+      filters.selectedTags?.length ||
+      filters.excludeTags?.length ||
+      filters.selectedLocations?.length ||
+      filters.minScore ||
+      filters.maxScore ||
+      filters.vip !== "any" ||
+      filters.vetted !== "any" ||
+      filters.canReceiveEmail !== "any" ||
+      filters.canReceiveSMS !== "any" ||
+      filters.createdAfter ||
+      filters.createdBefore ||
+      (filters.propertyType && filters.propertyType !== "any")
+  )
+
   // React Query for buyers with caching
   const {
     data: buyersData,
@@ -365,6 +391,21 @@ function BuyersPageContent() {
     staleTime: 30 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
     enabled: !permissionsLoading && canViewBuyers,
+  })
+
+  const { data: channelCounts = { emailable: 0, textable: 0 } } = useQuery({
+    queryKey: [
+      "channelCounts",
+      { ...filters, search: debouncedSearch },
+      selectedGroupId,
+    ],
+    queryFn: () =>
+      fetchChannelCounts({ ...filters, search: debouncedSearch }, selectedGroupId),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,
+    enabled: !permissionsLoading && canViewBuyers && filtersActive,
   })
 
   const buyers = useMemo(() => buyersData?.buyers || [], [buyersData])
@@ -761,26 +802,11 @@ function BuyersPageContent() {
     setSelectedGroupId("")
   }
 
-  const filtersActive = Boolean(
-    filters.search ||
-      filters.selectedTags?.length ||
-      filters.excludeTags?.length ||
-      filters.selectedLocations?.length ||
-      filters.minScore ||
-      filters.maxScore ||
-      filters.vip !== "any" ||
-      filters.vetted !== "any" ||
-      filters.canReceiveEmail !== "any" ||
-      filters.canReceiveSMS !== "any" ||
-      filters.createdAfter ||
-      filters.createdBefore ||
-      (filters.propertyType && filters.propertyType !== "any")
-  )
-
   const handleCreateCampaignForFilteredBuyers = async (channel: "email" | "sms") => {
     const ids = await fetchBuyerIds(
       { ...filters, search: debouncedSearch },
       selectedGroupId,
+      channel,
     )
     saveAudienceSnapshot({
       createdAt: new Date().toISOString(),
@@ -840,10 +866,6 @@ function BuyersPageContent() {
     } finally {
       setSavingSegment(false)
     }
-  }
-
-  const handleUseInNewCampaign = () => {
-    router.push(`/campaigns/new?audience=${encodeAudienceParam(filterMapping.definition)}`)
   }
 
   const formatName = (buyer: Buyer) => {
@@ -956,47 +978,43 @@ function BuyersPageContent() {
                   {totalCount} results
                 </Badge>
                 {filtersActive && (
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="brand"
-                      size="sm"
-                      className="h-9"
-                      disabled={totalCount === 0}
-                      title={totalCount === 0 ? "No buyers match current filters" : undefined}
-                      onClick={() => handleCreateCampaignForFilteredBuyers("email")}
-                    >
-                      <Mail className="h-4 w-4" />
-                      Email these {totalCount}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-9"
-                      disabled={totalCount === 0}
-                      title={totalCount === 0 ? "No buyers match current filters" : undefined}
-                      onClick={() => handleCreateCampaignForFilteredBuyers("sms")}
-                    >
-                      <MessageSquare className="h-4 w-4" />
-                      Text these {totalCount}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-9"
-                      onClick={() => setSaveSegmentOpen(true)}
-                      aria-label="Save current filter as a reusable segment"
-                    >
-                      Save as segment
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-9"
-                      onClick={handleUseInNewCampaign}
-                      aria-label="Use current filter as the audience for a new campaign"
-                    >
-                      Use in new campaign
-                    </Button>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="brand"
+                        size="sm"
+                        className="h-9"
+                        disabled={channelCounts.emailable === 0}
+                        title={channelCounts.emailable === 0 ? "No buyers in this filter have a valid email" : undefined}
+                        onClick={() => handleCreateCampaignForFilteredBuyers("email")}
+                      >
+                        <Mail className="h-4 w-4" />
+                        Email these {channelCounts.emailable.toLocaleString()}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-9"
+                        disabled={channelCounts.textable === 0}
+                        title={channelCounts.textable === 0 ? "No buyers in this filter have a textable number" : undefined}
+                        onClick={() => handleCreateCampaignForFilteredBuyers("sms")}
+                      >
+                        <MessageSquare className="h-4 w-4" />
+                        Text these {channelCounts.textable.toLocaleString()}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-9"
+                        onClick={() => setSaveSegmentOpen(true)}
+                        aria-label="Save current filter as a reusable segment"
+                      >
+                        Save as segment
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Of {totalCount.toLocaleString()} matched · {channelCounts.emailable.toLocaleString()} have a valid email · {channelCounts.textable.toLocaleString()} textable (opt-outs &amp; DNC excluded)
+                    </p>
                   </div>
                 )}
                 {totalCount > itemsPerPage && (
