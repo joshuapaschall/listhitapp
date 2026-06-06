@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requirePermission } from "@/lib/permissions/server"
 import { requireOrgContext } from "@/lib/auth/org-context"
+import { hasContactInfo } from "@/lib/dedup-utils"
 
 export async function POST(req: NextRequest) {
   const { user, orgId, supabase } = await requireOrgContext()
@@ -17,6 +18,13 @@ export async function POST(req: NextRequest) {
 
     // Strip any client-supplied org_id so the server-resolved org cannot be spoofed.
     const { org_id: _ignoredOrgId, ...rest } = payload as Record<string, unknown>
+
+    if (!hasContactInfo(rest as any)) {
+      return NextResponse.json(
+        { error: "A buyer must have at least one email or phone number." },
+        { status: 400 },
+      )
+    }
 
     const { data, error } = await supabase
       .from("buyers")

@@ -97,7 +97,7 @@ describe("importBuyersFromCsv", () => {
     const rows = [{ Email: "john@example.com", Tags: "VIP" }]
     const mapping = { email: "Email", tags: "Tags" }
     const result = await importBuyersFromCsv(rows, mapping, ["oldtag"], [], [], ["g1"])
-    expect(result).toEqual({ inserted: 1, updated: 0 })
+    expect(result).toEqual({ inserted: 1, updated: 0, skipped: 0 })
     expect(buyers[0].email).toBe("john@example.com")
     expect(buyers[0].tags).toEqual(["VIP", "oldtag"])
     expect(buyerGroups).toEqual([{ buyer_id: buyers[0].id, group_id: "g1" }])
@@ -108,7 +108,7 @@ describe("importBuyersFromCsv", () => {
     const rows = [{ Email: "jane@example.com", Tags: "VIP" }]
     const mapping = { email: "Email", tags: "Tags" }
     const result = await importBuyersFromCsv(rows, mapping, ["oldtag"], [], [], ["g2"])
-    expect(result).toEqual({ inserted: 0, updated: 1 })
+    expect(result).toEqual({ inserted: 0, updated: 1, skipped: 0 })
     expect(buyers[0].tags.sort()).toEqual(["existing", "VIP", "oldtag"].sort())
     expect(buyerGroups).toEqual([{ buyer_id: "b1", group_id: "g2" }])
   })

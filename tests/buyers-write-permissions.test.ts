@@ -157,7 +157,7 @@ describe("buyers write permission gates", () => {
       const { POST } = await import("../app/api/buyers/route")
       const req = new NextRequest("http://test/api/buyers", {
         method: "POST",
-        body: JSON.stringify({ fname: "Jane", org_id: "attacker-org" }),
+        body: JSON.stringify({ fname: "Jane", email: "jane@example.com", org_id: "attacker-org" }),
       })
       const res = await POST(req)
 
@@ -244,7 +244,7 @@ describe("buyers write permission gates", () => {
       const { POST } = await import("../app/api/buyers/import/route")
       const req = new NextRequest("http://test/api/buyers/import", {
         method: "POST",
-        body: JSON.stringify({ buyers: [{ fname: "Imported" }] }),
+        body: JSON.stringify({ buyers: [{ fname: "Imported", email: "imported@example.com" }] }),
       })
       return POST(req)
     }
@@ -264,7 +264,7 @@ describe("buyers write permission gates", () => {
 
       expect(res.status).toBe(200)
       expect(body.insertedIds).toEqual(["buyer-1"])
-      expect(state.insertedBuyers).toEqual([{ id: "buyer-1", fname: "Imported", org_id: "org-1" }])
+      expect(state.insertedBuyers).toEqual([{ id: "buyer-1", fname: "Imported", email: "imported@example.com", org_id: "org-1" }])
     })
 
     test("allows users granted buyers.import to import buyers", async () => {
@@ -285,8 +285,8 @@ describe("buyers write permission gates", () => {
         method: "POST",
         body: JSON.stringify({
           buyers: [
-            { fname: "A", org_id: "attacker-org" },
-            { fname: "B" },
+            { fname: "A", email: "a@example.com", org_id: "attacker-org" },
+            { fname: "B", phone: "5551234567" },
           ],
         }),
       })
