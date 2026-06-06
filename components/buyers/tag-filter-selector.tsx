@@ -2,12 +2,16 @@
 
 import type React from "react"
 import { useState } from "react"
-import { Check, ChevronsUpDown, X } from "lucide-react"
+import { Check, X, Tag as TagIcon, Ban } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Badge } from "@/components/ui/badge"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
 
 interface Tag {
   id: string
@@ -27,13 +31,16 @@ export default function TagFilterSelector({
   availableTags,
   selectedTags,
   onChange,
-  placeholder = "Select tags...",
+  placeholder = "Search tags...",
   variant = "include",
 }: TagFilterSelectorProps) {
-  const [open, setOpen] = useState(false)
   const [searchValue, setSearchValue] = useState("")
+  const [open, setOpen] = useState(false)
+  const isExclude = variant === "exclude"
 
-  const filteredTags = availableTags.filter((tag) => tag.name.toLowerCase().includes(searchValue.toLowerCase()))
+  const filteredTags = availableTags.filter((tag) =>
+    tag.name.toLowerCase().includes(searchValue.toLowerCase()),
+  )
 
   const toggleTag = (tagName: string) => {
     if (selectedTags.includes(tagName)) {
@@ -48,80 +55,52 @@ export default function TagFilterSelector({
     onChange(selectedTags.filter((t) => t !== tagName))
   }
 
-  const clearAll = () => {
-    onChange([])
-  }
-
   return (
-    <div className="space-y-2">
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between">
-            {selectedTags.length === 0 ? (
-              <span className="text-muted-foreground">{placeholder}</span>
-            ) : (
-              <span>
-                {selectedTags.length} tag{selectedTags.length !== 1 ? "s" : ""} selected
-              </span>
-            )}
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-full p-0" align="start">
-          <Command>
-            <CommandInput placeholder="Search tags..." value={searchValue} onValueChange={setSearchValue} />
-            <CommandList>
-              <CommandEmpty>No tags found.</CommandEmpty>
-              <CommandGroup>
-                {filteredTags.map((tag) => (
-                  <CommandItem
-                    key={tag.id}
-                    value={tag.name}
-                    onSelect={() => toggleTag(tag.name)}
-                    className="flex items-center justify-between"
-                  >
-                    <div className="flex items-center">
-                      <div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: tag.color || "#3B82F6" }} />
+    <div className="relative space-y-2">
+      <div className="flex flex-wrap gap-1 p-1 border rounded-md min-h-10 items-center">
+        {selectedTags.map((tagName) => (
+          <span key={tagName} className={cn("chip", isExclude && "chip-exclude")}>
+            {isExclude ? <Ban className="h-3 w-3" /> : <TagIcon className="h-3 w-3" />}
+            {tagName}
+            <X className="h-3 w-3 cursor-pointer" onClick={(e) => removeTag(tagName, e)} />
+          </span>
+        ))}
+        <Command className="w-full relative overflow-visible" shouldFilter={false}>
+          <CommandInput
+            placeholder={selectedTags.length ? "" : placeholder}
+            value={searchValue}
+            onValueChange={setSearchValue}
+            onBlur={() => setTimeout(() => setOpen(false), 200)}
+            onFocus={() => setOpen(true)}
+            className="border-0 focus:ring-0 p-0 h-8"
+          />
+          {open && (
+            <div className="absolute left-0 top-full z-10 w-full bg-popover border rounded-md shadow-md mt-1">
+              <CommandList>
+                <CommandEmpty>No tags found.</CommandEmpty>
+                <CommandGroup>
+                  {filteredTags.map((tag) => (
+                    <CommandItem
+                      key={tag.id}
+                      value={tag.name}
+                      onSelect={() => toggleTag(tag.name)}
+                      className="flex items-center justify-between"
+                    >
                       <span>{tag.name}</span>
-                    </div>
-                    <Check
-                      className={cn("mr-2 h-4 w-4", selectedTags.includes(tag.name) ? "opacity-100" : "opacity-0")}
-                    />
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
-
-      {/* Selected tags display */}
-      {selectedTags.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {selectedTags.map((tagName) => {
-            const tag = availableTags.find((t) => t.name === tagName)
-            return (
-              <Badge
-                key={tagName}
-                variant={variant === "exclude" ? "destructive" : "secondary"}
-                className="flex items-center gap-1 px-2 py-1"
-                style={
-                  variant === "include" && tag?.color
-                    ? { backgroundColor: tag.color + "20", color: tag.color }
-                    : undefined
-                }
-              >
-                {variant === "exclude" && "NOT "}
-                {tagName}
-                <X className="h-3 w-3 cursor-pointer" onClick={(e) => removeTag(tagName, e)} />
-              </Badge>
-            )
-          })}
-          <Button variant="ghost" size="sm" onClick={clearAll} className="h-6 px-2 text-xs">
-            Clear all
-          </Button>
-        </div>
-      )}
+                      <Check
+                        className={cn(
+                          "h-4 w-4",
+                          selectedTags.includes(tag.name) ? "opacity-100" : "opacity-0",
+                        )}
+                      />
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </div>
+          )}
+        </Command>
+      </div>
     </div>
   )
 }

@@ -38,17 +38,12 @@ export default function LocationFilterSelector({
     onChange(selectedLocations.filter((l) => l !== location))
   }
 
-  const clearAll = () => {
-    onChange([])
-  }
-
   return (
     <div className="relative space-y-2">
       <div className="flex flex-wrap gap-1 p-1 border rounded-md min-h-10 items-center">
         <LocationBadgeList
           locations={selectedLocations}
           onRemove={removeLocation}
-          onClearAll={clearAll}
         />
         <Command className="w-full relative overflow-visible">
           <CommandInput
