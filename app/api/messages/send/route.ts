@@ -4,9 +4,9 @@ import { requirePermission } from "@/lib/permissions/server"
 import { scheduleSMS, lookupCarrier } from "@/lib/sms-rate-limiter"
 import { normalizePhone, formatPhoneE164 } from "@/lib/dedup-utils"
 import { ensurePublicMediaUrls } from "@/utils/mms.server"
-import { TELNYX_API_URL, telnyxHeaders } from "@/lib/telnyx"
 import { getTelnyxApiKey } from "@/lib/voice-env"
 import { resolveOutboundFrom, recordStickyFrom } from "@/lib/sender/sticky-sender"
+import { resolveSmsProvider } from "@/lib/providers/sms"
 
 export async function POST(request: NextRequest) {
   const { user, orgId, supabase } = await requireOrgContext()
@@ -37,7 +37,6 @@ export async function POST(request: NextRequest) {
     })
   }
 
-  const url = `${TELNYX_API_URL}/messages`
   const formatted = formatPhoneE164(to)
   if (!formatted) {
     return new Response(JSON.stringify({ error: "Invalid phone number" }), {
@@ -140,58 +139,18 @@ export async function POST(request: NextRequest) {
 
   const isMms = !!(finalMediaUrls && finalMediaUrls.length)
 
-  const payload: Record<string, any> = {
-    from: replyFrom,
-    to: formatted,
-    text: body,
-    messaging_profile_id: messagingProfileId,
-    type: isMms ? "MMS" : "SMS",
-    use_profile_webhooks: true,
-  }
-  if (isMms) {
-    payload.media_urls = finalMediaUrls
-  }
-
   const carrier = (await lookupCarrier(formatted)) || "unknown"
-  const sendRequest = async () => {
-    if (isMms) {
-      console.info("[messages/send] Telnyx MMS payload", {
-        type: payload.type,
-        media_urls: payload.media_urls,
-      })
-    }
-    const res = await fetch(url, {
-      method: "POST",
-      headers: telnyxHeaders(),
-      body: JSON.stringify(payload),
+  const provider = await resolveSmsProvider(orgId)
+  const sendRequest = () =>
+    provider.sendMessage({
+      from: replyFrom,
+      to: formatted,
+      text: body,
+      mediaUrls: finalMediaUrls,
+      messagingProfileId,
+      type: isMms ? "MMS" : "SMS",
+      useProfileWebhooks: true,
     })
-    const text = await res.text()
-    if (!res.ok) {
-      if (isMms) {
-        console.error("[messages/send] Telnyx MMS error body", text)
-      }
-      let msg = `Telnyx API error: ${res.status}`
-      try {
-        const data = JSON.parse(text)
-        if (Array.isArray(data.errors) && data.errors.length) {
-          const details = data.errors
-            .map((e: any) => e?.detail || e?.title || e?.code)
-            .filter(Boolean)
-          if (details.length) msg = details.join("; ")
-        } else if (data.error?.message) {
-          msg = data.error.message
-        }
-      } catch (err) {
-        console.error("messages/send: failed to parse Telnyx error response:", err)
-      }
-      throw new Error(msg)
-    }
-    const json = text ? JSON.parse(text) : {}
-    const data = json.data as { id: string; from: any }
-    const from =
-      typeof data.from === "string" ? data.from : data.from?.phone_number || ""
-    return { id: data.id, from }
-  }
 
   try {
     const data = await scheduleSMS(carrier, body, sendRequest)
