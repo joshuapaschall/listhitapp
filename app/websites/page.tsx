@@ -143,6 +143,9 @@ export default function WebsitesPage() {
                       <Button asChild variant="outline" size="sm">
                         <Link href={`/websites/${site.id}/edit`}>Edit</Link>
                       </Button>
+                      <Button asChild variant="ghost" size="sm">
+                        <Link href={`/websites/${site.id}/analytics`}>Analytics</Link>
+                      </Button>
                       {published && (
                         <Button asChild variant="ghost" size="sm">
                           <a href={`https://${domain}`} target="_blank" rel="noreferrer">
