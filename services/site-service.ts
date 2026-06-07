@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { DEFAULT_THEME, type SitePersona, type SiteTemplateId, type SiteTheme } from "@/lib/site-builder/types"
+import { DEFAULT_THEME, DEFAULT_BUSINESS, type SitePersona, type SiteTemplateId, type SiteTheme, type SiteBusiness } from "@/lib/site-builder/types"
 import { getSiteTemplate } from "@/lib/site-builder/templates"
 import { slugifySiteName, isReservedSlug } from "@/lib/site-builder/slug"
 
@@ -157,6 +157,20 @@ export class SiteService {
       .update({ theme_json: merged })
       .eq("id", siteId)
       .eq("org_id", orgId)
+    if (updateError) throw new Error(updateError.message)
+  }
+
+  static async updateBusiness(
+    client: SupabaseClient,
+    siteId: string,
+    patch: Partial<SiteBusiness>,
+  ) {
+    const { data: existing, error: readError } = await client
+      .from("sites").select("business_json").eq("id", siteId).single()
+    if (readError) throw new Error(readError.message)
+    const merged = { ...DEFAULT_BUSINESS, ...((existing?.business_json as Partial<SiteBusiness>) || {}), ...patch }
+    const { error: updateError } = await client
+      .from("sites").update({ business_json: merged }).eq("id", siteId)
     if (updateError) throw new Error(updateError.message)
   }
 

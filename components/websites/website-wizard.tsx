@@ -17,11 +17,11 @@ import { ALL_SITE_TEMPLATES } from "@/lib/site-builder/templates"
 import { PERSONAS, getPersona } from "@/lib/site-builder/templates"
 import { TYPE_STYLES, resolveTypeFonts, DEFAULT_TYPE_STYLE_ID } from "@/lib/site-builder/typography"
 import { PALETTES } from "@/lib/site-builder/palettes"
-import { DEFAULT_THEME, type SitePersona, type SiteTemplateId, type SiteTheme } from "@/lib/site-builder/types"
+import { DEFAULT_THEME, DEFAULT_BUSINESS, type SitePersona, type SiteTemplateId, type SiteTheme, type SiteBusiness } from "@/lib/site-builder/types"
 
 type WizardProps = { mode: "new" } | { mode: "edit"; siteId: string }
 
-const STEPS = ["Goal", "Template", "Brand", "Content", "Launch"]
+const STEPS = ["Goal", "Template", "Brand", "Content", "Business", "Launch"]
 
 const PERSONA_BLURBS: Record<SitePersona, string> = {
   cash: "Build a cash-buyer list for your wholesale deals.",
@@ -61,6 +61,7 @@ interface Draft {
   templateId: SiteTemplateId
   theme: SiteTheme
   content: WizardContent
+  business: SiteBusiness
 }
 
 export default function WebsiteWizard(props: WizardProps) {
@@ -83,6 +84,7 @@ export default function WebsiteWizard(props: WizardProps) {
     templateId: "aspen",
     theme: { ...DEFAULT_THEME },
     content: seedContent("", "cash"),
+    business: { ...DEFAULT_BUSINESS },
   }))
 
   // Edit mode: hydrate from the API and jump to the Brand step.
@@ -104,6 +106,7 @@ export default function WebsiteWizard(props: WizardProps) {
           templateId: (site.template_id as SiteTemplateId) || "aspen",
           theme,
           content,
+          business: { ...DEFAULT_BUSINESS, ...(site.business_json || {}) },
         })
         setSlug(site.slug || "")
         setStatus(site.status || "draft")
@@ -123,6 +126,8 @@ export default function WebsiteWizard(props: WizardProps) {
     setDraft((d) => ({ ...d, theme: { ...d.theme, ...patch } }))
   const setContent = (patch: Partial<WizardContent>) =>
     setDraft((d) => ({ ...d, content: { ...d.content, ...patch } }))
+  const setBusiness = (patch: Partial<SiteBusiness>) =>
+    setDraft((d) => ({ ...d, business: { ...d.business, ...patch } }))
 
   const blockPatches = useMemo(
     () => [
@@ -157,7 +162,7 @@ export default function WebsiteWizard(props: WizardProps) {
       const res = await fetch(`/api/sites/${siteId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: draft.name, theme: draft.theme, blockPatches }),
+        body: JSON.stringify({ name: draft.name, theme: draft.theme, business: draft.business, blockPatches }),
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
@@ -211,7 +216,7 @@ export default function WebsiteWizard(props: WizardProps) {
       if (ok) setStep(2)
       return
     }
-    if (step === 2 || step === 3) {
+    if (step === 2 || step === 3 || step === 4) {
       const ok = await saveDraft()
       if (ok) setStep(step + 1)
       return
@@ -240,7 +245,7 @@ export default function WebsiteWizard(props: WizardProps) {
       const saved = await fetch(`/api/sites/${siteId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: draft.name, theme: draft.theme, blockPatches }),
+        body: JSON.stringify({ name: draft.name, theme: draft.theme, business: draft.business, blockPatches }),
       })
       if (!saved.ok) {
         const body = await saved.json().catch(() => ({}))
@@ -264,7 +269,13 @@ export default function WebsiteWizard(props: WizardProps) {
 
   const liveUrl = slug ? `https://${slug}.listhit.io` : ""
   const canContinue =
-    step === 0 ? Boolean(draft.name.trim() && draft.persona) : step === 1 ? Boolean(draft.templateId) : true
+    step === 0
+      ? Boolean(draft.name.trim() && draft.persona)
+      : step === 1
+        ? Boolean(draft.templateId)
+        : step === 4
+          ? Boolean(draft.business.email.trim() && draft.business.phone.trim())
+          : true
 
   if (loading) {
     return (
@@ -564,6 +575,97 @@ export default function WebsiteWizard(props: WizardProps) {
 
           {step === 4 && (
             <div className="space-y-5">
+              <div>
+                <h2 className="text-base font-semibold">Your business info</h2>
+                <p className="text-sm text-muted-foreground">
+                  We use this to automatically build your Contact page and your Terms of Use and Privacy Policy — what
+                  carriers check before approving you to send texts.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Business email">
+                  <Input
+                    type="email"
+                    placeholder="you@company.com"
+                    value={draft.business.email}
+                    onChange={(e) => setBusiness({ email: e.target.value })}
+                  />
+                </Field>
+                <Field label="Business phone">
+                  <Input
+                    placeholder="(555) 555-5555"
+                    value={draft.business.phone}
+                    onChange={(e) => setBusiness({ phone: e.target.value })}
+                  />
+                </Field>
+              </div>
+
+              <Field label="Street address">
+                <Input
+                  placeholder="123 Main St"
+                  value={draft.business.address}
+                  onChange={(e) => setBusiness({ address: e.target.value })}
+                />
+              </Field>
+              <div className="grid grid-cols-3 gap-3">
+                <Field label="City">
+                  <Input value={draft.business.city} onChange={(e) => setBusiness({ city: e.target.value })} />
+                </Field>
+                <Field label="State">
+                  <Input
+                    maxLength={2}
+                    placeholder="GA"
+                    value={draft.business.state}
+                    onChange={(e) => setBusiness({ state: e.target.value.toUpperCase() })}
+                  />
+                </Field>
+                <Field label="ZIP">
+                  <Input value={draft.business.zip} onChange={(e) => setBusiness({ zip: e.target.value })} />
+                </Field>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Social links (optional)</Label>
+                <Input
+                  placeholder="Facebook URL"
+                  value={draft.business.social.facebook || ""}
+                  onChange={(e) => setBusiness({ social: { ...draft.business.social, facebook: e.target.value } })}
+                />
+                <Input
+                  placeholder="Instagram URL"
+                  value={draft.business.social.instagram || ""}
+                  onChange={(e) => setBusiness({ social: { ...draft.business.social, instagram: e.target.value } })}
+                />
+                <Input
+                  placeholder="YouTube URL"
+                  value={draft.business.social.youtube || ""}
+                  onChange={(e) => setBusiness({ social: { ...draft.business.social, youtube: e.target.value } })}
+                />
+              </div>
+
+              <div className="rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+                Adding an SMS opt-in keeps your texting compliant and helps carriers approve your number faster.
+              </div>
+              <div className="flex items-center justify-between rounded-lg border border-border p-3">
+                <span className="text-sm font-medium">Add SMS opt-in to my forms</span>
+                <Switch
+                  checked={draft.business.optin.enabled}
+                  onCheckedChange={(v) => setBusiness({ optin: { ...draft.business.optin, enabled: v } })}
+                />
+              </div>
+              <div className="flex items-center justify-between rounded-lg border border-border p-3">
+                <span className="text-sm font-medium">Require a consent checkbox</span>
+                <Switch
+                  checked={draft.business.optin.requireConsent}
+                  onCheckedChange={(v) => setBusiness({ optin: { ...draft.business.optin, requireConsent: v } })}
+                />
+              </div>
+            </div>
+          )}
+
+          {step === 5 && (
+            <div className="space-y-5">
               {!published ? (
                 <>
                   <div>
@@ -621,7 +723,7 @@ export default function WebsiteWizard(props: WizardProps) {
         </div>
 
         {/* Footer nav */}
-        {!(step === 4 && published) && (
+        {!(step === 5 && published) && (
           <div className="flex items-center justify-between border-t border-border px-5 py-3">
             <Button type="button" variant="ghost" onClick={handleBack} disabled={saving}>
               <ArrowLeft className="h-4 w-4" />
@@ -638,7 +740,7 @@ export default function WebsiteWizard(props: WizardProps) {
                 <Eye className="h-4 w-4" />
                 Preview
               </Button>
-              {step < 4 && (
+              {step < 5 && (
                 <Button type="button" variant="brand" onClick={handleContinue} disabled={saving || !canContinue}>
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Continue <ArrowRight className="h-4 w-4" /></>}
                 </Button>
