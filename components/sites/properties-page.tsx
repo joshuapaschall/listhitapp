@@ -75,7 +75,7 @@ export function PropertiesPage({
               )}
             </>
           ) : (
-            <PropertiesGate brandName={brandName} count={count} formContext={formContext} />
+            <PropertiesGate brandName={brandName} count={count} deals={deals} formContext={formContext} />
           )}
         </div>
       </main>
