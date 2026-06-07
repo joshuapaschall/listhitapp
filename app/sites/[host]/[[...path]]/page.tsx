@@ -5,7 +5,7 @@ import { DEFAULT_THEME, DEFAULT_BUSINESS, DEFAULT_MARKETS } from "@/lib/site-bui
 import { buildTermsAndPrivacy, buildContactDoc, buildOptInDisclosure } from "@/lib/site-builder/compliance"
 import { SiteRenderer } from "@/components/sites/site-renderer"
 import { LegalPage } from "@/components/sites/legal-page"
-import { PropertyService } from "@/services/property-service"
+import { getPublishedDeals } from "@/services/site-deals-service"
 
 // Public tenant sites read published rows from the DB at request time, so this
 // route is never prerendered at build.
@@ -79,7 +79,7 @@ export default async function SitePage({ params }: { params: SitePageParams }) {
   const data = mergeThemeIntoRoot(result.page.puck_data, result.theme)
 
   const business = { ...DEFAULT_BUSINESS, ...((result.site.business_json as any) || {}) }
-  const deals = await PropertyService.getPublishedDeals(result.site.org_id, 6).catch(() => [])
+  const deals = await getPublishedDeals(result.site.org_id, 6).catch(() => [])
   const formContext = {
     persona: result.site.persona,
     brandName: result.site.name,
