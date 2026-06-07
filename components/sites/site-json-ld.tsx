@@ -1,6 +1,16 @@
 import type { SiteBusiness } from "@/lib/site-builder/types"
 
-export function SiteJsonLd({ brandName, host, business }: { brandName: string; host: string; business: SiteBusiness }) {
+export function SiteJsonLd({
+  brandName,
+  host,
+  business,
+  areaServed,
+}: {
+  brandName: string
+  host: string
+  business: SiteBusiness
+  areaServed?: { city?: string; state?: string }
+}) {
   const sameAs = Object.values(business.social || {}).filter((v): v is string => Boolean(v && v.trim()))
   const data: Record<string, unknown> = {
     "@context": "https://schema.org",
@@ -20,6 +30,12 @@ export function SiteJsonLd({ brandName, host, business }: { brandName: string; h
     data.address = addr
   }
   if (sameAs.length > 0) data.sameAs = sameAs
+  if (areaServed && (areaServed.city || areaServed.state)) {
+    data.areaServed = {
+      "@type": "Place",
+      name: areaServed.city ? `${areaServed.city}, ${areaServed.state}` : areaServed.state,
+    }
+  }
 
   return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }} />
 }

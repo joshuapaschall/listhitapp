@@ -1,5 +1,6 @@
 import { resolveSiteByHost } from "@/lib/site-builder/resolve-site"
 import { supabaseAdmin } from "@/lib/supabase/admin"
+import { locationPaths } from "@/lib/site-builder/location-pages"
 
 export const dynamic = "force-dynamic"
 
@@ -36,6 +37,9 @@ export async function GET(request: Request) {
       /* omit property paths if the query fails */
     }
   }
+
+  // Programmatic location landing pages (specific-market sites only).
+  for (const p of locationPaths(site)) paths.add(p)
 
   const urls = Array.from(paths).map((p) => `https://${host}${p === "/" ? "/" : p}`)
   const xml =
