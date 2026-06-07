@@ -4,7 +4,7 @@ import { notFound } from "next/navigation"
 import { resolveSite, mergeThemeIntoRoot, resolveSiteByHost } from "@/lib/site-builder/resolve-site"
 import { DEFAULT_THEME, DEFAULT_BUSINESS, DEFAULT_MARKETS } from "@/lib/site-builder/types"
 import { buildTermsAndPrivacy, buildContactDoc, buildOptInDisclosure } from "@/lib/site-builder/compliance"
-import { SiteRenderer } from "@/components/sites/site-renderer"
+import { SiteRendererRSC } from "@/components/sites/site-renderer-rsc"
 import { SiteJsonLd } from "@/components/sites/site-json-ld"
 import { LegalPage } from "@/components/sites/legal-page"
 import { PropertiesPage } from "@/components/sites/properties-page"
@@ -138,7 +138,7 @@ export default async function SitePage({ params }: { params: SitePageParams }) {
   return (
     <>
       <SiteJsonLd brandName={result.site.name} host={host} business={business} />
-      <SiteRenderer data={data} theme={result.theme} form={formContext} />
+      <SiteRendererRSC data={data} theme={result.theme} form={formContext} />
     </>
   )
 }
