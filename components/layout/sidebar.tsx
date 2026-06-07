@@ -20,6 +20,7 @@ import {
   ChevronRight,
   Phone,
   Target,
+  Globe,
 } from "lucide-react"
 import {
   Accordion,
@@ -85,6 +86,12 @@ const navigation = [
     title: "Offers",
     icon: DollarSign,
     href: "/offers",
+    badge: null,
+  },
+  {
+    title: "Websites",
+    icon: Globe,
+    href: "/websites",
     badge: null,
   },
 ]
