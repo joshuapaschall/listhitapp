@@ -28,6 +28,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@ffmpeg/ffmpeg": "^0.12.10",
     "@hookform/resolvers": "^3.9.1",
+    "@measured/puck": "^0.20.2",
     "@noble/ed25519": "^2.3.0",
     "@noble/hashes": "^1.8.0",
     "@radix-ui/react-accordion": "1.2.2",
