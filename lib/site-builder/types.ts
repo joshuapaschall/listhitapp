@@ -45,3 +45,36 @@ export const DEFAULT_THEME: SiteTheme = {
   headerLayout: "split",
   banner: true,
 }
+
+export interface SiteBusinessSocial {
+  facebook?: string
+  instagram?: string
+  youtube?: string
+  linkedin?: string
+  tiktok?: string
+}
+
+export interface SiteBusiness {
+  email: string
+  phone: string
+  address: string   // street line
+  city: string
+  state: string     // 2-letter
+  zip: string
+  social: SiteBusinessSocial
+  optin: {
+    enabled: boolean         // show SMS opt-in disclosure on forms
+    requireConsent: boolean  // require an explicit consent checkbox
+  }
+}
+
+export const DEFAULT_BUSINESS: SiteBusiness = {
+  email: "",
+  phone: "",
+  address: "",
+  city: "",
+  state: "",
+  zip: "",
+  social: {},
+  optin: { enabled: true, requireConsent: true },
+}

@@ -568,7 +568,16 @@ export const siteConfig: Config = {
       defaultProps: { text: "© Your Company. All rights reserved." },
       render: ({ text }: any) => (
         <footer style={{ borderTop: "1px solid #eef1f5", background: "#fff" }}>
-          <div style={{ ...WRAP, padding: "28px 24px", color: "#8a94a2", fontSize: 13.5, textAlign: "center" }}>{text}</div>
+          <div style={{ ...WRAP, padding: "28px 24px", color: "#8a94a2", fontSize: 13.5, textAlign: "center" }}>
+            <div>{text}</div>
+            <nav style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 16, justifyContent: "center" }}>
+              {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- public tenant site, not a dashboard route */}
+              <a href="/" style={{ color: "#8a94a2", textDecoration: "none" }}>Home</a>
+              <a href="/contact" style={{ color: "#8a94a2", textDecoration: "none" }}>Contact</a>
+              <a href="/privacy" style={{ color: "#8a94a2", textDecoration: "none" }}>Privacy Policy</a>
+              <a href="/terms" style={{ color: "#8a94a2", textDecoration: "none" }}>Terms of Use</a>
+            </nav>
+          </div>
         </footer>
       ),
     },
