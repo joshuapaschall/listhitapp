@@ -112,8 +112,14 @@ export default async function SitePage({ params }: { params: SitePageParams }) {
       const deals = await getPublishedDeals(site.org_id, 24).catch(() => [])
       return <PropertiesPage brandName={site.name} theme={theme} business={business} formContext={formContext} unlocked deals={deals} count={deals.length} />
     }
-    const count = await getPublishedDealCount(site.org_id).catch(() => 0)
-    return <PropertiesPage brandName={site.name} theme={theme} business={business} formContext={formContext} unlocked={false} deals={[]} count={count} />
+    const [count, teaser] = await Promise.all([
+      getPublishedDealCount(site.org_id).catch(() => 0),
+      getPublishedDeals(site.org_id, 6).catch(() => []),
+    ])
+    // Locked gate shows real photos/price/city as proof, but the street address
+    // — the carrot — is stripped server-side so it never reaches the client.
+    const lockedDeals = teaser.map((d) => ({ ...d, address: null }))
+    return <PropertiesPage brandName={site.name} theme={theme} business={business} formContext={formContext} unlocked={false} deals={lockedDeals} count={count} />
   }
 
   const result = await resolveSite(host, path)

@@ -17,13 +17,30 @@ export function DealsSection({ heading }: { heading?: string }) {
           <>
             <div className="lh-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 22 }}>
               {deals.slice(0, 6).map((d) => (
-                <DealCard key={d.id} property={d} variant="teaser" />
+                // eslint-disable-next-line @next/next/no-html-link-for-pages -- public tenant site, not a dashboard route
+                <a key={d.id} href="/properties" style={{ textDecoration: "none", color: "inherit", display: "block" }}>
+                  <DealCard property={d} variant="teaser" />
+                </a>
               ))}
             </div>
-            <div style={{ marginTop: 24, textAlign: "right" }}>
+            <div style={{ marginTop: 28, textAlign: "center" }}>
               {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- public tenant site, not a dashboard route */}
-              <a href="/properties" style={{ color: "var(--p)", fontWeight: 700, textDecoration: "none", fontSize: 14.5 }}>
-                View all deals →
+              <a
+                href="/properties"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  background: "var(--p)",
+                  color: "#fff",
+                  fontWeight: 700,
+                  fontSize: 15,
+                  textDecoration: "none",
+                  padding: "13px 26px",
+                  borderRadius: 10,
+                }}
+              >
+                🔒 Unlock all deals →
               </a>
             </div>
           </>
