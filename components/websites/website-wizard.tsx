@@ -10,12 +10,13 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { SitePreview } from "@/components/websites/site-preview"
 import { CURATED_HERO_IMAGES, extractContent, type WizardContent } from "@/lib/site-builder/compose"
 import { ALL_SITE_TEMPLATES } from "@/lib/site-builder/templates"
 import { PERSONAS, getPersona } from "@/lib/site-builder/templates"
+import { TYPE_STYLES, resolveTypeFonts, DEFAULT_TYPE_STYLE_ID } from "@/lib/site-builder/typography"
+import { PALETTES } from "@/lib/site-builder/palettes"
 import { DEFAULT_THEME, type SitePersona, type SiteTemplateId, type SiteTheme } from "@/lib/site-builder/types"
 
 type WizardProps = { mode: "new" } | { mode: "edit"; siteId: string }
@@ -23,21 +24,15 @@ type WizardProps = { mode: "new" } | { mode: "edit"; siteId: string }
 const STEPS = ["Goal", "Template", "Brand", "Content", "Launch"]
 
 const PERSONA_BLURBS: Record<SitePersona, string> = {
-  cash: "Cash buyers who want a fast, as-is sale.",
-  land: "Owners of vacant land ready to sell.",
-  owner: "Buyers who need owner financing.",
-  rto: "Renters working toward ownership.",
-  commercial: "Commercial property sellers.",
-  agentinv: "Investors hunting off-market deals.",
-  agentbuy: "Home buyers who want an agent.",
+  cash: "Build a cash-buyer list for your wholesale deals.",
+  investor: "Send vetted deals to your investor network.",
+  rto: "Capture rent-to-own ready buyers.",
+  owner: "Build a list of owner-finance buyers.",
+  creative: "Subject-to, lease-option and creative-terms buyers.",
+  land: "Build a land and lot buyer list.",
+  commercial: "Grow a commercial buyer network.",
+  agent: "Build your own private buyer list.",
 }
-
-const FONT_OPTIONS = [
-  { label: "Bricolage Grotesque", value: "'Bricolage Grotesque', serif" },
-  { label: "Fraunces", value: "'Fraunces', serif" },
-  { label: "Hanken Grotesk", value: "'Hanken Grotesk', sans-serif" },
-  { label: "Space Grotesk", value: "'Space Grotesk', sans-serif" },
-]
 
 const TEMPLATE_BLURBS: Record<string, string> = {
   aspen: "Bold full-bleed photo hero with a floating form.",
@@ -347,7 +342,7 @@ export default function WebsiteWizard(props: WizardProps) {
                 />
               </div>
               <div>
-                <h2 className="text-base font-semibold">Who do you want to reach?</h2>
+                <h2 className="text-base font-semibold">Who is this site for?</h2>
                 <p className="text-sm text-muted-foreground">Pick the audience this site is built for.</p>
                 <div className="mt-3 grid grid-cols-1 gap-2">
                   {(Object.keys(PERSONAS) as SitePersona[]).map((p) => (
@@ -377,7 +372,7 @@ export default function WebsiteWizard(props: WizardProps) {
                       )}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium capitalize">{getPersona(p).eyebrow}</span>
+                        <span className="text-sm font-medium">{getPersona(p).label}</span>
                         {draft.persona === p && <Check className="h-4 w-4 text-brand" />}
                       </div>
                       <p className="mt-0.5 text-xs text-muted-foreground">{PERSONA_BLURBS[p]}</p>
@@ -427,22 +422,61 @@ export default function WebsiteWizard(props: WizardProps) {
                 <h2 className="text-base font-semibold">Make it yours</h2>
                 <p className="text-sm text-muted-foreground">Colors, fonts, and header style.</p>
               </div>
+              <div className="space-y-1.5">
+                <Label>Color palette</Label>
+                <div className="grid grid-cols-4 gap-2">
+                  {PALETTES.map((p) => {
+                    const active = draft.theme.primary === p.primary && draft.theme.accent === p.accent
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        title={p.label}
+                        onClick={() => setTheme({ primary: p.primary, accent: p.accent })}
+                        className={cn(
+                          "flex h-9 overflow-hidden rounded-lg border-2 transition",
+                          active ? "border-foreground" : "border-transparent",
+                        )}
+                      >
+                        <span className="flex-1" style={{ background: p.primary }} />
+                        <span style={{ flex: ".55", background: p.accent }} />
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground">Pick a palette or set exact colors below.</p>
+              </div>
               <ColorRow label="Primary color" value={draft.theme.primary} onChange={(v) => setTheme({ primary: v })} />
               <ColorRow label="Accent color" value={draft.theme.accent} onChange={(v) => setTheme({ accent: v })} />
               <div className="space-y-1.5">
-                <Label>Heading font</Label>
-                <Select value={draft.theme.headingFont} onValueChange={(v) => setTheme({ headingFont: v })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose a font" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {FONT_OPTIONS.map((f) => (
-                      <SelectItem key={f.value} value={f.value}>
-                        {f.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>Type style</Label>
+                <div className="space-y-2">
+                  {TYPE_STYLES.map((t) => {
+                    const active = draft.theme.typeStyleId === t.id
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => {
+                          const fonts = resolveTypeFonts(t.id)
+                          setTheme({ typeStyleId: t.id, headingFont: fonts.headingFont, bodyFont: fonts.bodyFont })
+                        }}
+                        className={cn(
+                          "flex w-full items-center justify-between rounded-lg border p-3 text-left transition",
+                          active ? "border-brand ring-1 ring-brand" : "border-border hover:border-foreground/30",
+                        )}
+                      >
+                        <span>
+                          <span className="block text-xs text-muted-foreground">{t.label}</span>
+                          <span className="block text-lg" style={{ fontFamily: t.headingFont }}>
+                            Get the deal
+                          </span>
+                        </span>
+                        {active && <Check className="h-4 w-4 text-brand" />}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
               <div className="space-y-1.5">
                 <Label>Header layout</Label>

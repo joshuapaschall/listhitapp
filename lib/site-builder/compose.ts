@@ -69,6 +69,7 @@ export function applyContentToPuck(data: any, content: Partial<WizardContent>, t
       primary: theme.primary,
       accent: theme.accent,
       headingFont: theme.headingFont,
+      bodyFont: theme.bodyFont,
     },
   }
   return clone

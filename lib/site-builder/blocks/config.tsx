@@ -93,21 +93,24 @@ export const siteConfig: Config = {
       primary: { type: "text" },
       accent: { type: "text" },
       headingFont: { type: "text" },
+      bodyFont: { type: "text" },
     },
     defaultProps: {
       primary: "#173b5e",
       accent: "#e8833a",
       headingFont: "'Bricolage Grotesque', serif",
+      bodyFont: "'Source Sans 3', sans-serif",
     },
-    render: ({ primary, accent, headingFont, children }: any) => (
+    render: ({ primary, accent, headingFont, bodyFont, children }: any) => (
       <div
         style={{
           ...themeToCssVars({
-            primary: primary || "#173b5e",
-            accent: accent || "#e8833a",
-            headingFont: headingFont || "'Bricolage Grotesque', serif",
+            primary: primary || "#0f2a43",
+            accent: accent || "#f5a623",
+            headingFont: headingFont || "'Montserrat', sans-serif",
+            bodyFont: bodyFont || "'Source Sans 3', sans-serif",
           }),
-          fontFamily: "'Hanken Grotesk', sans-serif",
+          fontFamily: "var(--body)",
           color: "#0f1b29",
           background: "#fff",
         }}
