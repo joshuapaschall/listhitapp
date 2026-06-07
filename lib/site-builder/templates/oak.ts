@@ -42,7 +42,12 @@ function build(persona: SitePersona): Data {
         type: "TrustBar",
         props: {
           id: "TrustBar-oak",
-          items: [{ label: "Fast & fair" }, { label: "Zero fees" }, { label: "As-is sales" }, { label: "Proven track record" }],
+          items: [
+            { value: "$0", label: "Fees to join" },
+            { value: "<24h", label: "New deals to your inbox" },
+            { value: "All cash", label: "Fast, certain closings" },
+            { value: "Off-market", label: "Deals you won't find online" },
+          ],
         },
       },
       {

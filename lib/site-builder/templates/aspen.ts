@@ -42,7 +42,12 @@ function build(persona: SitePersona): Data {
         type: "TrustBar",
         props: {
           id: "TrustBar-aspen",
-          items: [{ label: "A+ BBB rated" }, { label: "No fees" }, { label: "Close in 7 days" }, { label: "5-star reviews" }],
+          items: [
+            { value: "$0", label: "Fees to join" },
+            { value: "<24h", label: "New deals to your inbox" },
+            { value: "All cash", label: "Fast, certain closings" },
+            { value: "Off-market", label: "Deals you won't find online" },
+          ],
         },
       },
       {

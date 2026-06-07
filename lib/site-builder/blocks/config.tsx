@@ -438,34 +438,84 @@ export const siteConfig: Config = {
 
     // -----------------------------------------------------------------------
     TrustBar: {
-      label: "Trust bar",
+      label: "Stats strip",
       fields: {
-        items: { type: "array", arrayFields: { label: { type: "text" } } },
+        items: {
+          type: "array",
+          arrayFields: {
+            value: { type: "text" },
+            label: { type: "text" },
+          },
+          getItemSummary: (item: any) =>
+            [item?.value, item?.label].filter(Boolean).join(" — ") || "Stat",
+        },
       },
       defaultProps: {
-        items: [{ label: "A+ BBB rated" }, { label: "Cash in 7 days" }, { label: "No fees, no commissions" }, { label: "500+ 5-star reviews" }],
+        items: [
+          { value: "$0", label: "Fees to join" },
+          { value: "<24h", label: "New deals to your inbox" },
+          { value: "All cash", label: "Fast, certain closings" },
+          { value: "Off-market", label: "Deals you won't find online" },
+        ],
       },
-      render: ({ items }: any) => (
-        <div style={{ background: "var(--p)" }}>
+      render: ({ items }: any) => {
+        const list = (items || []).filter((it: any) => it && (it.value || it.label))
+        if (list.length === 0) return <></>
+
+        return (
           <div
             style={{
-              ...WRAP,
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 28,
-              justifyContent: "center",
-              padding: "16px 24px",
+              background: "color-mix(in srgb, var(--p) 5%, #ffffff)",
+              borderTop: "1px solid color-mix(in srgb, var(--p) 12%, transparent)",
+              borderBottom: "1px solid color-mix(in srgb, var(--p) 12%, transparent)",
             }}
           >
-            {(items || []).map((it: any, i: number) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, color: "#fff", fontSize: 14.5, fontWeight: 600 }}>
-                <span style={{ width: 8, height: 8, borderRadius: 999, background: "var(--a)" }} />
-                {it?.label}
-              </div>
-            ))}
+            <div
+              style={{
+                ...WRAP,
+                display: "flex",
+                flexWrap: "wrap",
+                justifyContent: "center",
+                alignItems: "flex-start",
+                gap: "28px 48px",
+                padding: "34px 24px",
+              }}
+            >
+              {list.map((it: any, i: number) => (
+                <div key={i} style={{ flex: "0 1 auto", minWidth: 130, textAlign: "center" }}>
+                  {it.value ? (
+                    <div
+                      style={{
+                        fontFamily: "var(--head)",
+                        fontSize: 34,
+                        lineHeight: 1.05,
+                        fontWeight: 800,
+                        color: "var(--p)",
+                        letterSpacing: "-0.02em",
+                      }}
+                    >
+                      {it.value}
+                    </div>
+                  ) : null}
+                  <div
+                    style={{
+                      marginTop: it.value ? 7 : 0,
+                      fontFamily: "var(--body)",
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      letterSpacing: "0.06em",
+                      textTransform: "uppercase",
+                      color: "#5b6470",
+                    }}
+                  >
+                    {it.label}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      ),
+        )
+      },
     },
 
     // -----------------------------------------------------------------------

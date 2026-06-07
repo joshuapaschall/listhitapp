@@ -42,7 +42,12 @@ function build(persona: SitePersona): Data {
         type: "TrustBar",
         props: {
           id: "TrustBar-cedar",
-          items: [{ label: "Locally owned" }, { label: "No commissions" }, { label: "Fast closings" }, { label: "Trusted since day one" }],
+          items: [
+            { value: "$0", label: "Fees to join" },
+            { value: "<24h", label: "New deals to your inbox" },
+            { value: "All cash", label: "Fast, certain closings" },
+            { value: "Off-market", label: "Deals you won't find online" },
+          ],
         },
       },
       {
