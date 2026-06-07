@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { insertText } from "@/lib/utils"
 import { calculateSmsSegments } from "@/lib/sms-utils"
+import SmsCostGuard from "@/components/campaigns/sms-cost-guard"
 
 interface TemplateFormProps {
   initial?: { name: string; message: string }
@@ -186,6 +187,8 @@ export default function TemplateForm({
             {!message.trim() && (
               <p className="text-xs text-destructive">Message is required</p>
             )}
+
+            {isSms && <SmsCostGuard message={message} onApply={setMessage} />}
 
             {/* Live SMS phone preview */}
             {isSms && (

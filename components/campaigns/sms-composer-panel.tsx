@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { estimateCampaignCost, formatUsd } from "@/lib/sms-pricing"
 import { estimateDeliveryTime, fetchMessagingThroughput } from "@/lib/sms-throughput"
 import { calculateSmsSegments } from "@/lib/sms-utils"
+import SmsCostGuard from "@/components/campaigns/sms-cost-guard"
 
 interface SmsComposerPanelProps {
   message: string
@@ -32,9 +33,9 @@ export default function SmsComposerPanel({ message, onMessageChange, buyerIds, r
   const [emojiOpen, setEmojiOpen] = useState(false)
   const [throughputConfig, setThroughputConfig] = useState({ poolSize: 15, perNumberMpm: 2 })
   const segmentInfo = useMemo(() => calculateSmsSegments(message || ""), [message])
-  const capacity = segmentInfo.segments === 1 ? (segmentInfo.encoding === "GSM-7" ? 160 : 70) : segmentInfo.segments * (segmentInfo.encoding === "GSM-7" ? 153 : 67)
-  const charCount = capacity - segmentInfo.remaining
-  const percentFull = Math.min(100, Math.max(0, (charCount / capacity) * 100))
+  const charCount = segmentInfo.charCount
+  const capacity = segmentInfo.segments <= 1 ? segmentInfo.charsPerSegment : segmentInfo.segments * segmentInfo.charsPerSegment
+  const percentFull = Math.min(100, Math.max(0, (charCount / Math.max(1, capacity)) * 100))
   const hasMedia = false
   const cost = estimateCampaignCost({ recipients: recipientCount, segments: segmentInfo.segments, hasMedia })
   const throughput = estimateDeliveryTime({
@@ -148,6 +149,7 @@ export default function SmsComposerPanel({ message, onMessageChange, buyerIds, r
           {segmentInfo.segments > 10 && <p className="text-sm text-red-600">Message exceeds the 10-segment Telnyx limit. Shorten it or split into multiple campaigns.</p>}
         </div>
       </div>
+      <SmsCostGuard message={message} onApply={onMessageChange} />
       <div className="flex items-center gap-3 rounded-md border p-3">
         <Switch checked={hasStopFooter} onCheckedChange={toggleStopFooter} />
         <span className="text-sm">Append &apos;Reply STOP to opt out&apos; (10DLC compliance)</span>
