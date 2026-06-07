@@ -18,6 +18,25 @@ export async function GET(request: Request) {
     /* fall back to the generated paths if the page query fails */
   }
 
+  // Individual property pages are indexable only when the site is public.
+  if (site.deals_public !== false) {
+    try {
+      const { data: deals } = await supabaseAdmin
+        .from("properties")
+        .select("slug")
+        .eq("org_id", site.org_id)
+        .eq("status", "available")
+        .is("deleted_at", null)
+        .not("slug", "is", null)
+        .limit(500)
+      for (const d of (deals || []) as Array<{ slug: string | null }>) {
+        if (d.slug) paths.add(`/properties/${d.slug}`)
+      }
+    } catch {
+      /* omit property paths if the query fails */
+    }
+  }
+
   const urls = Array.from(paths).map((p) => `https://${host}${p === "/" ? "/" : p}`)
   const xml =
     `<?xml version="1.0" encoding="UTF-8"?>\n` +

@@ -17,10 +17,7 @@ export function DealsSection({ heading }: { heading?: string }) {
           <>
             <div className="lh-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 22 }}>
               {deals.slice(0, 6).map((d) => (
-                // eslint-disable-next-line @next/next/no-html-link-for-pages -- public tenant site, not a dashboard route
-                <a key={d.id} href="/properties" style={{ textDecoration: "none", color: "inherit", display: "block" }}>
-                  <DealCard property={d} variant="teaser" />
-                </a>
+                <DealCard key={d.id} property={d} variant="teaser" href={d.slug ? `/properties/${d.slug}` : "/properties"} />
               ))}
             </div>
             <div style={{ marginTop: 28, textAlign: "center" }}>

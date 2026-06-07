@@ -15,6 +15,7 @@ export function PropertiesPage({
   unlocked,
   deals,
   count,
+  publicMode,
 }: {
   brandName: string
   theme: SiteTheme
@@ -23,7 +24,12 @@ export function PropertiesPage({
   unlocked: boolean
   deals: DealSummary[]
   count: number
+  publicMode?: boolean
 }) {
+  // Public sites and cookie-unlocked sites both show full cards; only public
+  // sites link each card to its (indexable) detail page — detail pages 404 when
+  // deals_public is off, so the unlocked-but-gated funnel must not link out.
+  const showFull = publicMode || unlocked
   const footerLinks = [
     { label: "Home", href: "/" },
     { label: "Contact", href: "/contact" },
@@ -59,15 +65,20 @@ export function PropertiesPage({
 
       <main style={{ flex: 1, background: "color-mix(in srgb, var(--p) 5%, #fff)" }}>
         <div style={{ maxWidth: 1120, margin: "0 auto", padding: "48px 24px" }}>
-          {unlocked ? (
+          {showFull ? (
             <>
               <h1 style={{ fontFamily: "var(--head)", fontSize: 32, fontWeight: 800, color: "var(--p)", margin: "0 0 28px", letterSpacing: "-.01em" }}>
                 {count} available {count === 1 ? "deal" : "deals"}
               </h1>
               {deals.length > 0 ? (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 22 }}>
+                <div className="lh-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 22 }}>
                   {deals.map((d) => (
-                    <DealCard key={d.id} property={d} variant="full" />
+                    <DealCard
+                      key={d.id}
+                      property={d}
+                      variant="full"
+                      href={publicMode && d.slug ? `/properties/${d.slug}` : undefined}
+                    />
                   ))}
                 </div>
               ) : (

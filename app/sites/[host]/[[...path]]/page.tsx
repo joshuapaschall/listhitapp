@@ -8,7 +8,14 @@ import { SiteRendererRSC } from "@/components/sites/site-renderer-rsc"
 import { SiteJsonLd } from "@/components/sites/site-json-ld"
 import { LegalPage } from "@/components/sites/legal-page"
 import { PropertiesPage } from "@/components/sites/properties-page"
-import { getPublishedDeals, getPublishedDealCount } from "@/services/site-deals-service"
+import { PropertyPage } from "@/components/sites/property-page"
+import { PropertyJsonLd } from "@/components/sites/property-json-ld"
+import {
+  getPublishedDeals,
+  getPublishedDealCount,
+  getPublishedDealBySlug,
+  getNearbyPublishedDeals,
+} from "@/services/site-deals-service"
 
 // Public tenant sites read published rows from the DB at request time, so this
 // route is never prerendered at build.
@@ -69,6 +76,28 @@ export async function generateMetadata({
       return seoMeta(host, path, `Available deals · ${site.name}`, `Browse available off-market deals from ${site.name}.`, site.name)
     }
 
+    if (params.path?.length === 2 && params.path[0] === "properties") {
+      const slug = params.path[1]
+      const site = await resolveSiteByHost(host)
+      if (!site || site.deals_public === false) return { title: "Not found", robots: { index: false } }
+      const deal = await getPublishedDealBySlug(site.org_id, slug).catch(() => null)
+      if (!deal) return { title: "Not found", robots: { index: false } }
+      const cityState = [deal.city, deal.state].filter(Boolean).join(", ")
+      const title = deal.address
+        ? `${[deal.address, cityState].filter(Boolean).join(", ")}`
+        : `${deal.bedrooms ?? ""}BR investment property in ${cityState || "your market"}`.trim()
+      const priceBit = deal.price != null ? `$${Math.round(deal.price).toLocaleString("en-US")} ` : ""
+      const specBit = [
+        deal.bedrooms != null ? `${deal.bedrooms} bed` : null,
+        deal.bathrooms != null ? `${deal.bathrooms} bath` : null,
+      ]
+        .filter(Boolean)
+        .join(", ")
+      const desc = `${priceBit}off-market deal${specBit ? ` — ${specBit}` : ""}${cityState ? ` in ${cityState}` : ""}. Join ${site.name}'s buyers list for full address & details.`
+      const meta = seoMeta(host, `/properties/${slug}`, `${title} · ${site.name}`, desc, site.name)
+      return { ...meta, robots: { index: true, follow: true } }
+    }
+
     const result = await resolveSite(host, path)
     if (!result) return { title: "Site not found" }
     return seoMeta(host, path, result.page.title || result.site.name, result.page.meta_description || undefined, result.site.name)
@@ -96,6 +125,7 @@ export default async function SitePage({ params }: { params: SitePageParams }) {
     if (!site) notFound()
     const theme = { ...DEFAULT_THEME, ...(site.theme_json || {}) }
     const business = { ...DEFAULT_BUSINESS, ...(site.business_json || {}) }
+    const publicMode = site.deals_public !== false
     const unlocked = cookies().get("lh_deals_unlocked")?.value === "1"
     const formContext = {
       persona: site.persona,
@@ -107,6 +137,12 @@ export default async function SitePage({ params }: { params: SitePageParams }) {
       markets: { ...DEFAULT_MARKETS, ...((site.markets_json as any) || {}) },
       deals: [],
       business,
+    }
+    // Public sites: full, ungated list — every card links to its indexable
+    // detail page. No address stripping, no cookie gate.
+    if (publicMode) {
+      const deals = await getPublishedDeals(site.org_id, 24).catch(() => [])
+      return <PropertiesPage brandName={site.name} theme={theme} business={business} formContext={formContext} publicMode unlocked deals={deals} count={deals.length} />
     }
     if (unlocked) {
       const deals = await getPublishedDeals(site.org_id, 24).catch(() => [])
@@ -120,6 +156,37 @@ export default async function SitePage({ params }: { params: SitePageParams }) {
     // — the carrot — is stripped server-side so it never reaches the client.
     const lockedDeals = teaser.map((d) => ({ ...d, address: null }))
     return <PropertiesPage brandName={site.name} theme={theme} business={business} formContext={formContext} unlocked={false} deals={lockedDeals} count={count} />
+  }
+
+  // Individual property detail page — public + indexable when deals_public.
+  if (params.path?.length === 2 && params.path[0] === "properties") {
+    const site = await resolveSiteByHost(host)
+    if (!site || site.deals_public === false) notFound()
+    const deal = await getPublishedDealBySlug(site.org_id, params.path[1])
+    if (!deal) notFound()
+    const theme = { ...DEFAULT_THEME, ...(site.theme_json || {}) }
+    const business = { ...DEFAULT_BUSINESS, ...(site.business_json || {}) }
+    const nearby = await getNearbyPublishedDeals(site.org_id, deal.city, deal.state, deal.id, 3).catch(() => [])
+    const formContext = {
+      persona: site.persona,
+      brandName: site.name,
+      optinEnabled: business.optin?.enabled !== false,
+      requireConsent: business.optin?.requireConsent !== false,
+      disclosure: buildOptInDisclosure(site.name),
+      legalPaths: { terms: "/terms", privacy: "/privacy" },
+      markets: { ...DEFAULT_MARKETS, ...((site.markets_json as any) || {}) },
+      deals: nearby,
+      business,
+    }
+    // E1 location-pages helper is absent, so we don't have a city landing page
+    // to deep-link the breadcrumb to yet — fall back to /properties.
+    const cityLocationHref = null
+    return (
+      <>
+        <PropertyJsonLd deal={deal} host={host} brandName={site.name} />
+        <PropertyPage host={host} site={site} theme={theme} business={business} deal={deal} nearby={nearby} formContext={formContext} cityLocationHref={cityLocationHref} />
+      </>
+    )
   }
 
   const result = await resolveSite(host, path)
