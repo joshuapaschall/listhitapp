@@ -1,0 +1,77 @@
+import { NextRequest, NextResponse } from "next/server"
+import { requireOrgContext } from "@/lib/auth/org-context"
+import { SiteService, type BlockPatch } from "@/services/site-service"
+import type { SiteTheme } from "@/lib/site-builder/types"
+
+type RouteContext = { params: Promise<{ id: string }> }
+
+export async function GET(_request: NextRequest, context: RouteContext) {
+  const { user, orgId, supabase } = await requireOrgContext()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!orgId) return NextResponse.json({ error: "Missing org" }, { status: 400 })
+
+  const { id } = await context.params
+  try {
+    const result = await SiteService.get(supabase, orgId, id)
+    if (!result) return NextResponse.json({ error: "Site not found" }, { status: 404 })
+    return NextResponse.json(result)
+  } catch (err: any) {
+    return NextResponse.json({ error: err?.message || "Failed to load site" }, { status: 500 })
+  }
+}
+
+export async function PATCH(request: NextRequest, context: RouteContext) {
+  const { user, orgId, supabase } = await requireOrgContext()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!orgId) return NextResponse.json({ error: "Missing org" }, { status: 400 })
+
+  const { id } = await context.params
+
+  let body: {
+    name?: string
+    slug?: string
+    theme?: Partial<SiteTheme>
+    blockPatches?: BlockPatch[]
+  }
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
+  }
+
+  try {
+    // Make sure the site is in this org before mutating anything.
+    const existing = await SiteService.get(supabase, orgId, id)
+    if (!existing) return NextResponse.json({ error: "Site not found" }, { status: 404 })
+
+    if (body.name !== undefined || body.slug !== undefined) {
+      await SiteService.updateMeta(supabase, orgId, id, { name: body.name, slug: body.slug })
+    }
+    if (body.theme) {
+      await SiteService.updateTheme(supabase, orgId, id, body.theme)
+    }
+    if (Array.isArray(body.blockPatches) && body.blockPatches.length) {
+      await SiteService.patchPageBlocks(supabase, orgId, id, body.blockPatches)
+    }
+
+    const result = await SiteService.get(supabase, orgId, id)
+    return NextResponse.json(result)
+  } catch (err: any) {
+    return NextResponse.json({ error: err?.message || "Failed to update site" }, { status: 500 })
+  }
+}
+
+export async function DELETE(_request: NextRequest, context: RouteContext) {
+  const { user, orgId, supabase } = await requireOrgContext()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!orgId) return NextResponse.json({ error: "Missing org" }, { status: 400 })
+
+  const { id } = await context.params
+  try {
+    const { error } = await supabase.from("sites").delete().eq("id", id).eq("org_id", orgId)
+    if (error) throw new Error(error.message)
+    return NextResponse.json({ ok: true })
+  } catch (err: any) {
+    return NextResponse.json({ error: err?.message || "Failed to delete site" }, { status: 500 })
+  }
+}
