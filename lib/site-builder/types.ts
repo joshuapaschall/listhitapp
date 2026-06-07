@@ -68,6 +68,16 @@ export interface SiteBusiness {
   }
 }
 
+export interface SiteMarkets {
+  scope: "nationwide" | "specific"
+  markets: string[]   // canonical location strings: "Atlanta (GA)", "Fulton County (GA)", "GA, USA"
+}
+
+export const DEFAULT_MARKETS: SiteMarkets = {
+  scope: "nationwide",
+  markets: [],
+}
+
 export const DEFAULT_BUSINESS: SiteBusiness = {
   email: "",
   phone: "",

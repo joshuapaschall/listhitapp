@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireOrgContext } from "@/lib/auth/org-context"
 import { SiteService, type BlockPatch } from "@/services/site-service"
-import type { SiteTheme, SiteBusiness } from "@/lib/site-builder/types"
+import type { SiteTheme, SiteBusiness, SiteMarkets } from "@/lib/site-builder/types"
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -32,6 +32,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     slug?: string
     theme?: Partial<SiteTheme>
     business?: Partial<SiteBusiness>
+    markets?: Partial<SiteMarkets>
     blockPatches?: BlockPatch[]
   }
   try {
@@ -53,6 +54,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     }
     if (body.business) {
       await SiteService.updateBusiness(supabase, id, body.business)
+    }
+    if (body.markets) {
+      await SiteService.updateMarkets(supabase, id, body.markets)
     }
     if (Array.isArray(body.blockPatches) && body.blockPatches.length) {
       await SiteService.patchPageBlocks(supabase, orgId, id, body.blockPatches)

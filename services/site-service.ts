@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { DEFAULT_THEME, DEFAULT_BUSINESS, type SitePersona, type SiteTemplateId, type SiteTheme, type SiteBusiness } from "@/lib/site-builder/types"
+import { DEFAULT_THEME, DEFAULT_BUSINESS, DEFAULT_MARKETS, type SitePersona, type SiteTemplateId, type SiteTheme, type SiteBusiness, type SiteMarkets } from "@/lib/site-builder/types"
 import { getSiteTemplate } from "@/lib/site-builder/templates"
 import { slugifySiteName, isReservedSlug } from "@/lib/site-builder/slug"
 
@@ -171,6 +171,16 @@ export class SiteService {
     const merged = { ...DEFAULT_BUSINESS, ...((existing?.business_json as Partial<SiteBusiness>) || {}), ...patch }
     const { error: updateError } = await client
       .from("sites").update({ business_json: merged }).eq("id", siteId)
+    if (updateError) throw new Error(updateError.message)
+  }
+
+  static async updateMarkets(client: SupabaseClient, siteId: string, patch: Partial<SiteMarkets>) {
+    const { data: existing, error: readError } = await client
+      .from("sites").select("markets_json").eq("id", siteId).single()
+    if (readError) throw new Error(readError.message)
+    const merged = { ...DEFAULT_MARKETS, ...((existing?.markets_json as Partial<SiteMarkets>) || {}), ...patch }
+    const { error: updateError } = await client
+      .from("sites").update({ markets_json: merged }).eq("id", siteId)
     if (updateError) throw new Error(updateError.message)
   }
 

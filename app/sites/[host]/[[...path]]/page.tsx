@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import { resolveSite, mergeThemeIntoRoot, resolveSiteByHost } from "@/lib/site-builder/resolve-site"
-import { DEFAULT_THEME, DEFAULT_BUSINESS } from "@/lib/site-builder/types"
+import { DEFAULT_THEME, DEFAULT_BUSINESS, DEFAULT_MARKETS } from "@/lib/site-builder/types"
 import { buildTermsAndPrivacy, buildContactDoc, buildOptInDisclosure } from "@/lib/site-builder/compliance"
 import { SiteRenderer } from "@/components/sites/site-renderer"
 import { LegalPage } from "@/components/sites/legal-page"
@@ -85,6 +85,7 @@ export default async function SitePage({ params }: { params: SitePageParams }) {
     requireConsent: business.optin?.requireConsent !== false,
     disclosure: buildOptInDisclosure(result.site.name),
     legalPaths: { terms: "/terms", privacy: "/privacy" },
+    markets: { ...DEFAULT_MARKETS, ...((result.site.markets_json as any) || {}) },
   }
 
   return <SiteRenderer data={data} theme={result.theme} form={formContext} />
