@@ -1,11 +1,13 @@
 import type { Metadata } from "next"
+import { cookies } from "next/headers"
 import { notFound } from "next/navigation"
 import { resolveSite, mergeThemeIntoRoot, resolveSiteByHost } from "@/lib/site-builder/resolve-site"
 import { DEFAULT_THEME, DEFAULT_BUSINESS, DEFAULT_MARKETS } from "@/lib/site-builder/types"
 import { buildTermsAndPrivacy, buildContactDoc, buildOptInDisclosure } from "@/lib/site-builder/compliance"
 import { SiteRenderer } from "@/components/sites/site-renderer"
 import { LegalPage } from "@/components/sites/legal-page"
-import { getPublishedDeals } from "@/services/site-deals-service"
+import { PropertiesPage } from "@/components/sites/properties-page"
+import { getPublishedDeals, getPublishedDealCount } from "@/services/site-deals-service"
 
 // Public tenant sites read published rows from the DB at request time, so this
 // route is never prerendered at build.
@@ -48,6 +50,12 @@ export async function generateMetadata({
       return { title: `${doc.title} · ${site.name}` }
     }
 
+    if (path === "/properties") {
+      const site = await resolveSiteByHost(host)
+      if (!site) return { title: "Site not found" }
+      return { title: `Available deals · ${site.name}` }
+    }
+
     const result = await resolveSite(host, path)
     if (!result) return { title: "Site not found" }
     return {
@@ -71,6 +79,30 @@ export default async function SitePage({ params }: { params: SitePageParams }) {
     const business = { ...DEFAULT_BUSINESS, ...(site.business_json || {}) }
     const doc = legalKind === "legal" ? buildTermsAndPrivacy(site.name, business) : buildContactDoc(site.name, business)
     return <LegalPage doc={doc} brandName={site.name} phone={business.phone} theme={theme} />
+  }
+
+  if (path === "/properties") {
+    const site = await resolveSiteByHost(host)
+    if (!site) notFound()
+    const theme = { ...DEFAULT_THEME, ...(site.theme_json || {}) }
+    const business = { ...DEFAULT_BUSINESS, ...(site.business_json || {}) }
+    const unlocked = cookies().get("lh_deals_unlocked")?.value === "1"
+    const formContext = {
+      persona: site.persona,
+      brandName: site.name,
+      optinEnabled: business.optin?.enabled !== false,
+      requireConsent: business.optin?.requireConsent !== false,
+      disclosure: buildOptInDisclosure(site.name),
+      legalPaths: { terms: "/terms", privacy: "/privacy" },
+      markets: { ...DEFAULT_MARKETS, ...((site.markets_json as any) || {}) },
+      deals: [],
+    }
+    if (unlocked) {
+      const deals = await getPublishedDeals(site.org_id, 24).catch(() => [])
+      return <PropertiesPage brandName={site.name} theme={theme} business={business} formContext={formContext} unlocked deals={deals} count={deals.length} />
+    }
+    const count = await getPublishedDealCount(site.org_id).catch(() => 0)
+    return <PropertiesPage brandName={site.name} theme={theme} business={business} formContext={formContext} unlocked={false} deals={[]} count={count} />
   }
 
   const result = await resolveSite(host, path)
