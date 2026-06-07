@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { corsHeaders, isOriginAllowed } from "@/lib/public-api/cors"
+import { resolveSiteByHost } from "@/lib/site-builder/resolve-site"
+import { originHost } from "@/lib/public-api"
 import { supabaseAdmin } from "@/lib/supabase/admin"
 
 type PropertyRow = {
@@ -72,6 +74,10 @@ export async function GET(request: NextRequest) {
   const allowedOrigin = origin as string
 
   try {
+    const host = originHost(origin || "")
+    const site = host ? await resolveSiteByHost(host) : null
+    const orgId = site?.org_id ?? (process.env.PUBLIC_PROPERTIES_DEFAULT_ORG_ID || null)
+
     const params = request.nextUrl.searchParams
     const limit = parseIntParam(params.get("limit"), 20, 1, 50)
     const offset = parseIntParam(params.get("offset"), 0, 0)
@@ -95,6 +101,10 @@ export async function GET(request: NextRequest) {
       .not("slug", "is", null)
       .is("deleted_at", null)
 
+    if (orgId) {
+      countQuery = countQuery.eq("org_id", orgId)
+      dataQuery = dataQuery.eq("org_id", orgId)
+    }
     if (propertyType) {
       countQuery = countQuery.eq("property_type", propertyType)
       dataQuery = dataQuery.eq("property_type", propertyType)
