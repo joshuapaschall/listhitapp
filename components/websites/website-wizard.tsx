@@ -1,0 +1,690 @@
+"use client"
+
+import { useEffect, useMemo, useState } from "react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { ArrowLeft, ArrowRight, Check, ExternalLink, Eye, Loader2, X } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { cn } from "@/lib/utils"
+import { SitePreview } from "@/components/websites/site-preview"
+import { CURATED_HERO_IMAGES, extractContent, type WizardContent } from "@/lib/site-builder/compose"
+import { ALL_SITE_TEMPLATES } from "@/lib/site-builder/templates"
+import { PERSONAS, getPersona } from "@/lib/site-builder/templates"
+import { DEFAULT_THEME, type SitePersona, type SiteTemplateId, type SiteTheme } from "@/lib/site-builder/types"
+
+type WizardProps = { mode: "new" } | { mode: "edit"; siteId: string }
+
+const STEPS = ["Goal", "Template", "Brand", "Content", "Launch"]
+
+const PERSONA_BLURBS: Record<SitePersona, string> = {
+  cash: "Cash buyers who want a fast, as-is sale.",
+  land: "Owners of vacant land ready to sell.",
+  owner: "Buyers who need owner financing.",
+  rto: "Renters working toward ownership.",
+  commercial: "Commercial property sellers.",
+  agentinv: "Investors hunting off-market deals.",
+  agentbuy: "Home buyers who want an agent.",
+}
+
+const FONT_OPTIONS = [
+  { label: "Bricolage Grotesque", value: "'Bricolage Grotesque', serif" },
+  { label: "Fraunces", value: "'Fraunces', serif" },
+  { label: "Hanken Grotesk", value: "'Hanken Grotesk', sans-serif" },
+  { label: "Space Grotesk", value: "'Space Grotesk', sans-serif" },
+]
+
+const TEMPLATE_BLURBS: Record<string, string> = {
+  aspen: "Bold full-bleed photo hero with a floating form.",
+  cedar: "Calm centered hero with an inline form row.",
+  madrone: "Split hero: form left, photo + stat right.",
+  oak: "High-contrast color band hero, inline form.",
+}
+
+function seedContent(name: string, persona: SitePersona): WizardContent {
+  const p = getPersona(persona)
+  const brand = name || "Your Company"
+  return {
+    brandName: brand,
+    phone: "(555) 555-5555",
+    headline: p.headline,
+    subhead: p.subhead,
+    ctaLabel: p.ctaLabel,
+    heroImageUrl: CURATED_HERO_IMAGES[0].url,
+    footerText: `© ${brand}. All rights reserved.`,
+  }
+}
+
+interface Draft {
+  name: string
+  persona: SitePersona
+  templateId: SiteTemplateId
+  theme: SiteTheme
+  content: WizardContent
+}
+
+export default function WebsiteWizard(props: WizardProps) {
+  const router = useRouter()
+  const isEdit = props.mode === "edit"
+
+  const [step, setStep] = useState(0)
+  const [siteId, setSiteId] = useState<string | null>(isEdit ? props.siteId : null)
+  const [slug, setSlug] = useState<string>("")
+  const [status, setStatus] = useState<string>("draft")
+  const [saving, setSaving] = useState(false)
+  const [loading, setLoading] = useState(isEdit)
+  const [error, setError] = useState("")
+  const [published, setPublished] = useState(false)
+  const [mobilePreview, setMobilePreview] = useState(false)
+
+  const [draft, setDraft] = useState<Draft>(() => ({
+    name: "",
+    persona: "cash",
+    templateId: "aspen",
+    theme: { ...DEFAULT_THEME },
+    content: seedContent("", "cash"),
+  }))
+
+  // Edit mode: hydrate from the API and jump to the Brand step.
+  useEffect(() => {
+    if (!isEdit) return
+    let active = true
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/sites/${props.siteId}`)
+        if (!res.ok) throw new Error("Failed to load site")
+        const { site, pages } = await res.json()
+        if (!active) return
+        const theme: SiteTheme = { ...DEFAULT_THEME, ...(site.theme_json || {}) }
+        const home = (pages || []).find((p: any) => p.path === "/")
+        const content = home ? extractContent(home.puck_data) : seedContent(site.name, site.persona)
+        setDraft({
+          name: site.name || "",
+          persona: (site.persona as SitePersona) || "cash",
+          templateId: (site.template_id as SiteTemplateId) || "aspen",
+          theme,
+          content,
+        })
+        setSlug(site.slug || "")
+        setStatus(site.status || "draft")
+        setStep(2)
+      } catch (e: any) {
+        if (active) setError(e?.message || "Failed to load site")
+      } finally {
+        if (active) setLoading(false)
+      }
+    })()
+    return () => {
+      active = false
+    }
+  }, [isEdit, props])
+
+  const setTheme = (patch: Partial<SiteTheme>) =>
+    setDraft((d) => ({ ...d, theme: { ...d.theme, ...patch } }))
+  const setContent = (patch: Partial<WizardContent>) =>
+    setDraft((d) => ({ ...d, content: { ...d.content, ...patch } }))
+
+  const blockPatches = useMemo(
+    () => [
+      {
+        blockType: "Hero",
+        props: {
+          headline: draft.content.headline,
+          subhead: draft.content.subhead,
+          ctaLabel: draft.content.ctaLabel,
+          imageUrl: draft.content.heroImageUrl,
+        },
+      },
+      {
+        blockType: "Nav",
+        props: {
+          brandName: draft.content.brandName,
+          phone: draft.content.phone,
+          logoUrl: draft.theme.logoUrl || "",
+          layout: draft.theme.headerLayout,
+        },
+      },
+      { blockType: "Footer", props: { text: draft.content.footerText } },
+    ],
+    [draft],
+  )
+
+  async function saveDraft(): Promise<boolean> {
+    if (!siteId) return true
+    setSaving(true)
+    setError("")
+    try {
+      const res = await fetch(`/api/sites/${siteId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: draft.name, theme: draft.theme, blockPatches }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.error || "Failed to save changes")
+      }
+      return true
+    } catch (e: any) {
+      setError(e?.message || "Failed to save changes")
+      return false
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function ensureCreated(): Promise<boolean> {
+    if (siteId) return true
+    setSaving(true)
+    setError("")
+    try {
+      const res = await fetch("/api/sites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: draft.name, persona: draft.persona, templateId: draft.templateId }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.error || "Failed to create website")
+      }
+      const { site } = await res.json()
+      setSiteId(site.id)
+      setSlug(site.slug || "")
+      setStatus(site.status || "draft")
+      return true
+    } catch (e: any) {
+      setError(e?.message || "Failed to create website")
+      return false
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleContinue() {
+    setError("")
+    if (step === 0) {
+      if (!draft.name.trim() || !draft.persona) return
+      setStep(1)
+      return
+    }
+    if (step === 1) {
+      const ok = await ensureCreated()
+      if (ok) setStep(2)
+      return
+    }
+    if (step === 2 || step === 3) {
+      const ok = await saveDraft()
+      if (ok) setStep(step + 1)
+      return
+    }
+  }
+
+  function handleBack() {
+    setError("")
+    if (step === 0) {
+      router.push("/websites")
+      return
+    }
+    // Edit mode can't go back before the Brand step.
+    if (isEdit && step <= 2) {
+      router.push("/websites")
+      return
+    }
+    setStep(step - 1)
+  }
+
+  async function handlePublish() {
+    if (!siteId) return
+    setSaving(true)
+    setError("")
+    try {
+      const saved = await fetch(`/api/sites/${siteId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: draft.name, theme: draft.theme, blockPatches }),
+      })
+      if (!saved.ok) {
+        const body = await saved.json().catch(() => ({}))
+        throw new Error(body?.error || "Failed to save before publishing")
+      }
+      const res = await fetch(`/api/sites/${siteId}/publish`, { method: "POST" })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.error || "Failed to publish")
+      }
+      const { site } = await res.json()
+      setStatus(site?.status || "published")
+      if (site?.slug) setSlug(site.slug)
+      setPublished(true)
+    } catch (e: any) {
+      setError(e?.message || "Failed to publish")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const liveUrl = slug ? `https://${slug}.listhit.io` : ""
+  const canContinue =
+    step === 0 ? Boolean(draft.name.trim() && draft.persona) : step === 1 ? Boolean(draft.templateId) : true
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex h-screen flex-col md:flex-row">
+      {/* Left rail */}
+      <div className="flex w-full flex-col border-r border-border bg-background md:w-[440px] md:shrink-0">
+        {/* Top bar */}
+        <div className="flex items-center justify-between border-b border-border px-5 py-3">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold">Website studio</span>
+          </div>
+          <Link
+            href="/websites"
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-3.5 w-3.5" />
+            Exit
+          </Link>
+        </div>
+
+        {/* Stepper */}
+        <div className="flex items-center gap-2 border-b border-border px-5 py-3">
+          {STEPS.map((label, i) => (
+            <div key={label} className="flex items-center gap-2">
+              <div
+                className={cn(
+                  "flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-medium",
+                  i < step
+                    ? "bg-brand text-white"
+                    : i === step
+                      ? "bg-foreground text-background"
+                      : "bg-muted text-muted-foreground",
+                )}
+              >
+                {i < step ? <Check className="h-3 w-3" /> : i + 1}
+              </div>
+              <span className={cn("hidden text-xs lg:inline", i === step ? "font-medium text-foreground" : "text-muted-foreground")}>
+                {label}
+              </span>
+              {i < STEPS.length - 1 && <div className="h-px w-3 bg-border" />}
+            </div>
+          ))}
+        </div>
+
+        {/* Step body */}
+        <div className="flex-1 overflow-auto px-5 py-5">
+          {error && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          {step === 0 && (
+            <div className="space-y-5">
+              <div className="space-y-1.5">
+                <Label htmlFor="biz-name">Business name</Label>
+                <Input
+                  id="biz-name"
+                  placeholder="Acme Home Buyers"
+                  value={draft.name}
+                  onChange={(e) =>
+                    setDraft((d) => ({
+                      ...d,
+                      name: e.target.value,
+                      content: { ...d.content, brandName: e.target.value || "Your Company" },
+                    }))
+                  }
+                />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold">Who do you want to reach?</h2>
+                <p className="text-sm text-muted-foreground">Pick the audience this site is built for.</p>
+                <div className="mt-3 grid grid-cols-1 gap-2">
+                  {(Object.keys(PERSONAS) as SitePersona[]).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() =>
+                        setDraft((d) => {
+                          const next = getPersona(p)
+                          return {
+                            ...d,
+                            persona: p,
+                            content: {
+                              ...d.content,
+                              headline: next.headline,
+                              subhead: next.subhead,
+                              ctaLabel: next.ctaLabel,
+                            },
+                          }
+                        })
+                      }
+                      className={cn(
+                        "rounded-lg border p-3 text-left transition-colors",
+                        draft.persona === p
+                          ? "border-brand bg-brand/5"
+                          : "border-border hover:bg-muted/60",
+                      )}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium capitalize">{getPersona(p).eyebrow}</span>
+                        {draft.persona === p && <Check className="h-4 w-4 text-brand" />}
+                      </div>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{PERSONA_BLURBS[p]}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {step === 1 && (
+            <div className="space-y-4">
+              <div>
+                <h2 className="text-base font-semibold">Pick a starting point</h2>
+                <p className="text-sm text-muted-foreground">You can fine-tune everything next.</p>
+              </div>
+              <div className="grid grid-cols-1 gap-3">
+                {ALL_SITE_TEMPLATES.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setDraft((d) => ({ ...d, templateId: t.id }))}
+                    className={cn(
+                      "rounded-lg border p-3 text-left transition-colors",
+                      draft.templateId === t.id ? "border-brand bg-brand/5" : "border-border hover:bg-muted/60",
+                    )}
+                  >
+                    <div className="flex items-start gap-3">
+                      <HeroThumb variant={t.heroVariant} />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm font-medium">{t.name}</span>
+                          {draft.templateId === t.id && <Check className="h-4 w-4 text-brand" />}
+                        </div>
+                        <p className="mt-0.5 text-xs text-muted-foreground">{TEMPLATE_BLURBS[t.id] || t.description}</p>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="space-y-5">
+              <div>
+                <h2 className="text-base font-semibold">Make it yours</h2>
+                <p className="text-sm text-muted-foreground">Colors, fonts, and header style.</p>
+              </div>
+              <ColorRow label="Primary color" value={draft.theme.primary} onChange={(v) => setTheme({ primary: v })} />
+              <ColorRow label="Accent color" value={draft.theme.accent} onChange={(v) => setTheme({ accent: v })} />
+              <div className="space-y-1.5">
+                <Label>Heading font</Label>
+                <Select value={draft.theme.headingFont} onValueChange={(v) => setTheme({ headingFont: v })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a font" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FONT_OPTIONS.map((f) => (
+                      <SelectItem key={f.value} value={f.value}>
+                        {f.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Header layout</Label>
+                <RadioGroup
+                  value={draft.theme.headerLayout}
+                  onValueChange={(v) => setTheme({ headerLayout: v as SiteTheme["headerLayout"] })}
+                  className="flex gap-4"
+                >
+                  {(["split", "center", "stack"] as const).map((opt) => (
+                    <label key={opt} className="flex items-center gap-2 text-sm capitalize">
+                      <RadioGroupItem value={opt} /> {opt}
+                    </label>
+                  ))}
+                </RadioGroup>
+              </div>
+              <div className="flex items-center justify-between rounded-lg border border-border p-3">
+                <div>
+                  <p className="text-sm font-medium">Show announcement banner</p>
+                  <p className="text-xs text-muted-foreground">A thin promo strip at the top.</p>
+                </div>
+                <Switch checked={draft.theme.banner} onCheckedChange={(v) => setTheme({ banner: v })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="logo-url">Logo URL</Label>
+                <Input
+                  id="logo-url"
+                  placeholder="https://…/logo.png"
+                  value={draft.theme.logoUrl || ""}
+                  onChange={(e) => setTheme({ logoUrl: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">Paste a URL for now — upload coming soon.</p>
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="space-y-4">
+              <div>
+                <h2 className="text-base font-semibold">Write your message</h2>
+                <p className="text-sm text-muted-foreground">Speak directly to your audience.</p>
+              </div>
+              <Field label="Headline">
+                <Input value={draft.content.headline} onChange={(e) => setContent({ headline: e.target.value })} />
+              </Field>
+              <Field label="Subhead">
+                <Input value={draft.content.subhead} onChange={(e) => setContent({ subhead: e.target.value })} />
+              </Field>
+              <Field label="Button label">
+                <Input value={draft.content.ctaLabel} onChange={(e) => setContent({ ctaLabel: e.target.value })} />
+              </Field>
+              <Field label="Phone">
+                <Input value={draft.content.phone} onChange={(e) => setContent({ phone: e.target.value })} />
+              </Field>
+              <Field label="Footer text">
+                <Input value={draft.content.footerText} onChange={(e) => setContent({ footerText: e.target.value })} />
+              </Field>
+              <div className="space-y-1.5">
+                <Label>Hero image</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {CURATED_HERO_IMAGES.map((img) => (
+                    <button
+                      key={img.url}
+                      type="button"
+                      onClick={() => setContent({ heroImageUrl: img.url })}
+                      className={cn(
+                        "relative aspect-video overflow-hidden rounded-md border-2",
+                        draft.content.heroImageUrl === img.url ? "border-brand" : "border-transparent",
+                      )}
+                      title={img.label}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={img.url} alt={img.label} className="h-full w-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+                <Input
+                  className="mt-2"
+                  placeholder="Or paste an image URL"
+                  value={draft.content.heroImageUrl}
+                  onChange={(e) => setContent({ heroImageUrl: e.target.value })}
+                />
+              </div>
+            </div>
+          )}
+
+          {step === 4 && (
+            <div className="space-y-5">
+              {!published ? (
+                <>
+                  <div>
+                    <h2 className="text-base font-semibold">Ready to launch</h2>
+                    <p className="text-sm text-muted-foreground">Your site will go live at this address.</p>
+                  </div>
+                  <div className="rounded-lg border border-border bg-muted/40 p-4">
+                    <p className="text-xs text-muted-foreground">Publish address</p>
+                    <p className="mt-1 font-mono text-sm font-medium">
+                      {slug ? `${slug}.listhit.io` : "—"}
+                    </p>
+                  </div>
+                  <Button type="button" variant="brand" className="w-full" onClick={handlePublish} disabled={saving || !siteId}>
+                    {saving ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" /> Publishing…
+                      </>
+                    ) : status === "published" ? (
+                      "Republish website"
+                    ) : (
+                      "Publish website"
+                    )}
+                  </Button>
+                  <p className="text-xs text-muted-foreground">Custom domains are coming soon.</p>
+                </>
+              ) : (
+                <div className="space-y-4 text-center">
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-brand/10">
+                    <Check className="h-6 w-6 text-brand" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-semibold">Your website is live</h2>
+                    <p className="text-sm text-muted-foreground">It may take a moment to propagate.</p>
+                  </div>
+                  {liveUrl && (
+                    <a
+                      href={liveUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 text-sm font-medium text-brand hover:underline"
+                    >
+                      {liveUrl.replace("https://", "")}
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  )}
+                  <div>
+                    <Button asChild variant="brand">
+                      <Link href="/websites">Done</Link>
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer nav */}
+        {!(step === 4 && published) && (
+          <div className="flex items-center justify-between border-t border-border px-5 py-3">
+            <Button type="button" variant="ghost" onClick={handleBack} disabled={saving}>
+              <ArrowLeft className="h-4 w-4" />
+              {step === 0 || (isEdit && step <= 2) ? "Exit" : "Back"}
+            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="md:hidden"
+                onClick={() => setMobilePreview((v) => !v)}
+              >
+                <Eye className="h-4 w-4" />
+                Preview
+              </Button>
+              {step < 4 && (
+                <Button type="button" variant="brand" onClick={handleContinue} disabled={saving || !canContinue}>
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Continue <ArrowRight className="h-4 w-4" /></>}
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Preview */}
+      <div className={cn("flex-1 overflow-hidden", mobilePreview ? "block" : "hidden md:block")}>
+        <SitePreview
+          templateId={draft.templateId}
+          persona={draft.persona}
+          theme={draft.theme}
+          content={draft.content}
+        />
+      </div>
+    </div>
+  )
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      {children}
+    </div>
+  )
+}
+
+function ColorRow({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-9 w-12 shrink-0 cursor-pointer rounded-md border border-border bg-background"
+          aria-label={`${label} swatch`}
+        />
+        <Input value={value} onChange={(e) => onChange(e.target.value)} className="font-mono" />
+      </div>
+    </div>
+  )
+}
+
+function HeroThumb({ variant }: { variant: string }) {
+  // Tiny CSS representation of each hero layout.
+  const base = "h-14 w-20 shrink-0 overflow-hidden rounded-md border border-border bg-muted"
+  if (variant === "photo") {
+    return (
+      <div className={cn(base, "relative bg-gradient-to-br from-slate-400 to-slate-600")}>
+        <div className="absolute right-1 top-2 h-9 w-7 rounded-sm bg-white/90" />
+      </div>
+    )
+  }
+  if (variant === "centered") {
+    return (
+      <div className={cn(base, "flex flex-col items-center justify-center gap-1")}>
+        <div className="h-1.5 w-10 rounded-sm bg-foreground/40" />
+        <div className="h-3 w-12 rounded-sm bg-foreground/15" />
+      </div>
+    )
+  }
+  if (variant === "split") {
+    return (
+      <div className={cn(base, "flex")}>
+        <div className="flex-1 bg-white/80" />
+        <div className="flex-1 bg-slate-500" />
+      </div>
+    )
+  }
+  // band
+  return (
+    <div className={cn(base, "flex flex-col")}>
+      <div className="h-7 bg-slate-700" />
+      <div className="flex-1 bg-white/80" />
+    </div>
+  )
+}
