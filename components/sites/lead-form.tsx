@@ -425,6 +425,7 @@ export function LeadForm({
       )}
       {subtitle && <div style={{ fontSize: 13.5, color: "#5a6675", marginTop: 4 }}>{subtitle}</div>}
       <div
+        className={inline ? "lh-form-2" : undefined}
         style={{
           display: inline ? "grid" : "block",
           gridTemplateColumns: inline ? "1fr 1fr" : undefined,
