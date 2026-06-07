@@ -42,7 +42,12 @@ function build(persona: SitePersona): Data {
         type: "TrustBar",
         props: {
           id: "TrustBar-madrone",
-          items: [{ label: "Real cash offers" }, { label: "No repairs needed" }, { label: "You pick the date" }, { label: "Hundreds served" }],
+          items: [
+            { value: "$0", label: "Fees to join" },
+            { value: "<24h", label: "New deals to your inbox" },
+            { value: "All cash", label: "Fast, certain closings" },
+            { value: "Off-market", label: "Deals you won't find online" },
+          ],
         },
       },
       {
