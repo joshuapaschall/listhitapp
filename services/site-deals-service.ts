@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase/admin"
 import type { DealSummary, DealDetail, DealImage } from "@/lib/site-builder/types"
+import type { ParsedMarket } from "@/lib/site-builder/location-pages"
 
 // Server-only: public site reads are sessionless, so they MUST use supabaseAdmin
 // (anon returns 0 rows under RLS). This lives in its own module — NOT in
@@ -72,6 +73,36 @@ export async function getPublishedDealCount(orgId: string | null): Promise<numbe
   const { count, error } = await query
   if (error) throw new Error(error.message)
   return count || 0
+}
+
+export async function getPublishedDealsForMarket(
+  orgId: string | null,
+  market: ParsedMarket,
+  limit = 6,
+): Promise<DealSummary[]> {
+  let query = supabaseAdmin
+    .from("properties")
+    .select(DEAL_SUMMARY_COLUMNS)
+    .eq("status", "available")
+    .not("slug", "is", null)
+    .is("deleted_at", null)
+  if (orgId) query = query.eq("org_id", orgId)
+
+  // City pages narrow to city + state; county/state pages scope to the state.
+  if (market.kind === "city") {
+    query = query.ilike("city", market.place).eq("state", market.stateId)
+  } else {
+    query = query.eq("state", market.stateId)
+  }
+
+  const { data, error } = await query.order("created_at", { ascending: false }).range(0, limit - 1)
+  if (error) throw new Error(error.message)
+
+  const rows = (data || []) as Array<Omit<DealSummary, "primary_image_url">>
+  if (rows.length === 0) return getPublishedDeals(orgId, limit)
+
+  const imagesByProperty = await fetchImagesByProperty(rows.map((r) => r.id))
+  return rows.map((r) => ({ ...r, primary_image_url: primaryUrl(imagesByProperty.get(r.id)) }))
 }
 
 export async function getPublishedDealBySlug(orgId: string | null, slug: string): Promise<DealDetail | null> {

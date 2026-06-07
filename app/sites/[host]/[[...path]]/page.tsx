@@ -15,7 +15,11 @@ import {
   getPublishedDealCount,
   getPublishedDealBySlug,
   getNearbyPublishedDeals,
+  getPublishedDealsForMarket,
 } from "@/services/site-deals-service"
+import { resolveLocationPage, locationHrefForDeal, PERSONA_URL_SLUG } from "@/lib/site-builder/location-pages"
+import { locationCopy } from "@/lib/site-builder/location-content"
+import { LocationPage } from "@/components/sites/location-page"
 
 // Public tenant sites read published rows from the DB at request time, so this
 // route is never prerendered at build.
@@ -98,6 +102,17 @@ export async function generateMetadata({
       return { ...meta, robots: { index: true, follow: true } }
     }
 
+    if (params.path?.length === 2) {
+      const site = await resolveSiteByHost(host)
+      if (site) {
+        const match = resolveLocationPage(site, params.path)
+        if (match) {
+          const copy = locationCopy(match.persona, match.market, site.name)
+          return { ...seoMeta(host, path, copy.title, copy.metaDescription, site.name), robots: { index: true, follow: true } }
+        }
+      }
+    }
+
     const result = await resolveSite(host, path)
     if (!result) return { title: "Site not found" }
     return seoMeta(host, path, result.page.title || result.site.name, result.page.meta_description || undefined, result.site.name)
@@ -178,15 +193,55 @@ export default async function SitePage({ params }: { params: SitePageParams }) {
       deals: nearby,
       business,
     }
-    // E1 location-pages helper is absent, so we don't have a city landing page
-    // to deep-link the breadcrumb to yet — fall back to /properties.
-    const cityLocationHref = null
+    // Deep-link the breadcrumb to this property's city (or state) landing page
+    // when the site runs specific markets; null on nationwide sites.
+    const cityLocationHref = locationHrefForDeal(site, deal.city, deal.state)
     return (
       <>
         <PropertyJsonLd deal={deal} host={host} brandName={site.name} />
         <PropertyPage host={host} site={site} theme={theme} business={business} deal={deal} nearby={nearby} formContext={formContext} cityLocationHref={cityLocationHref} />
       </>
     )
+  }
+
+  // Programmatic location landing pages (e.g. /investment-properties/atlanta-ga)
+  // for sites running specific markets. Nationwide sites have none.
+  if (params.path?.length === 2 && params.path[0] !== "properties") {
+    const site = await resolveSiteByHost(host)
+    const match = site ? resolveLocationPage(site, params.path) : null
+    // A claimed persona prefix on a specific-market site but an unknown market
+    // is a 404 — don't silently fall through to the home page.
+    if (site && PERSONA_URL_SLUG[site.persona as keyof typeof PERSONA_URL_SLUG] === params.path[0] && site.markets_json?.scope === "specific" && !match) {
+      notFound()
+    }
+    if (site && match) {
+      const theme = { ...DEFAULT_THEME, ...(site.theme_json || {}) }
+      const business = { ...DEFAULT_BUSINESS, ...(site.business_json || {}) }
+      const deals = await getPublishedDealsForMarket(site.org_id, match.market, 6).catch(() => [])
+      const formContext = {
+        persona: site.persona,
+        brandName: site.name,
+        optinEnabled: business.optin?.enabled !== false,
+        requireConsent: business.optin?.requireConsent !== false,
+        disclosure: buildOptInDisclosure(site.name),
+        legalPaths: { terms: "/terms", privacy: "/privacy" },
+        markets: { ...DEFAULT_MARKETS, ...((site.markets_json as any) || {}) },
+        deals,
+        business,
+      }
+      const copy = locationCopy(match.persona, match.market, site.name)
+      return (
+        <>
+          <SiteJsonLd
+            brandName={site.name}
+            host={host}
+            business={business}
+            areaServed={{ city: match.market.kind === "city" ? match.market.place : undefined, state: match.market.stateId }}
+          />
+          <LocationPage host={host} site={site} theme={theme} business={business} copy={copy} formContext={formContext} />
+        </>
+      )
+    }
   }
 
   const result = await resolveSite(host, path)
