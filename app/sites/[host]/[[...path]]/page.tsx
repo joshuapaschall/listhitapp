@@ -96,6 +96,7 @@ export default async function SitePage({ params }: { params: SitePageParams }) {
       legalPaths: { terms: "/terms", privacy: "/privacy" },
       markets: { ...DEFAULT_MARKETS, ...((site.markets_json as any) || {}) },
       deals: [],
+      business,
     }
     if (unlocked) {
       const deals = await getPublishedDeals(site.org_id, 24).catch(() => [])
@@ -121,6 +122,7 @@ export default async function SitePage({ params }: { params: SitePageParams }) {
     legalPaths: { terms: "/terms", privacy: "/privacy" },
     markets: { ...DEFAULT_MARKETS, ...((result.site.markets_json as any) || {}) },
     deals,
+    business,
   }
 
   return <SiteRenderer data={data} theme={result.theme} form={formContext} />

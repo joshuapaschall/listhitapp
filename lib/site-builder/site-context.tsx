@@ -1,6 +1,7 @@
 "use client"
 import { createContext, useContext } from "react"
-import type { SitePersona, SiteMarkets, DealSummary } from "./types"
+import type { SitePersona, SiteMarkets, DealSummary, SiteBusiness } from "./types"
+import { DEFAULT_BUSINESS } from "./types"
 
 export interface SiteFormContext {
   persona: SitePersona
@@ -11,6 +12,7 @@ export interface SiteFormContext {
   legalPaths: { terms: string; privacy: string }
   markets: SiteMarkets
   deals: DealSummary[]
+  business: SiteBusiness
 }
 
 const DEFAULT_FORM_CONTEXT: SiteFormContext = {
@@ -22,6 +24,7 @@ const DEFAULT_FORM_CONTEXT: SiteFormContext = {
   legalPaths: { terms: "/terms", privacy: "/privacy" },
   markets: { scope: "nationwide", markets: [] },
   deals: [],
+  business: DEFAULT_BUSINESS,
 }
 
 const Ctx = createContext<SiteFormContext>(DEFAULT_FORM_CONTEXT)
