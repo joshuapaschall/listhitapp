@@ -68,6 +68,20 @@ export interface SiteBusiness {
   }
 }
 
+export interface DealSummary {
+  id: string
+  slug: string
+  address: string | null
+  city: string | null
+  state: string | null
+  price: number | null
+  bedrooms: number | null
+  bathrooms: number | null
+  sqft: number | null
+  property_type: string | null
+  primary_image_url: string | null
+}
+
 export interface SiteMarkets {
   scope: "nationwide" | "specific"
   markets: string[]   // canonical location strings: "Atlanta (GA)", "Fulton County (GA)", "GA, USA"

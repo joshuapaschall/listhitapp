@@ -10,6 +10,7 @@ import {
   PRICE_BANDS,
 } from "../persona-form"
 import type { BuyerTypeKey, PaymentKey } from "@/lib/buyer-taxonomy"
+import { DealCard } from "@/components/sites/deal-card"
 
 // ---------------------------------------------------------------------------
 // Shared primitives — every block is self-contained and token-driven. Styling
@@ -491,6 +492,40 @@ function LeadForm({
 
 const HEADING: React.CSSProperties = { fontFamily: "var(--head)", lineHeight: 1.05, letterSpacing: "-.01em" }
 
+// Property grid section — reads the org's real deals from site context. A real
+// component (uppercase) so the hook obeys rules-of-hooks.
+function DealsSection({ heading }: { heading?: string }) {
+  const { deals } = useSiteForm()
+  return (
+    <section style={{ background: "color-mix(in srgb, var(--p) 5%, #fff)" }}>
+      <div style={{ ...WRAP, padding: "64px 24px" }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 28, flexWrap: "wrap", gap: 10 }}>
+          <h2 style={{ ...HEADING, fontSize: 32, fontWeight: 800, color: "var(--p)", margin: 0 }}>{heading}</h2>
+        </div>
+        {deals.length > 0 ? (
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 22 }}>
+              {deals.slice(0, 6).map((d) => (
+                <DealCard key={d.id} property={d} variant="teaser" />
+              ))}
+            </div>
+            <div style={{ marginTop: 24, textAlign: "right" }}>
+              {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- public tenant site, not a dashboard route */}
+              <a href="/properties" style={{ color: "var(--p)", fontWeight: 700, textDecoration: "none", fontSize: 14.5 }}>
+                View all deals →
+              </a>
+            </div>
+          </>
+        ) : (
+          <div style={{ fontSize: 14.5, color: "#8a94a2", padding: "8px 0" }}>
+            Your published deals will appear here.
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
 // Footer "Serving …" line, read from the site's market focus via context.
 function FooterServing() {
   const { markets } = useSiteForm()
@@ -905,35 +940,7 @@ export const siteConfig: Config = {
         heading: { type: "text" },
       },
       defaultProps: { heading: "Recent deals" },
-      render: ({ heading }: any) => {
-        const samples = [
-          { city: "Atlanta, GA", price: "$185,000", beds: "3 bd · 2 ba · 1,540 sqft" },
-          { city: "Decatur, GA", price: "$142,500", beds: "2 bd · 1 ba · 1,080 sqft" },
-          { city: "Marietta, GA", price: "$229,900", beds: "4 bd · 3 ba · 2,210 sqft" },
-        ]
-        return (
-          <section style={{ background: "color-mix(in srgb, var(--p) 5%, #fff)" }}>
-            <div style={{ ...WRAP, padding: "64px 24px" }}>
-              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 28, flexWrap: "wrap", gap: 10 }}>
-                <h2 style={{ ...HEADING, fontSize: 32, fontWeight: 800, color: "var(--p)", margin: 0 }}>{heading}</h2>
-                <span style={{ fontSize: 12.5, color: "#8a94a2", fontWeight: 600 }}>Pulled live from your pipeline</span>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 22 }}>
-                {samples.map((s, i) => (
-                  <div key={i} style={{ border: "1px solid #eef1f5", borderRadius: 16, overflow: "hidden", background: "#fff", boxShadow: "0 8px 24px rgba(16,27,41,.05)" }}>
-                    <div style={{ height: 150, background: "linear-gradient(135deg, color-mix(in srgb, var(--p) 22%, #fff), color-mix(in srgb, var(--a) 22%, #fff))" }} />
-                    <div style={{ padding: 16 }}>
-                      <div style={{ fontFamily: "var(--head)", fontWeight: 800, fontSize: 20, color: "var(--p)" }}>{s.price}</div>
-                      <div style={{ color: "#0f1b29", fontWeight: 600, marginTop: 2 }}>{s.city}</div>
-                      <div style={{ color: "#5a6675", fontSize: 13.5, marginTop: 4 }}>{s.beds}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
-        )
-      },
+      render: ({ heading }: any) => <DealsSection heading={heading} />,
     },
 
     // -----------------------------------------------------------------------
