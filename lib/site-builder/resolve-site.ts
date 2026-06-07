@@ -18,43 +18,30 @@ export interface ResolvedSite {
   theme: SiteTheme
 }
 
-export async function resolveSite(host: string, path: string): Promise<ResolvedSite | null> {
+// Resolve a published site row from a request host (subdomain or custom domain).
+// Returns null if no published site matches. Sessionless → admin client only.
+export async function resolveSiteByHost(host: string): Promise<any | null> {
   const normalizedHost = normalizeHost(host)
   const root = rootDomain()
 
-  let site: any = null
-
   if (normalizedHost.endsWith(`.${root}`)) {
-    // Subdomain tenant: first DNS label is the site slug.
     const slug = normalizedHost.slice(0, normalizedHost.length - (`.${root}`).length).split(".")[0]
     if (!slug) return null
-    const { data, error } = await supabaseAdmin
-      .from("sites")
-      .select("*")
-      .eq("slug", slug.toLowerCase())
-      .eq("status", "published")
-      .maybeSingle()
-    if (error || !data) return null
-    site = data
-  } else {
-    // Custom domain: look up an active domain mapping, then its published site.
-    const { data: domain, error: domainError } = await supabaseAdmin
-      .from("site_domains")
-      .select("site_id")
-      .eq("domain", normalizedHost)
-      .eq("status", "active")
-      .maybeSingle()
-    if (domainError || !domain) return null
-    const { data: siteRow, error: siteError } = await supabaseAdmin
-      .from("sites")
-      .select("*")
-      .eq("id", domain.site_id)
-      .eq("status", "published")
-      .maybeSingle()
-    if (siteError || !siteRow) return null
-    site = siteRow
+    const { data } = await supabaseAdmin
+      .from("sites").select("*").eq("slug", slug.toLowerCase()).eq("status", "published").maybeSingle()
+    return data || null
   }
 
+  const { data: domain } = await supabaseAdmin
+    .from("site_domains").select("site_id").eq("domain", normalizedHost).eq("status", "active").maybeSingle()
+  if (!domain) return null
+  const { data: siteRow } = await supabaseAdmin
+    .from("sites").select("*").eq("id", domain.site_id).eq("status", "published").maybeSingle()
+  return siteRow || null
+}
+
+export async function resolveSite(host: string, path: string): Promise<ResolvedSite | null> {
+  const site = await resolveSiteByHost(host)
   if (!site) return null
 
   // Load the requested page, falling back to "/" when the exact path is missing.

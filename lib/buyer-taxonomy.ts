@@ -25,7 +25,7 @@ export const PAYMENT_MAP: Record<PaymentKey, Derivation> = {
 
 export function deriveProfile(buyerTypes: BuyerTypeKey[], payments: PaymentKey[]) {
   let tags: string[] = []
-  let investor = false
+  let investorFromTypes = false
   let cash_buyer = false
   let owner_financing = false
   let first_time_buyer = false
@@ -34,28 +34,40 @@ export function deriveProfile(buyerTypes: BuyerTypeKey[], payments: PaymentKey[]
     const d = BUYER_TYPE_MAP[key]
     if (!d) continue
     tags = mergeUnique(tags, d.tags) ?? []
-    investor = investor || d.investor === true
+    investorFromTypes = investorFromTypes || d.investor === true
     cash_buyer = cash_buyer || d.cash_buyer === true
     owner_financing = owner_financing || d.owner_financing === true
     first_time_buyer = first_time_buyer || d.first_time_buyer === true
   }
 
+  let investorFromPayments = false
   for (const key of payments) {
     const d = PAYMENT_MAP[key]
     if (!d) continue
     tags = mergeUnique(tags, d.tags) ?? []
-    investor = investor || d.investor === true
+    investorFromPayments = investorFromPayments || d.investor === true
     cash_buyer = cash_buyer || d.cash_buyer === true
     owner_financing = owner_financing || d.owner_financing === true
     first_time_buyer = first_time_buyer || d.first_time_buyer === true
+  }
+
+  // First-time buyers are owner-occupants. Suppress the payment-derived Investor
+  // signal (tag + boolean) unless a buyer TYPE independently makes them one.
+  const suppressInvestor = first_time_buyer && !investorFromTypes
+  const investor = investorFromTypes || (investorFromPayments && !suppressInvestor)
+  if (suppressInvestor) {
+    tags = tags.filter((t) => t !== "Investor")
   }
 
   return { tags, investor, cash_buyer, owner_financing, first_time_buyer }
 }
 
+const LOC_PLACE = / \([A-Z]{2}\)$/        // "Savannah (GA)", "Fulton County (GA)"
+const LOC_STATE = /^[A-Z]{2}, USA$/        // "GA, USA"
+
 export function sanitizeLocations(locs: string[] | undefined): string[] {
   if (!Array.isArray(locs)) return []
-  return locs.filter((loc) => typeof loc === "string" && (loc.endsWith("(GA)") || loc === "GA, USA"))
+  return locs.filter((loc) => typeof loc === "string" && (LOC_PLACE.test(loc) || LOC_STATE.test(loc)))
 }
 
 export function sanitizePropertyTypes(pts: string[] | undefined): string[] {

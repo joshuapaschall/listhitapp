@@ -5,12 +5,17 @@ import { deriveProfile, type BuyerTypeKey, type PaymentKey, sanitizeLocations, s
 import { normalizeEmail, formatPhoneE164, normalizePhone, mergeUnique } from "@/lib/dedup-utils"
 import { validateEmailDebounce, isEmailAcceptable, WRITE_DIAGNOSTIC_TAGS } from "@/lib/debounce"
 import { lookupNumber, isLineAcceptable } from "@/lib/number-lookup"
-import { assertAllowedOrigin, corsHeaders, errorResponse, isRateLimited } from "@/lib/public-api"
+import { ALLOWED_ORIGINS, corsHeaders, errorResponse, isRateLimited, originHost, isTenantSubdomainOrigin } from "@/lib/public-api"
+import { resolveSiteByHost } from "@/lib/site-builder/resolve-site"
 import { resolveFromNumber } from "@/lib/showing-notifications"
 import { supabaseAdmin } from "@/lib/supabase/admin"
 import { TELNYX_API_URL, telnyxHeaders } from "@/lib/telnyx"
 
 const WELCOME_TEXT = "Welcome to Georgia Wholesale Homes. We'll text you off-market deals — investment properties at 30-50% under retail. Reply STOP to opt out. HELP for info."
+
+function welcomeText(brand: string) {
+  return `Welcome to ${brand}. We'll text you off-market deals before they hit the market. Reply STOP to opt out, HELP for info.`
+}
 
 const bodySchema = z.object({
   fname: z.string().trim().min(1).max(50),
@@ -29,27 +34,39 @@ const bodySchema = z.object({
   utm: z.record(z.string()).optional(),
 })
 
-async function sendWelcomeSms(buyerId: string, to: string) {
+async function sendWelcomeSms(buyerId: string, to: string, text: string) {
   const from = (await resolveFromNumber(buyerId)) || formatPhoneE164(process.env.DEFAULT_OUTBOUND_DID)
   const messagingProfileId = process.env.TELNYX_MESSAGING_PROFILE_ID
   if (!from || !messagingProfileId) return
   await fetch(`${TELNYX_API_URL}/messages`, {
     method: "POST",
     headers: telnyxHeaders(),
-    body: JSON.stringify({ from, to, text: WELCOME_TEXT, messaging_profile_id: messagingProfileId, type: "SMS", use_profile_webhooks: true }),
+    body: JSON.stringify({ from, to, text, messaging_profile_id: messagingProfileId, type: "SMS", use_profile_webhooks: true }),
   })
 }
 
 export async function OPTIONS(request: NextRequest) {
-  const allowed = assertAllowedOrigin(request)
-  if (!allowed.ok) return allowed.response
-  return new NextResponse(null, { status: 204, headers: corsHeaders(allowed.origin) })
+  const origin = request.headers.get("origin") || ""
+  if (!ALLOWED_ORIGINS.includes(origin) && !isTenantSubdomainOrigin(origin)) {
+    return NextResponse.json({ ok: false }, { status: 403 })
+  }
+  return new NextResponse(null, { status: 204, headers: corsHeaders(origin) })
 }
 
 export async function POST(request: NextRequest, event: NextFetchEvent) {
-  const allowed = assertAllowedOrigin(request)
-  if (!allowed.ok) return allowed.response
-  const origin = allowed.origin
+  const origin = request.headers.get("origin") || ""
+  const host = originHost(origin)
+  const site = host ? await resolveSiteByHost(host) : null
+
+  // A request is allowed if it comes from a published builder site (tenant
+  // subdomain or active custom domain) OR a statically-allowed origin (the
+  // legacy GWH site + localhost). The lead lands in the org that owns the origin.
+  const isStatic = ALLOWED_ORIGINS.includes(origin)
+  if (!site && !isStatic) {
+    return NextResponse.json({ ok: false, error_code: "origin_not_allowed", message: "Origin not allowed" }, { status: 403 })
+  }
+  const orgId: string | null = site?.org_id ?? (process.env.PUBLIC_SIGNUP_DEFAULT_ORG_ID || null)
+  const brandName: string = site?.name || "our team"
 
   const ip = (request.headers.get("x-forwarded-for") || "unknown").split(",")[0].trim()
   if (isRateLimited(ip, "buyers-signup", 5)) return errorResponse(429, origin, "rate_limited", "Too many signup requests")
@@ -66,6 +83,7 @@ export async function POST(request: NextRequest, event: NextFetchEvent) {
     const emailNorm = normalizeEmail(payload.email)
     let query = supabaseAdmin.from("buyers").select("id,fname,lname,status,tags,locations,property_type,investor,cash_buyer,owner_financing,first_time_buyer,can_receive_sms,is_unsubscribed").eq("phone_norm", phoneE164.replace(/^\+1/, ""))
     if (emailNorm) query = query.or(`phone_norm.eq.${phoneE164.replace(/^\+1/, "")},email_norm.eq.${emailNorm}`)
+    if (orgId) query = query.eq("org_id", orgId)
     const { data: existing } = await query.limit(1).maybeSingle()
 
     const isNewBuyer = !existing?.id
@@ -100,6 +118,7 @@ export async function POST(request: NextRequest, event: NextFetchEvent) {
       owner_financing: derived.owner_financing,
       first_time_buyer: derived.first_time_buyer,
     }
+    if (orgId) common.org_id = orgId
 
     let buyerId = ""
     let sendSms = true
@@ -125,8 +144,23 @@ export async function POST(request: NextRequest, event: NextFetchEvent) {
       sendSms = inserted.can_receive_sms !== false && inserted.is_unsubscribed !== true
     }
 
-    await supabaseAdmin.from("buyer_consents").insert({ buyer_id: buyerId, consent_text: payload.consent_text, source: "website_signup", source_url: payload.source_url || null, ip_address: ip, user_agent: request.headers.get("user-agent") || null })
-    if (sendSms) event.waitUntil(sendWelcomeSms(buyerId, phoneE164))
+    await supabaseAdmin.from("buyer_consents").insert({
+      buyer_id: buyerId,
+      consent_text: payload.consent_text,
+      source: "website_signup",
+      source_url: payload.source_url || null,
+      ip_address: ip,
+      user_agent: request.headers.get("user-agent") || null,
+      ...(orgId ? { org_id: orgId } : {}),
+    })
+
+    // resolveFromNumber() is NOT org-scoped: for a brand-new lead it falls back
+    // to the global DEFAULT_OUTBOUND_DID (the legacy/platform number). Texting a
+    // tenant lead from that number would cross orgs, so we only auto-send the
+    // welcome SMS on the legacy/static path (no resolved builder site). Tenant
+    // welcome SMS will be enabled once sending is org-scoped (later phase).
+    const welcomeMessage = site ? welcomeText(brandName) : WELCOME_TEXT
+    if (sendSms && !site) event.waitUntil(sendWelcomeSms(buyerId, phoneE164, welcomeMessage))
 
     return NextResponse.json({ ok: true, buyer_id: buyerId, is_new_buyer: isNewBuyer }, { headers: corsHeaders(origin) })
   } catch (error) {
