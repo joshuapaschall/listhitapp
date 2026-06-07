@@ -17,11 +17,12 @@ import { ALL_SITE_TEMPLATES } from "@/lib/site-builder/templates"
 import { PERSONAS, getPersona } from "@/lib/site-builder/templates"
 import { TYPE_STYLES, resolveTypeFonts, DEFAULT_TYPE_STYLE_ID } from "@/lib/site-builder/typography"
 import { PALETTES } from "@/lib/site-builder/palettes"
-import { DEFAULT_THEME, DEFAULT_BUSINESS, type SitePersona, type SiteTemplateId, type SiteTheme, type SiteBusiness } from "@/lib/site-builder/types"
+import { DEFAULT_THEME, DEFAULT_BUSINESS, DEFAULT_MARKETS, type SitePersona, type SiteTemplateId, type SiteTheme, type SiteBusiness, type SiteMarkets } from "@/lib/site-builder/types"
+import { useLocationSuggestions } from "@/components/buyers/use-location-suggestions"
 
 type WizardProps = { mode: "new" } | { mode: "edit"; siteId: string }
 
-const STEPS = ["Goal", "Template", "Brand", "Content", "Business", "Launch"]
+const STEPS = ["Goal", "Template", "Brand", "Content", "Markets", "Business", "Launch"]
 
 const PERSONA_BLURBS: Record<SitePersona, string> = {
   cash: "Build a cash-buyer list for your wholesale deals.",
@@ -62,6 +63,7 @@ interface Draft {
   theme: SiteTheme
   content: WizardContent
   business: SiteBusiness
+  markets: SiteMarkets
 }
 
 export default function WebsiteWizard(props: WizardProps) {
@@ -85,6 +87,7 @@ export default function WebsiteWizard(props: WizardProps) {
     theme: { ...DEFAULT_THEME },
     content: seedContent("", "cash"),
     business: { ...DEFAULT_BUSINESS },
+    markets: { ...DEFAULT_MARKETS },
   }))
 
   // Edit mode: hydrate from the API and jump to the Brand step.
@@ -107,6 +110,7 @@ export default function WebsiteWizard(props: WizardProps) {
           theme,
           content,
           business: { ...DEFAULT_BUSINESS, ...(site.business_json || {}) },
+          markets: { ...DEFAULT_MARKETS, ...(site.markets_json || {}) },
         })
         setSlug(site.slug || "")
         setStatus(site.status || "draft")
@@ -128,6 +132,10 @@ export default function WebsiteWizard(props: WizardProps) {
     setDraft((d) => ({ ...d, content: { ...d.content, ...patch } }))
   const setBusiness = (patch: Partial<SiteBusiness>) =>
     setDraft((d) => ({ ...d, business: { ...d.business, ...patch } }))
+  const setMarkets = (patch: Partial<SiteMarkets>) =>
+    setDraft((d) => ({ ...d, markets: { ...d.markets, ...patch } }))
+  const [marketQuery, setMarketQuery] = useState("")
+  const { suggestions: marketSuggestions } = useLocationSuggestions(marketQuery)
 
   const blockPatches = useMemo(
     () => [
@@ -162,7 +170,7 @@ export default function WebsiteWizard(props: WizardProps) {
       const res = await fetch(`/api/sites/${siteId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: draft.name, theme: draft.theme, business: draft.business, blockPatches }),
+        body: JSON.stringify({ name: draft.name, theme: draft.theme, business: draft.business, markets: draft.markets, blockPatches }),
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
@@ -216,7 +224,7 @@ export default function WebsiteWizard(props: WizardProps) {
       if (ok) setStep(2)
       return
     }
-    if (step === 2 || step === 3 || step === 4) {
+    if (step === 2 || step === 3 || step === 4 || step === 5) {
       const ok = await saveDraft()
       if (ok) setStep(step + 1)
       return
@@ -245,7 +253,7 @@ export default function WebsiteWizard(props: WizardProps) {
       const saved = await fetch(`/api/sites/${siteId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: draft.name, theme: draft.theme, business: draft.business, blockPatches }),
+        body: JSON.stringify({ name: draft.name, theme: draft.theme, business: draft.business, markets: draft.markets, blockPatches }),
       })
       if (!saved.ok) {
         const body = await saved.json().catch(() => ({}))
@@ -274,8 +282,10 @@ export default function WebsiteWizard(props: WizardProps) {
       : step === 1
         ? Boolean(draft.templateId)
         : step === 4
-          ? Boolean(draft.business.email.trim() && draft.business.phone.trim())
-          : true
+          ? draft.markets.scope === "nationwide" || draft.markets.markets.length > 0
+          : step === 5
+            ? Boolean(draft.business.email.trim() && draft.business.phone.trim())
+            : true
 
   if (loading) {
     return (
@@ -576,6 +586,107 @@ export default function WebsiteWizard(props: WizardProps) {
           {step === 4 && (
             <div className="space-y-5">
               <div>
+                <h2 className="text-base font-semibold">Where do you work?</h2>
+                <p className="text-sm text-muted-foreground">
+                  This sets how your site positions geographically. Nationwide wholesalers aren&apos;t boxed in — pick
+                  Nationwide and your site reaches buyers everywhere.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMarkets({ scope: "nationwide" })}
+                  className={cn(
+                    "rounded-lg border p-3 text-left transition-colors",
+                    draft.markets.scope === "nationwide" ? "border-brand bg-brand/5" : "border-border hover:bg-muted/60",
+                  )}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Nationwide</span>
+                    {draft.markets.scope === "nationwide" && <Check className="h-4 w-4 text-brand" />}
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">We work across the U.S.</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMarkets({ scope: "specific" })}
+                  className={cn(
+                    "rounded-lg border p-3 text-left transition-colors",
+                    draft.markets.scope === "specific" ? "border-brand bg-brand/5" : "border-border hover:bg-muted/60",
+                  )}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Specific markets</span>
+                    {draft.markets.scope === "specific" && <Check className="h-4 w-4 text-brand" />}
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">Target specific cities, counties, or states.</p>
+                </button>
+              </div>
+
+              {draft.markets.scope === "nationwide" ? (
+                <p className="text-sm text-muted-foreground">
+                  Your site will position as nationwide — buyers anywhere can join your list.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">
+                    Add the cities, counties, or states you source and market deals in.
+                  </p>
+                  {draft.markets.markets.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {draft.markets.markets.map((m) => (
+                        <span
+                          key={m}
+                          className="inline-flex items-center gap-1.5 rounded-full bg-brand/10 px-2.5 py-1 text-xs font-medium text-brand"
+                        >
+                          {m}
+                          <button
+                            type="button"
+                            onClick={() => setMarkets({ markets: draft.markets.markets.filter((x) => x !== m) })}
+                            aria-label={`Remove ${m}`}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="relative">
+                    <Input
+                      placeholder="City, county, or state"
+                      value={marketQuery}
+                      onChange={(e) => setMarketQuery(e.target.value)}
+                      disabled={draft.markets.markets.length >= 25}
+                    />
+                    {marketQuery.trim().length > 1 && marketSuggestions.length > 0 && (
+                      <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-auto rounded-md border border-border bg-popover shadow-md">
+                        {marketSuggestions.map((s) => (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => {
+                              if (!draft.markets.markets.includes(s) && draft.markets.markets.length < 25) {
+                                setMarkets({ markets: [...draft.markets.markets, s] })
+                              }
+                              setMarketQuery("")
+                            }}
+                            className="block w-full px-3 py-2 text-left text-sm hover:bg-muted"
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {step === 5 && (
+            <div className="space-y-5">
+              <div>
                 <h2 className="text-base font-semibold">Your business info</h2>
                 <p className="text-sm text-muted-foreground">
                   We use this to automatically build your Contact page and your Terms of Use and Privacy Policy — what
@@ -664,7 +775,7 @@ export default function WebsiteWizard(props: WizardProps) {
             </div>
           )}
 
-          {step === 5 && (
+          {step === 6 && (
             <div className="space-y-5">
               {!published ? (
                 <>
@@ -723,7 +834,7 @@ export default function WebsiteWizard(props: WizardProps) {
         </div>
 
         {/* Footer nav */}
-        {!(step === 5 && published) && (
+        {!(step === 6 && published) && (
           <div className="flex items-center justify-between border-t border-border px-5 py-3">
             <Button type="button" variant="ghost" onClick={handleBack} disabled={saving}>
               <ArrowLeft className="h-4 w-4" />
@@ -740,7 +851,7 @@ export default function WebsiteWizard(props: WizardProps) {
                 <Eye className="h-4 w-4" />
                 Preview
               </Button>
-              {step < 5 && (
+              {step < 6 && (
                 <Button type="button" variant="brand" onClick={handleContinue} disabled={saving || !canContinue}>
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Continue <ArrowRight className="h-4 w-4" /></>}
                 </Button>

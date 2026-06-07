@@ -1,6 +1,6 @@
 "use client"
 import { createContext, useContext } from "react"
-import type { SitePersona } from "./types"
+import type { SitePersona, SiteMarkets } from "./types"
 
 export interface SiteFormContext {
   persona: SitePersona
@@ -9,6 +9,7 @@ export interface SiteFormContext {
   requireConsent: boolean
   disclosure: string   // exact opt-in text shown + stored as consent_text
   legalPaths: { terms: string; privacy: string }
+  markets: SiteMarkets
 }
 
 const DEFAULT_FORM_CONTEXT: SiteFormContext = {
@@ -18,6 +19,7 @@ const DEFAULT_FORM_CONTEXT: SiteFormContext = {
   requireConsent: true,
   disclosure: "",
   legalPaths: { terms: "/terms", privacy: "/privacy" },
+  markets: { scope: "nationwide", markets: [] },
 }
 
 const Ctx = createContext<SiteFormContext>(DEFAULT_FORM_CONTEXT)

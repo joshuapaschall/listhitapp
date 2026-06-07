@@ -491,6 +491,16 @@ function LeadForm({
 
 const HEADING: React.CSSProperties = { fontFamily: "var(--head)", lineHeight: 1.05, letterSpacing: "-.01em" }
 
+// Footer "Serving …" line, read from the site's market focus via context.
+function FooterServing() {
+  const { markets } = useSiteForm()
+  const label =
+    markets.scope === "nationwide" || markets.markets.length === 0
+      ? "Serving buyers nationwide"
+      : `Serving ${markets.markets.slice(0, 6).join(" · ")}`
+  return <div style={{ marginTop: 8, fontSize: 12.5, color: "#9aa4b0" }}>{label}</div>
+}
+
 export const siteConfig: Config = {
   root: {
     fields: {
@@ -974,6 +984,7 @@ export const siteConfig: Config = {
         <footer style={{ borderTop: "1px solid #eef1f5", background: "#fff" }}>
           <div style={{ ...WRAP, padding: "28px 24px", color: "#8a94a2", fontSize: 13.5, textAlign: "center" }}>
             <div>{text}</div>
+            <FooterServing />
             <nav style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 16, justifyContent: "center" }}>
               {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- public tenant site, not a dashboard route */}
               <a href="/" style={{ color: "#8a94a2", textDecoration: "none" }}>Home</a>
