@@ -82,6 +82,20 @@ export interface DealSummary {
   primary_image_url: string | null
 }
 
+export interface DealImage {
+  image_url: string
+  is_featured: boolean
+}
+
+export interface DealDetail extends DealSummary {
+  zip: string | null
+  description: string | null
+  deal_type: string | null
+  finance_subtype: string | null
+  status: string | null
+  images: DealImage[]
+}
+
 export interface SiteMarkets {
   scope: "nationwide" | "specific"
   markets: string[]   // canonical location strings: "Atlanta (GA)", "Fulton County (GA)", "GA, USA"
