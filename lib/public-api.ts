@@ -31,6 +31,16 @@ export function assertAllowedOrigin(request: NextRequest): { ok: true; origin: s
   return { ok: true, origin }
 }
 
+export function originHost(origin: string): string {
+  try { return new URL(origin).host.toLowerCase().split(":")[0] } catch { return "" }
+}
+
+export function isTenantSubdomainOrigin(origin: string): boolean {
+  const root = (process.env.SITES_ROOT_DOMAIN || "listhit.io").toLowerCase()
+  const host = originHost(origin)
+  return Boolean(host) && host.endsWith(`.${root}`)
+}
+
 export function isRateLimited(ip: string, limitKey = "default", limit = DEFAULT_LIMIT): boolean {
   const key = `${limitKey}:${ip}`
   const now = Date.now()
