@@ -150,14 +150,14 @@ export const siteConfig: Config = {
       },
       defaultProps: {
         variant: "photo",
-        eyebrow: "Trusted local buyer",
-        headline: "Sell your house fast — for cash",
-        subhead: "Get a fair, no-obligation cash offer in 24 hours.",
-        stat: "500+ homes purchased",
+        eyebrow: "Off-market deals",
+        headline: "Get first access to deeply discounted properties.",
+        subhead: "Join the buyers list and we'll send wholesale-priced, off-market deals straight to your phone — before anyone else sees them.",
+        stat: "Trusted by 2,400+ cash buyers",
         imageUrl: "https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=1600",
-        formTitle: "Get your cash offer",
-        formSubtitle: "Takes 60 seconds.",
-        ctaLabel: "Get my offer",
+        formTitle: "See this week's deals",
+        formSubtitle: "Step 1 of 2 — where should we send them?",
+        ctaLabel: "Unlock the deals",
       },
       render: ({ variant, eyebrow, headline, subhead, stat, imageUrl, formTitle, formSubtitle, ctaLabel }: any) => {
         const eyebrowEl = eyebrow ? (
@@ -183,32 +183,154 @@ export const siteConfig: Config = {
           <p style={{ fontSize: 18, lineHeight: 1.5, color, marginTop: 14, maxWidth: 520 }}>{subhead}</p>
         )
 
+        // Eyebrow for dark heroes: white label with an accent dot + halo.
+        const eyebrowDark = eyebrow ? (
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 9,
+              fontFamily: "var(--body)",
+              fontSize: 12.5,
+              fontWeight: 600,
+              letterSpacing: ".12em",
+              textTransform: "uppercase",
+              color: "#fff",
+              marginBottom: 22,
+            }}
+          >
+            <span
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background: "var(--a)",
+                boxShadow: "0 0 0 4px color-mix(in srgb, var(--a) 30%, transparent)",
+              }}
+            />
+            {eyebrow}
+          </div>
+        ) : null
+
+        // Social-proof row built from `stat`: decorative avatars + stars + the stat line.
+        const trustRow = () =>
+          stat ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 28 }}>
+              <div style={{ display: "flex" }}>
+                {["JD", "MK", "RP", "+"].map((t, i) => (
+                  <span
+                    key={i}
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: "50%",
+                      border: "2px solid #0c1420",
+                      marginLeft: i === 0 ? 0 : -10,
+                      background: "#3a4a5e",
+                      display: "grid",
+                      placeItems: "center",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: "#dfe7f0",
+                    }}
+                  >
+                    {t}
+                  </span>
+                ))}
+              </div>
+              <div>
+                <div style={{ color: "#ffb733", letterSpacing: 2, fontSize: 15 }}>★★★★★</div>
+                <div style={{ fontSize: 13.5, color: "rgba(255,255,255,.72)", marginTop: 2 }}>{stat}</div>
+              </div>
+            </div>
+          ) : null
+
         if (variant === "photo") {
+          const scrim = "linear-gradient(90deg, rgba(10,15,24,.92) 0%, rgba(10,15,24,.55) 45%, rgba(10,15,24,.20) 100%)"
+          const themedFallback =
+            "radial-gradient(120% 90% at 78% 18%, color-mix(in srgb, var(--a) 22%, transparent), transparent 55%)," +
+            "radial-gradient(120% 90% at 18% 92%, color-mix(in srgb, var(--p) 45%, #000), transparent 60%)," +
+            "linear-gradient(115deg, color-mix(in srgb, var(--p) 78%, #000), color-mix(in srgb, var(--p) 90%, #000))"
+          const background = imageUrl ? `${scrim}, url(${imageUrl})` : themedFallback
           return (
             <section
               style={{
-                backgroundImage: `linear-gradient(90deg, rgba(11,22,36,.78), rgba(11,22,36,.35)), url(${imageUrl})`,
+                position: "relative",
+                minHeight: 720,
+                display: "flex",
+                alignItems: "center",
+                background,
                 backgroundSize: "cover",
                 backgroundPosition: "center",
               }}
             >
+              <style
+                dangerouslySetInnerHTML={{
+                  __html:
+                    "@media (max-width: 920px){.lh-hero-grid{grid-template-columns:1fr !important;gap:36px !important;padding-top:120px !important}}",
+                }}
+              />
               <div
+                className="lh-hero-grid"
                 style={{
                   ...WRAP,
+                  width: "100%",
                   display: "grid",
-                  gridTemplateColumns: "minmax(0,1fr) minmax(280px,400px)",
-                  gap: 40,
+                  gridTemplateColumns: "1.15fr .85fr",
+                  gap: 52,
                   alignItems: "center",
-                  padding: "76px 24px",
+                  padding: "110px 24px 90px",
                 }}
               >
                 <div>
-                  {eyebrowEl}
-                  {h("#fff")}
-                  {sub("rgba(255,255,255,.88)")}
-                  {stat && <div style={{ marginTop: 18, color: "#fff", fontWeight: 700 }}>★ {stat}</div>}
+                  {eyebrowDark}
+                  <h1
+                    style={{
+                      fontFamily: "var(--head)",
+                      fontSize: "clamp(38px, 5vw, 58px)",
+                      fontWeight: 700,
+                      lineHeight: 1.04,
+                      letterSpacing: "-.02em",
+                      color: "#fff",
+                      margin: 0,
+                    }}
+                  >
+                    {headline}
+                  </h1>
+                  {subhead && (
+                    <p style={{ fontFamily: "var(--body)", fontSize: 18, lineHeight: 1.6, color: "rgba(255,255,255,.80)", marginTop: 18, maxWidth: 520 }}>
+                      {subhead}
+                    </p>
+                  )}
+                  {trustRow()}
                 </div>
-                <LeadForm title={formTitle} subtitle={formSubtitle} ctaLabel={ctaLabel} />
+                <div
+                  style={{
+                    background: "#fff",
+                    borderRadius: 20,
+                    padding: "30px 28px",
+                    boxShadow: "0 30px 70px rgba(5,12,24,.40)",
+                    border: "1px solid #eef1f5",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 7,
+                      fontSize: 12.5,
+                      fontWeight: 700,
+                      color: "var(--a)",
+                      background: "color-mix(in srgb, var(--a) 12%, #fff)",
+                      padding: "6px 12px",
+                      borderRadius: 999,
+                      marginBottom: 16,
+                    }}
+                  >
+                    Free — instant access
+                  </div>
+                  <LeadForm title={formTitle} subtitle={formSubtitle} ctaLabel={ctaLabel} />
+                </div>
               </div>
             </section>
           )
