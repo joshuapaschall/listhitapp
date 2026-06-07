@@ -165,6 +165,36 @@ export async function POST(request: NextRequest, event: NextFetchEvent) {
     const welcomeMessage = site ? welcomeText(brandName) : WELCOME_TEXT
     if (sendSms && !site) event.waitUntil(sendWelcomeSms(buyerId, phoneE164, welcomeMessage))
 
+    // First-party analytics: record a 'lead' event. Fire-and-forget via
+    // waitUntil so it never delays the response, and never throws.
+    if (orgId) {
+      let leadPath: string | null = null
+      try {
+        if (payload.source_url) leadPath = new URL(payload.source_url).pathname
+      } catch {
+        /* ignore malformed source_url */
+      }
+      event.waitUntil(
+        (async () => {
+          try {
+            await supabaseAdmin.from("site_events").insert({
+              site_id: site?.id ?? null,
+              org_id: orgId,
+              type: "lead",
+              path: leadPath,
+              referrer: null,
+              utm_source: payload.utm?.utm_source ?? null,
+              utm_medium: payload.utm?.utm_medium ?? null,
+              utm_campaign: payload.utm?.utm_campaign ?? null,
+              visitor_id: null,
+            })
+          } catch {
+            /* never throw from analytics */
+          }
+        })(),
+      )
+    }
+
     return NextResponse.json({ ok: true, buyer_id: buyerId, is_new_buyer: isNewBuyer }, { headers: corsHeaders(origin) })
   } catch (error) {
     console.error("[public-buyers-signup] error", error)
