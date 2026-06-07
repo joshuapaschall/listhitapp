@@ -2,9 +2,10 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { createLogger } from "@/lib/logger"
 import { scheduleSMS, lookupCarrier } from "@/lib/sms-rate-limiter"
 import { normalizePhone, formatPhoneE164 } from "@/lib/dedup-utils"
-import { TELNYX_API_URL, getTelnyxApiKey } from "@/lib/voice-env"
+import { getTelnyxApiKey } from "@/lib/voice-env"
 import { resolveOutboundFrom, recordStickyFrom } from "@/lib/sender/sticky-sender"
 import { ensurePublicMediaUrls } from "@/utils/mms.server"
+import { resolveSmsProvider } from "@/lib/providers/sms"
 export { sendEmailCampaign } from "./campaign-sender"
 
 const log = createLogger("campaign-sender")
@@ -41,7 +42,7 @@ export async function sendCampaignSMS({ buyerId, to, body, mediaUrls, dryRun, ca
     return to.map((num) => ({ to: formatPhoneE164(num) || num, sid: "dry-run", from: "" }))
   }
 
-  const url = `${TELNYX_API_URL}/messages`
+  const provider = await resolveSmsProvider()
 
   const results: SmsSendResult[] = []
 
@@ -69,47 +70,16 @@ export async function sendCampaignSMS({ buyerId, to, body, mediaUrls, dryRun, ca
       threadId: null,
       explicitFrom: null,
     })
-    const payload: Record<string, any> = {
-      to: formatted,
-      text: body,
-      messaging_profile_id: messagingProfileId,
-    }
-    if (finalMediaUrls?.length) {
-      payload.media_urls = finalMediaUrls
-    }
-    if (fromNumber) {
-      payload.from = fromNumber
-    }
-
     const sendRequest = async () => {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${telnyxApiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
+      const result = await provider.sendMessage({
+        from: fromNumber,
+        to: formatted,
+        text: body,
+        mediaUrls: finalMediaUrls,
+        messagingProfileId,
       })
-
-      if (!response.ok) {
-        const text = await response.text()
-        console.error("Telnyx error", text)
-        let msg = `Telnyx API error: ${response.status}`
-        try {
-          const err = JSON.parse(text)
-          if (err.errors && err.errors[0]?.detail) msg = err.errors[0].detail
-        } catch (err) {
-          console.error("campaign-sender: failed to parse Telnyx error response:", err)
-        }
-        throw new Error(msg)
-      }
-
-      const json = await response.json()
-      const data = json.data as { id: string; from: any }
-      const from = typeof data.from === "string" ? data.from : data.from?.phone_number || ""
-      log("sms", "Sent", { to: formatted, sid: data.id })
-
-      return { id: data.id, from }
+      log("sms", "Sent", { to: formatted, sid: result.id })
+      return result
     }
 
     try {
