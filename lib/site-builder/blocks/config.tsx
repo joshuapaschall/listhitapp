@@ -87,7 +87,7 @@ export const siteConfig: Config = {
           </div>
         )
         const linkRow = (
-          <nav style={{ display: "flex", gap: 22, alignItems: "center" }}>
+          <nav className="lh-nav-links" style={{ display: "flex", gap: 22, alignItems: "center" }}>
             {(links || []).map((l: any, i: number) => (
               // eslint-disable-next-line @next/next/no-html-link-for-pages -- public tenant site
               <a key={i} href={l?.href || "#"} style={{ color: "#3a4554", textDecoration: "none", fontSize: 14.5 }}>
@@ -107,6 +107,7 @@ export const siteConfig: Config = {
         return (
           <header style={{ borderBottom: "1px solid #eef1f5", background: "#fff" }}>
             <div
+              className="lh-nav"
               style={{
                 ...WRAP,
                 display: "flex",
@@ -177,7 +178,7 @@ export const siteConfig: Config = {
         ) : null
 
         const h = (color: string) => (
-          <h1 style={{ ...HEADING, fontSize: 44, fontWeight: 800, color, margin: 0 }}>{headline}</h1>
+          <h1 className="lh-hero-h1" style={{ ...HEADING, fontSize: 44, fontWeight: 800, color, margin: 0 }}>{headline}</h1>
         )
         const sub = (color: string) => (
           <p style={{ fontSize: 18, lineHeight: 1.5, color, marginTop: 14, maxWidth: 520 }}>{subhead}</p>
@@ -254,6 +255,7 @@ export const siteConfig: Config = {
           const background = imageUrl ? `${scrim}, url(${imageUrl})` : themedFallback
           return (
             <section
+              className="lh-hero-photo"
               style={{
                 position: "relative",
                 minHeight: 720,
@@ -264,12 +266,6 @@ export const siteConfig: Config = {
                 backgroundPosition: "center",
               }}
             >
-              <style
-                dangerouslySetInnerHTML={{
-                  __html:
-                    "@media (max-width: 920px){.lh-hero-grid{grid-template-columns:1fr !important;gap:36px !important;padding-top:120px !important}}",
-                }}
-              />
               <div
                 className="lh-hero-grid"
                 style={{
@@ -285,6 +281,7 @@ export const siteConfig: Config = {
                 <div>
                   {eyebrowDark}
                   <h1
+                    className="lh-hero-h1"
                     style={{
                       fontFamily: "var(--head)",
                       fontSize: "clamp(38px, 5vw, 58px)",
@@ -341,7 +338,7 @@ export const siteConfig: Config = {
             <section style={{ background: "color-mix(in srgb, var(--p) 7%, #fff)" }}>
               <div style={{ ...WRAP, padding: "72px 24px", textAlign: "center" }}>
                 {eyebrowEl}
-                <h1 style={{ ...HEADING, fontSize: 46, fontWeight: 800, color: "var(--p)", margin: "0 auto", maxWidth: 760 }}>
+                <h1 className="lh-hero-h1" style={{ ...HEADING, fontSize: 46, fontWeight: 800, color: "var(--p)", margin: "0 auto", maxWidth: 760 }}>
                   {headline}
                 </h1>
                 <p style={{ fontSize: 18, lineHeight: 1.5, color: "#42505f", margin: "14px auto 0", maxWidth: 600 }}>
@@ -359,6 +356,7 @@ export const siteConfig: Config = {
           return (
             <section style={{ background: "#fff" }}>
               <div
+                className="lh-grid-2"
                 style={{
                   ...WRAP,
                   display: "grid",
@@ -409,6 +407,7 @@ export const siteConfig: Config = {
           <section>
             <div style={{ background: "var(--p)" }}>
               <div
+                className="lh-grid-2"
                 style={{
                   ...WRAP,
                   display: "grid",
@@ -544,11 +543,11 @@ export const siteConfig: Config = {
         <section style={{ background: "#fff" }}>
           <div style={{ ...WRAP, padding: "64px 24px" }}>
             {heading && (
-              <h2 style={{ ...HEADING, fontSize: 32, fontWeight: 800, color: "var(--p)", textAlign: "center", margin: "0 0 36px" }}>
+              <h2 className="lh-h2" style={{ ...HEADING, fontSize: 32, fontWeight: 800, color: "var(--p)", textAlign: "center", margin: "0 0 36px" }}>
                 {heading}
               </h2>
             )}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 22 }}>
+            <div className="lh-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 22 }}>
               {(features || []).map((f: any, i: number) => (
                 <div
                   key={i}
@@ -611,7 +610,7 @@ export const siteConfig: Config = {
       render: ({ heading, body, buttonLabel }: any) => (
         <section style={{ background: "var(--p)" }}>
           <div style={{ ...WRAP, padding: "56px 24px", textAlign: "center" }}>
-            <h2 style={{ ...HEADING, fontSize: 32, fontWeight: 800, color: "#fff", margin: 0 }}>{heading}</h2>
+            <h2 className="lh-h2" style={{ ...HEADING, fontSize: 32, fontWeight: 800, color: "#fff", margin: 0 }}>{heading}</h2>
             {body && <p style={{ color: "rgba(255,255,255,.85)", fontSize: 17, marginTop: 12, maxWidth: 560, marginInline: "auto" }}>{body}</p>}
             <button
               type="button"

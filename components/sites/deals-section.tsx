@@ -15,7 +15,7 @@ export function DealsSection({ heading }: { heading?: string }) {
         </div>
         {deals.length > 0 ? (
           <>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 22 }}>
+            <div className="lh-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 22 }}>
               {deals.slice(0, 6).map((d) => (
                 <DealCard key={d.id} property={d} variant="teaser" />
               ))}
