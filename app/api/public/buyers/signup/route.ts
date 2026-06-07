@@ -1,7 +1,7 @@
 import { NextFetchEvent, NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 
-import { deriveProfile, type BuyerTypeKey, type PaymentKey, sanitizeLocations, sanitizePropertyTypes } from "@/lib/buyer-taxonomy"
+import { deriveProfile, personaBaseTags, type BuyerTypeKey, type PaymentKey, sanitizeLocations, sanitizePropertyTypes } from "@/lib/buyer-taxonomy"
 import { normalizeEmail, formatPhoneE164, normalizePhone, mergeUnique } from "@/lib/dedup-utils"
 import { validateEmailDebounce, isEmailAcceptable, WRITE_DIAGNOSTIC_TAGS } from "@/lib/debounce"
 import { lookupNumber, isLineAcceptable } from "@/lib/number-lookup"
@@ -98,6 +98,9 @@ export async function POST(request: NextRequest, event: NextFetchEvent) {
     }
 
     const derived = deriveProfile(buyerTypes as BuyerTypeKey[], (payload.payment_methods || []) as PaymentKey[])
+    // Persona base tags come from the server-trusted site persona, never a
+    // client value.
+    const baseTags = personaBaseTags(site?.persona)
     const common: Record<string, any> = {
       fname: payload.fname,
       lname: payload.lname || null,
@@ -110,7 +113,7 @@ export async function POST(request: NextRequest, event: NextFetchEvent) {
       is_unsubscribed: false,
       asking_price_min: payload.asking_price_min ?? null,
       asking_price_max: payload.asking_price_max ?? null,
-      tags: derived.tags,
+      tags: mergeUnique(derived.tags, baseTags) ?? derived.tags,
       locations: sanitizeLocations(payload.locations),
       property_type: sanitizePropertyTypes(payload.property_types),
       investor: derived.investor,

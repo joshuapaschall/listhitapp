@@ -1,7 +1,27 @@
 import { PROPERTY_TYPES } from "@/lib/constant"
 import { mergeUnique } from "@/lib/dedup-utils"
+import type { SitePersona } from "@/lib/site-builder/types"
 
 export { PROPERTY_TYPES }
+
+// Tags every lead on a given niche site should receive, regardless of answers.
+// (Commercial asset-class tags and an "Agent Lead" tag need new canonical rows
+//  first; those personas get their extra tags in a later phase.)
+export const PERSONA_BASE_TAGS: Record<SitePersona, string[]> = {
+  cash: [],
+  investor: [],
+  rto: ["Rent to Own", "Retail Buyer"],
+  owner: ["Owner Financing", "Creative Finance"],
+  creative: ["Creative Finance"],
+  land: ["Investor"],
+  commercial: ["Investor", "Commercial"],
+  agent: [],
+}
+
+export function personaBaseTags(persona: SitePersona | undefined): string[] {
+  if (!persona) return []
+  return PERSONA_BASE_TAGS[persona] || []
+}
 
 export type BuyerTypeKey = "fix_flip" | "buy_hold" | "first_time" | "developer" | "wholesaler" | "realtor"
 export type PaymentKey = "cash" | "hard_money" | "creative_finance"

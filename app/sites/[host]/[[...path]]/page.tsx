@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import { resolveSite, mergeThemeIntoRoot, resolveSiteByHost } from "@/lib/site-builder/resolve-site"
 import { DEFAULT_THEME, DEFAULT_BUSINESS } from "@/lib/site-builder/types"
-import { buildTermsAndPrivacy, buildContactDoc } from "@/lib/site-builder/compliance"
+import { buildTermsAndPrivacy, buildContactDoc, buildOptInDisclosure } from "@/lib/site-builder/compliance"
 import { SiteRenderer } from "@/components/sites/site-renderer"
 import { LegalPage } from "@/components/sites/legal-page"
 
@@ -77,5 +77,15 @@ export default async function SitePage({ params }: { params: SitePageParams }) {
 
   const data = mergeThemeIntoRoot(result.page.puck_data, result.theme)
 
-  return <SiteRenderer data={data} theme={result.theme} />
+  const business = { ...DEFAULT_BUSINESS, ...((result.site.business_json as any) || {}) }
+  const formContext = {
+    persona: result.site.persona,
+    brandName: result.site.name,
+    optinEnabled: business.optin?.enabled !== false,
+    requireConsent: business.optin?.requireConsent !== false,
+    disclosure: buildOptInDisclosure(result.site.name),
+    legalPaths: { terms: "/terms", privacy: "/privacy" },
+  }
+
+  return <SiteRenderer data={data} theme={result.theme} form={formContext} />
 }
