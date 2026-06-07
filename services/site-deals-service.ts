@@ -43,3 +43,16 @@ export async function getPublishedDeals(orgId: string | null, limit = 6, offset 
     return { ...r, primary_image_url: primary?.image_url || null }
   })
 }
+
+export async function getPublishedDealCount(orgId: string | null): Promise<number> {
+  let query = supabaseAdmin
+    .from("properties")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "available")
+    .not("slug", "is", null)
+    .is("deleted_at", null)
+  if (orgId) query = query.eq("org_id", orgId)
+  const { count, error } = await query
+  if (error) throw new Error(error.message)
+  return count || 0
+}

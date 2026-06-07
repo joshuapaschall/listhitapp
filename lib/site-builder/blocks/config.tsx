@@ -109,16 +109,18 @@ function renderDisclosure(text: string, terms: string, privacy: string): React.R
 // the public signup endpoint; Step 2 captures persona-driven qualification and
 // dedup-merges into the same buyer. Posts same-origin; org is resolved by the
 // endpoint from the request Origin.
-function LeadForm({
+export function LeadForm({
   title,
   subtitle,
   ctaLabel,
   inline,
+  onComplete,
 }: {
   title?: string
   subtitle?: string
   ctaLabel?: string
   inline?: boolean
+  onComplete?: () => void
 }) {
   const form = useSiteForm()
   const cfg = getPersonaForm(form.persona)
@@ -128,6 +130,10 @@ function LeadForm({
   const paymentOpts = PAYMENT_OPTIONS.filter((o) => cfg.paymentKeys.includes(o.key))
 
   const [step, setStep] = useState<"contact" | "qualify" | "done">("contact")
+  useEffect(() => {
+    if (step === "done") onComplete?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step])
   const [fname, setFname] = useState("")
   const [lname, setLname] = useState("")
   const [phone, setPhone] = useState("")
