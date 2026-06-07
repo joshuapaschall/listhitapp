@@ -56,6 +56,50 @@ export async function middleware(req: NextRequest) {
   }
 
   // ============================================================
+  // (1.5) TENANT SITE HOSTNAME ROUTING (after short-link, before auth)
+  // ============================================================
+  const APP_HOST = (process.env.NEXT_PUBLIC_APP_HOST || "app.listhit.io").toLowerCase()
+  const ROOT_DOMAIN = (process.env.SITES_ROOT_DOMAIN || "listhit.io").toLowerCase()
+  const RESERVED_SUBDOMAINS = new Set(["app", "www", "api", "admin", "mail", "ftp", "dev", "staging"])
+
+  const isAppHost =
+    host === APP_HOST ||
+    host === "localhost" ||
+    host.endsWith(".vercel.app") ||
+    host === ROOT_DOMAIN ||
+    host === `www.${ROOT_DOMAIN}`
+
+  // Never expose the internal /sites/* renderer path on the dashboard host.
+  if (isAppHost && req.nextUrl.pathname.startsWith("/sites/")) {
+    return new NextResponse("Not found", { status: 404 })
+  }
+
+  if (!isAppHost && !SHORT_LINK_DOMAINS.includes(host)) {
+    let isTenant = false
+    if (host.endsWith(`.${ROOT_DOMAIN}`)) {
+      const label = host.slice(0, host.length - (`.${ROOT_DOMAIN}`).length).split(".")[0]
+      if (label && !RESERVED_SUBDOMAINS.has(label)) isTenant = true
+    } else {
+      isTenant = true // custom domain pointed at us
+    }
+
+    if (isTenant) {
+      const p = req.nextUrl.pathname
+      if (
+        p.startsWith("/_next") ||
+        p.startsWith("/api") ||
+        p === "/favicon.ico" ||
+        p === "/robots.txt"
+      ) {
+        return NextResponse.next()
+      }
+      const url = req.nextUrl.clone()
+      url.pathname = `/sites/${host}${p === "/" ? "" : p}`
+      return NextResponse.rewrite(url)
+    }
+  }
+
+  // ============================================================
   // (2) EXISTING AUTH LOGIC (only runs on the main app domain)
   // ============================================================
   const { pathname } = req.nextUrl
