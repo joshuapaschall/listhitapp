@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { SiteContextProvider, type SiteFormContext } from "@/lib/site-builder/site-context"
-import { LeadForm } from "@/lib/site-builder/blocks/config"
+import { LeadForm } from "@/components/sites/lead-form"
 
 // Client island for the locked /properties state. Receives ALL data as props —
 // it must never import server-only data modules or the service-role client
