@@ -5,6 +5,7 @@ import { resolveSite, mergeThemeIntoRoot, resolveSiteByHost } from "@/lib/site-b
 import { DEFAULT_THEME, DEFAULT_BUSINESS, DEFAULT_MARKETS } from "@/lib/site-builder/types"
 import { buildTermsAndPrivacy, buildContactDoc, buildOptInDisclosure } from "@/lib/site-builder/compliance"
 import { SiteRenderer } from "@/components/sites/site-renderer"
+import { SiteJsonLd } from "@/components/sites/site-json-ld"
 import { LegalPage } from "@/components/sites/legal-page"
 import { PropertiesPage } from "@/components/sites/properties-page"
 import { getPublishedDeals, getPublishedDealCount } from "@/services/site-deals-service"
@@ -32,6 +33,18 @@ function normalizePath(path?: string[]): string {
   return joined.replace(/\/{2,}/g, "/")
 }
 
+function seoMeta(host: string, path: string, title: string, description: string | undefined, siteName: string): Metadata {
+  const canonical = path && path !== "/" ? path : "/"
+  return {
+    title,
+    description,
+    metadataBase: new URL(`https://${host}`),
+    alternates: { canonical },
+    openGraph: { title, description, url: canonical, siteName, type: "website" },
+    twitter: { card: "summary_large_image", title, description },
+  }
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -47,21 +60,18 @@ export async function generateMetadata({
       if (!site) return { title: "Site not found" }
       const business = { ...DEFAULT_BUSINESS, ...(site.business_json || {}) }
       const doc = legalKind === "legal" ? buildTermsAndPrivacy(site.name, business) : buildContactDoc(site.name, business)
-      return { title: `${doc.title} · ${site.name}` }
+      return seoMeta(host, path, `${doc.title} · ${site.name}`, undefined, site.name)
     }
 
     if (path === "/properties") {
       const site = await resolveSiteByHost(host)
       if (!site) return { title: "Site not found" }
-      return { title: `Available deals · ${site.name}` }
+      return seoMeta(host, path, `Available deals · ${site.name}`, `Browse available off-market deals from ${site.name}.`, site.name)
     }
 
     const result = await resolveSite(host, path)
     if (!result) return { title: "Site not found" }
-    return {
-      title: result.page.title || result.site.name,
-      description: result.page.meta_description || undefined,
-    }
+    return seoMeta(host, path, result.page.title || result.site.name, result.page.meta_description || undefined, result.site.name)
   } catch {
     return { title: "Site not found" }
   }
@@ -125,5 +135,10 @@ export default async function SitePage({ params }: { params: SitePageParams }) {
     business,
   }
 
-  return <SiteRenderer data={data} theme={result.theme} form={formContext} />
+  return (
+    <>
+      <SiteJsonLd brandName={result.site.name} host={host} business={business} />
+      <SiteRenderer data={data} theme={result.theme} form={formContext} />
+    </>
+  )
 }
