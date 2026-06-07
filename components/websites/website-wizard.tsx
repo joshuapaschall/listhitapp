@@ -1,9 +1,10 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, ArrowRight, Check, ExternalLink, Eye, Loader2, X } from "lucide-react"
+import { ArrowLeft, ArrowRight, Check, ExternalLink, Eye, Loader2, Upload, X } from "lucide-react"
+import { supabaseBrowser } from "@/lib/supabase-browser"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -64,6 +65,30 @@ interface Draft {
   content: WizardContent
   business: SiteBusiness
   markets: SiteMarkets
+}
+
+const ASSET_ACCEPT = "image/png,image/jpeg,image/webp,image/svg+xml"
+
+// Sign + upload a brand asset (logo / hero photo) to the public site-assets
+// bucket via the browser client, returning its public URL. Mirrors the
+// property-image upload flow — never touches the admin client.
+async function uploadSiteAsset(file: File, siteId: string): Promise<string> {
+  const signRes = await fetch(`/api/sites/${siteId}/assets/sign`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ files: [{ name: file.name, type: file.type, size: file.size }] }),
+  })
+  const signData = await signRes.json().catch(() => ({}))
+  const entry = signData?.signed?.[0]
+  if (!signRes.ok || !entry) {
+    throw new Error(signData?.errors?.[0] || signData?.error || "Could not start upload")
+  }
+  const supabase = supabaseBrowser()
+  const { error: upErr } = await supabase.storage
+    .from("site-assets")
+    .uploadToSignedUrl(entry.path, entry.token, file, { contentType: file.type })
+  if (upErr) throw new Error(upErr.message)
+  return supabase.storage.from("site-assets").getPublicUrl(entry.path).data.publicUrl
 }
 
 export default function WebsiteWizard(props: WizardProps) {
@@ -136,6 +161,35 @@ export default function WebsiteWizard(props: WizardProps) {
     setDraft((d) => ({ ...d, markets: { ...d.markets, ...patch } }))
   const [marketQuery, setMarketQuery] = useState("")
   const { suggestions: marketSuggestions } = useLocationSuggestions(marketQuery)
+
+  // Brand-asset uploads (logo + hero photo).
+  const [logoUploading, setLogoUploading] = useState(false)
+  const [heroUploading, setHeroUploading] = useState(false)
+  const [assetError, setAssetError] = useState("")
+  const logoInputRef = useRef<HTMLInputElement>(null)
+  const heroInputRef = useRef<HTMLInputElement>(null)
+
+  async function handleAssetUpload(
+    file: File | undefined,
+    setUploading: (v: boolean) => void,
+    apply: (url: string) => void,
+  ) {
+    if (!file) return
+    if (!siteId) {
+      setAssetError("Save your progress first, then upload.")
+      return
+    }
+    setAssetError("")
+    setUploading(true)
+    try {
+      const url = await uploadSiteAsset(file, siteId)
+      apply(url)
+    } catch (e: any) {
+      setAssetError(e?.message || "Upload failed")
+    } finally {
+      setUploading(false)
+    }
+  }
 
   const blockPatches = useMemo(
     () => [
@@ -521,14 +575,77 @@ export default function WebsiteWizard(props: WizardProps) {
                 <Switch checked={draft.theme.banner} onCheckedChange={(v) => setTheme({ banner: v })} />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="logo-url">Logo URL</Label>
-                <Input
-                  id="logo-url"
-                  placeholder="https://…/logo.png"
-                  value={draft.theme.logoUrl || ""}
-                  onChange={(e) => setTheme({ logoUrl: e.target.value })}
+                <Label>Logo</Label>
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept={ASSET_ACCEPT}
+                  className="hidden"
+                  onChange={(e) => {
+                    handleAssetUpload(e.target.files?.[0], setLogoUploading, (url) => setTheme({ logoUrl: url }))
+                    e.target.value = ""
+                  }}
                 />
-                <p className="text-xs text-muted-foreground">Paste a URL for now — upload coming soon.</p>
+                {draft.theme.logoUrl ? (
+                  <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/40 p-2.5">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={draft.theme.logoUrl}
+                      alt="Logo preview"
+                      className="h-10 w-auto max-w-[140px] rounded bg-white object-contain"
+                    />
+                    <div className="ml-auto flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => logoInputRef.current?.click()}
+                        disabled={logoUploading}
+                      >
+                        {logoUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Replace"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setTheme({ logoUrl: "" })}
+                        disabled={logoUploading}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => logoInputRef.current?.click()}
+                    disabled={logoUploading}
+                  >
+                    {logoUploading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" /> Uploading…
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4" /> Upload logo
+                      </>
+                    )}
+                  </Button>
+                )}
+                <details className="group">
+                  <summary className="cursor-pointer list-none text-xs text-muted-foreground hover:text-foreground">
+                    or paste a URL
+                  </summary>
+                  <Input
+                    className="mt-2"
+                    placeholder="https://…/logo.png"
+                    value={draft.theme.logoUrl || ""}
+                    onChange={(e) => setTheme({ logoUrl: e.target.value })}
+                  />
+                </details>
+                {assetError && <p className="text-xs text-destructive">{assetError}</p>}
               </div>
             </div>
           )}
@@ -573,12 +690,40 @@ export default function WebsiteWizard(props: WizardProps) {
                     </button>
                   ))}
                 </div>
+                <input
+                  ref={heroInputRef}
+                  type="file"
+                  accept={ASSET_ACCEPT}
+                  className="hidden"
+                  onChange={(e) => {
+                    handleAssetUpload(e.target.files?.[0], setHeroUploading, (url) => setContent({ heroImageUrl: url }))
+                    e.target.value = ""
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="mt-2 w-full"
+                  onClick={() => heroInputRef.current?.click()}
+                  disabled={heroUploading}
+                >
+                  {heroUploading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" /> Uploading…
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-4 w-4" /> Upload your own photo
+                    </>
+                  )}
+                </Button>
                 <Input
                   className="mt-2"
                   placeholder="Or paste an image URL"
                   value={draft.content.heroImageUrl}
                   onChange={(e) => setContent({ heroImageUrl: e.target.value })}
                 />
+                {assetError && <p className="text-xs text-destructive">{assetError}</p>}
               </div>
             </div>
           )}
