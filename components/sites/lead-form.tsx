@@ -114,7 +114,12 @@ export function LeadForm({
 
   const [step, setStep] = useState<"contact" | "qualify" | "done">("contact")
   useEffect(() => {
-    if (step === "done") onComplete?.()
+    if (step === "done") {
+      onComplete?.()
+      // Notify the owner's ad tags (SiteAnalytics) so the conversion fires
+      // regardless of which parent rendered this form.
+      if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("lh:lead"))
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step])
   const [fname, setFname] = useState("")

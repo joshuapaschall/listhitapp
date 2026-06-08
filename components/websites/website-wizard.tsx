@@ -57,6 +57,13 @@ function seedContent(name: string, persona: SitePersona): WizardContent {
   }
 }
 
+interface TrackingConfig {
+  ga4_id?: string
+  google_ads_id?: string
+  google_ads_label?: string
+  meta_pixel_id?: string
+}
+
 interface Draft {
   name: string
   persona: SitePersona
@@ -65,6 +72,7 @@ interface Draft {
   content: WizardContent
   business: SiteBusiness
   markets: SiteMarkets
+  tracking: TrackingConfig
 }
 
 const ASSET_ACCEPT = "image/png,image/jpeg,image/webp,image/svg+xml"
@@ -113,6 +121,7 @@ export default function WebsiteWizard(props: WizardProps) {
     content: seedContent("", "cash"),
     business: { ...DEFAULT_BUSINESS },
     markets: { ...DEFAULT_MARKETS },
+    tracking: {},
   }))
 
   // Edit mode: hydrate from the API and jump to the Brand step.
@@ -136,6 +145,7 @@ export default function WebsiteWizard(props: WizardProps) {
           content,
           business: { ...DEFAULT_BUSINESS, ...(site.business_json || {}) },
           markets: { ...DEFAULT_MARKETS, ...(site.markets_json || {}) },
+          tracking: (site.tracking_json || {}) as TrackingConfig,
         })
         setSlug(site.slug || "")
         setStatus(site.status || "draft")
@@ -159,6 +169,8 @@ export default function WebsiteWizard(props: WizardProps) {
     setDraft((d) => ({ ...d, business: { ...d.business, ...patch } }))
   const setMarkets = (patch: Partial<SiteMarkets>) =>
     setDraft((d) => ({ ...d, markets: { ...d.markets, ...patch } }))
+  const setTracking = (patch: Partial<TrackingConfig>) =>
+    setDraft((d) => ({ ...d, tracking: { ...d.tracking, ...patch } }))
   const [marketQuery, setMarketQuery] = useState("")
   const { suggestions: marketSuggestions } = useLocationSuggestions(marketQuery)
 
@@ -224,7 +236,7 @@ export default function WebsiteWizard(props: WizardProps) {
       const res = await fetch(`/api/sites/${siteId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: draft.name, theme: draft.theme, business: draft.business, markets: draft.markets, blockPatches }),
+        body: JSON.stringify({ name: draft.name, theme: draft.theme, business: draft.business, markets: draft.markets, tracking: draft.tracking, blockPatches }),
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
@@ -307,7 +319,7 @@ export default function WebsiteWizard(props: WizardProps) {
       const saved = await fetch(`/api/sites/${siteId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: draft.name, theme: draft.theme, business: draft.business, markets: draft.markets, blockPatches }),
+        body: JSON.stringify({ name: draft.name, theme: draft.theme, business: draft.business, markets: draft.markets, tracking: draft.tracking, blockPatches }),
       })
       if (!saved.ok) {
         const body = await saved.json().catch(() => ({}))
@@ -916,6 +928,51 @@ export default function WebsiteWizard(props: WizardProps) {
                   checked={draft.business.optin.requireConsent}
                   onCheckedChange={(v) => setBusiness({ optin: { ...draft.business.optin, requireConsent: v } })}
                 />
+              </div>
+
+              {/* Tracking & ads */}
+              <div className="space-y-3 border-t border-border pt-5">
+                <div>
+                  <h2 className="text-base font-semibold">Tracking &amp; ads</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Paste the IDs from your ad accounts — we&apos;ll fire a conversion automatically when someone joins
+                    your buyers list. Leave blank if you&apos;re not running ads.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Google Analytics 4 — Measurement ID</Label>
+                  <Input
+                    placeholder="G-XXXXXXX"
+                    value={draft.tracking.ga4_id || ""}
+                    onChange={(e) => setTracking({ ga4_id: e.target.value })}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Google Ads — Conversion ID</Label>
+                    <Input
+                      placeholder="AW-XXXXXXXXX"
+                      value={draft.tracking.google_ads_id || ""}
+                      onChange={(e) => setTracking({ google_ads_id: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Google Ads — Conversion label</Label>
+                    <Input
+                      placeholder="abcDEF123"
+                      value={draft.tracking.google_ads_label || ""}
+                      onChange={(e) => setTracking({ google_ads_label: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Meta Pixel ID</Label>
+                  <Input
+                    placeholder="15–16 digit number"
+                    value={draft.tracking.meta_pixel_id || ""}
+                    onChange={(e) => setTracking({ meta_pixel_id: e.target.value })}
+                  />
+                </div>
               </div>
             </div>
           )}
