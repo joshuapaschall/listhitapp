@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextResponse } from "next/server"
 import { createLogger } from "@/lib/logger"
 import { hasPermission } from "@/lib/permissions/server"
@@ -49,7 +50,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     update.updated_at = new Date().toISOString()
 
     const { data, error } = await supabase.from("campaigns").update(update).eq("id", params.id).select("*").single()
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+    if (error) return apiError(error, 400)
     return NextResponse.json(data)
   } catch (error) {
     log("patch campaign error", error)

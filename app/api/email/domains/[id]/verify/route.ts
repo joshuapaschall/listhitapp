@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/permissions/server";
 import { requireOrgContext } from "@/lib/auth/org-context";
@@ -12,7 +13,7 @@ export async function POST(_: Request, { params }: { params: { id: string } }) {
   if (denied) return denied;
   if (!orgId) return NextResponse.json({ ok: false, error: "Organization context missing" }, { status: 400 });
   const { data: existing, error } = await supabase.from("email_domains").select("*").eq("org_id", orgId).eq("id", params.id).maybeSingle();
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  if (error) return apiError(error, 500, undefined, { ok: false });
   if (!existing) return NextResponse.json({ ok: false, error: "Domain not found" }, { status: 404 });
   const status = await getDomainIdentityStatus(existing.domain);
   const { data: domain, error: updateError } = await supabase.from("email_domains").update({ dkim_status: status.dkimStatus, verified_for_sending: status.verifiedForSending, mail_from_status: status.mailFromStatus, status: deriveDomainStatus(status.dkimStatus, status.verifiedForSending), last_checked_at: new Date().toISOString(), dkim_tokens: status.dkimTokens, mail_from_domain: status.mailFromDomain }).eq("org_id", orgId).eq("id", params.id).select("*").maybeSingle();

@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
@@ -26,6 +27,6 @@ export async function POST(request: NextRequest) {
     .maybeSingle()
   if (!target) return NextResponse.json({ error: "Not found" }, { status: 404 })
   const { error } = await (supabaseAdmin.auth.admin as any).resetPasswordForEmail(email)
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  if (error) return apiError(error, 400)
   return NextResponse.json({ success: true })
 }

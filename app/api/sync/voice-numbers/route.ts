@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 // /app/api/sync/voice-numbers/route.ts
 
 import { NextRequest, NextResponse } from "next/server"
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "success", synced: numbers.length })
   } catch (err: any) {
     console.error("Failed to sync voice numbers", err)
-    return NextResponse.json({ error: err.message || "Unknown error" }, { status: 500 })
+    return apiError(err, 500)
   }
 }
 

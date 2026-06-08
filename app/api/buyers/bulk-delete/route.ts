@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextRequest } from "next/server"
 import { requireOrgContext } from "@/lib/auth/org-context"
 import { requirePermission } from "@/lib/permissions/server"
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest) {
     .is("deleted_at", null)
     .select("id")
 
-  if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 })
+  if (error) return apiError(error, 500)
 
   return new Response(JSON.stringify({ ok: true, deleted: data?.length ?? 0 }), { status: 200 })
 }

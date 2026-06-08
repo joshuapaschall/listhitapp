@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/permissions/server";
 import { requireOrgContext } from "@/lib/auth/org-context";
@@ -44,7 +45,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   }
 
   const { data: sender, error } = await supabase.from("email_senders").update(update).eq("org_id", orgId).eq("id", params.id).select("*").maybeSingle();
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  if (error) return apiError(error, 500, undefined, { ok: false });
   if (!sender) return NextResponse.json({ ok: false, error: "Sender not found" }, { status: 404 });
   return NextResponse.json({ ok: true, sender });
 }
@@ -56,6 +57,6 @@ export async function DELETE(_: Request, { params }: { params: { id: string } })
   if (denied) return denied;
   if (!orgId) return NextResponse.json({ ok: false, error: "Organization context missing" }, { status: 400 });
   const { error } = await supabase.from("email_senders").delete().eq("org_id", orgId).eq("id", params.id);
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  if (error) return apiError(error, 500, undefined, { ok: false });
   return NextResponse.json({ ok: true });
 }

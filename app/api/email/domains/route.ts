@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/permissions/server";
 
@@ -41,7 +42,7 @@ export async function GET() {
   if (!orgId) return NextResponse.json({ ok: false, error: "Organization context missing" }, { status: 400 });
 
   const { data: domains, error } = await supabase.from("email_domains").select("*").eq("org_id", orgId).order("created_at", { ascending: false });
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  if (error) return apiError(error, 500, undefined, { ok: false });
 
   const { data: senders, error: sendersError } = await supabase.from("email_senders").select("*").eq("org_id", orgId);
   if (sendersError) return NextResponse.json({ ok: false, error: sendersError.message }, { status: 500 });
@@ -92,7 +93,7 @@ export async function POST(request: Request) {
     mail_from_status: identity.mailFromStatus,
     status: deriveDomainStatus(identity.dkimStatus, identity.verifiedForSending),
   }).select("*").maybeSingle();
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  if (error) return apiError(error, 500, undefined, { ok: false });
 
   return NextResponse.json({
     ok: true,

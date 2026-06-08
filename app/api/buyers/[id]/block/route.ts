@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextRequest, NextResponse } from "next/server"
 import { requireOrgContext } from "@/lib/auth/org-context"
 import { requirePermission } from "@/lib/permissions/server"
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     action === "block" ? await blockBuyer(params.id, reason) : await unblockBuyer(params.id)
 
   if (error) {
-    return NextResponse.json({ error: error.message || "Failed to update block state" }, { status: 500 })
+    return apiError(error, 500)
   }
 
   return NextResponse.json({ ok: true, blocked_at: action === "block" ? new Date().toISOString() : null })

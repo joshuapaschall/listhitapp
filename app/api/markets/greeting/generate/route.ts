@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { PollyClient, SynthesizeSpeechCommand, type VoiceId } from "@aws-sdk/client-polly";
 import { requirePermission } from "@/lib/permissions/server";
 import { NextResponse } from "next/server";
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
     const ext = file.type.includes("wav") ? "wav" : file.type.includes("mp3") || file.type.includes("mpeg") ? "mp3" : "webm";
     const path = `${scopeType === "market" ? "markets" : "numbers"}/${scopeKey}/preview-${ts}.${ext}`;
     const { error } = await supabaseAdmin.storage.from(GREETING_BUCKET).upload(path, Buffer.from(await file.arrayBuffer()), { contentType: file.type || "audio/webm", upsert: true });
-    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    if (error) return apiError(error, 500, undefined, { ok: false });
     const url = `${supabaseAdmin.storage.from(GREETING_BUCKET).getPublicUrl(path).data.publicUrl}?v=${ts}`;
     return NextResponse.json({ ok: true, url, source: "recorded" });
   }
@@ -78,7 +79,7 @@ export async function POST(request: Request) {
   }
   const path = `${scopeType === "market" ? "markets" : "numbers"}/${scopeKey}/preview-${ts}.mp3`;
   const { error } = await supabaseAdmin.storage.from(GREETING_BUCKET).upload(path, Buffer.concat(chunks), { contentType: "audio/mpeg", upsert: true });
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  if (error) return apiError(error, 500, undefined, { ok: false });
   const url = `${supabaseAdmin.storage.from(GREETING_BUCKET).getPublicUrl(path).data.publicUrl}?v=${ts}`;
   return NextResponse.json({ ok: true, url, source: "polly", voice_id: voiceConfig.id });
 }

@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextRequest, NextResponse } from "next/server"
 import { requirePermission } from "@/lib/permissions/server"
 import { requireOrgContext } from "@/lib/auth/org-context"
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      return apiError(error, 500)
     }
 
     return NextResponse.json({ buyer: data }, { status: 201 })

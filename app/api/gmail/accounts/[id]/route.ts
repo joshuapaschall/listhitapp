@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
@@ -40,7 +41,7 @@ export async function DELETE(_: NextRequest, context: RouteContext) {
   }
 
   const { error } = await supabase.from("gmail_tokens").delete().eq("id", id)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return apiError(error, 500)
 
   if (row.is_active) {
     const { data: next } = await supabase

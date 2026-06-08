@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextRequest } from "next/server"
 import { supabase } from "@/lib/supabase"
 
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest) {
       .from("buyers")
       .select("id,email,can_receive_email,deleted_at,buyer_groups!inner(group_id)")
       .in("buyer_groups.group_id", groupIds as any)
-    if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 })
+    if (error) return apiError(error, 500)
 
     const recipients = (buyers as any as Row[])
       .filter(b => !b.deleted_at)

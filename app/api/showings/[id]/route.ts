@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextRequest, NextResponse } from "next/server"
 import { requireOrgContext } from "@/lib/auth/org-context"
 import { requirePermission } from "@/lib/permissions/server"
@@ -17,7 +18,7 @@ export async function GET(_: NextRequest, context: RouteContext) {
 
   const { id } = await context.params
   const { data, error } = await supabase.from("showings").select(SHOWING_SELECT).eq("id", id).maybeSingle()
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return apiError(error, 500)
   if (!data) return NextResponse.json({ error: "Showing not found" }, { status: 404 })
   return NextResponse.json(data)
 }
@@ -43,7 +44,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     .select(SHOWING_SELECT)
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return apiError(error, 500)
 
   if (typeof updates.status === "string" && updates.status !== current.status) {
     const type = updates.status === "completed" ? "showing_completed" : updates.status === "canceled" ? "showing_cancelled" : updates.status === "rescheduled" ? "showing_rescheduled" : null
@@ -77,7 +78,7 @@ export async function DELETE(_: NextRequest, context: RouteContext) {
   const { id } = await context.params
   const { data: showing } = await supabase.from("showings").select("id,buyer_id,property_id").eq("id", id).maybeSingle()
   const { error } = await supabase.from("showings").delete().eq("id", id)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return apiError(error, 500)
 
   await insertNotification({
     type: "showing_deleted",

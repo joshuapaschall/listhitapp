@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
@@ -36,6 +37,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ content })
   } catch (err: any) {
     console.error("Chat API error", err)
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    return apiError(err, 500)
   }
 }

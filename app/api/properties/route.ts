@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextRequest, NextResponse } from "next/server"
 import { requireOrgContext } from "@/lib/auth/org-context"
 import { requirePermission } from "@/lib/permissions/server"
@@ -69,15 +70,11 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error("Property insert failed:", error)
-      return NextResponse.json({ error: error.message, details: error }, { status: 400 })
+      return apiError(error, 400)
     }
 
     return NextResponse.json({ property: data }, { status: 201 })
   } catch (err) {
-    console.error("POST /api/properties error:", err)
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Internal server error" },
-      { status: 500 },
-    )
+    return apiError(err, 500)
   }
 }

@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -21,6 +22,6 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ deleted: count }))
   } catch (err: any) {
     console.error("Failed to cleanup credentials", err)
-    return new Response(JSON.stringify({ error: err.message || "error" }), { status: 500 })
+    return apiError(err, 500)
   }
 }

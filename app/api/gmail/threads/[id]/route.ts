@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextRequest } from "next/server"
 import { getThread } from "@/services/gmail-api"
 import { cookies } from "next/headers"
@@ -21,6 +22,6 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     return new Response(JSON.stringify({ thread }))
   } catch (err: any) {
     console.error("Failed to get thread", err)
-    return new Response(JSON.stringify({ error: err.message || "error" }), { status: 500 })
+    return apiError(err, 500)
   }
 }

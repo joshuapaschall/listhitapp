@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
@@ -30,7 +31,7 @@ export async function POST(_: NextRequest, context: RouteContext) {
 
   await supabase.from("gmail_tokens").update({ is_active: false }).eq("user_id", user.id)
   const { error } = await supabase.from("gmail_tokens").update({ is_active: true }).eq("id", id)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return apiError(error, 500)
 
   return NextResponse.json({ ok: true })
 }

@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { cookies } from "next/headers"
 import { NextRequest, NextResponse } from "next/server"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
@@ -96,7 +97,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, data })
   } catch (error: any) {
     console.error("❌ Conference error:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return apiError(error, 500)
   }
 }
 
@@ -133,6 +134,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(data)
   } catch (error: any) {
     console.error("❌ Conference fetch error:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return apiError(error, 500)
   }
 }

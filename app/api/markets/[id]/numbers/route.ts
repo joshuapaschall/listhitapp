@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/permissions/server";
 import { requireOrgContext } from "../../_shared";
@@ -13,7 +14,7 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
     .eq("org_id", orgId)
     .eq("market_id", params.id)
     .order("label");
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  if (error) return apiError(error, 500, undefined, { ok: false });
   return NextResponse.json({ ok: true, numbers: data ?? [] });
 }
 

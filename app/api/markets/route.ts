@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/permissions/server";
 import { requireOrgContext } from "./_shared";
@@ -10,7 +11,7 @@ export async function GET() {
   if (!orgId) return NextResponse.json({ ok: false, error: "Missing org" }, { status: 400 });
 
   const { data: markets, error } = await supabase.from("markets").select("*").eq("org_id", orgId).order("name");
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  if (error) return apiError(error, 500, undefined, { ok: false });
 
   const ids = (markets ?? []).map((m) => m.id);
   const { data: numbers } = ids.length
@@ -40,6 +41,6 @@ export async function POST(request: Request) {
   if (existing) return NextResponse.json({ ok: false, error: "Market name already exists" }, { status: 409 });
 
   const { data: market, error } = await supabase.from("markets").insert({ org_id: orgId, name, purpose }).select("*").single();
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  if (error) return apiError(error, 500, undefined, { ok: false });
   return NextResponse.json({ ok: true, market });
 }

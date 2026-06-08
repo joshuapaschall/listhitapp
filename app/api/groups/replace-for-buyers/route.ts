@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextRequest, NextResponse } from "next/server"
 import { requireOrgContext } from "@/lib/auth/org-context"
 
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
     })
     if (error) {
       console.error("replace-groups: rpc error", { error })
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      return apiError(error, 500)
     }
 
     const changedRows = Number((rpcResult as any)?.changed_rows ?? 0)
