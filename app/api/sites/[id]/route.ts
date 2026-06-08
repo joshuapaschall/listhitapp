@@ -34,6 +34,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     business?: Partial<SiteBusiness>
     markets?: Partial<SiteMarkets>
     blockPatches?: BlockPatch[]
+    tracking?: Record<string, unknown>
   }
   try {
     body = await request.json()
@@ -60,6 +61,21 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     }
     if (Array.isArray(body.blockPatches) && body.blockPatches.length) {
       await SiteService.patchPageBlocks(supabase, orgId, id, body.blockPatches)
+    }
+    if (body.tracking && typeof body.tracking === "object") {
+      // Keep only the known ad-tag keys, coerced to trimmed strings.
+      const src = body.tracking as Record<string, unknown>
+      const tracking_json: Record<string, string> = {}
+      for (const key of ["ga4_id", "google_ads_id", "google_ads_label", "meta_pixel_id"]) {
+        const v = src[key]
+        if (typeof v === "string" && v.trim()) tracking_json[key] = v.trim()
+      }
+      const { error: trackErr } = await supabase
+        .from("sites")
+        .update({ tracking_json })
+        .eq("id", id)
+        .eq("org_id", orgId)
+      if (trackErr) throw new Error(trackErr.message)
     }
 
     const result = await SiteService.get(supabase, orgId, id)
