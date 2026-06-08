@@ -2,13 +2,13 @@ import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
 import { cookies } from "next/headers"
 import { notFound, redirect } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft } from "lucide-react"
 import MainLayout from "@/components/layout/main-layout"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { resolveOrgIdForUser } from "@/lib/auth/org-context"
 import { cn } from "@/lib/utils"
 import { AnalyticsTrendChart, type TrendPoint } from "@/components/websites/analytics-trend-chart"
+import { SiteHubNav } from "@/components/websites/site-hub-nav"
 
 export const dynamic = "force-dynamic"
 
@@ -75,7 +75,7 @@ export default async function WebsiteAnalyticsPage({
   // Org-scoped load confirms ownership before showing any analytics.
   const { data: site } = await supabase
     .from("sites")
-    .select("id,name,slug")
+    .select("id,name,slug,status")
     .eq("id", params.id)
     .eq("org_id", orgId)
     .maybeSingle()
@@ -131,20 +131,17 @@ export default async function WebsiteAnalyticsPage({
   return (
     <MainLayout>
       <div className="space-y-6 p-4 md:p-6">
-        {/* Header */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-1">
-            <Link
-              href="/websites"
-              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" /> Websites
-            </Link>
-            <h1 className="text-2xl font-bold tracking-tight">{site.name}</h1>
-            <p className="font-mono text-xs text-muted-foreground">
-              {site.slug}.listhit.io · {rangeLabel}
-            </p>
-          </div>
+        <SiteHubNav
+          active="analytics"
+          siteId={site.id}
+          siteName={site.name}
+          slug={site.slug}
+          published={site.status === "published"}
+        />
+
+        {/* Range selector */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-muted-foreground">{rangeLabel}</p>
           <div className="flex flex-wrap items-center gap-1.5">
             {RANGES.map((r) => {
               const active = r.key === range

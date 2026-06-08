@@ -132,7 +132,11 @@ export default function WebsitesPage() {
                 <Card key={site.id} className="flex h-full flex-col">
                   <CardHeader className="space-y-2">
                     <div className="flex items-start justify-between gap-2">
-                      <h3 className="line-clamp-2 text-base font-medium">{site.name}</h3>
+                      <h3 className="line-clamp-2 text-base font-medium">
+                        <Link href={`/websites/${site.id}`} className="hover:underline">
+                          {site.name}
+                        </Link>
+                      </h3>
                       <Badge variant={published ? "default" : "secondary"}>{published ? "Published" : "Draft"}</Badge>
                     </div>
                     <p className="font-mono text-xs text-muted-foreground">{domain}</p>
@@ -141,10 +145,7 @@ export default function WebsitesPage() {
                   <CardFooter className="items-center justify-between gap-2 border-t bg-muted/20">
                     <div className="flex items-center gap-2">
                       <Button asChild variant="outline" size="sm">
-                        <Link href={`/websites/${site.id}/edit`}>Edit</Link>
-                      </Button>
-                      <Button asChild variant="ghost" size="sm">
-                        <Link href={`/websites/${site.id}/analytics`}>Analytics</Link>
+                        <Link href={`/websites/${site.id}`}>Manage</Link>
                       </Button>
                       {published && (
                         <Button asChild variant="ghost" size="sm">
