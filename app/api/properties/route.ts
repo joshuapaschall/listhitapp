@@ -48,6 +48,16 @@ export async function POST(request: NextRequest) {
       tags: body.tags?.length ? body.tags : null,
       website_url: body.website_url || null,
       short_slug: body.short_slug || null,
+      // Listings v2: public listing copy vs private notes, publish gate, and
+      // the optional listing facts. description is the PUBLIC text — never notes.
+      description: body.description ?? null,
+      internal_notes: body.internal_notes ?? null,
+      show_on_site: body.show_on_site ?? true,
+      photo_album_url: body.photo_album_url || null,
+      year_built: body.year_built ?? null,
+      lot_size: body.lot_size || null,
+      mls_number: body.mls_number || null,
+      construction_type: body.construction_type || null,
       org_id: orgId,
     }
 
