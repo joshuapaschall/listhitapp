@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextRequest, NextResponse } from "next/server"
 import { requireOrgContext } from "@/lib/auth/org-context"
 import { requirePermission } from "@/lib/permissions/server"
@@ -72,16 +73,12 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
     if (error) {
       console.error("Property update failed:", error)
-      return NextResponse.json({ error: error.message, details: error }, { status: 400 })
+      return apiError(error, 400)
     }
 
     return NextResponse.json({ property: data })
   } catch (err) {
-    console.error("PATCH /api/properties/[id] error:", err)
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Internal server error" },
-      { status: 500 },
-    )
+    return apiError(err, 500)
   }
 }
 
@@ -123,7 +120,7 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
 
     if (error) {
       console.error("Property delete failed:", error)
-      return NextResponse.json({ error: error.message, details: error }, { status: 400 })
+      return apiError(error, 400)
     }
 
     return NextResponse.json({ success: true })

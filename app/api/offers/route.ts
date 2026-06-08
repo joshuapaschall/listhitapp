@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextRequest, NextResponse } from "next/server"
 import { requireOrgContext } from "@/lib/auth/org-context"
 import { requirePermission } from "@/lib/permissions/server"
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
   if (propertyId) query = query.eq("property_id", propertyId)
 
   const { data, error } = await query
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return apiError(error, 500)
 
   return NextResponse.json(data || [])
 }

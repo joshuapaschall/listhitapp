@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/permissions/server";
 import { requireOrgContext } from "@/lib/auth/org-context";
@@ -12,7 +13,7 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
   if (denied) return denied;
   if (!orgId) return NextResponse.json({ ok: false, error: "Organization context missing" }, { status: 400 });
   const { data: domain, error } = await supabase.from("email_domains").select("*").eq("org_id", orgId).eq("id", params.id).maybeSingle();
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  if (error) return apiError(error, 500, undefined, { ok: false });
   if (!domain) return NextResponse.json({ ok: false, error: "Domain not found" }, { status: 404 });
   const { data: senders, error: sendersError } = await supabase.from("email_senders").select("*").eq("org_id", orgId).eq("domain_id", domain.id);
   if (sendersError) return NextResponse.json({ ok: false, error: sendersError.message }, { status: 500 });
@@ -26,7 +27,7 @@ export async function DELETE(_: Request, { params }: { params: { id: string } })
   if (denied) return denied;
   if (!orgId) return NextResponse.json({ ok: false, error: "Organization context missing" }, { status: 400 });
   const { data: domain, error } = await supabase.from("email_domains").select("*").eq("org_id", orgId).eq("id", params.id).maybeSingle();
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  if (error) return apiError(error, 500, undefined, { ok: false });
   if (!domain) return NextResponse.json({ ok: false, error: "Domain not found" }, { status: 404 });
   await deleteDomainIdentity(domain.domain);
   const { error: deleteError } = await supabase.from("email_domains").delete().eq("org_id", orgId).eq("id", params.id);

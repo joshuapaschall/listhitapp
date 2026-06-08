@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextResponse } from "next/server";
 
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -54,10 +55,6 @@ export async function POST(request: Request) {
       error: result.error,
     });
   } catch (error) {
-    console.error("[voicemail-fallback] error", error);
-    return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "Unexpected error" },
-      { status: 500 },
-    );
+    return apiError(error, 500, undefined, { ok: false });
   }
 }

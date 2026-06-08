@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextRequest, NextResponse } from "next/server"
 
 import { TELNYX_API_URL, telnyxHeaders } from "@/lib/telnyx"
@@ -54,6 +55,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid action" }, { status: 400 })
   } catch (error: any) {
     console.error("Conference bridge error:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return apiError(error, 500)
   }
 }

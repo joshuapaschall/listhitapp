@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextRequest } from "next/server"
 import { getOrgScopedClient } from "@/lib/auth/scoped-db"
 import { createLogger } from "@/lib/logger"
@@ -51,9 +52,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     return new Response(JSON.stringify({ success: true }))
   } catch (err: any) {
     log("error", "unsubscribe route error", { id, err })
-    return new Response(JSON.stringify({ error: err.message || "error" }), {
-      status: 500,
-    })
+    return apiError(err, 500)
   }
 }
 

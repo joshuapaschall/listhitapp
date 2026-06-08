@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
@@ -147,7 +148,7 @@ export async function POST(request: NextRequest) {
     const { data, error } = await query
 
     if (error) {
-      return NextResponse.json({ error: error.message || "Failed to export buyers" }, { status: 500 })
+      return apiError(error, 500)
     }
 
     const buyers = (data || []).map((row: any) => {

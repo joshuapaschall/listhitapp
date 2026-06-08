@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextRequest, NextResponse } from "next/server"
 import { assertCronAuth } from "@/lib/cron-auth"
 import { supabaseAdmin } from "@/lib/supabase"
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest) {
 
   if (error) {
     console.error("requeue stuck email jobs failed", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return apiError(error, 500)
   }
 
   return NextResponse.json({ requeued: data ?? 0 })

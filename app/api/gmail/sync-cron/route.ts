@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextRequest, NextResponse } from "next/server"
 import { assertCronAuth } from "@/lib/cron-auth"
 import { supabaseAdmin } from "@/lib/supabase"
@@ -49,7 +50,7 @@ export async function POST(req: NextRequest) {
       .maybeSingle()
 
     if (error) {
-      return NextResponse.json({ error: error.message || "Failed to load user" }, { status: 500 })
+      return apiError(error, 500)
     }
 
     if (!data) {
@@ -67,7 +68,7 @@ export async function POST(req: NextRequest) {
       .limit(limitUsers)
 
     if (error) {
-      return NextResponse.json({ error: error.message || "Failed to load users" }, { status: 500 })
+      return apiError(error, 500)
     }
 
     targetUserIds = (data || []).map((row) => row.user_id)

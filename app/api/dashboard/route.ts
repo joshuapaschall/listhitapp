@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextRequest, NextResponse } from "next/server"
 import { requireOrgContext } from "@/lib/auth/org-context"
 import {
@@ -78,10 +79,6 @@ export async function GET(request: NextRequest) {
       funnel,
     })
   } catch (err) {
-    console.error("GET /api/dashboard error:", err)
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Internal server error" },
-      { status: 500 },
-    )
+    return apiError(err, 500)
   }
 }

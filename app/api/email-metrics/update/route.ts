@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextRequest } from "next/server"
 import { cookies } from "next/headers"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
@@ -29,8 +30,6 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify(result))
   } catch (err: any) {
     console.error("Failed to update email metrics", err)
-    return new Response(JSON.stringify({ error: err.message || "error" }), {
-      status: 500,
-    })
+    return apiError(err, 500)
   }
 }

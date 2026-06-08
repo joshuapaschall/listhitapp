@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextRequest } from "next/server"
 
 import { formatPhoneE164 } from "@/lib/dedup-utils"
@@ -72,9 +73,7 @@ export async function POST(request: NextRequest) {
       }
     } catch (err: any) {
       console.error("Failed to mirror media", err)
-      return new Response(JSON.stringify({ error: err.message || "error" }), {
-        status: 400,
-      })
+      return apiError(err, 400)
     }
   }
 
@@ -153,8 +152,6 @@ export async function POST(request: NextRequest) {
     )
   } catch (err: any) {
     console.error("Failed to schedule message", err)
-    return new Response(JSON.stringify({ error: err.message || "error" }), {
-      status: 500,
-    })
+    return apiError(err, 500)
   }
 }

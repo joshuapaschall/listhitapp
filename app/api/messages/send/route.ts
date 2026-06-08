@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextRequest } from "next/server"
 import { requireOrgContext } from "@/lib/auth/org-context"
 import { requirePermission } from "@/lib/permissions/server"
@@ -58,7 +59,7 @@ export async function POST(request: NextRequest) {
       }
     } catch (err: any) {
       console.error("Failed to mirror media", err)
-      return new Response(JSON.stringify({ error: err.message }), { status: 400 })
+      return apiError(err, 400)
     }
   }
   const digits = normalizePhone(formatted)
@@ -275,6 +276,6 @@ export async function POST(request: NextRequest) {
     return new Response(JSON.stringify({ sid: data.id }), { status: 200 })
   } catch (err: any) {
     console.error("Failed to send message", err)
-    return new Response(JSON.stringify({ error: err.message || "error" }), { status: 500 })
+    return apiError(err, 500)
   }
 }

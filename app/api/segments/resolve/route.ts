@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextResponse } from "next/server"
 import { requireOrgContext } from "@/lib/auth/org-context"
 import { hasPermission } from "@/lib/permissions/server"
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ buyerIds, count: buyerIds.length })
   } catch (err: any) {
     if (err instanceof SegmentContextError) {
-      return NextResponse.json({ error: err.message }, { status: 400 })
+      return apiError(err, 400)
     }
     log.error("resolve failed", err)
     return NextResponse.json({ error: err?.message || "error" }, { status: 500 })

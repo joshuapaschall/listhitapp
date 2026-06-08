@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextRequest, NextResponse } from "next/server"
 import { requireOrgContext } from "@/lib/auth/org-context"
 import { requirePermission } from "@/lib/permissions/server"
@@ -111,7 +112,7 @@ export async function GET(_: NextRequest, context: RouteContext) {
 
   const { id } = await context.params
   const { data, error } = await supabase.from("offers").select(OFFER_SELECT).eq("id", id).maybeSingle()
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return apiError(error, 500)
   if (!data) return NextResponse.json({ error: "Offer not found" }, { status: 404 })
   return NextResponse.json(data)
 }
@@ -145,7 +146,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     .select(OFFER_SELECT)
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return apiError(error, 500)
 
   if (newStatus === "accepted" || newStatus === "closed") {
     await syncDispositionForOffer({
@@ -177,7 +178,7 @@ export async function DELETE(_: NextRequest, context: RouteContext) {
   const { id } = await context.params
   const { data: offer } = await supabase.from("offers").select("id,buyer_id,property_id").eq("id", id).maybeSingle()
   const { error } = await supabase.from("offers").delete().eq("id", id)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return apiError(error, 500)
 
   await insertNotification({
     type: "offer_deleted",

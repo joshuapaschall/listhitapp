@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
     password: throwawayPassword(),
     user_metadata: fullName ? { display_name: fullName } : undefined,
   })
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  if (error) return apiError(error, 400)
 
   const id = data.user?.id
   if (id) {

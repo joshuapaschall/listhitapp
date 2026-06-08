@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextRequest } from "next/server"
 import {
   buildMessage,
@@ -101,6 +102,6 @@ export async function POST(request: NextRequest) {
     return new Response(JSON.stringify({ id, threadId }))
   } catch (err: any) {
     console.error("Failed to send email", err)
-    return new Response(JSON.stringify({ error: err.message || "error" }), { status: 500 })
+    return apiError(err, 500)
   }
 }

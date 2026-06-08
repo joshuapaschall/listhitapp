@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { cookies } from "next/headers"
 import { NextRequest } from "next/server"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
@@ -39,6 +40,6 @@ export async function POST(request: NextRequest) {
     return new Response(text, { status: 200 })
   } catch (err: any) {
     console.error("Reject call error", err)
-    return new Response(JSON.stringify({ error: err.message || "error" }), { status: 500 })
+    return apiError(err, 500)
   }
 }

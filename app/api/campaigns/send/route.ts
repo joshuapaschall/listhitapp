@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextRequest, NextResponse } from "next/server"
 import {
   processEmailQueue,
@@ -485,10 +486,8 @@ export async function POST(request: NextRequest) {
       })
     } catch (err: any) {
       if (err instanceof SenderNotVerifiedError) {
-        return new Response(
-          JSON.stringify({ error: err.message }),
-          { status: 422 },
-        )
+        // Deliberate, safe user-facing message for this known error type.
+        return apiError(err, 422, err.message)
       }
       console.error("Sender resolution failed", err)
       return new Response(

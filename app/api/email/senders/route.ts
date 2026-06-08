@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/permissions/server";
 import { requireOrgContext } from "@/lib/auth/org-context";
@@ -29,7 +30,7 @@ export async function GET(request: Request) {
   let query = supabase.from("email_senders").select("*").eq("org_id", orgId).order("created_at", { ascending: false });
   if (domainId) query = query.eq("domain_id", domainId);
   const { data, error } = await query;
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  if (error) return apiError(error, 500, undefined, { ok: false });
   return NextResponse.json({ ok: true, senders: data || [] });
 }
 
@@ -60,6 +61,6 @@ export async function POST(request: Request) {
   if (emailDomain !== domain.domain) return NextResponse.json({ ok: false, error: "From email must match the verified domain." }, { status: 422 });
   if (isDefault) await supabase.from("email_senders").update({ is_default: false }).eq("org_id", orgId).eq("is_default", true);
   const { data: sender, error } = await supabase.from("email_senders").insert({ org_id: orgId, domain_id: domain.id, from_email: fromEmail, from_name: fromName, reply_to: replyTo, is_default: isDefault }).select("*").maybeSingle();
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  if (error) return apiError(error, 500, undefined, { ok: false });
   return NextResponse.json({ ok: true, sender });
 }

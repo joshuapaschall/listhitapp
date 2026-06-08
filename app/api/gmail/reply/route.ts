@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api-error"
 import { NextRequest } from "next/server"
 import { getThread, buildReply, buildReplyWithAttachments, sendEmail } from "@/services/gmail-api"
 import { cookies } from "next/headers"
@@ -91,6 +92,6 @@ export async function POST(request: NextRequest) {
     return new Response(JSON.stringify({ id }))
   } catch (err: any) {
     console.error("Failed to send reply", err)
-    return new Response(JSON.stringify({ error: err.message || "error" }), { status: 500 })
+    return apiError(err, 500)
   }
 }
