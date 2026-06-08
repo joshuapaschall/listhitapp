@@ -1,6 +1,7 @@
 import React from "react"
 import { themeToCssVars } from "@/lib/site-builder/theme"
-import { googleFontsHref } from "@/lib/site-builder/typography"
+import { siteImage, siteSrcSet } from "@/lib/site-builder/image-url"
+import { SiteFonts } from "@/components/sites/site-fonts"
 import { SiteStyles } from "@/components/sites/site-styles"
 import { SiteContextProvider, type SiteFormContext } from "@/lib/site-builder/site-context"
 import { SiteFooter } from "@/components/sites/site-footer"
@@ -47,8 +48,7 @@ export function BlogIndexPage({
       }}
     >
       <SiteStyles />
-      {/* eslint-disable-next-line @next/next/no-page-custom-font */}
-      <link rel="stylesheet" href={googleFontsHref(theme.typeStyleId)} />
+      <SiteFonts typeStyleId={theme.typeStyleId} />
       <SiteContextProvider value={formContext}>
         {/* Brand header */}
         <header style={{ borderBottom: "1px solid #eef1f5", background: "#fff" }}>
@@ -89,7 +89,9 @@ export function BlogIndexPage({
                         {p.featuredImageUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
-                            src={p.featuredImageUrl}
+                            src={siteImage(p.featuredImageUrl, { width: 800 })}
+                            srcSet={siteSrcSet(p.featuredImageUrl, [400, 800])}
+                            sizes="(max-width: 768px) 100vw, 360px"
                             alt={p.featuredImageAlt || p.title}
                             width={400}
                             height={160}

@@ -1,5 +1,6 @@
 import React from "react"
 import type { DealSummary } from "@/lib/site-builder/types"
+import { siteImage, siteSrcSet } from "@/lib/site-builder/image-url"
 
 export interface DealCardProps {
   property: DealSummary
@@ -51,7 +52,9 @@ export function DealCard({ property, variant = "teaser", locked = false, href, s
         {property.primary_image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={property.primary_image_url}
+            src={siteImage(property.primary_image_url, { width: 800 })}
+            srcSet={siteSrcSet(property.primary_image_url, [400, 800])}
+            sizes="(max-width: 768px) 100vw, 380px"
             alt={cityState || property.slug}
             width={400}
             height={150}

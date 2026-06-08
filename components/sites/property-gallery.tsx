@@ -1,5 +1,6 @@
 "use client"
 import React, { useState } from "react"
+import { siteImage, siteSrcSet } from "@/lib/site-builder/image-url"
 
 // Client gallery: a large primary image plus a clickable thumbnail strip.
 // Theme-token framed; uses plain <img> (next.config has images.unoptimized).
@@ -38,11 +39,14 @@ export function PropertyGallery({ images, alt }: { images: { image_url: string }
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={current.image_url}
+          src={siteImage(current.image_url, { width: 1280, quality: 80 })}
+          srcSet={siteSrcSet(current.image_url, [800, 1280, 1600], 80)}
+          sizes="(max-width: 900px) 100vw, 760px"
           alt={alt}
           width={1200}
           height={750}
-          loading="lazy"
+          loading={active === 0 ? "eager" : "lazy"}
+          fetchPriority={active === 0 ? "high" : "auto"}
           decoding="async"
           style={{ width: "100%", height: "auto", aspectRatio: "16 / 10", objectFit: "cover", display: "block" }}
         />
@@ -71,7 +75,9 @@ export function PropertyGallery({ images, alt }: { images: { image_url: string }
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={img.image_url}
+                  src={siteImage(img.image_url, { width: 96 })}
+                  srcSet={siteSrcSet(img.image_url, [96, 192])}
+                  sizes="96px"
                   alt={`${alt} — photo ${i + 1}`}
                   width={96}
                   height={68}

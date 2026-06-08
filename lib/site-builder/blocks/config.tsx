@@ -5,6 +5,7 @@ import { WRAP, HEADING } from "./primitives"
 import { LeadForm } from "@/components/sites/lead-form"
 import { DealsSection } from "@/components/sites/deals-section"
 import { SiteFooter } from "@/components/sites/site-footer"
+import { siteImage, siteSrcSet } from "@/lib/site-builder/image-url"
 
 
 // ---------------------------------------------------------------------------
@@ -252,8 +253,11 @@ export const siteConfig: Config = {
             "radial-gradient(120% 90% at 78% 18%, color-mix(in srgb, var(--a) 22%, transparent), transparent 55%)," +
             "radial-gradient(120% 90% at 18% 92%, color-mix(in srgb, var(--p) 45%, #000), transparent 60%)," +
             "linear-gradient(115deg, color-mix(in srgb, var(--p) 78%, #000), color-mix(in srgb, var(--p) 90%, #000))"
-          const background = imageUrl ? `${scrim}, url(${imageUrl})` : themedFallback
+          const heroSrc = imageUrl ? (siteImage(imageUrl, { width: 1920, quality: 80 }) ?? imageUrl) : null
+          const background = heroSrc ? `${scrim}, url(${heroSrc})` : themedFallback
           return (
+            <>
+            {heroSrc ? <link rel="preload" as="image" href={heroSrc} fetchPriority="high" /> : null}
             <section
               className="lh-hero-photo"
               style={{
@@ -330,6 +334,7 @@ export const siteConfig: Config = {
                 </div>
               </div>
             </section>
+            </>
           )
         }
 
@@ -376,8 +381,15 @@ export const siteConfig: Config = {
                 </div>
                 <div style={{ position: "relative", borderRadius: 18, overflow: "hidden", minHeight: 360 }}>
                   <img
-                    src={imageUrl}
+                    src={siteImage(imageUrl, { width: 900, quality: 80 })}
+                    srcSet={siteSrcSet(imageUrl, [600, 900, 1200], 80)}
+                    sizes="(max-width: 900px) 100vw, 400px"
                     alt=""
+                    width={800}
+                    height={600}
+                    loading="eager"
+                    fetchPriority="high"
+                    decoding="async"
                     style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", minHeight: 360 }}
                   />
                   {stat && (

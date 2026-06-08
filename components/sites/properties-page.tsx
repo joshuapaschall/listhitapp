@@ -1,5 +1,5 @@
 import { themeToCssVars } from "@/lib/site-builder/theme"
-import { googleFontsHref } from "@/lib/site-builder/typography"
+import { SiteFonts } from "@/components/sites/site-fonts"
 import type { SiteTheme, SiteBusiness, DealSummary } from "@/lib/site-builder/types"
 import type { SiteFormContext } from "@/lib/site-builder/site-context"
 import { DealCard } from "@/components/sites/deal-card"
@@ -49,8 +49,7 @@ export function PropertiesPage({
         flexDirection: "column",
       }}
     >
-      {/* eslint-disable-next-line @next/next/no-page-custom-font */}
-      <link rel="stylesheet" href={googleFontsHref(theme.typeStyleId)} />
+      <SiteFonts typeStyleId={theme.typeStyleId} />
 
       <header style={{ borderBottom: "1px solid #eef1f5", background: "#fff" }}>
         <div style={{ maxWidth: 1120, margin: "0 auto", padding: "16px 24px" }}>

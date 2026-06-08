@@ -1,6 +1,7 @@
 import React from "react"
 import { themeToCssVars } from "@/lib/site-builder/theme"
-import { googleFontsHref } from "@/lib/site-builder/typography"
+import { siteImage, siteSrcSet } from "@/lib/site-builder/image-url"
+import { SiteFonts } from "@/components/sites/site-fonts"
 import { SiteStyles } from "@/components/sites/site-styles"
 import { SiteContextProvider, type SiteFormContext } from "@/lib/site-builder/site-context"
 import { LeadForm } from "@/components/sites/lead-form"
@@ -50,8 +51,7 @@ export function BlogPostPage({
       }}
     >
       <SiteStyles />
-      {/* eslint-disable-next-line @next/next/no-page-custom-font */}
-      <link rel="stylesheet" href={googleFontsHref(theme.typeStyleId)} />
+      <SiteFonts typeStyleId={theme.typeStyleId} />
       <SiteContextProvider value={formContext}>
         {/* Brand header */}
         <header style={{ borderBottom: "1px solid #eef1f5", background: "#fff" }}>
@@ -94,11 +94,14 @@ export function BlogPostPage({
               <div style={{ marginTop: 22, borderRadius: 16, overflow: "hidden", border: "1px solid #eef1f5", background: "color-mix(in srgb, var(--p) 5%, #fff)" }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={post.featuredImageUrl}
+                  src={siteImage(post.featuredImageUrl, { width: 1200, quality: 80 })}
+                  srcSet={siteSrcSet(post.featuredImageUrl, [600, 1200], 80)}
+                  sizes="(max-width: 800px) 100vw, 760px"
                   alt={post.featuredImageAlt || post.title}
                   width={1200}
                   height={630}
-                  loading="lazy"
+                  loading="eager"
+                  fetchPriority="high"
                   decoding="async"
                   style={{ width: "100%", height: "auto", aspectRatio: "1200 / 630", objectFit: "cover", display: "block" }}
                 />
