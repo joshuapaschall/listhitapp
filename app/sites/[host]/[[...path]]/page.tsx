@@ -20,6 +20,10 @@ import {
 import { resolveLocationPage, locationHrefForDeal, PERSONA_URL_SLUG } from "@/lib/site-builder/location-pages"
 import { locationCopy } from "@/lib/site-builder/location-content"
 import { LocationPage } from "@/components/sites/location-page"
+import { getPublishedPosts, getPublishedPostBySlug } from "@/services/site-posts-service"
+import { BlogIndexPage } from "@/components/sites/blog-index-page"
+import { BlogPostPage } from "@/components/sites/blog-post-page"
+import { PostJsonLd } from "@/components/sites/post-json-ld"
 
 // Public tenant sites read published rows from the DB at request time, so this
 // route is never prerendered at build.
@@ -100,6 +104,34 @@ export async function generateMetadata({
       const desc = `${priceBit}off-market deal${specBit ? ` — ${specBit}` : ""}${cityState ? ` in ${cityState}` : ""}. Join ${site.name}'s buyers list for full address & details.`
       const meta = seoMeta(host, `/properties/${slug}`, `${title} · ${site.name}`, desc, site.name)
       return { ...meta, robots: { index: true, follow: true } }
+    }
+
+    // Blog index — must precede the 2-segment location branch below.
+    if (params.path?.length === 1 && params.path[0] === "blog") {
+      const site = await resolveSiteByHost(host)
+      if (!site) return { title: "Site not found" }
+      return seoMeta(host, "/blog", `Blog | ${site.name}`, `Latest articles and updates from ${site.name}.`, site.name)
+    }
+
+    // Blog post — must precede the 2-segment location branch (it also matches length===2).
+    if (params.path?.length === 2 && params.path[0] === "blog") {
+      const site = await resolveSiteByHost(host)
+      if (!site) return { title: "Site not found" }
+      const post = await getPublishedPostBySlug(site.id, site.org_id, params.path[1]).catch(() => null)
+      if (!post) return { title: "Not found", robots: { index: false } }
+      const ogImage = post.ogImageUrl || post.featuredImageUrl || undefined
+      const meta = seoMeta(
+        host,
+        `/blog/${post.slug}`,
+        post.metaTitle || post.title,
+        post.metaDescription || post.excerpt || undefined,
+        site.name,
+      )
+      return {
+        ...meta,
+        robots: { index: true, follow: true },
+        openGraph: { ...meta.openGraph, images: ogImage ? [ogImage] : undefined },
+      }
     }
 
     if (params.path?.length === 2) {
@@ -200,6 +232,56 @@ export default async function SitePage({ params }: { params: SitePageParams }) {
       <>
         <PropertyJsonLd deal={deal} host={host} brandName={site.name} />
         <PropertyPage host={host} site={site} theme={theme} business={business} deal={deal} nearby={nearby} formContext={formContext} cityLocationHref={cityLocationHref} />
+      </>
+    )
+  }
+
+  // Blog index — must precede the 2-segment location branch below.
+  if (params.path?.length === 1 && params.path[0] === "blog") {
+    const site = await resolveSiteByHost(host)
+    if (!site) notFound()
+    const theme = { ...DEFAULT_THEME, ...(site.theme_json || {}) }
+    const business = { ...DEFAULT_BUSINESS, ...(site.business_json || {}) }
+    const deals = await getPublishedDeals(site.org_id, 6).catch(() => [])
+    const posts = await getPublishedPosts(site.id, site.org_id, 12).catch(() => [])
+    const formContext = {
+      persona: site.persona,
+      brandName: site.name,
+      optinEnabled: business.optin?.enabled !== false,
+      requireConsent: business.optin?.requireConsent !== false,
+      disclosure: buildOptInDisclosure(site.name),
+      legalPaths: { terms: "/terms", privacy: "/privacy" },
+      markets: { ...DEFAULT_MARKETS, ...((site.markets_json as any) || {}) },
+      deals,
+      business,
+    }
+    return <BlogIndexPage host={host} site={site} theme={theme} business={business} formContext={formContext} posts={posts} />
+  }
+
+  // Blog post — must precede the 2-segment location branch (it also matches length===2).
+  if (params.path?.length === 2 && params.path[0] === "blog") {
+    const site = await resolveSiteByHost(host)
+    if (!site) notFound()
+    const post = await getPublishedPostBySlug(site.id, site.org_id, params.path[1])
+    if (!post) notFound()
+    const theme = { ...DEFAULT_THEME, ...(site.theme_json || {}) }
+    const business = { ...DEFAULT_BUSINESS, ...(site.business_json || {}) }
+    const deals = await getPublishedDeals(site.org_id, 6).catch(() => [])
+    const formContext = {
+      persona: site.persona,
+      brandName: site.name,
+      optinEnabled: business.optin?.enabled !== false,
+      requireConsent: business.optin?.requireConsent !== false,
+      disclosure: buildOptInDisclosure(site.name),
+      legalPaths: { terms: "/terms", privacy: "/privacy" },
+      markets: { ...DEFAULT_MARKETS, ...((site.markets_json as any) || {}) },
+      deals,
+      business,
+    }
+    return (
+      <>
+        <PostJsonLd post={post} host={host} brandName={site.name} />
+        <BlogPostPage host={host} site={site} theme={theme} business={business} formContext={formContext} post={post} />
       </>
     )
   }

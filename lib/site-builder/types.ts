@@ -102,6 +102,26 @@ export interface DealDetail extends DealSummary {
   images: DealImage[]
 }
 
+export interface PostSummary {
+  id: string
+  slug: string
+  title: string
+  excerpt: string | null
+  featuredImageUrl: string | null
+  featuredImageAlt: string | null
+  publishedAt: string | null
+}
+
+export interface PostDetail extends PostSummary {
+  bodyHtml: string | null
+  metaTitle: string | null
+  metaDescription: string | null
+  ogImageUrl: string | null
+  focusKeyword: string | null
+  authorName: string | null
+  seoScore: number | null
+}
+
 export interface SiteMarkets {
   scope: "nationwide" | "specific"
   markets: string[]   // canonical location strings: "Atlanta (GA)", "Fulton County (GA)", "GA, USA"
