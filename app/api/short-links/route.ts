@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
+import { requireOrgContext } from "@/lib/auth/org-context"
 import { createShortLink } from "@/services/shortlink-service"
 
 export async function POST(request: NextRequest) {
+  // Creating short links requires an authenticated session.
+  const { user } = await requireOrgContext()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
   try {
     const body = await request.json()
     const { originalURL, path: customSlug } = body as {

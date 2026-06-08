@@ -12,6 +12,7 @@ const DEFAULT_FOLDER = "inbox"
 const DEFAULT_LIMIT_USERS = 10
 
 export async function POST(req: NextRequest) {
+  // Auth: CRON_SECRET (or service-role) bearer enforced via assertCronAuth.
   try {
     assertCronAuth(req)
   } catch (err) {

@@ -11,6 +11,7 @@ const DEFAULT_STUCK_SECONDS = 300
 const DEFAULT_LIMIT = 50
 
 export async function POST(request: NextRequest) {
+  // Auth: CRON_SECRET (or service-role) bearer enforced via assertCronAuth.
   try {
     assertCronAuth(request)
   } catch (err) {

@@ -1,6 +1,12 @@
-import { NextRequest } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
+import { requireOrgContext } from "@/lib/auth/org-context"
 
 export async function POST(request: NextRequest) {
+  // Require an authenticated session — this is an internal geocoding helper,
+  // not a public proxy.
+  const { user } = await requireOrgContext()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
   const { query } = await request.json()
   if (!query || typeof query !== "string") {
     return new Response(JSON.stringify({ latitude: null, longitude: null }), {

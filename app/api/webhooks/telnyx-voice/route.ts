@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer";
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { verifyTelnyxRequest } from "@/lib/telnyx";
 import { formatPhoneE164 } from "@/lib/call-validation";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getWebRTCSipUri } from "@/lib/voice/webrtc-sip";
@@ -242,11 +243,17 @@ async function pickTargetSipUsername(orgId?: string | null) {
   return process.env.FALLBACK_AGENT_SIP_USERNAME || null;
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  // Verify the Telnyx Ed25519 signature before any processing.
+  const raw = await req.text();
+  if (!verifyTelnyxRequest(req, raw)) {
+    return new Response("Invalid signature", { status: 403 });
+  }
+
   let body: TelnyxEventPayload | null = null;
 
   try {
-    body = (await req.json()) as TelnyxEventPayload;
+    body = JSON.parse(raw) as TelnyxEventPayload;
   } catch {
     body = null;
   }

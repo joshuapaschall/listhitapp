@@ -1,7 +1,21 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { corsHeaders, isOriginAllowed } from "@/lib/public-api/cors"
+import { resolveSiteByHost } from "@/lib/site-builder/resolve-site"
 import { supabaseAdmin } from "@/lib/supabase/admin"
+
+// The requesting tenant is identified by its Origin in a CORS call (the Host
+// header is the API domain); fall back to Host for same-origin requests.
+function requestingHost(request: NextRequest, origin: string | null): string {
+  if (origin) {
+    try {
+      return new URL(origin).host.toLowerCase().split(":")[0]
+    } catch {
+      /* fall through */
+    }
+  }
+  return (request.headers.get("host") || "").toLowerCase().split(":")[0]
+}
 
 type PropertyImageRow = {
   id: string
@@ -29,11 +43,24 @@ export async function GET(request: NextRequest, context: { params: Promise<{ slu
     const params = await context.params
     const slug = params.slug
 
+    // Scope to the requesting site's org so one tenant can't read another's
+    // properties by slug.
+    const host = requestingHost(request, origin)
+    const site = host ? await resolveSiteByHost(host).catch(() => null) : null
+    if (!site) {
+      return NextResponse.json(
+        { ok: false, error_code: "not_found", message: "Property not found or not available." },
+        { status: 404, headers: corsHeaders(allowedOrigin) }
+      )
+    }
+
     const { data: property, error } = await supabaseAdmin
       .from("properties")
       .select("id,slug,address,city,state,zip,latitude,longitude,price,down_payment,monthly_payment,earnest_money,bedrooms,bathrooms,sqft,description,property_type,condition,occupancy,tags,created_at,updated_at")
       .eq("slug", slug)
+      .eq("org_id", site.org_id)
       .eq("status", "available")
+      .eq("show_on_site", true)
       .not("slug", "is", null)
       .is("deleted_at", null)
       .maybeSingle()
