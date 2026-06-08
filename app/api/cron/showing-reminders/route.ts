@@ -6,6 +6,7 @@ import { sendShowingReminder } from "@/lib/showing-notifications"
 export const maxDuration = 300
 
 export async function POST(req: NextRequest) {
+  // Auth: CRON_SECRET (or service-role) bearer enforced via assertCronAuth.
   try {
     assertCronAuth(req)
   } catch (err) {

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { assertCronAuth } from '@/lib/cron-auth';
 import { supabaseAdmin } from '@/lib/supabase';
 import { TELNYX_API_URL, telnyxHeaders } from '@/lib/telnyx';
 
@@ -19,6 +20,19 @@ async function fetchRecordings(params: Record<string, string>) {
 }
 
 export async function POST(request: NextRequest) {
+  // Gate: requires the CRON_SECRET (or service-role) bearer — this endpoint has
+  // no authenticated UI caller and must not be publicly invocable.
+  try {
+    assertCronAuth(request)
+  } catch (err) {
+    if (err instanceof Response) return err
+    throw err
+  }
+  const cronSecret = process.env.CRON_SECRET
+  if (!cronSecret) {
+    return NextResponse.json({ error: "CRON_SECRET env var is required" }, { status: 500 })
+  }
+
   try {
     const { callSid, force = false } = await request.json();
     
