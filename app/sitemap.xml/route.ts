@@ -9,7 +9,7 @@ export async function GET(request: Request) {
   const site = host ? await resolveSiteByHost(host).catch(() => null) : null
   if (!site) return new Response("Not found", { status: 404 })
 
-  const paths = new Set<string>(["/", "/properties", "/contact", "/privacy", "/terms"])
+  const paths = new Set<string>(["/", "/properties", "/blog", "/contact", "/privacy", "/terms"])
   try {
     const { data: pages } = await supabaseAdmin.from("site_pages").select("path").eq("site_id", site.id)
     for (const p of (pages || []) as Array<{ path: string | null }>) {
@@ -37,6 +37,24 @@ export async function GET(request: Request) {
     } catch {
       /* omit property paths if the query fails */
     }
+  }
+
+  // Published blog posts (always, not gated by deals_public).
+  try {
+    const { data: posts } = await supabaseAdmin
+      .from("posts")
+      .select("slug")
+      .eq("site_id", site.id)
+      .eq("org_id", site.org_id)
+      .eq("status", "published")
+      .is("deleted_at", null)
+      .not("slug", "is", null)
+      .limit(500)
+    for (const p of (posts || []) as Array<{ slug: string | null }>) {
+      if (p.slug) paths.add(`/blog/${p.slug}`)
+    }
+  } catch {
+    /* omit blog paths if the query fails */
   }
 
   // Programmatic location landing pages (specific-market sites only).
