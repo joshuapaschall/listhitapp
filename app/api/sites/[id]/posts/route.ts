@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireOrgContext } from "@/lib/auth/org-context"
 import { apiError } from "@/lib/api-error"
+import { sanitizePostHtml } from "@/lib/blog/sanitize"
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         slug,
         title,
         excerpt: body?.excerpt || null,
-        body_html: body?.bodyHtml || null,
+        body_html: body?.bodyHtml ? sanitizePostHtml(body.bodyHtml) : null,
         featured_image_url: body?.featuredImageUrl || null,
         featured_image_alt: body?.featuredImageAlt || null,
         focus_keyword: body?.focusKeyword || null,
