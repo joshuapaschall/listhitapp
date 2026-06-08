@@ -13,8 +13,14 @@ export function vercelConfigured(): boolean {
 }
 
 function teamQuery(): string {
-  const t = process.env.VERCEL_TEAM_ID
-  return t ? `?teamId=${encodeURIComponent(t)}` : ""
+  // The project lives under a Vercel team. The API accepts either the team id
+  // OR the team slug — prefer the id when present, else fall back to the slug
+  // (the slug is visible in the dashboard URL, e.g. /joshuapaschalls-projects/...).
+  const id = process.env.VERCEL_TEAM_ID
+  const slug = process.env.VERCEL_TEAM_SLUG
+  if (id) return `?teamId=${encodeURIComponent(id)}`
+  if (slug) return `?slug=${encodeURIComponent(slug)}`
+  return ""
 }
 
 export interface VercelVerification {
