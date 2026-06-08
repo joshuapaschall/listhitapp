@@ -24,6 +24,17 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       short_slug: body.short_slug || null,
     }
 
+    // Listings v2 fields — persist only when provided so partial PATCHes don't
+    // wipe them. show_on_site is a real boolean toggle (true/false both honored).
+    if (body.description !== undefined) updateData.description = body.description ?? null
+    if (body.internal_notes !== undefined) updateData.internal_notes = body.internal_notes ?? null
+    if (body.show_on_site !== undefined) updateData.show_on_site = Boolean(body.show_on_site)
+    if (body.photo_album_url !== undefined) updateData.photo_album_url = body.photo_album_url || null
+    if (body.year_built !== undefined) updateData.year_built = body.year_built ?? null
+    if (body.lot_size !== undefined) updateData.lot_size = body.lot_size || null
+    if (body.mls_number !== undefined) updateData.mls_number = body.mls_number || null
+    if (body.construction_type !== undefined) updateData.construction_type = body.construction_type || null
+
     if (
       (body.address || body.city || body.state || body.zip) &&
       body.latitude == null &&
