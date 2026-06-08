@@ -15,6 +15,7 @@ export function PropertyJsonLd({ deal, host, brandName }: { deal: DealDetail; ho
   if (deal.address) residence.name = deal.address
   if (deal.description) residence.description = deal.description
   if (deal.bedrooms != null) residence.numberOfRooms = deal.bedrooms
+  if (deal.year_built != null) residence.yearBuilt = deal.year_built
   if (deal.sqft != null) {
     residence.floorSize = { "@type": "QuantitativeValue", value: deal.sqft, unitCode: "FTK" }
   }

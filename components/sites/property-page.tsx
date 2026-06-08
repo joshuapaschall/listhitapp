@@ -156,6 +156,17 @@ export function PropertyPage({
               <div>
                 <PropertyGallery images={deal.images} alt={deal.address || cityState || brandName} />
 
+                {deal.photo_album_url ? (
+                  <a
+                    href={deal.photo_album_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ display: "inline-block", marginTop: 12, fontSize: 13.5, fontWeight: 700, color: "var(--a)", textDecoration: "none" }}
+                  >
+                    View all photos →
+                  </a>
+                ) : null}
+
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 20 }}>
                   {badge("Available", "primary")}
                   {badge(terms, "accent")}
@@ -198,6 +209,10 @@ export function PropertyPage({
                   <Fact label="Terms" value={terms} />
                   {cityState ? <Fact label="Location" value={cityState} /> : null}
                   {deal.zip ? <Fact label="Zip" value={deal.zip} /> : null}
+                  {deal.year_built != null ? <Fact label="Year built" value={deal.year_built} /> : null}
+                  {deal.lot_size ? <Fact label="Lot size" value={deal.lot_size} /> : null}
+                  {deal.mls_number ? <Fact label="MLS #" value={deal.mls_number} /> : null}
+                  {deal.construction_type ? <Fact label="Construction" value={deal.construction_type} /> : null}
                 </div>
 
                 {/* Description */}

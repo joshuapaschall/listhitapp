@@ -48,6 +48,7 @@ export async function getPublishedDeals(orgId: string | null, limit = 6, offset 
     .from("properties")
     .select(DEAL_SUMMARY_COLUMNS)
     .eq("status", "available")
+    .eq("show_on_site", true)
     .not("slug", "is", null)
     .is("deleted_at", null)
   if (orgId) query = query.eq("org_id", orgId)
@@ -67,6 +68,7 @@ export async function getPublishedDealCount(orgId: string | null): Promise<numbe
     .from("properties")
     .select("id", { count: "exact", head: true })
     .eq("status", "available")
+    .eq("show_on_site", true)
     .not("slug", "is", null)
     .is("deleted_at", null)
   if (orgId) query = query.eq("org_id", orgId)
@@ -84,6 +86,7 @@ export async function getPublishedDealsForMarket(
     .from("properties")
     .select(DEAL_SUMMARY_COLUMNS)
     .eq("status", "available")
+    .eq("show_on_site", true)
     .not("slug", "is", null)
     .is("deleted_at", null)
   if (orgId) query = query.eq("org_id", orgId)
@@ -109,10 +112,11 @@ export async function getPublishedDealBySlug(orgId: string | null, slug: string)
   let query = supabaseAdmin
     .from("properties")
     .select(
-      "id,slug,address,city,state,zip,price,bedrooms,bathrooms,sqft,property_type,description,deal_type,finance_subtype,status",
+      "id,slug,address,city,state,zip,price,bedrooms,bathrooms,sqft,property_type,description,deal_type,finance_subtype,status,year_built,lot_size,mls_number,construction_type,photo_album_url,video_link",
     )
     .eq("slug", slug)
     .eq("status", "available")
+    .eq("show_on_site", true)
     .is("deleted_at", null)
   if (orgId) query = query.eq("org_id", orgId)
 
@@ -141,6 +145,7 @@ export async function getNearbyPublishedDeals(
       .from("properties")
       .select(DEAL_SUMMARY_COLUMNS)
       .eq("status", "available")
+      .eq("show_on_site", true)
       .not("slug", "is", null)
       .is("deleted_at", null)
       .neq("id", excludeId)
