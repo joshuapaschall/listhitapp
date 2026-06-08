@@ -20,6 +20,29 @@ export interface ResolvedSite {
 
 // Resolve a published site row from a request host (subdomain or custom domain).
 // Returns null if no published site matches. Sessionless → admin client only.
+// The org's primary site, used to source theme/business/persona/host for the
+// owner draft preview. Prefers a published site; falls back to the oldest.
+export async function getPrimarySiteForOrg(orgId: string): Promise<any | null> {
+  const { data: published } = await supabaseAdmin
+    .from("sites")
+    .select("*")
+    .eq("org_id", orgId)
+    .eq("status", "published")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (published) return published
+
+  const { data } = await supabaseAdmin
+    .from("sites")
+    .select("*")
+    .eq("org_id", orgId)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  return data || null
+}
+
 export async function resolveSiteByHost(host: string): Promise<any | null> {
   const normalizedHost = normalizeHost(host)
   const root = rootDomain()

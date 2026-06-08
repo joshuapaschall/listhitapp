@@ -131,6 +131,30 @@ export async function getPublishedDealBySlug(orgId: string | null, slug: string)
   return { ...row, primary_image_url: primaryUrl(imgs), images }
 }
 
+// Owner draft preview: same shape as getPublishedDealBySlug but keyed by id and
+// NOT gated by status/show_on_site, so the owner can preview an unpublished
+// draft. Still org-scoped so it never reaches another tenant's property.
+export async function getDealByIdForOwner(orgId: string | null, propertyId: string): Promise<DealDetail | null> {
+  let query = supabaseAdmin
+    .from("properties")
+    .select(
+      "id,slug,address,city,state,zip,price,bedrooms,bathrooms,sqft,property_type,description,deal_type,finance_subtype,status,year_built,lot_size,mls_number,construction_type,photo_album_url,video_link,show_on_site",
+    )
+    .eq("id", propertyId)
+    .is("deleted_at", null)
+  if (orgId) query = query.eq("org_id", orgId)
+
+  const { data, error } = await query.maybeSingle()
+  if (error) throw new Error(error.message)
+  if (!data) return null
+
+  const row = data as Omit<DealDetail, "primary_image_url" | "images">
+  const imagesByProperty = await fetchImagesByProperty([row.id])
+  const imgs = imagesByProperty.get(row.id) || []
+  const images: DealImage[] = imgs.map((i) => ({ image_url: i.image_url, is_featured: i.is_featured }))
+  return { ...row, primary_image_url: primaryUrl(imgs), images }
+}
+
 export async function getNearbyPublishedDeals(
   orgId: string | null,
   city: string | null,
