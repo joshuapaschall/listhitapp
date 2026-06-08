@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { cookies } from "next/headers"
 import { notFound } from "next/navigation"
-import { resolveSite, mergeThemeIntoRoot, resolveSiteByHost } from "@/lib/site-builder/resolve-site"
+import { resolveSite, mergeThemeIntoRoot, resolveSiteByHost, injectBlogNavLink } from "@/lib/site-builder/resolve-site"
 import { DEFAULT_THEME, DEFAULT_BUSINESS, DEFAULT_MARKETS } from "@/lib/site-builder/types"
 import { buildTermsAndPrivacy, buildContactDoc, buildOptInDisclosure } from "@/lib/site-builder/compliance"
 import { SiteRendererRSC } from "@/components/sites/site-renderer-rsc"
@@ -20,7 +20,7 @@ import {
 import { resolveLocationPage, locationHrefForDeal, PERSONA_URL_SLUG } from "@/lib/site-builder/location-pages"
 import { locationCopy } from "@/lib/site-builder/location-content"
 import { LocationPage } from "@/components/sites/location-page"
-import { getPublishedPosts, getPublishedPostBySlug } from "@/services/site-posts-service"
+import { getPublishedPosts, getPublishedPostBySlug, getPublishedPostCount } from "@/services/site-posts-service"
 import { BlogIndexPage } from "@/components/sites/blog-index-page"
 import { BlogPostPage } from "@/components/sites/blog-post-page"
 import { PostJsonLd } from "@/components/sites/post-json-ld"
@@ -329,7 +329,9 @@ export default async function SitePage({ params }: { params: SitePageParams }) {
   const result = await resolveSite(host, path)
   if (!result) notFound()
 
-  const data = mergeThemeIntoRoot(result.page.puck_data, result.theme)
+  let data = mergeThemeIntoRoot(result.page.puck_data, result.theme)
+  const postCount = await getPublishedPostCount(result.site.id, result.site.org_id).catch(() => 0)
+  if (postCount > 0) data = injectBlogNavLink(data)
 
   const business = { ...DEFAULT_BUSINESS, ...((result.site.business_json as any) || {}) }
   const deals = await getPublishedDeals(result.site.org_id, 6).catch(() => [])

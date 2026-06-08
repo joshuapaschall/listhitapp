@@ -107,3 +107,21 @@ export function mergeThemeIntoRoot(puckData: any, theme: SiteTheme): any {
   data.root = root
   return data
 }
+
+// Adds a "Blog" link to the Puck Nav block's links array (home page nav).
+// Idempotent: no-op if a /blog link is already present or there is no Nav block.
+export function injectBlogNavLink(puckData: any): any {
+  const data = { ...(puckData || {}) }
+  const content = Array.isArray(data.content) ? data.content.map((b: any) => ({ ...b })) : []
+  const nav = content.find((b: any) => b?.type === "Nav")
+  if (nav) {
+    const links = Array.isArray(nav.props?.links) ? [...nav.props.links] : []
+    const hasBlog = links.some((l: any) => (l?.href || "").replace(/\/$/, "") === "/blog")
+    if (!hasBlog) {
+      links.push({ label: "Blog", href: "/blog" })
+      nav.props = { ...(nav.props || {}), links }
+    }
+  }
+  data.content = content
+  return data
+}

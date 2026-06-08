@@ -1,4 +1,5 @@
 import React from "react"
+import { sanitizePostHtml } from "@/lib/blog/sanitize"
 import { themeToCssVars } from "@/lib/site-builder/theme"
 import { siteImage, siteSrcSet } from "@/lib/site-builder/image-url"
 import { SiteFonts } from "@/components/sites/site-fonts"
@@ -19,7 +20,7 @@ function formatDate(iso: string | null): string {
 }
 
 // Public, brand-rendered blog post for a tenant site. Mirrors PropertyPage's
-// shell. bodyHtml is sanitized on save (editor PR); rendered as-is here.
+// shell. bodyHtml is sanitized on save and re-sanitized here (defense in depth).
 export function BlogPostPage({
   host: _host,
   site: _site,
@@ -112,7 +113,7 @@ export function BlogPostPage({
             <article
               className="lh-prose"
               style={{ marginTop: 28, fontSize: 16.5, lineHeight: 1.75, color: "#2c3744" }}
-              dangerouslySetInnerHTML={{ __html: post.bodyHtml || "" }}
+              dangerouslySetInnerHTML={{ __html: sanitizePostHtml(post.bodyHtml || "") }}
             />
 
             {/* Lead-form CTA */}

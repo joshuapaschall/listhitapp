@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireOrgContext } from "@/lib/auth/org-context"
 import { apiError } from "@/lib/api-error"
+import { sanitizePostHtml } from "@/lib/blog/sanitize"
 
 type RouteContext = { params: Promise<{ id: string; postId: string }> }
 
@@ -72,7 +73,10 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       authorName: "author_name",
     }
     for (const [k, col] of Object.entries(map)) {
-      if (body[k] !== undefined) updates[col] = body[k] || null
+      if (body[k] !== undefined) {
+        updates[col] =
+          col === "body_html" && body[k] ? sanitizePostHtml(body[k]) : body[k] || null
+      }
     }
     if (typeof body.seoScore === "number") updates.seo_score = body.seoScore
 
