@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Banknote,
-  Bold,
   Check,
   ChevronDown,
   Copy,
@@ -14,26 +13,23 @@ import {
   Globe,
   Home,
   Image as ImageIcon,
-  Italic,
   KeyRound,
-  Link2,
-  List,
-  ListOrdered,
   Loader2,
   MapPin,
   Minus,
+  Monitor,
   Plus,
-  Quote,
+  RefreshCw,
   Search,
   SlidersHorizontal,
   Tag as TagIcon,
-  Type,
   Upload,
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import MainLayout from "@/components/layout/main-layout";
+import RichTextEditor from "@/components/gmail/rich-text-editor";
 import AddressAutocomplete from "@/components/properties/address-autocomplete";
 import MapPreview from "@/components/properties/map-preview";
 import TagSelector from "@/components/buyers/tag-selector";
@@ -133,14 +129,15 @@ const SECTIONS = [
   { id: "property", label: "Property" },
   { id: "deal", label: "The deal" },
   { id: "listing", label: "Listing" },
+  { id: "preview", label: "Preview" },
 ];
 
 export default function PropertyEditor({ mode, propertyId }: { mode: "create" | "edit"; propertyId?: string }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const descRef = useRef<HTMLDivElement | null>(null);
-  const descInitialized = useRef(false);
+  const [description, setDescription] = useState("");
+  const [previewKey, setPreviewKey] = useState(0);
 
   const [savedId, setSavedId] = useState<string | null>(mode === "edit" ? propertyId ?? null : null);
   const [publicSlug, setPublicSlug] = useState<string | null>(null);
@@ -264,11 +261,7 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
       setShowOnSite(anyP.show_on_site !== false);
       setSavedShowOnSite(anyP.show_on_site !== false);
       setPublicSlug(anyP.slug ?? null);
-      // Description HTML is set into the contentEditable region once.
-      if (descRef.current && !descInitialized.current) {
-        descRef.current.innerHTML = p.description ?? "";
-        descInitialized.current = true;
-      }
+      setDescription(p.description ?? "");
       const buyers = await PropertyService.getPropertyBuyers(propertyId).catch(() => []);
       if (!active) return;
       setSelectedBuyers(buyers);
@@ -335,16 +328,6 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
   const formatPrice = (field: "price" | "buy_price") => {
     const value = field === "price" ? numericPrice : numericBuyPrice;
     handleChange(field, value ? value.toLocaleString() : "");
-  };
-
-  // Rich-text toolbar (no new dependency — uses execCommand on a contentEditable).
-  const exec = (command: string, value?: string) => {
-    document.execCommand(command, false, value);
-    descRef.current?.focus();
-  };
-  const addLink = () => {
-    const url = window.prompt("Link URL");
-    if (url) exec("createLink", url);
   };
 
   // Upload handling: stage in memory pre-save (create), upload immediately once
@@ -461,7 +444,7 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
       priority: form.priority || null,
       tags: form.tags.length > 0 ? form.tags : null,
       // Public listing copy vs private internal notes — kept strictly separate.
-      description: descRef.current?.innerHTML || null,
+      description: description || null,
       internal_notes: form.internal_notes || null,
       photo_album_url: form.photo_album_url || null,
       video_link: form.video_link || null,
@@ -504,6 +487,7 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
         }
         await persistBuyers(newId);
         setSavedShowOnSite(publish);
+        setPreviewKey((k) => k + 1);
         toast.success(publish ? "Property published" : "Property saved as draft");
         queryClient.invalidateQueries({ queryKey: ["properties"] });
         router.replace(`/properties/edit/${newId}`);
@@ -512,6 +496,7 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
         setPublicSlug(updated.slug ?? publicSlug);
         await persistBuyers(savedId);
         setSavedShowOnSite(publish);
+        setPreviewKey((k) => k + 1);
         toast.success(publish ? "Property published" : "Property saved");
         queryClient.invalidateQueries({ queryKey: ["properties"] });
       }
@@ -540,14 +525,10 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
 
   const scrollTo = (id: string) => document.getElementById(`section-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
 
-  const toolbarBtn = (onClick: () => void, icon: React.ReactNode, label: string) => (
-    <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={onClick} title={label} aria-label={label}
-      className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
-      {icon}
-    </button>
-  );
-
   const showPublicControls = savedShowOnSite && !!savedId && !!publicUrl;
+  // "Open in new tab": the authenticated draft preview while unpublished, the
+  // real public URL once live.
+  const openTarget = showPublicControls ? publicUrl : savedId ? `/properties/${savedId}/preview` : null;
 
   return (
     <MainLayout>
@@ -568,14 +549,14 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
                 <SegButton active={showOnSite} disabled={!canPublish && !showOnSite} onClick={() => canPublish && setShowOnSite(true)}>Live</SegButton>
               </div>
               {showPublicControls ? (
-                <>
-                  <Button type="button" variant="outline" size="sm" onClick={copyLink}>
-                    {copied ? <><Check className="h-4 w-4" /> Copied</> : <><Copy className="h-4 w-4" /> Copy link</>}
-                  </Button>
-                  <Button asChild variant="ghost" size="sm">
-                    <a href={publicUrl!} target="_blank" rel="noreferrer">Open preview <ExternalLink className="h-3.5 w-3.5" /></a>
-                  </Button>
-                </>
+                <Button type="button" variant="outline" size="sm" onClick={copyLink}>
+                  {copied ? <><Check className="h-4 w-4" /> Copied</> : <><Copy className="h-4 w-4" /> Copy link</>}
+                </Button>
+              ) : null}
+              {openTarget ? (
+                <Button asChild variant="ghost" size="sm">
+                  <a href={openTarget} target="_blank" rel="noreferrer">Open in new tab <ExternalLink className="h-3.5 w-3.5" /></a>
+                </Button>
               ) : null}
               <Button type="button" variant="brand" onClick={handleSave} disabled={saving}>
                 {saving ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</> : showOnSite && canPublish ? "Save & publish" : "Save"}
@@ -782,26 +763,15 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
           <CardContent className="space-y-6 p-5">
             <SectionLabel icon={Globe} badge={{ text: "Shown on your website", tone: "public" }}>Listing</SectionLabel>
 
-            {/* Rich-text description */}
+            {/* Rich-text description (Tiptap) */}
             <div className="space-y-2">
               <Label className="text-sm">Public description</Label>
               <div className="overflow-hidden rounded-lg border border-border">
-                <div className="flex flex-wrap items-center gap-0.5 border-b border-border bg-muted/40 p-1">
-                  {toolbarBtn(() => exec("bold"), <Bold className="h-4 w-4" />, "Bold")}
-                  {toolbarBtn(() => exec("italic"), <Italic className="h-4 w-4" />, "Italic")}
-                  {toolbarBtn(() => exec("formatBlock", "H3"), <Type className="h-4 w-4" />, "Heading")}
-                  {toolbarBtn(() => exec("insertUnorderedList"), <List className="h-4 w-4" />, "Bullet list")}
-                  {toolbarBtn(() => exec("insertOrderedList"), <ListOrdered className="h-4 w-4" />, "Numbered list")}
-                  {toolbarBtn(() => exec("formatBlock", "BLOCKQUOTE"), <Quote className="h-4 w-4" />, "Quote")}
-                  {toolbarBtn(addLink, <Link2 className="h-4 w-4" />, "Link")}
-                </div>
-                <div
-                  ref={descRef}
-                  contentEditable
-                  suppressContentEditableWarning
-                  role="textbox"
-                  aria-multiline="true"
-                  className="min-h-[180px] px-3 py-2 text-sm leading-relaxed outline-none [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground [&_h3]:text-base [&_h3]:font-semibold [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5"
+                <RichTextEditor
+                  value={description}
+                  onChange={setDescription}
+                  placeholder="Describe the property for buyers — highlights, location, terms…"
+                  minHeight={180}
                 />
               </div>
               <p className="text-xs text-muted-foreground">This is the public listing copy buyers see on your site.</p>
@@ -825,6 +795,39 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
               <div className="space-y-1.5"><Label className="text-sm">Photo album link — Google Drive / Dropbox</Label><Input className="h-9" placeholder="https://drive.google.com/…" value={form.photo_album_url} onChange={(e) => handleChange("photo_album_url", e.target.value)} /></div>
               <div className="space-y-1.5"><Label className="text-sm">Video link (YouTube)</Label><Input className="h-9" placeholder="https://youtube.com/…" value={form.video_link} onChange={(e) => handleChange("video_link", e.target.value)} /></div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Section: Live preview — the actual property page via the draft route */}
+        <Card id="section-preview" className="scroll-mt-32 border-border">
+          <CardContent className="space-y-3 p-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <SectionLabel icon={Monitor}>Live preview</SectionLabel>
+              {savedId ? (
+                <Button type="button" variant="outline" size="sm" onClick={() => setPreviewKey((k) => k + 1)}>
+                  <RefreshCw className="h-3.5 w-3.5" /> Refresh
+                </Button>
+              ) : null}
+            </div>
+            {savedId ? (
+              <>
+                <div className="overflow-hidden rounded-xl border border-border bg-muted/20">
+                  <iframe
+                    key={previewKey}
+                    src={`/properties/${savedId}/preview?v=${previewKey}`}
+                    title="Property preview"
+                    className="h-[720px] w-full"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  The preview reflects your last saved version — Save, then Refresh to see new changes.
+                </p>
+              </>
+            ) : (
+              <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-border text-sm text-muted-foreground">
+                Save a draft to see the live preview.
+              </div>
+            )}
           </CardContent>
         </Card>
 
