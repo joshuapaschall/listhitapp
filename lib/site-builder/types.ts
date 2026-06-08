@@ -93,6 +93,12 @@ export interface DealDetail extends DealSummary {
   deal_type: string | null
   finance_subtype: string | null
   status: string | null
+  year_built: number | null
+  lot_size: string | null
+  mls_number: string | null
+  construction_type: string | null
+  photo_album_url: string | null
+  video_link: string | null
   images: DealImage[]
 }
 

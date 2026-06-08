@@ -27,6 +27,7 @@ export async function GET(request: Request) {
         .select("slug")
         .eq("org_id", site.org_id)
         .eq("status", "available")
+        .eq("show_on_site", true)
         .is("deleted_at", null)
         .not("slug", "is", null)
         .limit(500)
