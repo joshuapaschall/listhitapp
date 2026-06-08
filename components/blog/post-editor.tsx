@@ -13,6 +13,8 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { supabaseBrowser } from "@/lib/supabase-browser"
+import { analyzePost, type SeoInput } from "@/lib/blog/seo-coach"
+import { SeoCoachPanel } from "@/components/blog/seo-coach-panel"
 
 export interface PostEditorData {
   id: string
@@ -106,6 +108,19 @@ export function PostEditor({
     !featuredImageUrl && "a featured image",
   ].filter(Boolean) as string[]
 
+  // Live SEO inputs — fed to the coach panel and used to persist the score on save.
+  const seoInput: SeoInput = {
+    title,
+    slug,
+    bodyHtml,
+    focusKeyword,
+    metaTitle,
+    metaDescription,
+    featuredImageUrl,
+    featuredImageAlt,
+    excerpt,
+  }
+
   async function handleUpload(file: File | undefined) {
     if (!file) return
     setUploading(true)
@@ -152,6 +167,8 @@ export function PostEditor({
         metaDescription: metaDescription || null,
         authorName: authorName || null,
         status: publish ? "published" : "draft",
+        // Persist the latest live score so the Posts-list chip stays accurate.
+        seoScore: analyzePost(seoInput).score,
       }
       if (!savedId) {
         const res = await fetch(`/api/sites/${siteId}/posts`, {
@@ -186,7 +203,7 @@ export function PostEditor({
   const publishedUrl = savedStatus === "published" && savedSlug ? `https://${siteSlug}.listhit.io/blog/${savedSlug}` : null
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
+    <div className="mx-auto max-w-6xl space-y-5">
       {/* Sticky header */}
         <div className="sticky top-0 z-20 -mx-4 border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -211,6 +228,8 @@ export function PostEditor({
           )}
         </div>
 
+      <div className="flex flex-col gap-5 lg:flex-row">
+        <div className="min-w-0 flex-1 space-y-5">
         {/* Title + slug */}
         <Card className="space-y-4 p-5">
           <div className="space-y-1.5">
@@ -309,6 +328,15 @@ export function PostEditor({
             <Input id="post-author" placeholder="Shown on the post" value={authorName} onChange={(e) => setAuthorName(e.target.value)} />
           </div>
         </Card>
+        </div>
+
+        {/* SEO coach right rail */}
+        <aside className="lg:w-[280px] lg:shrink-0">
+          <div className="lg:sticky lg:top-20">
+            <SeoCoachPanel {...seoInput} />
+          </div>
+        </aside>
+      </div>
     </div>
   )
 }
