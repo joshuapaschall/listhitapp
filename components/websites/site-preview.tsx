@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { SiteRenderer } from "@/components/sites/site-renderer"
 import { composePreview, type WizardContent } from "@/lib/site-builder/compose"
-import { googleFontsHref } from "@/lib/site-builder/typography"
+import { SiteFonts } from "@/components/sites/site-fonts"
 import type { SitePersona, SiteTemplateId, SiteTheme } from "@/lib/site-builder/types"
 
 interface SitePreviewProps {
@@ -26,8 +26,7 @@ export function SitePreview({ templateId, persona, theme, content }: SitePreview
 
   return (
     <div className="flex h-full flex-col">
-      {/* eslint-disable-next-line @next/next/no-page-custom-font */}
-      <link rel="stylesheet" href={googleFontsHref(theme.typeStyleId)} />
+      <SiteFonts typeStyleId={theme.typeStyleId} />
       <div className="flex items-center justify-between border-b border-border px-4 py-2">
         <span className="text-xs font-medium text-muted-foreground">Live preview</span>
         <div className="flex items-center gap-1">

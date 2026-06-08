@@ -1,5 +1,5 @@
 import { themeToCssVars } from "@/lib/site-builder/theme"
-import { googleFontsHref } from "@/lib/site-builder/typography"
+import { SiteFonts } from "@/components/sites/site-fonts"
 import type { SiteTheme } from "@/lib/site-builder/types"
 import type { LegalDoc } from "@/lib/site-builder/compliance"
 
@@ -35,8 +35,7 @@ export function LegalPage({
         flexDirection: "column",
       }}
     >
-      {/* eslint-disable-next-line @next/next/no-page-custom-font */}
-      <link rel="stylesheet" href={googleFontsHref(theme.typeStyleId)} />
+      <SiteFonts typeStyleId={theme.typeStyleId} />
 
       <header style={{ borderBottom: "1px solid #eef1f5", background: "#fff" }}>
         <div
