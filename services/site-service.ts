@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { DEFAULT_THEME, DEFAULT_BUSINESS, DEFAULT_MARKETS, type SitePersona, type SiteTemplateId, type SiteTheme, type SiteBusiness, type SiteMarkets } from "@/lib/site-builder/types"
 import { getSiteTemplate } from "@/lib/site-builder/templates"
+import { extractContent, applyContentToPuck } from "@/lib/site-builder/compose"
 import { slugifySiteName, isReservedSlug } from "@/lib/site-builder/slug"
 
 // Backend data layer for the website builder.
@@ -115,6 +116,62 @@ export class SiteService {
     if (pageError) throw new Error(pageError.message)
 
     return site
+  }
+
+  static async switchTemplate(
+    client: SupabaseClient,
+    orgId: string,
+    siteId: string,
+    newTemplateId: SiteTemplateId,
+  ) {
+    const tpl = getSiteTemplate(newTemplateId)
+    if (!tpl) throw new Error(`Unknown template: ${newTemplateId}`)
+
+    // Load the site (persona + current theme), org-scoped.
+    const { data: site, error: siteErr } = await client
+      .from("sites")
+      .select("id, persona, theme_json")
+      .eq("id", siteId)
+      .eq("org_id", orgId)
+      .maybeSingle()
+    if (siteErr) throw new Error(siteErr.message)
+    if (!site) throw new Error("Site not found")
+
+    // Load the home page's current content.
+    const { data: page, error: pageErr } = await client
+      .from("site_pages")
+      .select("id, puck_data")
+      .eq("site_id", siteId)
+      .eq("org_id", orgId)
+      .eq("path", "/")
+      .maybeSingle()
+    if (pageErr) throw new Error(pageErr.message)
+    if (!page) throw new Error("Home page not found")
+
+    // Full look of the new template (incl. its colors), preserving only the logo.
+    const currentTheme = (site.theme_json as Partial<SiteTheme>) || {}
+    const newTheme: SiteTheme = { ...DEFAULT_THEME, ...(tpl.defaultTheme || {}) }
+    if (currentTheme.logoUrl) newTheme.logoUrl = currentTheme.logoUrl
+
+    // Carry the owner's content into the new template's layout.
+    const content = extractContent(page.puck_data)
+    const base = tpl.build(site.persona as SitePersona)
+    const newPuck = applyContentToPuck(base, content, newTheme)
+
+    // Persist: template + theme on the site, recomposed content on the page.
+    const { error: upSiteErr } = await client
+      .from("sites")
+      .update({ template_id: newTemplateId, theme_json: newTheme })
+      .eq("id", siteId)
+      .eq("org_id", orgId)
+    if (upSiteErr) throw new Error(upSiteErr.message)
+
+    const { error: upPageErr } = await client
+      .from("site_pages")
+      .update({ puck_data: newPuck })
+      .eq("id", page.id)
+      .eq("org_id", orgId)
+    if (upPageErr) throw new Error(upPageErr.message)
   }
 
   static async updateMeta(

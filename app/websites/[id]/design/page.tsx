@@ -4,6 +4,8 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { loadOwnedSite } from "@/lib/websites/load-owned-site"
 import { SiteHubNav } from "@/components/websites/site-hub-nav"
+import { ALL_SITE_TEMPLATES } from "@/lib/site-builder/templates"
+import { TemplateSwitcher } from "@/components/websites/template-switcher"
 
 export const dynamic = "force-dynamic"
 
@@ -24,7 +26,15 @@ const SWATCH_KEYS: { key: string; label: string }[] = [
 ]
 
 export default async function WebsiteDesignPage({ params }: { params: { id: string } }) {
-  const { site } = await loadOwnedSite(params.id, "id,name,slug,status,persona,theme_json")
+  const { site } = await loadOwnedSite(params.id, "id,name,slug,status,persona,theme_json,template_id")
+  const templatesMeta = ALL_SITE_TEMPLATES.map((t) => ({
+    id: t.id,
+    name: t.name,
+    description: t.description,
+    heroVariant: t.heroVariant,
+    primary: (t.defaultTheme?.primary as string) || "#173b5e",
+    accent: (t.defaultTheme?.accent as string) || "#e8833a",
+  }))
   const published = site.status === "published"
   const domain = `${site.slug}.listhit.io`
   const theme = (site.theme_json || {}) as Record<string, any>
@@ -35,6 +45,8 @@ export default async function WebsiteDesignPage({ params }: { params: { id: stri
     <MainLayout>
       <div className="space-y-6 p-4 md:p-6">
         <SiteHubNav active="design" siteId={site.id} siteName={site.name} slug={site.slug} published={published} />
+
+        <TemplateSwitcher siteId={site.id} currentTemplateId={site.template_id} templates={templatesMeta} />
 
         <Card className="space-y-5 p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
