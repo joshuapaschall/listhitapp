@@ -10,6 +10,13 @@ import type { ParsedMarket } from "@/lib/site-builder/location-pages"
 
 const DEAL_SUMMARY_COLUMNS = "id,slug,address,city,state,price,bedrooms,bathrooms,sqft,property_type"
 
+export type DealFilters = {
+  minBeds?: number
+  minBaths?: number
+  terms?: string // "cash" | "owner_finance" | "subject_to" | "land_contract"
+  sort?: "new" | "price_asc" | "price_desc"
+}
+
 interface PropertyImageRow {
   property_id: string
   image_url: string
@@ -43,7 +50,12 @@ function primaryUrl(imgs: PropertyImageRow[] | undefined): string | null {
   return primary?.image_url || null
 }
 
-export async function getPublishedDeals(orgId: string | null, limit = 6, offset = 0): Promise<DealSummary[]> {
+export async function getPublishedDeals(
+  orgId: string | null,
+  limit = 6,
+  offset = 0,
+  filters?: DealFilters,
+): Promise<DealSummary[]> {
   let query = supabaseAdmin
     .from("properties")
     .select(DEAL_SUMMARY_COLUMNS)
@@ -52,10 +64,16 @@ export async function getPublishedDeals(orgId: string | null, limit = 6, offset 
     .not("slug", "is", null)
     .is("deleted_at", null)
   if (orgId) query = query.eq("org_id", orgId)
+  if (filters?.minBeds) query = query.gte("bedrooms", filters.minBeds)
+  if (filters?.minBaths) query = query.gte("bathrooms", filters.minBaths)
+  if (filters?.terms === "cash") query = query.eq("deal_type", "cash")
+  else if (filters?.terms) query = query.eq("finance_subtype", filters.terms)
 
-  const { data, error } = await query
-    .order("created_at", { ascending: false })
-    .range(offset, offset + limit - 1)
+  if (filters?.sort === "price_asc") query = query.order("price", { ascending: true, nullsFirst: false })
+  else if (filters?.sort === "price_desc") query = query.order("price", { ascending: false, nullsFirst: false })
+  else query = query.order("created_at", { ascending: false })
+
+  const { data, error } = await query.range(offset, offset + limit - 1)
   if (error) throw new Error(error.message)
 
   const rows = (data || []) as Array<Omit<DealSummary, "primary_image_url">>
@@ -63,7 +81,7 @@ export async function getPublishedDeals(orgId: string | null, limit = 6, offset 
   return rows.map((r) => ({ ...r, primary_image_url: primaryUrl(imagesByProperty.get(r.id)) }))
 }
 
-export async function getPublishedDealCount(orgId: string | null): Promise<number> {
+export async function getPublishedDealCount(orgId: string | null, filters?: DealFilters): Promise<number> {
   let query = supabaseAdmin
     .from("properties")
     .select("id", { count: "exact", head: true })
@@ -72,6 +90,10 @@ export async function getPublishedDealCount(orgId: string | null): Promise<numbe
     .not("slug", "is", null)
     .is("deleted_at", null)
   if (orgId) query = query.eq("org_id", orgId)
+  if (filters?.minBeds) query = query.gte("bedrooms", filters.minBeds)
+  if (filters?.minBaths) query = query.gte("bathrooms", filters.minBaths)
+  if (filters?.terms === "cash") query = query.eq("deal_type", "cash")
+  else if (filters?.terms) query = query.eq("finance_subtype", filters.terms)
   const { count, error } = await query
   if (error) throw new Error(error.message)
   return count || 0

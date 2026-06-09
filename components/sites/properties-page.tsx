@@ -4,6 +4,7 @@ import type { SiteTheme, SiteBusiness, DealSummary } from "@/lib/site-builder/ty
 import type { SiteFormContext } from "@/lib/site-builder/site-context"
 import { DealCard } from "@/components/sites/deal-card"
 import { PropertiesGate } from "./properties-gate"
+import { PropertiesFilterBar } from "@/components/sites/properties-filter-bar"
 
 // On-brand shell for the gated /properties page (mirrors legal-page.tsx). Server
 // component — receives all data as props and imports nothing server-only.
@@ -16,6 +17,7 @@ export function PropertiesPage({
   deals,
   count,
   publicMode,
+  filters,
 }: {
   brandName: string
   theme: SiteTheme
@@ -25,6 +27,7 @@ export function PropertiesPage({
   deals: DealSummary[]
   count: number
   publicMode?: boolean
+  filters?: { sort: string; beds: string; baths: string; terms: string }
 }) {
   // Public sites and cookie-unlocked sites both show full cards; only public
   // sites link each card to its (indexable) detail page — detail pages 404 when
@@ -66,6 +69,7 @@ export function PropertiesPage({
         <div style={{ maxWidth: 1120, margin: "0 auto", padding: "48px 24px" }}>
           {showFull ? (
             <>
+              {filters ? <PropertiesFilterBar basePath="/properties" initial={filters} /> : null}
               <h1 style={{ fontFamily: "var(--head)", fontSize: 32, fontWeight: 800, color: "var(--p)", margin: "0 0 28px", letterSpacing: "-.01em" }}>
                 {count} available {count === 1 ? "deal" : "deals"}
               </h1>
