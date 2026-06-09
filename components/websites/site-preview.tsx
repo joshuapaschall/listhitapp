@@ -7,22 +7,44 @@ import { cn } from "@/lib/utils"
 import { SiteRenderer } from "@/components/sites/site-renderer"
 import { composePreview, type WizardContent } from "@/lib/site-builder/compose"
 import { SiteFonts } from "@/components/sites/site-fonts"
-import type { SitePersona, SiteTemplateId, SiteTheme } from "@/lib/site-builder/types"
+import { buildOptInDisclosure } from "@/lib/site-builder/compliance"
+import type { SiteFormContext } from "@/lib/site-builder/site-context"
+import type { SitePersona, SiteTemplateId, SiteTheme, SiteBusiness, SiteMarkets } from "@/lib/site-builder/types"
 
 interface SitePreviewProps {
   templateId: SiteTemplateId
   persona: SitePersona
   theme: SiteTheme
   content: Partial<WizardContent>
+  business: SiteBusiness
+  markets: SiteMarkets
 }
 
-export function SitePreview({ templateId, persona, theme, content }: SitePreviewProps) {
+export function SitePreview({ templateId, persona, theme, content, business, markets }: SitePreviewProps) {
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop")
 
   const data = useMemo(
     () => composePreview(templateId, persona, theme, content),
     [templateId, persona, theme, content],
   )
+
+  // Build the same form context the published site uses, so the preview shows
+  // the opt-in disclosure + consent checkbox accurately.
+  const form = useMemo<SiteFormContext>(() => {
+    const brandName = content.brandName || "your team"
+    return {
+      persona,
+      brandName,
+      optinEnabled: business.optin.enabled,
+      requireConsent: business.optin.requireConsent,
+      disclosure: buildOptInDisclosure(brandName),
+      // Inert in preview so clicking a link doesn't navigate the dashboard.
+      legalPaths: { terms: "#", privacy: "#" },
+      markets,
+      deals: [],
+      business,
+    }
+  }, [persona, content.brandName, business, markets])
 
   return (
     <div className="flex h-full flex-col">
@@ -60,7 +82,7 @@ export function SitePreview({ templateId, persona, theme, content }: SitePreview
             device === "mobile" ? "w-[390px] max-w-full" : "w-full",
           )}
         >
-          <SiteRenderer data={data} theme={theme} />
+          <SiteRenderer data={data} theme={theme} form={form} />
         </div>
       </div>
     </div>

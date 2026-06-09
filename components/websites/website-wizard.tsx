@@ -1002,7 +1002,15 @@ export default function WebsiteWizard(props: WizardProps) {
                       "Publish website"
                     )}
                   </Button>
-                  <p className="text-xs text-muted-foreground">Custom domains are coming soon.</p>
+                  {siteId && (
+                    <p className="text-xs text-muted-foreground">
+                      Want to use your own domain? You can connect it in{" "}
+                      <Link href={`/websites/${siteId}/settings`} className="font-medium text-brand hover:underline">
+                        site settings
+                      </Link>{" "}
+                      after publishing.
+                    </p>
+                  )}
                 </>
               ) : (
                 <div className="space-y-4 text-center">
@@ -1070,6 +1078,8 @@ export default function WebsiteWizard(props: WizardProps) {
           persona={draft.persona}
           theme={draft.theme}
           content={draft.content}
+          business={draft.business}
+          markets={draft.markets}
         />
       </div>
     </div>
