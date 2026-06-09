@@ -85,15 +85,41 @@ export function applyContentToPuck(data: any, content: Partial<WizardContent>, t
   return clone
 }
 
+// Client-safe mirror of resolve-site.ts#injectPageNavLinks. Inserts a nav link
+// for each enabled sub-page before the "/contact" link (else appended).
+// Idempotent: skips any href already present. Pure — safe in the browser.
+export function injectNavPages(data: any, pages: { path: string; navLabel: string }[]): any {
+  if (!Array.isArray(pages) || !pages.length) return data
+  const clone = JSON.parse(JSON.stringify(data || {}))
+  const items: any[] = Array.isArray(clone.content) ? clone.content : []
+  const nav = items.find((b) => b?.type === "Nav")
+  if (nav) {
+    const links = Array.isArray(nav.props?.links) ? [...nav.props.links] : []
+    const norm = (h: any) => (h || "").replace(/\/$/, "")
+    const contactIdx = links.findIndex((l: any) => norm(l?.href) === "/contact")
+    let at = contactIdx >= 0 ? contactIdx : links.length
+    for (const p of pages) {
+      if (!p?.navLabel || !p?.path) continue
+      if (links.some((l: any) => norm(l?.href) === norm(p.path))) continue
+      links.splice(at, 0, { label: p.navLabel, href: p.path })
+      at++
+    }
+    nav.props = { ...(nav.props || {}), links }
+  }
+  clone.content = items
+  return clone
+}
+
 export function composePreview(
   templateId: SiteTemplateId,
   persona: SitePersona,
   theme: SiteTheme,
   content: Partial<WizardContent>,
+  navPages: { path: string; navLabel: string }[] = [],
 ): any {
   const tpl = getSiteTemplate(templateId) || ALL_SITE_TEMPLATES[0]
   const base = tpl.build(persona)
-  return applyContentToPuck(base, content, theme)
+  return injectNavPages(applyContentToPuck(base, content, theme), navPages)
 }
 
 // Hydrate a WizardContent from stored Puck data (edit mode). Blanks → "".

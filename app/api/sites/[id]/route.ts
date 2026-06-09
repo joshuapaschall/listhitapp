@@ -36,6 +36,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     blockPatches?: BlockPatch[]
     tracking?: Record<string, unknown>
     deals_public?: boolean
+    pageUpdates?: { path: string; enabled: boolean }[]
   }
   try {
     body = await request.json()
@@ -62,6 +63,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     }
     if (Array.isArray(body.blockPatches) && body.blockPatches.length) {
       await SiteService.patchPageBlocks(supabase, orgId, id, body.blockPatches)
+    }
+    if (Array.isArray(body.pageUpdates) && body.pageUpdates.length) {
+      await SiteService.setPagesEnabled(supabase, orgId, id, body.pageUpdates)
     }
     if (body.tracking && typeof body.tracking === "object") {
       // Keep only the known ad-tag keys, coerced to trimmed strings.
