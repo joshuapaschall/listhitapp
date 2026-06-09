@@ -5,13 +5,15 @@ import { themeToCssVars } from "@/lib/site-builder/theme"
 import { SiteFonts } from "@/components/sites/site-fonts"
 import { SiteContextProvider, type SiteFormContext } from "@/lib/site-builder/site-context"
 import { SiteStyles } from "@/components/sites/site-styles"
+import { interpolateSiteData, cityFromMarkets } from "@/lib/site-builder/interpolate"
 import type { SiteTheme } from "@/lib/site-builder/types"
 
 export function SiteRenderer({ data, theme, form }: { data: any; theme: SiteTheme; form?: SiteFormContext }) {
   // Older rows may lack typeStyleId; the font loader falls back to
   // the default pairing rather than throwing.
   const typeStyleId = (theme as Partial<SiteTheme>)?.typeStyleId
-  const rendered = <Render config={siteConfig} data={data} />
+  const display = interpolateSiteData(data, form?.brandName ?? "our team", cityFromMarkets(form?.markets))
+  const rendered = <Render config={siteConfig} data={display} />
   return (
     <div className="lh-site" style={themeToCssVars(theme)}>
       <SiteStyles />

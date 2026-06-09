@@ -1,7 +1,7 @@
 import type { Data } from "@measured/puck"
 import type { SitePersona } from "../types"
 import type { SiteTemplateDef } from "./types"
-import { PERSONAS } from "./personas"
+import { PERSONAS, PLACEHOLDER_REVIEWS } from "./personas"
 
 const PRIMARY = "#5a2a4d"
 const ACCENT = "#e0654f"
@@ -13,13 +13,21 @@ function build(persona: SitePersona): Data {
     root: { props: { primary: PRIMARY, accent: ACCENT, headingFont: HEADING_FONT } },
     content: [
       {
+        type: "AnnouncementBar",
+        props: { id: "AnnouncementBar-madrone", text: c.announcement, enabled: "show" },
+      },
+      {
         type: "Nav",
         props: {
           id: "Nav-madrone",
           brandName: "Your Company",
           logoUrl: "",
           phone: "(555) 555-5555",
-          links: [{ label: "How it works" }, { label: "Reviews" }, { label: "Contact" }],
+          links: [
+            { label: "How it works", href: "#how-it-works" },
+            { label: "Reviews", href: "#reviews" },
+            { label: "Contact", href: "/contact" },
+          ],
           layout: "split",
         },
       },
@@ -54,7 +62,19 @@ function build(persona: SitePersona): Data {
         type: "FeatureGrid",
         props: { id: "FeatureGrid-madrone", heading: "What you get", features: c.features },
       },
+      {
+        type: "HowItWorks",
+        props: { id: "HowItWorks-madrone", heading: "How it works", steps: c.howItWorks },
+      },
       { type: "PropertyGrid", props: { id: "PropertyGrid-madrone", heading: "Recent deals" } },
+      {
+        type: "Testimonials",
+        props: { id: "Testimonials-madrone", heading: "What buyers say", reviews: PLACEHOLDER_REVIEWS },
+      },
+      {
+        type: "Faq",
+        props: { id: "Faq-madrone", heading: "Questions & answers", items: c.faqs },
+      },
       {
         type: "CtaBand",
         props: { id: "CtaBand-madrone", heading: "Get your offer today", body: c.subhead, buttonLabel: c.bannerCta },
