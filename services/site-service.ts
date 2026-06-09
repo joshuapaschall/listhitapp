@@ -4,7 +4,7 @@ import { getSiteTemplate } from "@/lib/site-builder/templates"
 import { extractContent, applyContentToPuck } from "@/lib/site-builder/compose"
 import { buildAboutPage, buildFaqPage } from "@/lib/site-builder/extra-pages"
 import { slugifySiteName, isReservedSlug } from "@/lib/site-builder/slug"
-import { addProjectDomain, vercelConfigured } from "@/lib/vercel/domains"
+import { addProjectDomain, removeProjectDomain, vercelConfigured } from "@/lib/vercel/domains"
 
 // Backend data layer for the website builder.
 //
@@ -209,15 +209,36 @@ export class SiteService {
   ) {
     const update: Record<string, any> = {}
     if (patch.name !== undefined) update.name = patch.name
-    if (patch.slug !== undefined) update.slug = await this.ensureUniqueSlug(client, patch.slug, siteId)
+    let newSlug: string | undefined
+    if (patch.slug !== undefined) {
+      newSlug = await this.ensureUniqueSlug(client, patch.slug, siteId)
+      update.slug = newSlug
+    }
     if (Object.keys(update).length === 0) return
 
-    const { error } = await client
-      .from("sites")
-      .update(update)
-      .eq("id", siteId)
-      .eq("org_id", orgId)
+    // Capture current slug + status BEFORE the update so we can detect a real slug change.
+    const { data: before } = await client
+      .from("sites").select("slug, status").eq("id", siteId).eq("org_id", orgId).maybeSingle()
+
+    const { error } = await client.from("sites").update(update).eq("id", siteId).eq("org_id", orgId)
     if (error) throw new Error(error.message)
+
+    if (newSlug && before?.slug && before.slug !== newSlug) {
+      const oldDomain = `${before.slug}.${ROOT_DOMAIN()}`
+      const newDomain = `${newSlug}.${ROOT_DOMAIN()}`
+      // Drop the stale subdomain row + its Vercel entry.
+      await client.from("site_domains").delete()
+        .eq("site_id", siteId).eq("type", "subdomain").eq("domain", oldDomain)
+      await this.vercelRemoveDomain(oldDomain)
+      // If the site is live, make the renamed subdomain live immediately.
+      if (before.status === "published") {
+        await client.from("site_domains").upsert(
+          { site_id: siteId, org_id: orgId, domain: newDomain, type: "subdomain", status: "active" },
+          { onConflict: "domain" },
+        )
+        await this.vercelAddDomain(newDomain)
+      }
+    }
   }
 
   static async updateTheme(
@@ -355,23 +376,30 @@ export class SiteService {
       .single()
     if (domainError) throw new Error(domainError.message)
 
-    // Register the subdomain with Vercel so it gets a TLS cert and routes to the app.
-    // Best-effort: the site is already published; a Vercel hiccup must NOT fail publish,
-    // and an already-registered domain is a success (publish is idempotent / re-runnable).
-    if (vercelConfigured()) {
-      try {
-        await addProjectDomain(domain)
-      } catch (e: any) {
-        const status = e?.status
-        const alreadyExists =
-          status === 409 || /already|exists|in use/i.test(e?.message || "")
-        if (!alreadyExists) {
-          console.error(`[publish] Vercel domain registration failed for ${domain}: ${e?.message || e}`)
-        }
-      }
-    }
+    await this.vercelAddDomain(domain)
 
     return { site, subdomain }
+  }
+
+  // Best-effort Vercel domain registration. Never throws; an already-registered domain is success.
+  private static async vercelAddDomain(domain: string): Promise<void> {
+    if (!vercelConfigured()) return
+    try {
+      await addProjectDomain(domain)
+    } catch (e: any) {
+      const alreadyExists = e?.status === 409 || /already|exists|in use/i.test(e?.message || "")
+      if (!alreadyExists) console.error(`[sites] Vercel domain add failed for ${domain}: ${e?.message || e}`)
+    }
+  }
+
+  // Best-effort Vercel domain removal. Never throws; a missing domain (404) is success (handled in helper).
+  private static async vercelRemoveDomain(domain: string): Promise<void> {
+    if (!vercelConfigured()) return
+    try {
+      await removeProjectDomain(domain)
+    } catch (e: any) {
+      console.error(`[sites] Vercel domain remove failed for ${domain}: ${e?.message || e}`)
+    }
   }
 
   static async unpublish(client: SupabaseClient, orgId: string, siteId: string) {
@@ -383,6 +411,23 @@ export class SiteService {
       .select("*")
       .single()
     if (error) throw new Error(error.message)
+
+    const domain = `${site.slug}.${ROOT_DOMAIN()}`
+    await client.from("site_domains").delete()
+      .eq("site_id", siteId).eq("type", "subdomain").eq("domain", domain)
+    await this.vercelRemoveDomain(domain)
+
     return site
+  }
+
+  static async delete(client: SupabaseClient, orgId: string, siteId: string) {
+    // Read all Vercel-registered domains BEFORE the cascade delete removes the rows.
+    const { data: domains } = await client
+      .from("site_domains").select("domain").eq("site_id", siteId)
+    const { error } = await client.from("sites").delete().eq("id", siteId).eq("org_id", orgId)
+    if (error) throw new Error(error.message)
+    for (const d of domains || []) {
+      await this.vercelRemoveDomain((d as any).domain)
+    }
   }
 }
