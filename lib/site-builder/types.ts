@@ -34,6 +34,12 @@ export interface PersonaContent {
   ctaLabel: string
   bannerCta: string
   features: { icon: string; title: string; body: string }[]
+  // Expanded site copy. `{Brand}` / `{City}` are render-time placeholders
+  // (City falls back to "your area" on nationwide sites).
+  announcement: string
+  howItWorks: { title: string; body: string }[]
+  faqs: { q: string; a: string }[]
+  about: { headline: string; body: string; trust: string[] }
 }
 
 export const DEFAULT_THEME: SiteTheme = {
