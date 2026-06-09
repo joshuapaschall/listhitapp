@@ -16,6 +16,7 @@ import {
   getPublishedDealBySlug,
   getNearbyPublishedDeals,
   getPublishedDealsForMarket,
+  type DealFilters,
 } from "@/services/site-deals-service"
 import { resolveLocationPage, locationHrefForDeal, PERSONA_URL_SLUG } from "@/lib/site-builder/location-pages"
 import { locationCopy } from "@/lib/site-builder/location-content"
@@ -46,6 +47,30 @@ const LEGAL_PATHS: Record<string, "legal" | "contact"> = {
 function normalizePath(path?: string[]): string {
   const joined = "/" + (path?.join("/") ?? "")
   return joined.replace(/\/{2,}/g, "/")
+}
+
+// Parse the public /properties buyer filter from the URL search params into a
+// server-side DealFilters plus the seed values the client filter bar reflects.
+function readDealFilters(sp: Record<string, string | string[] | undefined> | undefined) {
+  const get = (k: string) => {
+    const val = sp?.[k]
+    return Array.isArray(val) ? val[0] : val
+  }
+  const bedsN = parseInt(get("beds") || "0", 10) || 0
+  const bathsN = parseInt(get("baths") || "0", 10) || 0
+  const termsRaw = get("terms") || "any"
+  const allowedTerms = ["cash", "owner_finance", "subject_to", "land_contract"]
+  const terms = allowedTerms.includes(termsRaw) ? termsRaw : "any"
+  const sortRaw = get("sort") || "new"
+  const sort: DealFilters["sort"] = sortRaw === "price_asc" || sortRaw === "price_desc" ? sortRaw : "new"
+  const filters: DealFilters = {
+    minBeds: bedsN > 0 ? bedsN : undefined,
+    minBaths: bathsN > 0 ? bathsN : undefined,
+    terms: terms !== "any" ? terms : undefined,
+    sort,
+  }
+  const values = { sort: sort || "new", beds: String(bedsN), baths: String(bathsN), terms }
+  return { filters, values }
 }
 
 function seoMeta(host: string, path: string, title: string, description: string | undefined, siteName: string): Metadata {
@@ -81,7 +106,7 @@ export async function generateMetadata({
     if (path === "/properties") {
       const site = await resolveSiteByHost(host)
       if (!site) return { title: "Site not found" }
-      return seoMeta(host, path, `Available deals · ${site.name}`, `Browse available off-market deals from ${site.name}.`, site.name)
+      return { ...seoMeta(host, path, `Available deals · ${site.name}`, `Browse available off-market deals from ${site.name}.`, site.name), alternates: { canonical: `https://${host}/properties` } }
     }
 
     if (params.path?.length === 2 && params.path[0] === "properties") {
@@ -153,7 +178,13 @@ export async function generateMetadata({
   }
 }
 
-export default async function SitePage({ params }: { params: SitePageParams }) {
+export default async function SitePage({
+  params,
+  searchParams,
+}: {
+  params: SitePageParams
+  searchParams?: Record<string, string | string[] | undefined>
+}) {
   const host = decodeURIComponent(params.host)
   const path = normalizePath(params.path)
 
@@ -185,15 +216,22 @@ export default async function SitePage({ params }: { params: SitePageParams }) {
       deals: [],
       business,
     }
+    const { filters, values } = readDealFilters(searchParams)
     // Public sites: full, ungated list — every card links to its indexable
     // detail page. No address stripping, no cookie gate.
     if (publicMode) {
-      const deals = await getPublishedDeals(site.org_id, 24).catch(() => [])
-      return <PropertiesPage brandName={site.name} theme={theme} business={business} formContext={formContext} publicMode unlocked deals={deals} count={deals.length} />
+      const [deals, count] = await Promise.all([
+        getPublishedDeals(site.org_id, 24, 0, filters).catch(() => []),
+        getPublishedDealCount(site.org_id, filters).catch(() => 0),
+      ])
+      return <PropertiesPage brandName={site.name} theme={theme} business={business} formContext={formContext} publicMode unlocked deals={deals} count={count} filters={values} />
     }
     if (unlocked) {
-      const deals = await getPublishedDeals(site.org_id, 24).catch(() => [])
-      return <PropertiesPage brandName={site.name} theme={theme} business={business} formContext={formContext} unlocked deals={deals} count={deals.length} />
+      const [deals, count] = await Promise.all([
+        getPublishedDeals(site.org_id, 24, 0, filters).catch(() => []),
+        getPublishedDealCount(site.org_id, filters).catch(() => 0),
+      ])
+      return <PropertiesPage brandName={site.name} theme={theme} business={business} formContext={formContext} unlocked deals={deals} count={count} filters={values} />
     }
     const [count, teaser] = await Promise.all([
       getPublishedDealCount(site.org_id).catch(() => 0),
