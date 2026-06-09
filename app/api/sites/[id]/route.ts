@@ -109,8 +109,7 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
 
   const { id } = await context.params
   try {
-    const { error } = await supabase.from("sites").delete().eq("id", id).eq("org_id", orgId)
-    if (error) throw new Error(error.message)
+    await SiteService.delete(supabase, orgId, id)
     return NextResponse.json({ ok: true })
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || "Failed to delete site" }, { status: 500 })
