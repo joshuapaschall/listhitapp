@@ -300,6 +300,23 @@ export class SiteService {
     if (updateError) throw new Error(updateError.message)
   }
 
+  static async setPagesEnabled(
+    client: SupabaseClient,
+    orgId: string,
+    siteId: string,
+    updates: { path: string; enabled: boolean }[],
+  ) {
+    for (const u of updates) {
+      const { error } = await client
+        .from("site_pages")
+        .update({ enabled: u.enabled })
+        .eq("site_id", siteId)
+        .eq("org_id", orgId)
+        .eq("path", u.path)
+      if (error) throw new Error(error.message)
+    }
+  }
+
   static async publish(client: SupabaseClient, orgId: string, siteId: string) {
     const { data: site, error } = await client
       .from("sites")

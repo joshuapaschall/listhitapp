@@ -18,14 +18,15 @@ interface SitePreviewProps {
   content: Partial<WizardContent>
   business: SiteBusiness
   markets: SiteMarkets
+  navPages: { path: string; navLabel: string }[]
 }
 
-export function SitePreview({ templateId, persona, theme, content, business, markets }: SitePreviewProps) {
+export function SitePreview({ templateId, persona, theme, content, business, markets, navPages }: SitePreviewProps) {
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop")
 
   const data = useMemo(
-    () => composePreview(templateId, persona, theme, content),
-    [templateId, persona, theme, content],
+    () => composePreview(templateId, persona, theme, content, navPages),
+    [templateId, persona, theme, content, navPages],
   )
 
   // Build the same form context the published site uses, so the preview shows

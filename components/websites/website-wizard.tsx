@@ -113,6 +113,7 @@ export default function WebsiteWizard(props: WizardProps) {
   const [error, setError] = useState("")
   const [published, setPublished] = useState(false)
   const [mobilePreview, setMobilePreview] = useState(false)
+  const [pages, setPages] = useState<{ path: string; nav_label: string; enabled: boolean }[]>([])
 
   const [draft, setDraft] = useState<Draft>(() => ({
     name: "",
@@ -125,6 +126,12 @@ export default function WebsiteWizard(props: WizardProps) {
     tracking: {},
   }))
 
+  // Keep only sub-pages that can appear in the nav (labeled, non-home).
+  const toToggleable = (rows: any[]) =>
+    (rows || [])
+      .filter((p) => p?.nav_label && p?.path !== "/")
+      .map((p) => ({ path: p.path, nav_label: p.nav_label, enabled: p.enabled !== false }))
+
   // Edit mode: hydrate from the API and jump to the Brand step.
   useEffect(() => {
     if (!isEdit) return
@@ -135,6 +142,7 @@ export default function WebsiteWizard(props: WizardProps) {
         if (!res.ok) throw new Error("Failed to load site")
         const { site, pages } = await res.json()
         if (!active) return
+        setPages(toToggleable(pages))
         const theme: SiteTheme = { ...DEFAULT_THEME, ...(site.theme_json || {}) }
         const home = (pages || []).find((p: any) => p.path === "/")
         const content = home ? extractContent(home.puck_data) : seedContent(site.name, site.persona)
@@ -277,12 +285,35 @@ export default function WebsiteWizard(props: WizardProps) {
       setSiteId(site.id)
       setSlug(site.slug || "")
       setStatus(site.status || "draft")
+      try {
+        const r = await fetch(`/api/sites/${site.id}`)
+        if (r.ok) {
+          const { pages } = await r.json()
+          setPages(toToggleable(pages))
+        }
+      } catch {}
       return true
     } catch (e: any) {
       setError(e?.message || "Failed to create website")
       return false
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function togglePage(path: string, enabled: boolean) {
+    setPages((prev) => prev.map((p) => (p.path === path ? { ...p, enabled } : p)))
+    if (!siteId) return
+    try {
+      const res = await fetch(`/api/sites/${siteId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pageUpdates: [{ path, enabled }] }),
+      })
+      if (!res.ok) throw new Error("Failed to update page")
+    } catch (e: any) {
+      setPages((prev) => prev.map((p) => (p.path === path ? { ...p, enabled: !enabled } : p)))
+      setError(e?.message || "Failed to update page")
     }
   }
 
@@ -764,6 +795,18 @@ export default function WebsiteWizard(props: WizardProps) {
                 />
                 {assetError && <p className="text-xs text-destructive">{assetError}</p>}
               </div>
+              {pages.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Pages</Label>
+                  <p className="text-xs text-muted-foreground">Turn extra pages on or off — they show in your menu when on.</p>
+                  {pages.map((p) => (
+                    <div key={p.path} className="flex items-center justify-between rounded-lg border border-border p-3">
+                      <span className="text-sm font-medium">{p.nav_label}</span>
+                      <Switch checked={p.enabled} onCheckedChange={(v) => togglePage(p.path, v)} />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -1110,6 +1153,7 @@ export default function WebsiteWizard(props: WizardProps) {
           content={draft.content}
           business={draft.business}
           markets={draft.markets}
+          navPages={pages.filter((p) => p.enabled).map((p) => ({ path: p.path, navLabel: p.nav_label }))}
         />
       </div>
     </div>
