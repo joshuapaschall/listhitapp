@@ -155,7 +155,7 @@ export const siteConfig: Config = {
         eyebrow: "Off-market deals",
         headline: "Get first access to deeply discounted properties.",
         subhead: "Join the buyers list and we'll send wholesale-priced, off-market deals straight to your phone — before anyone else sees them.",
-        stat: "Trusted by 2,400+ cash buyers",
+        stat: "New deals, sent to the list first",
         imageUrl: "https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=1600",
         formTitle: "See this week's deals",
         formSubtitle: "Step 1 of 2 — where should we send them?",
