@@ -9,7 +9,7 @@ export const PERSONAS: Record<SitePersona, PersonaContent> = {
     headline: "Get our best off-market deals before anyone else.",
     subhead:
       "Join our cash buyers list and get new wholesale and off-market properties — 30 to 50% under retail — the moment we lock them up. By text and email. Free to join.",
-    stat: "1,200+ active buyers on the list",
+    stat: "New off-market deals, sent first",
     formTitle: "Get deals sent to you",
     formSubtitle: "New off-market properties, by text and email.",
     ctaLabel: "Send me deals",
@@ -44,7 +44,7 @@ export const PERSONAS: Record<SitePersona, PersonaContent> = {
     headline: "Funded deals, straight to your inbox.",
     subhead:
       "We send vetted flip and rental opportunities to our private investor network before they ever hit the market — with the numbers already run.",
-    stat: "$42M+ in deals moved",
+    stat: "Funded-ready deals, matched to you",
     formTitle: "Join the investor list",
     formSubtitle: "Deal alerts by text and email.",
     ctaLabel: "Get the deals",
@@ -184,7 +184,7 @@ export const PERSONAS: Record<SitePersona, PersonaContent> = {
     headline: "Off-market land deals, priced to move.",
     subhead:
       "Raw land, lots, and acreage at investor prices. Join our list and get first access before they hit the open market.",
-    stat: "Acreage & lots added weekly",
+    stat: "Off-market land & lots",
     formTitle: "Get land deals",
     formSubtitle: "New parcels by text and email.",
     ctaLabel: "Join the land list",
