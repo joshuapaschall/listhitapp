@@ -300,6 +300,22 @@ export class SiteService {
     if (updateError) throw new Error(updateError.message)
   }
 
+  static async savePageData(
+    client: SupabaseClient,
+    orgId: string,
+    siteId: string,
+    path: string,
+    data: any,
+  ) {
+    const { error } = await client
+      .from("site_pages")
+      .update({ puck_data: data })
+      .eq("site_id", siteId)
+      .eq("org_id", orgId)
+      .eq("path", path)
+    if (error) throw new Error(error.message)
+  }
+
   static async setPagesEnabled(
     client: SupabaseClient,
     orgId: string,
