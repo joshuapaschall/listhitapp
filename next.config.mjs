@@ -1,7 +1,8 @@
-// Content-Security-Policy in REPORT-ONLY mode — it observes and reports
-// violations without blocking, so it cannot break anything yet. The allowlist
-// covers every third party the app actually uses (Mapbox, Supabase, Telnyx,
-// Google Fonts, Unsplash, owner ad tags, YouTube embeds).
+// Content-Security-Policy — now ENFORCED (was report-only during rollout). The
+// allowlist covers every third party the app actually uses (Mapbox, Supabase,
+// Telnyx, Google Fonts, Unsplash, owner ad tags, YouTube embeds); `report-uri
+// /api/csp-report` still logs any violation so a missed origin surfaces. To
+// revert, change the header key below back to the report-only variant.
 const cspReportOnly = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://www.googleadservices.com https://googleads.g.doubleclick.net https://connect.facebook.net https://api.mapbox.com",
@@ -25,7 +26,7 @@ const securityHeaders = [
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   // microphone=(self) is REQUIRED for Telnyx calling — do not remove.
   { key: "Permissions-Policy", value: "camera=(), microphone=(self), geolocation=(self), payment=()" },
-  { key: "Content-Security-Policy-Report-Only", value: cspReportOnly },
+  { key: "Content-Security-Policy", value: cspReportOnly },
 ]
 
 /** @type {import('next').NextConfig} */
