@@ -2,6 +2,7 @@ import { apiError } from "@/lib/api-error"
 import { NextRequest, NextResponse } from "next/server"
 import { requireOrgContext } from "@/lib/auth/org-context"
 import { requirePermission } from "@/lib/permissions/server"
+import { geocodeAddress } from "@/lib/geocode"
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -41,26 +42,12 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       body.latitude == null &&
       body.longitude == null
     ) {
-      try {
-        const baseUrl =
-          process.env.NEXT_PUBLIC_BASE_URL || `${request.nextUrl.protocol}//${request.nextUrl.host}`
-        const geoRes = await fetch(`${baseUrl}/api/geocode`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            query: [body.address, body.city, body.state, body.zip].filter(Boolean).join(", "),
-          }),
-        })
-
-        if (geoRes.ok) {
-          const geo = await geoRes.json()
-          if (geo && geo.latitude != null && geo.longitude != null) {
-            updateData.latitude = geo.latitude
-            updateData.longitude = geo.longitude
-          }
-        }
-      } catch (geoErr) {
-        console.error("Geocoding failed (non-fatal):", geoErr)
+      const geo = await geocodeAddress(
+        [body.address, body.city, body.state, body.zip].filter(Boolean).join(", "),
+      )
+      if (geo.latitude != null && geo.longitude != null) {
+        updateData.latitude = geo.latitude
+        updateData.longitude = geo.longitude
       }
     }
 
