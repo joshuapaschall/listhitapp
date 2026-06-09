@@ -13,6 +13,7 @@ export interface WizardContent {
   ctaLabel: string
   heroImageUrl: string
   footerText: string
+  announcementText: string
 }
 
 export const CURATED_HERO_IMAGES: { label: string; url: string }[] = [
@@ -61,6 +62,15 @@ export function applyContentToPuck(data: any, content: Partial<WizardContent>, t
     footer.props = { ...(footer.props || {}), text: content.footerText }
   }
 
+  const announcement = firstOfType(items, "AnnouncementBar")
+  if (announcement) {
+    announcement.props = {
+      ...(announcement.props || {}),
+      ...(content.announcementText !== undefined ? { text: content.announcementText } : {}),
+      enabled: theme.banner ? "show" : "hide",
+    }
+  }
+
   clone.content = items
   clone.root = {
     ...(clone.root || {}),
@@ -92,6 +102,7 @@ export function extractContent(puckData: any): WizardContent {
   const hero = firstOfType(items, "Hero")?.props || {}
   const nav = firstOfType(items, "Nav")?.props || {}
   const footer = firstOfType(items, "Footer")?.props || {}
+  const announcement = firstOfType(items, "AnnouncementBar")?.props || {}
   return {
     brandName: nav.brandName || "",
     phone: nav.phone || "",
@@ -100,5 +111,6 @@ export function extractContent(puckData: any): WizardContent {
     ctaLabel: hero.ctaLabel || "",
     heroImageUrl: hero.imageUrl || "",
     footerText: footer.text || "",
+    announcementText: announcement.text || "",
   }
 }

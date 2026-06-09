@@ -54,6 +54,7 @@ function seedContent(name: string, persona: SitePersona): WizardContent {
     ctaLabel: p.ctaLabel,
     heroImageUrl: CURATED_HERO_IMAGES[0].url,
     footerText: `© ${brand}. All rights reserved.`,
+    announcementText: p.announcement,
   }
 }
 
@@ -224,6 +225,13 @@ export default function WebsiteWizard(props: WizardProps) {
         },
       },
       { blockType: "Footer", props: { text: draft.content.footerText } },
+      {
+        blockType: "AnnouncementBar",
+        props: {
+          text: draft.content.announcementText,
+          enabled: draft.theme.banner ? "show" : "hide",
+        },
+      },
     ],
     [draft],
   )
@@ -454,6 +462,7 @@ export default function WebsiteWizard(props: WizardProps) {
                               headline: next.headline,
                               subhead: next.subhead,
                               ctaLabel: next.ctaLabel,
+                              announcementText: next.announcement,
                             },
                           }
                         })
@@ -593,6 +602,17 @@ export default function WebsiteWizard(props: WizardProps) {
                 </div>
                 <Switch checked={draft.theme.banner} onCheckedChange={(v) => setTheme({ banner: v })} />
               </div>
+              {draft.theme.banner && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="ann-text">Announcement text</Label>
+                  <Input
+                    id="ann-text"
+                    value={draft.content.announcementText}
+                    onChange={(e) => setContent({ announcementText: e.target.value })}
+                  />
+                  <p className="text-xs text-muted-foreground">Keep it buyer-facing — these sites collect buyers, not sellers.</p>
+                </div>
+              )}
               <div className="space-y-1.5">
                 <Label>Logo</Label>
                 <input
