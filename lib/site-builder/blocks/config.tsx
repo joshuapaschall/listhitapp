@@ -787,6 +787,80 @@ export const siteConfig: Config = {
     },
 
     // -----------------------------------------------------------------------
+    AboutStory: {
+      label: "About story",
+      fields: {
+        headline: { type: "text" },
+        body: { type: "textarea" },
+        trust: {
+          type: "array",
+          arrayFields: { text: { type: "text" } },
+        },
+        stats: {
+          type: "array",
+          arrayFields: { value: { type: "text" }, label: { type: "text" } },
+        },
+      },
+      defaultProps: {
+        headline: "Built for buyers who close.",
+        body: "We find the deals and pass them straight to our list — no markups, no bidding wars, just clean opportunities for serious buyers.",
+        trust: [],
+        stats: [],
+      },
+      render: ({ headline, body, trust, stats }: any) => (
+        <section style={{ background: "#fff" }}>
+          <div style={{ ...WRAP, padding: "64px 24px" }}>
+            {headline && (
+              <h2 className="lh-h2" style={{ ...HEADING, fontSize: 32, fontWeight: 800, color: "var(--p)", textAlign: "center", margin: "0 0 18px" }}>
+                {headline}
+              </h2>
+            )}
+            {body && (
+              <p style={{ fontFamily: "var(--body)", fontSize: 17, lineHeight: 1.65, color: "#5a6675", textAlign: "center", maxWidth: 640, margin: "0 auto" }}>
+                {body}
+              </p>
+            )}
+            {stats?.length ? (
+              <div className="lh-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 22, marginTop: 40 }}>
+                {stats.map((s: any, i: number) => (
+                  <div key={i} style={{ textAlign: "center", border: "1px solid #eef1f5", borderRadius: 16, padding: 24, background: "#fff" }}>
+                    <div style={{ fontFamily: "var(--head)", fontWeight: 800, fontSize: 34, lineHeight: 1.05, color: "var(--p)" }}>{s?.value}</div>
+                    <div style={{ marginTop: 6, fontFamily: "var(--body)", fontSize: 13, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", color: "#5b6470" }}>{s?.label}</div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {trust?.length ? (
+              <div className="lh-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 22, marginTop: 40 }}>
+                {trust.map((t: any, i: number) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, border: "1px solid #eef1f5", borderRadius: 16, padding: 20, background: "#fff", boxShadow: "0 8px 24px rgba(16,27,41,.05)" }}>
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: 32,
+                        height: 32,
+                        borderRadius: 8,
+                        background: "color-mix(in srgb, var(--a) 18%, #fff)",
+                        color: "var(--a)",
+                        fontWeight: 800,
+                        flexShrink: 0,
+                      }}
+                    >
+                      ✓
+                    </span>
+                    <span style={{ fontFamily: "var(--body)", fontSize: 15, fontWeight: 600, color: "#0f1b29" }}>{t?.text}</span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </section>
+      ),
+    },
+
+    // -----------------------------------------------------------------------
     PropertyGrid: {
       label: "Property grid",
       fields: {

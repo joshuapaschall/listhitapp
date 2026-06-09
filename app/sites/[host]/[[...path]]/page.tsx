@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { cookies } from "next/headers"
 import { notFound } from "next/navigation"
-import { resolveSite, mergeThemeIntoRoot, resolveSiteByHost, injectBlogNavLink } from "@/lib/site-builder/resolve-site"
+import { resolveSite, mergeThemeIntoRoot, resolveSiteByHost, injectBlogNavLink, getNavPages, injectPageNavLinks } from "@/lib/site-builder/resolve-site"
 import { DEFAULT_THEME, DEFAULT_BUSINESS, DEFAULT_MARKETS } from "@/lib/site-builder/types"
 import { buildTermsAndPrivacy, buildContactDoc, buildOptInDisclosure } from "@/lib/site-builder/compliance"
 import { SiteRendererRSC } from "@/components/sites/site-renderer-rsc"
@@ -366,10 +366,13 @@ export default async function SitePage({
 
   const result = await resolveSite(host, path)
   if (!result) notFound()
+  if (result.page.enabled === false) notFound()
 
   let data = mergeThemeIntoRoot(result.page.puck_data, result.theme)
   const postCount = await getPublishedPostCount(result.site.id, result.site.org_id).catch(() => 0)
   if (postCount > 0) data = injectBlogNavLink(data)
+  const navPages = await getNavPages(result.site.id).catch(() => [])
+  data = injectPageNavLinks(data, navPages)
 
   const business = { ...DEFAULT_BUSINESS, ...((result.site.business_json as any) || {}) }
   const deals = await getPublishedDeals(result.site.org_id, 6).catch(() => [])

@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { DEFAULT_THEME, DEFAULT_BUSINESS, DEFAULT_MARKETS, type SitePersona, type SiteTemplateId, type SiteTheme, type SiteBusiness, type SiteMarkets } from "@/lib/site-builder/types"
 import { getSiteTemplate } from "@/lib/site-builder/templates"
 import { extractContent, applyContentToPuck } from "@/lib/site-builder/compose"
+import { buildAboutPage, buildFaqPage } from "@/lib/site-builder/extra-pages"
 import { slugifySiteName, isReservedSlug } from "@/lib/site-builder/slug"
 
 // Backend data layer for the website builder.
@@ -105,15 +106,40 @@ export class SiteService {
       .single()
     if (error) throw new Error(error.message)
 
+    const home = tpl.build(input.persona) // reuse for "/" insert AND the sub-pages
     const { error: pageError } = await client.from("site_pages").insert({
       site_id: site.id,
       org_id: orgId,
       path: "/",
       title: input.name,
       meta_description: null,
-      puck_data: tpl.build(input.persona),
+      puck_data: home,
     })
     if (pageError) throw new Error(pageError.message)
+
+    const { error: extraErr } = await client.from("site_pages").insert([
+      {
+        site_id: site.id,
+        org_id: orgId,
+        path: "/about",
+        title: "About",
+        meta_description: null,
+        puck_data: buildAboutPage(home, input.persona),
+        nav_label: "About",
+        sort_order: 10,
+      },
+      {
+        site_id: site.id,
+        org_id: orgId,
+        path: "/faq",
+        title: "Questions & answers",
+        meta_description: null,
+        puck_data: buildFaqPage(home, input.persona),
+        nav_label: "FAQ",
+        sort_order: 20,
+      },
+    ])
+    if (extraErr) throw new Error(extraErr.message)
 
     return site
   }
