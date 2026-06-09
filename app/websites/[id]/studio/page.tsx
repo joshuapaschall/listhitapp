@@ -17,14 +17,23 @@ export default async function StudioPage({ params }: { params: Promise<{ id: str
   const home = (pages || []).find((p: any) => p.path === "/")
   if (!home) notFound()
   const theme = { ...DEFAULT_THEME, ...(site.theme_json || {}) }
-  const data = mergeThemeIntoRoot(home.puck_data, theme)
+  const sorted = [...(pages || [])].sort((a: any, b: any) => {
+    if (a.path === "/") return -1
+    if (b.path === "/") return 1
+    return (a.sort_order ?? 0) - (b.sort_order ?? 0)
+  })
+  const editablePages = sorted.map((p: any) => ({
+    path: p.path,
+    label: p.path === "/" ? "Home" : (p.nav_label || p.title || p.path),
+    data: mergeThemeIntoRoot(p.puck_data, theme),
+  }))
   return (
     <SiteStudioEditor
       siteId={site.id}
       slug={site.slug || ""}
       siteName={site.name || ""}
       status={site.status || "draft"}
-      initialData={data}
+      pages={editablePages}
     />
   )
 }
