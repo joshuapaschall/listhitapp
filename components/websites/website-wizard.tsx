@@ -23,7 +23,7 @@ import { useLocationSuggestions } from "@/components/buyers/use-location-suggest
 
 type WizardProps = { mode: "new" } | { mode: "edit"; siteId: string }
 
-const STEPS = ["Goal", "Template", "Brand", "Content", "Markets", "Business", "Launch"]
+const STEPS = ["Who it's for", "Template", "Your area", "Brand", "Message", "Texting", "Launch"]
 
 const PERSONA_BLURBS: Record<SitePersona, string> = {
   cash: "Build a cash-buyer list for your wholesale deals.",
@@ -347,7 +347,7 @@ export default function WebsiteWizard(props: WizardProps) {
       ? Boolean(draft.name.trim() && draft.persona)
       : step === 1
         ? Boolean(draft.templateId)
-        : step === 4
+        : step === 2
           ? draft.markets.scope === "nationwide" || draft.markets.markets.length > 0
           : step === 5
             ? Boolean(draft.business.email.trim() && draft.business.phone.trim())
@@ -380,25 +380,29 @@ export default function WebsiteWizard(props: WizardProps) {
         </div>
 
         {/* Stepper */}
-        <div className="flex items-center gap-2 border-b border-border px-5 py-3">
+        <div className="flex items-start border-b border-border px-4 py-3">
           {STEPS.map((label, i) => (
-            <div key={label} className="flex items-center gap-2">
+            <div key={label} className="flex flex-1 flex-col items-center gap-1.5">
               <div
                 className={cn(
                   "flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-medium",
                   i < step
                     ? "bg-brand text-white"
                     : i === step
-                      ? "bg-foreground text-background"
-                      : "bg-muted text-muted-foreground",
+                      ? "bg-background text-brand ring-2 ring-brand"
+                      : "border border-border bg-background text-muted-foreground",
                 )}
               >
                 {i < step ? <Check className="h-3 w-3" /> : i + 1}
               </div>
-              <span className={cn("hidden text-xs lg:inline", i === step ? "font-medium text-foreground" : "text-muted-foreground")}>
+              <span
+                className={cn(
+                  "text-center text-[11px] leading-tight",
+                  i === step ? "font-medium text-foreground" : "text-muted-foreground",
+                )}
+              >
                 {label}
               </span>
-              {i < STEPS.length - 1 && <div className="h-px w-3 bg-border" />}
             </div>
           ))}
         </div>
@@ -427,10 +431,13 @@ export default function WebsiteWizard(props: WizardProps) {
                     }))
                   }
                 />
+                <p className="text-sm text-muted-foreground">
+                  This shows at the top of every page — and on your Contact, Terms &amp; Privacy. Make sure it&apos;s exactly right.
+                </p>
               </div>
               <div>
-                <h2 className="text-base font-semibold">Who is this site for?</h2>
-                <p className="text-sm text-muted-foreground">Pick the audience this site is built for.</p>
+                <h2 className="text-base font-semibold">Who is this website for?</h2>
+                <p className="text-sm text-muted-foreground">Pick the kind of buyers you want to collect — we&apos;ll tailor the site for them.</p>
                 <div className="mt-3 grid grid-cols-1 gap-2">
                   {(Object.keys(PERSONAS) as SitePersona[]).map((p) => (
                     <button
@@ -473,8 +480,8 @@ export default function WebsiteWizard(props: WizardProps) {
           {step === 1 && (
             <div className="space-y-4">
               <div>
-                <h2 className="text-base font-semibold">Pick a starting point</h2>
-                <p className="text-sm text-muted-foreground">You can fine-tune everything next.</p>
+                <h2 className="text-base font-semibold">Pick a look you like</h2>
+                <p className="text-sm text-muted-foreground">Just a starting point — colors, words, and photos are all yours to change next.</p>
               </div>
               <div className="grid grid-cols-1 gap-3">
                 {ALL_SITE_TEMPLATES.map((t) => (
@@ -503,11 +510,11 @@ export default function WebsiteWizard(props: WizardProps) {
             </div>
           )}
 
-          {step === 2 && (
+          {step === 3 && (
             <div className="space-y-5">
               <div>
-                <h2 className="text-base font-semibold">Make it yours</h2>
-                <p className="text-sm text-muted-foreground">Colors, fonts, and header style.</p>
+                <h2 className="text-base font-semibold">Make it look like yours</h2>
+                <p className="text-sm text-muted-foreground">Colors, fonts, and header style — every choice updates the preview on the right.</p>
               </div>
               <div className="space-y-1.5">
                 <Label>Color palette</Label>
@@ -662,11 +669,11 @@ export default function WebsiteWizard(props: WizardProps) {
             </div>
           )}
 
-          {step === 3 && (
+          {step === 4 && (
             <div className="space-y-4">
               <div>
-                <h2 className="text-base font-semibold">Write your message</h2>
-                <p className="text-sm text-muted-foreground">Speak directly to your audience.</p>
+                <h2 className="text-base font-semibold">Your words</h2>
+                <p className="text-sm text-muted-foreground">Edit anything, or keep what we wrote.</p>
               </div>
               <Field label="Headline">
                 <Input value={draft.content.headline} onChange={(e) => setContent({ headline: e.target.value })} />
@@ -740,13 +747,12 @@ export default function WebsiteWizard(props: WizardProps) {
             </div>
           )}
 
-          {step === 4 && (
+          {step === 2 && (
             <div className="space-y-5">
               <div>
-                <h2 className="text-base font-semibold">Where do you work?</h2>
+                <h2 className="text-base font-semibold">Where do you buy houses?</h2>
                 <p className="text-sm text-muted-foreground">
-                  This sets how your site positions geographically. Nationwide wholesalers aren&apos;t boxed in — pick
-                  Nationwide and your site reaches buyers everywhere.
+                  This helps local buyers find you on Google. Not sure? Pick Anywhere — you can add areas anytime.
                 </p>
               </div>
 
@@ -844,11 +850,15 @@ export default function WebsiteWizard(props: WizardProps) {
           {step === 5 && (
             <div className="space-y-5">
               <div>
-                <h2 className="text-base font-semibold">Your business info</h2>
+                <h2 className="text-base font-semibold">Get set up to text your list</h2>
                 <p className="text-sm text-muted-foreground">
                   We use this to automatically build your Contact page and your Terms of Use and Privacy Policy — what
                   carriers check before approving you to send texts.
                 </p>
+              </div>
+
+              <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+                We add the exact wording carriers require so your texts get delivered, not blocked — this is what gets you 10DLC approved.
               </div>
 
               <div className="grid grid-cols-2 gap-3">
