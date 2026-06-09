@@ -19,10 +19,10 @@ import { siteImage, siteSrcSet } from "@/lib/site-builder/image-url"
 export const siteConfig: Config = {
   root: {
     fields: {
-      primary: { type: "text" },
-      accent: { type: "text" },
-      headingFont: { type: "text" },
-      bodyFont: { type: "text" },
+      primary: { type: "text", label: "Primary color" },
+      accent: { type: "text", label: "Accent color" },
+      headingFont: { type: "text", label: "Heading font" },
+      bodyFont: { type: "text", label: "Body font" },
     },
     defaultProps: {
       primary: "#173b5e",
@@ -55,12 +55,18 @@ export const siteConfig: Config = {
       label: "Nav",
       permissions: { delete: false, drag: false, duplicate: false },
       fields: {
-        brandName: { type: "text" },
-        logoUrl: { type: "text" },
-        phone: { type: "text" },
-        links: { type: "array", arrayFields: { label: { type: "text" }, href: { type: "text" } } },
+        brandName: { type: "text", label: "Business name" },
+        logoUrl: { type: "text", label: "Logo URL" },
+        phone: { type: "text", label: "Phone number" },
+        links: {
+          type: "array",
+          label: "Menu links",
+          arrayFields: { label: { type: "text", label: "Label" }, href: { type: "text", label: "Link" } },
+          getItemSummary: (item: any, i?: number) => item?.label || `Item ${(i ?? 0) + 1}`,
+        },
         layout: {
           type: "select",
+          label: "Header layout",
           options: [
             { label: "Split", value: "split" },
             { label: "Center", value: "center" },
@@ -136,6 +142,7 @@ export const siteConfig: Config = {
       fields: {
         variant: {
           type: "select",
+          label: "Layout",
           options: [
             { label: "Photo", value: "photo" },
             { label: "Centered", value: "centered" },
@@ -143,14 +150,14 @@ export const siteConfig: Config = {
             { label: "Band", value: "band" },
           ],
         },
-        eyebrow: { type: "text" },
-        headline: { type: "textarea" },
-        subhead: { type: "textarea" },
-        stat: { type: "text" },
-        imageUrl: { type: "text" },
-        formTitle: { type: "text" },
-        formSubtitle: { type: "text" },
-        ctaLabel: { type: "text" },
+        eyebrow: { type: "text", label: "Eyebrow tag", contentEditable: true },
+        headline: { type: "textarea", label: "Headline", contentEditable: true },
+        subhead: { type: "textarea", label: "Subheadline", contentEditable: true },
+        stat: { type: "text", label: "Trust badge", contentEditable: true },
+        imageUrl: { type: "text", label: "Background image URL" },
+        formTitle: { type: "text", label: "Form title" },
+        formSubtitle: { type: "text", label: "Form subtitle" },
+        ctaLabel: { type: "text", label: "Button text" },
       },
       defaultProps: {
         variant: "photo",
@@ -455,12 +462,13 @@ export const siteConfig: Config = {
       fields: {
         items: {
           type: "array",
+          label: "Stats",
           arrayFields: {
-            value: { type: "text" },
-            label: { type: "text" },
+            value: { type: "text", label: "Value" },
+            label: { type: "text", label: "Label" },
           },
-          getItemSummary: (item: any) =>
-            [item?.value, item?.label].filter(Boolean).join(" — ") || "Stat",
+          getItemSummary: (item: any, i?: number) =>
+            [item?.value, item?.label].filter(Boolean).join(" — ") || item?.label || `Item ${(i ?? 0) + 1}`,
         },
       },
       defaultProps: {
@@ -535,14 +543,16 @@ export const siteConfig: Config = {
     FeatureGrid: {
       label: "Feature grid",
       fields: {
-        heading: { type: "text" },
+        heading: { type: "text", label: "Section heading", contentEditable: true },
         features: {
           type: "array",
+          label: "Cards",
           arrayFields: {
-            icon: { type: "text" },
-            title: { type: "text" },
-            body: { type: "textarea" },
+            icon: { type: "text", label: "Icon" },
+            title: { type: "text", label: "Title" },
+            body: { type: "textarea", label: "Body" },
           },
+          getItemSummary: (item: any, i?: number) => item?.title || `Item ${(i ?? 0) + 1}`,
         },
       },
       defaultProps: {
@@ -602,9 +612,10 @@ export const siteConfig: Config = {
     AnnouncementBar: {
       label: "Announcement bar",
       fields: {
-        text: { type: "text" },
+        text: { type: "text", label: "Text", contentEditable: true },
         enabled: {
           type: "radio",
+          label: "Show banner",
           options: [
             { label: "Show", value: "show" },
             { label: "Hide", value: "hide" },
@@ -636,13 +647,15 @@ export const siteConfig: Config = {
     HowItWorks: {
       label: "How it works",
       fields: {
-        heading: { type: "text" },
+        heading: { type: "text", label: "Section heading", contentEditable: true },
         steps: {
           type: "array",
+          label: "Steps",
           arrayFields: {
-            title: { type: "text" },
-            body: { type: "textarea" },
+            title: { type: "text", label: "Title" },
+            body: { type: "textarea", label: "Body" },
           },
+          getItemSummary: (item: any, i?: number) => item?.title || `Item ${(i ?? 0) + 1}`,
         },
       },
       defaultProps: {
@@ -695,13 +708,15 @@ export const siteConfig: Config = {
     Testimonials: {
       label: "Testimonials",
       fields: {
-        heading: { type: "text" },
+        heading: { type: "text", label: "Section heading", contentEditable: true },
         reviews: {
           type: "array",
+          label: "Reviews",
           arrayFields: {
-            quote: { type: "textarea" },
-            author: { type: "text" },
+            quote: { type: "textarea", label: "Quote" },
+            author: { type: "text", label: "Author" },
           },
+          getItemSummary: (item: any, i?: number) => item?.quote || item?.author || `Item ${(i ?? 0) + 1}`,
         },
       },
       defaultProps: {
@@ -749,13 +764,15 @@ export const siteConfig: Config = {
     Faq: {
       label: "FAQ",
       fields: {
-        heading: { type: "text" },
+        heading: { type: "text", label: "Section heading", contentEditable: true },
         items: {
           type: "array",
+          label: "Questions",
           arrayFields: {
-            q: { type: "text" },
-            a: { type: "textarea" },
+            q: { type: "text", label: "Question" },
+            a: { type: "textarea", label: "Answer" },
           },
+          getItemSummary: (item: any, i?: number) => item?.q || `Item ${(i ?? 0) + 1}`,
         },
       },
       defaultProps: {
@@ -792,15 +809,19 @@ export const siteConfig: Config = {
     AboutStory: {
       label: "About story",
       fields: {
-        headline: { type: "text" },
-        body: { type: "textarea" },
+        headline: { type: "text", label: "Headline", contentEditable: true },
+        body: { type: "textarea", label: "Body text", contentEditable: true },
         trust: {
           type: "array",
-          arrayFields: { text: { type: "text" } },
+          label: "Trust points",
+          arrayFields: { text: { type: "text", label: "Text" } },
+          getItemSummary: (item: any, i?: number) => item?.text || `Item ${(i ?? 0) + 1}`,
         },
         stats: {
           type: "array",
-          arrayFields: { value: { type: "text" }, label: { type: "text" } },
+          label: "Stats",
+          arrayFields: { value: { type: "text", label: "Value" }, label: { type: "text", label: "Label" } },
+          getItemSummary: (item: any, i?: number) => item?.label || item?.value || `Item ${(i ?? 0) + 1}`,
         },
       },
       defaultProps: {
@@ -866,7 +887,7 @@ export const siteConfig: Config = {
     PropertyGrid: {
       label: "Property grid",
       fields: {
-        heading: { type: "text" },
+        heading: { type: "text", label: "Section heading" },
       },
       defaultProps: { heading: "Recent deals" },
       render: ({ heading }: any) => <DealsSection heading={heading} />,
@@ -876,9 +897,9 @@ export const siteConfig: Config = {
     CtaBand: {
       label: "CTA band",
       fields: {
-        heading: { type: "text" },
-        body: { type: "textarea" },
-        buttonLabel: { type: "text" },
+        heading: { type: "text", label: "Section heading", contentEditable: true },
+        body: { type: "textarea", label: "Body text", contentEditable: true },
+        buttonLabel: { type: "text", label: "Button text", contentEditable: true },
       },
       defaultProps: {
         heading: "Ready for your offer?",
@@ -915,7 +936,7 @@ export const siteConfig: Config = {
     Footer: {
       label: "Footer",
       permissions: { delete: false, drag: false, duplicate: false },
-      fields: { text: { type: "text" } },
+      fields: { text: { type: "text", label: "Text" } },
       defaultProps: { text: "" },
       render: ({ text }: any) => <SiteFooter text={text} />,
     },

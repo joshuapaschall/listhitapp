@@ -77,10 +77,10 @@ export default async function WebsiteOverviewPage({ params }: { params: { id: st
           <h2 className="mb-3 text-sm font-semibold">Quick links</h2>
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="brand">
-              <Link href={`/websites/${site.id}/edit`}>Open site editor</Link>
+              <Link href={`/websites/${site.id}/edit`}>Edit settings</Link>
             </Button>
             <Button asChild variant="outline">
-              <Link href={`/websites/${site.id}/studio`}>Edit content</Link>
+              <Link href={`/websites/${site.id}/studio`}>Edit page</Link>
             </Button>
             <Button asChild variant="outline">
               <Link href={`/websites/${site.id}/analytics`}>Analytics</Link>
