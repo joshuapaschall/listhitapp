@@ -4,6 +4,7 @@ import { getSiteTemplate } from "@/lib/site-builder/templates"
 import { extractContent, applyContentToPuck } from "@/lib/site-builder/compose"
 import { buildAboutPage, buildFaqPage } from "@/lib/site-builder/extra-pages"
 import { slugifySiteName, isReservedSlug } from "@/lib/site-builder/slug"
+import { addProjectDomain, vercelConfigured } from "@/lib/vercel/domains"
 
 // Backend data layer for the website builder.
 //
@@ -353,6 +354,22 @@ export class SiteService {
       .select("*")
       .single()
     if (domainError) throw new Error(domainError.message)
+
+    // Register the subdomain with Vercel so it gets a TLS cert and routes to the app.
+    // Best-effort: the site is already published; a Vercel hiccup must NOT fail publish,
+    // and an already-registered domain is a success (publish is idempotent / re-runnable).
+    if (vercelConfigured()) {
+      try {
+        await addProjectDomain(domain)
+      } catch (e: any) {
+        const status = e?.status
+        const alreadyExists =
+          status === 409 || /already|exists|in use/i.test(e?.message || "")
+        if (!alreadyExists) {
+          console.error(`[publish] Vercel domain registration failed for ${domain}: ${e?.message || e}`)
+        }
+      }
+    }
 
     return { site, subdomain }
   }
