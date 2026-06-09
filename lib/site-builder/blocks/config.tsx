@@ -53,6 +53,7 @@ export const siteConfig: Config = {
     // -----------------------------------------------------------------------
     Nav: {
       label: "Nav",
+      permissions: { delete: false, drag: false, duplicate: false },
       fields: {
         brandName: { type: "text" },
         logoUrl: { type: "text" },
@@ -131,6 +132,7 @@ export const siteConfig: Config = {
     // -----------------------------------------------------------------------
     Hero: {
       label: "Hero",
+      permissions: { delete: false, drag: false, duplicate: false },
       fields: {
         variant: {
           type: "select",
@@ -912,6 +914,7 @@ export const siteConfig: Config = {
     // -----------------------------------------------------------------------
     Footer: {
       label: "Footer",
+      permissions: { delete: false, drag: false, duplicate: false },
       fields: { text: { type: "text" } },
       defaultProps: { text: "" },
       render: ({ text }: any) => <SiteFooter text={text} />,
