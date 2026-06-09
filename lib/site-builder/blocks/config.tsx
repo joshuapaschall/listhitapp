@@ -597,6 +597,196 @@ export const siteConfig: Config = {
     },
 
     // -----------------------------------------------------------------------
+    AnnouncementBar: {
+      label: "Announcement bar",
+      fields: {
+        text: { type: "text" },
+        enabled: {
+          type: "radio",
+          options: [
+            { label: "Show", value: "show" },
+            { label: "Hide", value: "hide" },
+          ],
+        },
+      },
+      defaultProps: { text: "", enabled: "show" },
+      render: ({ text, enabled }: any) => {
+        if (enabled !== "show" || !text) return <></>
+        return (
+          <div
+            style={{
+              background: "var(--a)",
+              color: "#3a2700",
+              textAlign: "center",
+              fontFamily: "var(--body)",
+              fontSize: 13,
+              fontWeight: 600,
+              padding: "8px 16px",
+            }}
+          >
+            {text}
+          </div>
+        )
+      },
+    },
+
+    // -----------------------------------------------------------------------
+    HowItWorks: {
+      label: "How it works",
+      fields: {
+        heading: { type: "text" },
+        steps: {
+          type: "array",
+          arrayFields: {
+            title: { type: "text" },
+            body: { type: "textarea" },
+          },
+        },
+      },
+      defaultProps: {
+        heading: "How it works",
+        steps: [
+          { title: "Join the list", body: "Tell us what you're looking for — it's free." },
+          { title: "Get matched", body: "We send the deals that fit, by text and email." },
+          { title: "Move first", body: "Reply to claim it and we take it from there." },
+        ],
+      },
+      render: ({ heading, steps }: any) => (
+        <section id="how-it-works" style={{ background: "#fff" }}>
+          <div style={{ ...WRAP, padding: "64px 24px" }}>
+            {heading && (
+              <h2 className="lh-h2" style={{ ...HEADING, fontSize: 32, fontWeight: 800, color: "var(--p)", textAlign: "center", margin: "0 0 36px" }}>
+                {heading}
+              </h2>
+            )}
+            <div className="lh-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 22 }}>
+              {(steps || []).map((s: any, i: number) => (
+                <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 10 }}>
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: 40,
+                      height: 40,
+                      borderRadius: 999,
+                      background: "var(--p)",
+                      color: "#fff",
+                      fontFamily: "var(--head)",
+                      fontWeight: 800,
+                      fontSize: 18,
+                    }}
+                  >
+                    {i + 1}
+                  </span>
+                  <div style={{ fontFamily: "var(--head)", fontWeight: 700, fontSize: 18, color: "#0f1b29" }}>{s?.title}</div>
+                  <div style={{ fontFamily: "var(--body)", fontSize: 15, lineHeight: 1.55, color: "#5a6675" }}>{s?.body}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      ),
+    },
+
+    // -----------------------------------------------------------------------
+    Testimonials: {
+      label: "Testimonials",
+      fields: {
+        heading: { type: "text" },
+        reviews: {
+          type: "array",
+          arrayFields: {
+            quote: { type: "textarea" },
+            author: { type: "text" },
+          },
+        },
+      },
+      defaultProps: {
+        heading: "What buyers say",
+        reviews: [
+          { quote: "Closed a deal from this list in my first month — the numbers were real.", author: "Marcus T." },
+          { quote: "Finally a list that sends actual deals, not junk.", author: "Dana K." },
+          { quote: "The only buyer list I actually read now.", author: "Priya R." },
+        ],
+      },
+      render: ({ heading, reviews }: any) => (
+        <section id="reviews" style={{ background: "#f7f8fa" }}>
+          <div style={{ ...WRAP, padding: "64px 24px" }}>
+            {heading && (
+              <h2 className="lh-h2" style={{ ...HEADING, fontSize: 32, fontWeight: 800, color: "var(--p)", textAlign: "center", margin: "0 0 36px" }}>
+                {heading}
+              </h2>
+            )}
+            <div className="lh-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 22 }}>
+              {(reviews || []).map((r: any, i: number) => (
+                <div
+                  key={i}
+                  style={{
+                    background: "#fff",
+                    border: "1px solid #eef1f5",
+                    borderRadius: 16,
+                    padding: 24,
+                    boxShadow: "0 8px 24px rgba(16,27,41,.05)",
+                  }}
+                >
+                  <div style={{ color: "var(--a)", fontSize: 16, letterSpacing: 2, marginBottom: 12 }}>★★★★★</div>
+                  <div style={{ fontFamily: "var(--body)", fontSize: 15, lineHeight: 1.6, color: "#2c3744" }}>{r?.quote}</div>
+                  {r?.author ? (
+                    <div style={{ marginTop: 14, fontFamily: "var(--head)", fontWeight: 700, fontSize: 14, color: "var(--p)" }}>— {r.author}</div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      ),
+    },
+
+    // -----------------------------------------------------------------------
+    Faq: {
+      label: "FAQ",
+      fields: {
+        heading: { type: "text" },
+        items: {
+          type: "array",
+          arrayFields: {
+            q: { type: "text" },
+            a: { type: "textarea" },
+          },
+        },
+      },
+      defaultProps: {
+        heading: "Questions & answers",
+        items: [
+          { q: "Is it free to join?", a: "Yes — free to join, no obligation." },
+          { q: "How do I get off the list?", a: "Reply STOP to any text and you're out instantly." },
+        ],
+      },
+      render: ({ heading, items }: any) => (
+        <section style={{ background: "#fff" }}>
+          <div style={{ ...WRAP, padding: "64px 24px", maxWidth: 820 }}>
+            {heading && (
+              <h2 className="lh-h2" style={{ ...HEADING, fontSize: 32, fontWeight: 800, color: "var(--p)", textAlign: "center", margin: "0 0 32px" }}>
+                {heading}
+              </h2>
+            )}
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {(items || []).map((it: any, i: number) => (
+                <details key={i} style={{ borderBottom: "1px solid #eef1f5", padding: "10px 0" }}>
+                  <summary style={{ cursor: "pointer", fontFamily: "var(--head)", fontWeight: 700, fontSize: 16, color: "var(--p)", listStyle: "none" }}>
+                    {it?.q}
+                  </summary>
+                  <div style={{ marginTop: 10, fontFamily: "var(--body)", fontSize: 15, lineHeight: 1.6, color: "#5a6675" }}>{it?.a}</div>
+                </details>
+              ))}
+            </div>
+          </div>
+        </section>
+      ),
+    },
+
+    // -----------------------------------------------------------------------
     PropertyGrid: {
       label: "Property grid",
       fields: {

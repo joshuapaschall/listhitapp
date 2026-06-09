@@ -1,7 +1,7 @@
 import type { Data } from "@measured/puck"
 import type { SitePersona } from "../types"
 import type { SiteTemplateDef } from "./types"
-import { PERSONAS } from "./personas"
+import { PERSONAS, PLACEHOLDER_REVIEWS } from "./personas"
 
 const PRIMARY = "#1f5d4c"
 const ACCENT = "#d98c2b"
@@ -13,13 +13,21 @@ function build(persona: SitePersona): Data {
     root: { props: { primary: PRIMARY, accent: ACCENT, headingFont: HEADING_FONT } },
     content: [
       {
+        type: "AnnouncementBar",
+        props: { id: "AnnouncementBar-cedar", text: c.announcement, enabled: "hide" },
+      },
+      {
         type: "Nav",
         props: {
           id: "Nav-cedar",
           brandName: "Your Company",
           logoUrl: "",
           phone: "(555) 555-5555",
-          links: [{ label: "How it works" }, { label: "Reviews" }, { label: "Contact" }],
+          links: [
+            { label: "How it works", href: "#how-it-works" },
+            { label: "Reviews", href: "#reviews" },
+            { label: "Contact", href: "/contact" },
+          ],
           layout: "center",
         },
       },
@@ -54,7 +62,19 @@ function build(persona: SitePersona): Data {
         type: "FeatureGrid",
         props: { id: "FeatureGrid-cedar", heading: "How it works", features: c.features },
       },
+      {
+        type: "HowItWorks",
+        props: { id: "HowItWorks-cedar", heading: "How it works", steps: c.howItWorks },
+      },
       { type: "PropertyGrid", props: { id: "PropertyGrid-cedar", heading: "Recent deals" } },
+      {
+        type: "Testimonials",
+        props: { id: "Testimonials-cedar", heading: "What buyers say", reviews: PLACEHOLDER_REVIEWS },
+      },
+      {
+        type: "Faq",
+        props: { id: "Faq-cedar", heading: "Questions & answers", items: c.faqs },
+      },
       {
         type: "CtaBand",
         props: { id: "CtaBand-cedar", heading: "Let's get started", body: c.subhead, buttonLabel: c.bannerCta },

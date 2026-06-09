@@ -1,7 +1,7 @@
 import type { Data } from "@measured/puck"
 import type { SitePersona } from "../types"
 import type { SiteTemplateDef } from "./types"
-import { PERSONAS } from "./personas"
+import { PERSONAS, PLACEHOLDER_REVIEWS } from "./personas"
 
 const PRIMARY = "#0f2a43"
 const ACCENT = "#f0a500"
@@ -13,13 +13,21 @@ function build(persona: SitePersona): Data {
     root: { props: { primary: PRIMARY, accent: ACCENT, headingFont: HEADING_FONT } },
     content: [
       {
+        type: "AnnouncementBar",
+        props: { id: "AnnouncementBar-oak", text: c.announcement, enabled: "show" },
+      },
+      {
         type: "Nav",
         props: {
           id: "Nav-oak",
           brandName: "Your Company",
           logoUrl: "",
           phone: "(555) 555-5555",
-          links: [{ label: "How it works" }, { label: "Reviews" }, { label: "Contact" }],
+          links: [
+            { label: "How it works", href: "#how-it-works" },
+            { label: "Reviews", href: "#reviews" },
+            { label: "Contact", href: "/contact" },
+          ],
           layout: "stack",
         },
       },
@@ -54,7 +62,19 @@ function build(persona: SitePersona): Data {
         type: "FeatureGrid",
         props: { id: "FeatureGrid-oak", heading: "The simple way to sell", features: c.features },
       },
+      {
+        type: "HowItWorks",
+        props: { id: "HowItWorks-oak", heading: "How it works", steps: c.howItWorks },
+      },
       { type: "PropertyGrid", props: { id: "PropertyGrid-oak", heading: "Recent deals" } },
+      {
+        type: "Testimonials",
+        props: { id: "Testimonials-oak", heading: "What buyers say", reviews: PLACEHOLDER_REVIEWS },
+      },
+      {
+        type: "Faq",
+        props: { id: "Faq-oak", heading: "Questions & answers", items: c.faqs },
+      },
       {
         type: "CtaBand",
         props: { id: "CtaBand-oak", heading: "Your offer is waiting", body: c.subhead, buttonLabel: c.bannerCta },
