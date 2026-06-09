@@ -35,6 +35,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     markets?: Partial<SiteMarkets>
     blockPatches?: BlockPatch[]
     tracking?: Record<string, unknown>
+    deals_public?: boolean
   }
   try {
     body = await request.json()
@@ -76,6 +77,14 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         .eq("id", id)
         .eq("org_id", orgId)
       if (trackErr) throw new Error(trackErr.message)
+    }
+    if (typeof body.deals_public === "boolean") {
+      const { error: dpErr } = await supabase
+        .from("sites")
+        .update({ deals_public: body.deals_public })
+        .eq("org_id", orgId)
+        .eq("id", id)
+      if (dpErr) return NextResponse.json({ error: dpErr.message }, { status: 400 })
     }
 
     const result = await SiteService.get(supabase, orgId, id)

@@ -7,6 +7,7 @@ import { loadOwnedSite } from "@/lib/websites/load-owned-site"
 import { SiteHubNav } from "@/components/websites/site-hub-nav"
 import { SiteDangerZone } from "@/components/websites/site-danger-zone"
 import { CustomDomainCard } from "@/components/websites/custom-domain-card"
+import { DealVisibilityCard } from "@/components/websites/deal-visibility-card"
 
 export const dynamic = "force-dynamic"
 
@@ -20,7 +21,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 export default async function WebsiteSettingsPage({ params }: { params: { id: string } }) {
-  const { site } = await loadOwnedSite(params.id, "id,name,slug,status")
+  const { site } = await loadOwnedSite(params.id, "id,name,slug,status,deals_public")
   const published = site.status === "published"
   const domain = `${site.slug}.listhit.io`
 
@@ -53,6 +54,8 @@ export default async function WebsiteSettingsPage({ params }: { params: { id: st
             </Button>
           </div>
         </Card>
+
+        <DealVisibilityCard siteId={site.id} initialPublic={site.deals_public !== false} />
 
         <Card className="p-5">
           <h2 className="mb-3 text-sm font-semibold">Danger zone</h2>

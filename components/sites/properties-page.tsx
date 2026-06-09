@@ -33,6 +33,7 @@ export function PropertiesPage({
   // sites link each card to its (indexable) detail page — detail pages 404 when
   // deals_public is off, so the unlocked-but-gated funnel must not link out.
   const showFull = publicMode || unlocked
+  const filtersActive = !!filters && (filters.beds !== "0" || filters.baths !== "0" || filters.terms !== "any")
   const footerLinks = [
     { label: "Home", href: "/" },
     { label: "Contact", href: "/contact" },
@@ -85,7 +86,11 @@ export function PropertiesPage({
                   ))}
                 </div>
               ) : (
-                <p style={{ fontSize: 15, color: "#5a6675" }}>No deals available right now — check back soon.</p>
+                <p style={{ fontSize: 15, color: "#5a6675" }}>
+                  {filtersActive
+                    ? "No deals match these filters — try widening your search."
+                    : "No deals available right now — check back soon."}
+                </p>
               )}
             </>
           ) : (
