@@ -125,3 +125,46 @@ export function injectBlogNavLink(puckData: any): any {
   data.content = content
   return data
 }
+
+export interface NavPage {
+  path: string
+  nav_label: string
+  sort_order: number
+}
+
+// Enabled, nav-labeled sub-pages (excluding the home "/"), ordered for the nav.
+export async function getNavPages(siteId: string): Promise<NavPage[]> {
+  const { data } = await supabaseAdmin
+    .from("site_pages")
+    .select("path, nav_label, sort_order")
+    .eq("site_id", siteId)
+    .eq("enabled", true)
+    .not("nav_label", "is", null)
+    .neq("path", "/")
+    .order("sort_order", { ascending: true })
+  return (data || []) as NavPage[]
+}
+
+// Inject nav links for enabled pages, mirroring injectBlogNavLink. Each link is
+// inserted before the existing "/contact" link when present, else appended.
+// Idempotent: skips any href already in the nav.
+export function injectPageNavLinks(puckData: any, pages: NavPage[]): any {
+  const data = { ...(puckData || {}) }
+  const content = Array.isArray(data.content) ? data.content.map((b: any) => ({ ...b })) : []
+  const nav = content.find((b: any) => b?.type === "Nav")
+  if (nav && Array.isArray(pages) && pages.length) {
+    const links = Array.isArray(nav.props?.links) ? [...nav.props.links] : []
+    const norm = (h: any) => (h || "").replace(/\/$/, "")
+    const contactIdx = links.findIndex((l: any) => norm(l?.href) === "/contact")
+    let insertAt = contactIdx >= 0 ? contactIdx : links.length
+    for (const p of pages) {
+      if (!p?.nav_label || !p?.path) continue
+      if (links.some((l: any) => norm(l?.href) === norm(p.path))) continue
+      links.splice(insertAt, 0, { label: p.nav_label, href: p.path })
+      insertAt++
+    }
+    nav.props = { ...(nav.props || {}), links }
+  }
+  data.content = content
+  return data
+}
