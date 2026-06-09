@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { loadOwnedSite } from "@/lib/websites/load-owned-site"
 import { SiteHubNav } from "@/components/websites/site-hub-nav"
 import { SiteDangerZone } from "@/components/websites/site-danger-zone"
+import { CustomDomainCard } from "@/components/websites/custom-domain-card"
 
 export const dynamic = "force-dynamic"
 
@@ -39,16 +40,7 @@ export default async function WebsiteSettingsPage({ params }: { params: { id: st
           </Field>
         </Card>
 
-        <Card className="p-5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold">Custom domain</h2>
-            <Badge variant="secondary">Coming soon</Badge>
-          </div>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Connecting your own domain (e.g. yourbrand.com) is coming in a future update. For now your site lives at{" "}
-            <span className="font-mono text-xs">{domain}</span>.
-          </p>
-        </Card>
+        <CustomDomainCard siteId={site.id} slug={site.slug} />
 
         <Card className="p-5">
           <h2 className="mb-2 text-sm font-semibold">Branding &amp; tracking</h2>
