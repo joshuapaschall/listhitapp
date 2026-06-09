@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, ArrowRight, Check, ExternalLink, Eye, Loader2, Upload, X } from "lucide-react"
+import { ArrowLeft, ArrowRight, Check, Copy, ExternalLink, Eye, Loader2, Upload, X } from "lucide-react"
 import { supabaseBrowser } from "@/lib/supabase-browser"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -13,6 +13,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { cn } from "@/lib/utils"
 import { SitePreview } from "@/components/websites/site-preview"
+import { CustomDomainCard } from "@/components/websites/custom-domain-card"
 import { CURATED_HERO_IMAGES, extractContent, type WizardContent } from "@/lib/site-builder/compose"
 import { ALL_SITE_TEMPLATES } from "@/lib/site-builder/templates"
 import { PERSONAS, getPersona } from "@/lib/site-builder/templates"
@@ -112,6 +113,7 @@ export default function WebsiteWizard(props: WizardProps) {
   const [loading, setLoading] = useState(isEdit)
   const [error, setError] = useState("")
   const [published, setPublished] = useState(false)
+  const [copiedLive, setCopiedLive] = useState(false)
   const [mobilePreview, setMobilePreview] = useState(false)
   const [pages, setPages] = useState<{ path: string; nav_label: string; enabled: boolean }[]>([])
 
@@ -1075,37 +1077,60 @@ export default function WebsiteWizard(props: WizardProps) {
                       "Publish website"
                     )}
                   </Button>
-                  {siteId && (
-                    <p className="text-xs text-muted-foreground">
-                      Want to use your own domain? You can connect it in{" "}
-                      <Link href={`/websites/${siteId}/settings`} className="font-medium text-brand hover:underline">
-                        site settings
-                      </Link>{" "}
-                      after publishing.
-                    </p>
-                  )}
                 </>
               ) : (
-                <div className="space-y-4 text-center">
-                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-brand/10">
-                    <Check className="h-6 w-6 text-brand" />
+                <div className="space-y-6">
+                  <div className="space-y-3 text-center">
+                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-brand/10">
+                      <Check className="h-6 w-6 text-brand" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-semibold">Your website is live</h2>
+                      <p className="text-sm text-muted-foreground">Share your link, or connect your own domain below.</p>
+                    </div>
+                    {liveUrl && (
+                      <div className="flex items-center justify-center gap-2">
+                        <a
+                          href={liveUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 text-sm font-medium text-brand hover:underline"
+                        >
+                          {liveUrl.replace("https://", "")}
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 gap-1.5"
+                          onClick={() => {
+                            navigator.clipboard?.writeText(liveUrl).catch(() => {})
+                            setCopiedLive(true)
+                            setTimeout(() => setCopiedLive(false), 1500)
+                          }}
+                        >
+                          {copiedLive ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                          {copiedLive ? "Copied" : "Copy"}
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <h2 className="text-base font-semibold">Your website is live</h2>
-                    <p className="text-sm text-muted-foreground">It may take a moment to propagate.</p>
-                  </div>
-                  {liveUrl && (
-                    <a
-                      href={liveUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 text-sm font-medium text-brand hover:underline"
-                    >
-                      {liveUrl.replace("https://", "")}
-                      <ExternalLink className="h-3.5 w-3.5" />
-                    </a>
+
+                  {siteId && (
+                    <div className="space-y-2 text-left">
+                      <div>
+                        <h3 className="text-sm font-semibold">Use your own domain (optional)</h3>
+                        <p className="text-xs text-muted-foreground">
+                          Connect a domain like yourcompany.com. Add it, drop in the DNS record we show you, and we&apos;ll
+                          flip it to Connected automatically once it&apos;s pointing here.
+                        </p>
+                      </div>
+                      <CustomDomainCard siteId={siteId} slug={slug} />
+                    </div>
                   )}
-                  <div>
+
+                  <div className="text-center">
                     <Button asChild variant="brand">
                       <Link href="/websites">Done</Link>
                     </Button>
