@@ -8,15 +8,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { cn } from "@/lib/utils"
-import type { EntityType, VerificationFormState } from "@/lib/business-verification/types"
+import type { VerificationFormState } from "@/lib/business-verification/types"
 
 const EIN_RE = /^\d{2}-?\d{7}$/
 const EIN_LETTER_TYPES = ["application/pdf", "image/png", "image/jpeg"]
 
 const EMPTY: VerificationFormState = {
-  entity_type: null,
   legal_business_name: "",
   ein: "",
   dba_name: "",
@@ -78,7 +75,6 @@ export function VerifyBusinessForm() {
         if (!active) return
         const businessName: string = data.business_name || ""
         set({
-          entity_type: data.entity_type ?? null,
           legal_business_name: data.legal_business_name || businessName,
           ein: data.ein || "",
           dba_name: data.dba_name || businessName,
@@ -104,15 +100,12 @@ export function VerifyBusinessForm() {
     }
   }, [])
 
-  const isEin = form.entity_type === "ein_business"
-  const isSole = form.entity_type === "sole_proprietor"
   const einValid = EIN_RE.test(form.ein.trim())
 
   function computeMissing(): string[] {
     const m: string[] = []
-    if (!form.entity_type) m.push("Business type")
     if (!form.legal_business_name.trim()) m.push("Legal business name")
-    if (isEin && !einValid) m.push("A valid EIN")
+    if (!einValid) m.push("A valid EIN")
     if (!form.contact_first_name.trim()) m.push("Contact first name")
     if (!form.contact_last_name.trim()) m.push("Contact last name")
     if (!form.contact_email.trim()) m.push("Contact email")
@@ -205,7 +198,7 @@ export function VerifyBusinessForm() {
         </button>
         <h1 className="mt-3 text-lg font-semibold text-foreground">Verify your business</h1>
         <p className="text-sm text-muted-foreground">
-          Carriers need this to approve business texting. EIN or sole proprietor — nobody gets stuck.
+          Carriers need this to approve business texting. Your EIN unlocks the highest sending limits.
         </p>
       </div>
 
@@ -216,46 +209,7 @@ export function VerifyBusinessForm() {
         </Alert>
       ) : null}
 
-      {/* Branch selector */}
-      <div className="space-y-2">
-        <SectionHeader>How is your business set up?</SectionHeader>
-        <RadioGroup
-          value={form.entity_type ?? ""}
-          onValueChange={(v) => set({ entity_type: v as EntityType })}
-          className="grid grid-cols-1 gap-3 sm:grid-cols-2"
-        >
-          {[
-            { v: "ein_business", title: "Registered business", desc: "LLC, corp, etc. — verified by EIN." },
-            { v: "sole_proprietor", title: "Sole proprietor", desc: "No EIN — verified by text." },
-          ].map((opt) => {
-            const active = form.entity_type === opt.v
-            return (
-              <label
-                key={opt.v}
-                className={cn(
-                  "flex cursor-pointer items-start gap-3 rounded-lg border p-3.5",
-                  active ? "border-2 border-brand bg-card" : "border-border bg-card hover:bg-muted/40",
-                )}
-              >
-                <RadioGroupItem value={opt.v} className={cn("mt-0.5", active && "border-brand text-brand")} />
-                <span>
-                  <span className="block text-sm font-medium text-foreground">{opt.title}</span>
-                  <span className="block text-xs text-muted-foreground">{opt.desc}</span>
-                </span>
-              </label>
-            )
-          })}
-        </RadioGroup>
-        {isSole ? (
-          <p className="text-xs text-muted-foreground">
-            We&apos;ll verify by texting a code to your business phone — no EIN needed.
-          </p>
-        ) : null}
-      </div>
-
-      {form.entity_type ? (
-        <>
-          {/* Your business */}
+      {/* Your business */}
           <div className="space-y-3">
             <SectionHeader>Your business</SectionHeader>
             <Field label="Legal business name" helper="Match your CP-575 exactly.">
@@ -264,25 +218,36 @@ export function VerifyBusinessForm() {
                 onChange={(e) => set({ legal_business_name: e.target.value })}
               />
             </Field>
-            {isEin ? (
-              <Field label="EIN" helper="The carrier confirms this matches your IRS records.">
-                <Input
-                  value={form.ein}
-                  onChange={(e) => set({ ein: e.target.value })}
-                  placeholder="12-3456789"
-                  inputMode="numeric"
-                />
-                {form.ein.trim() ? (
-                  einValid ? (
-                    <p className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
-                      <Check className="h-3.5 w-3.5" /> Format looks right.
-                    </p>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">Enter 9 digits, like 12-3456789.</p>
-                  )
-                ) : null}
-              </Field>
-            ) : null}
+            <Field label="EIN" helper="Enter it exactly as it appears on your CP-575.">
+              <Input
+                value={form.ein}
+                onChange={(e) => set({ ein: e.target.value })}
+                placeholder="12-3456789"
+                inputMode="numeric"
+              />
+              {form.ein.trim() ? (
+                einValid ? (
+                  <p className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+                    <Check className="h-3.5 w-3.5" /> Format looks right.
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Enter 9 digits, like 12-3456789.</p>
+                )
+              ) : null}
+              <p className="text-xs text-muted-foreground">
+                No EIN yet? It&apos;s free and takes about 10 minutes from the IRS — and it unlocks much higher
+                texting limits than going without one.{" "}
+                <a
+                  href="https://www.irs.gov/businesses/small-businesses-self-employed/apply-for-an-employer-identification-number-ein-online"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium text-brand hover:underline"
+                >
+                  Get one
+                </a>
+                , then finish this step.
+              </p>
+            </Field>
             <Field label="DBA / brand name" helper="The name buyers will see.">
               <Input value={form.dba_name} onChange={(e) => set({ dba_name: e.target.value })} />
             </Field>
@@ -341,10 +306,9 @@ export function VerifyBusinessForm() {
             </Field>
           </div>
 
-          {/* Proof — optional (EIN path only) */}
-          {isEin ? (
-            <div className="space-y-3">
-              <SectionHeader>Proof — optional</SectionHeader>
+          {/* Proof — optional */}
+          <div className="space-y-3">
+            <SectionHeader>Proof — optional</SectionHeader>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -385,9 +349,8 @@ export function VerifyBusinessForm() {
                 </button>
               )}
             </div>
-          ) : null}
 
-          {missing.length ? (
+          {missing.length > 0 ? (
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
@@ -410,8 +373,6 @@ export function VerifyBusinessForm() {
               </Button>
             </div>
           </div>
-        </>
-      ) : null}
     </div>
   )
 }

@@ -8,7 +8,6 @@ import type {
   VerificationStatus,
 } from "@/lib/business-verification/types"
 
-const ENTITY_TYPES: EntityType[] = ["ein_business", "sole_proprietor"]
 
 function s(v: unknown): string {
   return typeof v === "string" ? v.trim() : ""
@@ -44,7 +43,6 @@ export async function getVerification(orgId: string): Promise<VerificationMerged
   const businessName = s(org?.business_name)
 
   return {
-    entity_type: (row?.entity_type as EntityType | null) ?? null,
     legal_business_name: s(row?.legal_business_name),
     ein: s(row?.ein),
     dba_name: s(row?.dba_name),
@@ -72,19 +70,16 @@ export interface SaveResult {
 export async function saveVerification(orgId: string, payload: unknown): Promise<SaveResult> {
   const body = (payload && typeof payload === "object" ? payload : {}) as Record<string, unknown>
 
-  const entityType = s(body.entity_type) as EntityType
-  if (!ENTITY_TYPES.includes(entityType)) return { ok: false, error: "Invalid entity type" }
+  // Standardized on the EIN (Standard / Low-Volume Standard) path for v1 —
+  // entity_type is always ein_business. The column stays for future use.
+  const entityType: EntityType = "ein_business"
 
   // Never accept/store an SSN — drop the field entirely if a client sends one.
   // (No `ssn` / `social_security` is ever read from the body.)
 
-  // EIN only applies to registered businesses; sole proprietors store null.
-  let ein: string | null = null
-  if (entityType === "ein_business") {
-    const parsed = normalizeEin(s(body.ein))
-    if (!parsed.ok) return { ok: false, error: "EIN must be 9 digits (XX-XXXXXXX)" }
-    ein = parsed.value
-  }
+  const parsed = normalizeEin(s(body.ein))
+  if (!parsed.ok) return { ok: false, error: "EIN must be 9 digits (XX-XXXXXXX)" }
+  const ein = parsed.value
 
   const legalBusinessName = s(body.legal_business_name)
   const dbaName = s(body.dba_name)
@@ -110,9 +105,9 @@ export async function saveVerification(orgId: string, payload: unknown): Promise
     isNonEmpty(city) &&
     isNonEmpty(state) &&
     isNonEmpty(zip) &&
-    isNonEmpty(phone)
-  const einComplete = entityType === "ein_business" ? !!ein : true
-  const status: VerificationStatus = baseComplete && einComplete ? "ready" : "draft"
+    isNonEmpty(phone) &&
+    !!ein
+  const status: VerificationStatus = baseComplete ? "ready" : "draft"
 
   const now = new Date().toISOString()
   const { error: upsertErr } = await supabaseAdmin.from("business_verification").upsert(

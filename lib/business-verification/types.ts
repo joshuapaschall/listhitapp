@@ -24,7 +24,6 @@ export interface BusinessVerification {
 // Shape the client form works with: verification fields + the org-sourced
 // address/phone fields (the organization remains the single source of truth).
 export interface VerificationFormState {
-  entity_type: EntityType | null
   legal_business_name: string
   ein: string
   dba_name: string
