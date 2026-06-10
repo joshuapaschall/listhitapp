@@ -71,23 +71,6 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   return <div style={{ fontSize: 13.5, fontWeight: 600, color: "#0f1b29", marginTop: 16 }}>{children}</div>
 }
 
-// Render the opt-in disclosure with the trailing "Terms of Use and Privacy
-// Policy" turned into real links.
-function renderDisclosure(text: string, terms: string, privacy: string): React.ReactNode {
-  const marker = "Terms of Use and Privacy Policy"
-  const idx = text.lastIndexOf(marker)
-  if (idx < 0) return text
-  const linkStyle: React.CSSProperties = { color: "var(--p)", textDecoration: "underline" }
-  return (
-    <>
-      {text.slice(0, idx)}
-      <a href={terms} style={linkStyle}>Terms of Use</a>
-      {" and "}
-      <a href={privacy} style={linkStyle}>Privacy Policy</a>
-    </>
-  )
-}
-
 // Two-step buyer lead form. Step 1 captures contact + TCPA consent and posts to
 // the public signup endpoint; Step 2 captures persona-driven qualification and
 // dedup-merges into the same buyer. Posts same-origin; org is resolved by the
@@ -126,7 +109,10 @@ export function LeadForm({
   const [lname, setLname] = useState("")
   const [phone, setPhone] = useState("")
   const [email, setEmail] = useState("")
-  const [consent, setConsent] = useState(false) // TCPA: always starts UNCHECKED
+  // Two-checkbox TCPA consent — both ALWAYS start unchecked, never pre-checked,
+  // and never block submission.
+  const [marketingConsent, setMarketingConsent] = useState(false)
+  const [nonMarketingConsent, setNonMarketingConsent] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
 
@@ -171,9 +157,11 @@ export function LeadForm({
       lname: lname || undefined,
       email,
       phone,
-      // consent_text is always the generated disclosure (endpoint requires >=50
-      // chars) — sent even when the visible checkbox is disabled.
-      consent_text: form.disclosure,
+      // consent_text reflects the marketing disclosure shown (endpoint requires
+      // >=50 chars); the two booleans record which boxes the visitor checked.
+      consent_text: form.consentMarketing || form.disclosure,
+      marketing_consent: marketingConsent,
+      nonmarketing_consent: nonMarketingConsent,
       source_url: typeof window !== "undefined" ? window.location.href : undefined,
     }
   }
@@ -194,15 +182,16 @@ export function LeadForm({
     }
   }
 
+  // Consent is NEVER required to submit — the two checkboxes are optional and
+  // only record opt-in preference.
   const contactValid =
     fname.trim().length > 0 &&
     phone.trim().length > 0 &&
-    email.trim().length > 0 &&
-    (!form.requireConsent || consent)
+    email.trim().length > 0
 
   async function submitContact() {
     if (!contactValid) {
-      setError("Please add your name, phone, and email" + (form.requireConsent ? ", and agree to the terms." : "."))
+      setError("Please add your name, phone, and email.")
       return
     }
     setSubmitting(true)
@@ -444,29 +433,35 @@ export function LeadForm({
         <input style={{ ...fieldStyle, gridColumn: inline ? "1 / -1" : undefined }} placeholder="Email" aria-label="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
       </div>
 
-      {form.optinEnabled && form.disclosure && (
-        <div style={{ marginTop: 12 }}>
-          {form.requireConsent && (
-            <label style={{ display: "flex", gap: 8, alignItems: "flex-start", cursor: "pointer" }}>
-              <input
-                type="checkbox"
-                checked={consent}
-                onChange={(e) => setConsent(e.target.checked)}
-                style={{ marginTop: 3 }}
-                aria-label="Agree to receive text messages"
-              />
-              <span style={{ fontSize: 11.5, color: "#5a6675", lineHeight: 1.45 }}>
-                {renderDisclosure(form.disclosure, form.legalPaths.terms, form.legalPaths.privacy)}
-              </span>
-            </label>
-          )}
-          {!form.requireConsent && (
-            <div style={{ fontSize: 11.5, color: "#5a6675", lineHeight: 1.45 }}>
-              {renderDisclosure(form.disclosure, form.legalPaths.terms, form.legalPaths.privacy)}
-            </div>
-          )}
+      {/* Carrier-required two-checkbox consent: always shown, never pre-checked,
+          optional (does not block submit). */}
+      <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+        <label style={{ display: "flex", gap: 8, alignItems: "flex-start", cursor: "pointer" }}>
+          <input
+            type="checkbox"
+            checked={marketingConsent}
+            onChange={(e) => setMarketingConsent(e.target.checked)}
+            style={{ marginTop: 3 }}
+            aria-label="Agree to receive marketing text messages"
+          />
+          <span style={{ fontSize: 11.5, color: "#5a6675", lineHeight: 1.45 }}>{form.consentMarketing}</span>
+        </label>
+        <label style={{ display: "flex", gap: 8, alignItems: "flex-start", cursor: "pointer" }}>
+          <input
+            type="checkbox"
+            checked={nonMarketingConsent}
+            onChange={(e) => setNonMarketingConsent(e.target.checked)}
+            style={{ marginTop: 3 }}
+            aria-label="Agree to receive non-marketing text messages"
+          />
+          <span style={{ fontSize: 11.5, color: "#5a6675", lineHeight: 1.45 }}>{form.consentNonMarketing}</span>
+        </label>
+        <div style={{ fontSize: 11.5, color: "#5a6675", lineHeight: 1.45 }}>
+          <a href={form.legalPaths.terms} style={{ color: "var(--p)", textDecoration: "underline" }}>Terms of Use</a>
+          {" and "}
+          <a href={form.legalPaths.privacy} style={{ color: "var(--p)", textDecoration: "underline" }}>Privacy Policy</a>
         </div>
-      )}
+      </div>
 
       {error && <div style={{ color: "#b42318", fontSize: 13, marginTop: 12 }}>{error}</div>}
 

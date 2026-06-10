@@ -9,6 +9,8 @@ export interface SiteFormContext {
   optinEnabled: boolean
   requireConsent: boolean
   disclosure: string   // exact opt-in text shown + stored as consent_text
+  consentMarketing?: string     // marketing checkbox label (fixed system wording)
+  consentNonMarketing?: string  // non-marketing checkbox label (fixed system wording)
   legalPaths: { terms: string; privacy: string }
   markets: SiteMarkets
   deals: DealSummary[]
@@ -21,6 +23,8 @@ const DEFAULT_FORM_CONTEXT: SiteFormContext = {
   optinEnabled: true,
   requireConsent: true,
   disclosure: "",
+  consentMarketing: "",
+  consentNonMarketing: "",
   legalPaths: { terms: "/terms", privacy: "/privacy" },
   markets: { scope: "nationwide", markets: [] },
   deals: [],

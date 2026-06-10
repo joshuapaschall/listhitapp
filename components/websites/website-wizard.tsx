@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { ArrowLeft, ArrowRight, Check, Copy, ExternalLink, Eye, Loader2, Upload, X } from "lucide-react"
+import { ArrowLeft, ArrowRight, Check, Copy, ExternalLink, Eye, Loader2, Lock, Upload, X } from "lucide-react"
 import { supabaseBrowser } from "@/lib/supabase-browser"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils"
 import { SitePreview } from "@/components/websites/site-preview"
 import { CustomDomainCard } from "@/components/websites/custom-domain-card"
 import { CURATED_HERO_IMAGES, extractContent, type WizardContent } from "@/lib/site-builder/compose"
+import { buildConsentTexts } from "@/lib/site-builder/compliance"
 import { ALL_SITE_TEMPLATES } from "@/lib/site-builder/templates"
 import { PERSONAS, getPersona } from "@/lib/site-builder/templates"
 import { TYPE_STYLES, resolveTypeFonts, DEFAULT_TYPE_STYLE_ID } from "@/lib/site-builder/typography"
@@ -178,7 +179,9 @@ export default function WebsiteWizard(props: WizardProps) {
           templateId: (site.template_id as SiteTemplateId) || "aspen",
           theme,
           content,
-          business: { ...DEFAULT_BUSINESS, ...(site.business_json || {}) },
+          // Opt-in is mandatory and not user-editable — force it on regardless of
+          // any older stored value.
+          business: { ...DEFAULT_BUSINESS, ...(site.business_json || {}), optin: { enabled: true, requireConsent: true } },
           markets: { ...DEFAULT_MARKETS, ...(site.markets_json || {}) },
           tracking: (site.tracking_json || {}) as TrackingConfig,
         })
@@ -1011,22 +1014,26 @@ export default function WebsiteWizard(props: WizardProps) {
                 />
               </div>
 
-              <div className="rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
-                Adding an SMS opt-in keeps your texting compliant and helps carriers approve your number faster.
-              </div>
-              <div className="flex items-center justify-between rounded-lg border border-border p-3">
-                <span className="text-sm font-medium">Add SMS opt-in to my forms</span>
-                <Switch
-                  checked={draft.business.optin.enabled}
-                  onCheckedChange={(v) => setBusiness({ optin: { ...draft.business.optin, enabled: v } })}
-                />
-              </div>
-              <div className="flex items-center justify-between rounded-lg border border-border p-3">
-                <span className="text-sm font-medium">Require a consent checkbox</span>
-                <Switch
-                  checked={draft.business.optin.requireConsent}
-                  onCheckedChange={(v) => setBusiness({ optin: { ...draft.business.optin, requireConsent: v } })}
-                />
+              <div className="rounded-lg border border-border bg-muted/40 p-4">
+                <div className="flex items-center gap-2">
+                  <Lock className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-semibold">SMS opt-in &amp; consent</span>
+                </div>
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  Required for texting approval — always on. These can&apos;t be edited or turned off; they&apos;re
+                  what gets your texts delivered.
+                </p>
+                <div className="mt-3 space-y-2">
+                  {(() => {
+                    const consent = buildConsentTexts(draft.content.brandName || draft.name || "your business")
+                    return [consent.marketing, consent.nonMarketing].map((text, i) => (
+                      <div key={i} className="flex items-start gap-2 rounded-md border border-border bg-background p-2.5">
+                        <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border border-border" />
+                        <span className="text-xs leading-relaxed text-muted-foreground">{text}</span>
+                      </div>
+                    ))
+                  })()}
+                </div>
               </div>
 
               {/* Tracking & ads */}

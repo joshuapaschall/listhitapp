@@ -69,8 +69,12 @@ export interface SiteBusiness {
   zip: string
   social: SiteBusinessSocial
   optin: {
-    enabled: boolean         // show SMS opt-in disclosure on forms
-    requireConsent: boolean  // require an explicit consent checkbox
+    enabled: boolean         // always on — opt-in is mandatory for texting approval
+    requireConsent: boolean  // always true — kept for back-compat
+    // Two-checkbox consent labels. System-derived from the legal business name at
+    // render time (see buildConsentTexts); fixed wording, never user-editable.
+    consentMarketing?: string
+    consentNonMarketing?: string
   }
 }
 
