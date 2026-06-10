@@ -85,9 +85,15 @@ export async function getOnboardingState(orgId: string, userId?: string): Promis
     return { ...step, status, locked }
   })
 
+  // A counted step is "resolved" when it's done, or when an OPTIONAL step has been
+  // skipped (a skipped optional fills its slot so the checklist can complete).
+  // Required steps must still be done.
+  const isResolved = (s: ResolvedStep) =>
+    s.status === "done" || (s.optional && s.status === "skipped")
+
   const counted = steps.filter((s) => s.countsTowardProgress)
   const totalCount = counted.length
-  const doneCount = counted.filter((s) => s.status === "done").length
+  const doneCount = counted.filter(isResolved).length
 
   return { steps, doneCount, totalCount, completed: doneCount === totalCount }
 }
