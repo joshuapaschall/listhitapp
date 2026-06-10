@@ -21,6 +21,17 @@ export function buildOptInDisclosure(name: string): string {
   return `By submitting your cell phone number you are agreeing to receive automated/promotional Text Messages from ${name}. Message frequency varies. This campaign utilizes promotional marketing. Reply STOP to cancel. For Help reply with 'HELP'. Message and Data Rates May Apply. Terms of Use and Privacy Policy`
 }
 
+// Carrier-required two-checkbox consent: one marketing, one non-marketing, each
+// naming the legal business and carrying the mandated STOP/HELP + rates language.
+// Fixed system wording — never user-configurable.
+export function buildConsentTexts(legalName: string): { marketing: string; nonMarketing: string } {
+  const name = legalName?.trim() || "us"
+  return {
+    marketing: `I consent to receive marketing text messages about new property deals, investment opportunities, and list updates from ${name} at the phone number provided. Message frequency may vary. Message & data rates may apply. Text HELP for assistance, reply STOP to opt out.`,
+    nonMarketing: `I consent to receive non-marketing text messages from ${name} about replies to my questions and details on properties I ask about. Message frequency may vary. Message & data rates may apply. Text HELP for assistance, reply STOP to opt out.`,
+  }
+}
+
 // Single combined Terms of Use & Privacy Policy, served at BOTH /terms and
 // /privacy. Verbatim approved TCPA language; only business name, support email,
 // phone, and address are interpolated.

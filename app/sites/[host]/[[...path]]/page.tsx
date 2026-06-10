@@ -3,7 +3,8 @@ import { cookies } from "next/headers"
 import { notFound } from "next/navigation"
 import { resolveSite, mergeThemeIntoRoot, resolveSiteByHost, injectBlogNavLink, getNavPages, injectPageNavLinks } from "@/lib/site-builder/resolve-site"
 import { DEFAULT_THEME, DEFAULT_BUSINESS, DEFAULT_MARKETS } from "@/lib/site-builder/types"
-import { buildTermsAndPrivacy, buildContactDoc, buildOptInDisclosure } from "@/lib/site-builder/compliance"
+import { buildTermsAndPrivacy, buildContactDoc, buildConsentTexts } from "@/lib/site-builder/compliance"
+import { supabaseAdmin } from "@/lib/supabase"
 import { SiteRendererRSC } from "@/components/sites/site-renderer-rsc"
 import { SiteJsonLd } from "@/components/sites/site-json-ld"
 import { LegalPage } from "@/components/sites/legal-page"
@@ -178,6 +179,28 @@ export async function generateMetadata({
   }
 }
 
+// Build the form's opt-in context for a resolved site. Opt-in is always on and
+// the two consent labels are auto-populated with the org's legal business name
+// (from business_verification, falling back to the site name). System wording —
+// not user-editable. `disclosure` mirrors the marketing text so any existing
+// consent_text plumbing still gets a ≥50-char string.
+async function buildOptinContext(site: any) {
+  const { data: row } = await supabaseAdmin
+    .from("business_verification")
+    .select("legal_business_name")
+    .eq("org_id", site.org_id)
+    .maybeSingle()
+  const legalName = row?.legal_business_name?.trim() || site.name
+  const consent = buildConsentTexts(legalName)
+  return {
+    optinEnabled: true,
+    requireConsent: true,
+    disclosure: consent.marketing,
+    consentMarketing: consent.marketing,
+    consentNonMarketing: consent.nonMarketing,
+  }
+}
+
 export default async function SitePage({
   params,
   searchParams,
@@ -208,9 +231,7 @@ export default async function SitePage({
     const formContext = {
       persona: site.persona,
       brandName: site.name,
-      optinEnabled: business.optin?.enabled !== false,
-      requireConsent: business.optin?.requireConsent !== false,
-      disclosure: buildOptInDisclosure(site.name),
+      ...(await buildOptinContext(site)),
       legalPaths: { terms: "/terms", privacy: "/privacy" },
       markets: { ...DEFAULT_MARKETS, ...((site.markets_json as any) || {}) },
       deals: [],
@@ -255,9 +276,7 @@ export default async function SitePage({
     const formContext = {
       persona: site.persona,
       brandName: site.name,
-      optinEnabled: business.optin?.enabled !== false,
-      requireConsent: business.optin?.requireConsent !== false,
-      disclosure: buildOptInDisclosure(site.name),
+      ...(await buildOptinContext(site)),
       legalPaths: { terms: "/terms", privacy: "/privacy" },
       markets: { ...DEFAULT_MARKETS, ...((site.markets_json as any) || {}) },
       deals: nearby,
@@ -285,9 +304,7 @@ export default async function SitePage({
     const formContext = {
       persona: site.persona,
       brandName: site.name,
-      optinEnabled: business.optin?.enabled !== false,
-      requireConsent: business.optin?.requireConsent !== false,
-      disclosure: buildOptInDisclosure(site.name),
+      ...(await buildOptinContext(site)),
       legalPaths: { terms: "/terms", privacy: "/privacy" },
       markets: { ...DEFAULT_MARKETS, ...((site.markets_json as any) || {}) },
       deals,
@@ -308,9 +325,7 @@ export default async function SitePage({
     const formContext = {
       persona: site.persona,
       brandName: site.name,
-      optinEnabled: business.optin?.enabled !== false,
-      requireConsent: business.optin?.requireConsent !== false,
-      disclosure: buildOptInDisclosure(site.name),
+      ...(await buildOptinContext(site)),
       legalPaths: { terms: "/terms", privacy: "/privacy" },
       markets: { ...DEFAULT_MARKETS, ...((site.markets_json as any) || {}) },
       deals,
@@ -341,9 +356,7 @@ export default async function SitePage({
       const formContext = {
         persona: site.persona,
         brandName: site.name,
-        optinEnabled: business.optin?.enabled !== false,
-        requireConsent: business.optin?.requireConsent !== false,
-        disclosure: buildOptInDisclosure(site.name),
+        ...(await buildOptinContext(site)),
         legalPaths: { terms: "/terms", privacy: "/privacy" },
         markets: { ...DEFAULT_MARKETS, ...((site.markets_json as any) || {}) },
         deals,
@@ -379,9 +392,7 @@ export default async function SitePage({
   const formContext = {
     persona: result.site.persona,
     brandName: result.site.name,
-    optinEnabled: business.optin?.enabled !== false,
-    requireConsent: business.optin?.requireConsent !== false,
-    disclosure: buildOptInDisclosure(result.site.name),
+    ...(await buildOptinContext(result.site)),
     legalPaths: { terms: "/terms", privacy: "/privacy" },
     markets: { ...DEFAULT_MARKETS, ...((result.site.markets_json as any) || {}) },
     deals,

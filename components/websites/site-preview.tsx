@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 import { SiteRenderer } from "@/components/sites/site-renderer"
 import { composePreview, type WizardContent } from "@/lib/site-builder/compose"
 import { SiteFonts } from "@/components/sites/site-fonts"
-import { buildOptInDisclosure } from "@/lib/site-builder/compliance"
+import { buildConsentTexts } from "@/lib/site-builder/compliance"
 import type { SiteFormContext } from "@/lib/site-builder/site-context"
 import type { SitePersona, SiteTemplateId, SiteTheme, SiteBusiness, SiteMarkets } from "@/lib/site-builder/types"
 
@@ -33,12 +33,16 @@ export function SitePreview({ templateId, persona, theme, content, business, mar
   // the opt-in disclosure + consent checkbox accurately.
   const form = useMemo<SiteFormContext>(() => {
     const brandName = content.brandName || "your team"
+    const consent = buildConsentTexts(brandName)
     return {
       persona,
       brandName,
-      optinEnabled: business.optin.enabled,
-      requireConsent: business.optin.requireConsent,
-      disclosure: buildOptInDisclosure(brandName),
+      // Opt-in is always on; the two consent checkboxes always render.
+      optinEnabled: true,
+      requireConsent: true,
+      disclosure: consent.marketing,
+      consentMarketing: consent.marketing,
+      consentNonMarketing: consent.nonMarketing,
       // Inert in preview so clicking a link doesn't navigate the dashboard.
       legalPaths: { terms: "#", privacy: "#" },
       markets,
