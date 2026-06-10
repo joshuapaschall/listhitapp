@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { ArrowLeft, ArrowRight, Check, Copy, ExternalLink, Eye, Loader2, Upload, X } from "lucide-react"
 import { supabaseBrowser } from "@/lib/supabase-browser"
 import { Button } from "@/components/ui/button"
@@ -104,6 +104,8 @@ async function uploadSiteAsset(file: File, siteId: string): Promise<string> {
 export default function WebsiteWizard(props: WizardProps) {
   const router = useRouter()
   const isEdit = props.mode === "edit"
+  const fromOnboarding = useSearchParams().get("from") === "onboarding"
+  const seededRef = useRef(false)
 
   const [step, setStep] = useState(0)
   const [siteId, setSiteId] = useState<string | null>(isEdit ? props.siteId : null)
@@ -127,6 +129,28 @@ export default function WebsiteWizard(props: WizardProps) {
     markets: { ...DEFAULT_MARKETS },
     tracking: {},
   }))
+
+  // New mode: best-effort prefill business fields + site name from the org and
+  // the verify-business record, so the user never retypes what they entered.
+  // Runs once; never clobbers later user edits (ref guard + `d.name ||`).
+  useEffect(() => {
+    if (isEdit || seededRef.current) return
+    seededRef.current = true
+    ;(async () => {
+      try {
+        const res = await fetch("/api/onboarding/site-defaults")
+        if (!res.ok) return
+        const data = await res.json()
+        setDraft((d) => ({
+          ...d,
+          name: d.name || data.name || "",
+          business: { ...d.business, ...(data.business || {}) },
+        }))
+      } catch {
+        /* non-blocking: prefill is best-effort */
+      }
+    })()
+  }, [isEdit])
 
   // Keep only sub-pages that can appear in the nav (labeled, non-home).
   const toToggleable = (rows: any[]) =>
@@ -1130,8 +1154,13 @@ export default function WebsiteWizard(props: WizardProps) {
                     </div>
                   )}
 
-                  <div className="text-center">
-                    <Button asChild variant="brand">
+                  <div className="flex flex-col items-center gap-2 text-center">
+                    {fromOnboarding && (
+                      <Button type="button" variant="brand" onClick={() => router.push("/getting-started/website")}>
+                        Finish setup <ArrowRight className="h-4 w-4" />
+                      </Button>
+                    )}
+                    <Button asChild variant={fromOnboarding ? "outline" : "brand"}>
                       <Link href="/websites">Done</Link>
                     </Button>
                   </div>
