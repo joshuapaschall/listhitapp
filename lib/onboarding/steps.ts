@@ -75,7 +75,7 @@ export const ONBOARDING_STEPS: OnboardingStepDef[] = [
     section: "approval",
     optional: false,
     dependsOn: "website",
-    href: null,
+    href: "/getting-started/a2p-registration",
     countsTowardProgress: true,
   },
   {
