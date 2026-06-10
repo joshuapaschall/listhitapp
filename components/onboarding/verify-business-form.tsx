@@ -120,6 +120,7 @@ export function VerifyBusinessForm() {
     if (!form.city.trim()) m.push("City")
     if (!form.state.trim()) m.push("State")
     if (!form.zip.trim()) m.push("ZIP")
+    if (!form.phone.trim()) m.push("Business phone")
     return m
   }
 

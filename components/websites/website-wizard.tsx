@@ -253,7 +253,7 @@ export default function WebsiteWizard(props: WizardProps) {
         blockType: "Nav",
         props: {
           brandName: draft.content.brandName,
-          phone: draft.content.phone,
+          phone: draft.content.phone?.trim() ? draft.content.phone : draft.business.phone,
           logoUrl: draft.theme.logoUrl || "",
           layout: draft.theme.headerLayout,
         },
@@ -761,9 +761,6 @@ export default function WebsiteWizard(props: WizardProps) {
               <Field label="Button label">
                 <Input value={draft.content.ctaLabel} onChange={(e) => setContent({ ctaLabel: e.target.value })} />
               </Field>
-              <Field label="Phone">
-                <Input value={draft.content.phone} onChange={(e) => setContent({ phone: e.target.value })} />
-              </Field>
               <Field label="Footer text">
                 <Input value={draft.content.footerText} onChange={(e) => setContent({ footerText: e.target.value })} />
               </Field>
@@ -965,6 +962,9 @@ export default function WebsiteWizard(props: WizardProps) {
                     value={draft.business.phone}
                     onChange={(e) => setBusiness({ phone: e.target.value })}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    {"Your business contact number. It appears on your texting application and on your site — keep it the same on both. Your existing number is fine; you'll get a dedicated texting number after approval that you can switch to."}
+                  </p>
                 </Field>
               </div>
 
