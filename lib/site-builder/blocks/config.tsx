@@ -709,6 +709,7 @@ export const siteConfig: Config = {
       label: "Testimonials",
       fields: {
         heading: { type: "text", label: "Section heading", contentEditable: true },
+        emptyText: { type: "text", label: "Empty state message" },
         reviews: {
           type: "array",
           label: "Reviews",
@@ -721,43 +722,49 @@ export const siteConfig: Config = {
       },
       defaultProps: {
         heading: "What buyers say",
-        reviews: [
-          { quote: "Closed a deal from this list in my first month — the numbers were real.", author: "Marcus T." },
-          { quote: "Finally a list that sends actual deals, not junk.", author: "Dana K." },
-          { quote: "The only buyer list I actually read now.", author: "Priya R." },
-        ],
+        emptyText: "No reviews yet — they'll appear here as buyers close deals from the list.",
+        reviews: [],
       },
-      render: ({ heading, reviews }: any) => (
-        <section id="reviews" style={{ background: "#f7f8fa" }}>
-          <div style={{ ...WRAP, padding: "64px 24px" }}>
-            {heading && (
-              <h2 className="lh-h2" style={{ ...HEADING, fontSize: 32, fontWeight: 800, color: "var(--p)", textAlign: "center", margin: "0 0 36px" }}>
-                {heading}
-              </h2>
-            )}
-            <div className="lh-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 22 }}>
-              {(reviews || []).map((r: any, i: number) => (
-                <div
-                  key={i}
-                  style={{
-                    background: "#fff",
-                    border: "1px solid #eef1f5",
-                    borderRadius: 16,
-                    padding: 24,
-                    boxShadow: "0 8px 24px rgba(16,27,41,.05)",
-                  }}
-                >
-                  <div style={{ color: "var(--a)", fontSize: 16, letterSpacing: 2, marginBottom: 12 }}>★★★★★</div>
-                  <div style={{ fontFamily: "var(--body)", fontSize: 15, lineHeight: 1.6, color: "#2c3744" }}>{r?.quote}</div>
-                  {r?.author ? (
-                    <div style={{ marginTop: 14, fontFamily: "var(--head)", fontWeight: 700, fontSize: 14, color: "var(--p)" }}>— {r.author}</div>
-                  ) : null}
+      render: ({ heading, reviews, emptyText }: any) => {
+        const list = (reviews || []).filter((r: any) => r && (r.quote || r.author))
+        return (
+          <section id="reviews" style={{ background: "#f7f8fa" }}>
+            <div style={{ ...WRAP, padding: "64px 24px" }}>
+              {heading && (
+                <h2 className="lh-h2" style={{ ...HEADING, fontSize: 32, fontWeight: 800, color: "var(--p)", textAlign: "center", margin: "0 0 36px" }}>
+                  {heading}
+                </h2>
+              )}
+              {list.length === 0 ? (
+                <p style={{ textAlign: "center", fontSize: 15, color: "inherit", opacity: 0.7 }}>
+                  {emptyText}
+                </p>
+              ) : (
+                <div className="lh-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 22 }}>
+                  {list.map((r: any, i: number) => (
+                    <div
+                      key={i}
+                      style={{
+                        background: "#fff",
+                        border: "1px solid #eef1f5",
+                        borderRadius: 16,
+                        padding: 24,
+                        boxShadow: "0 8px 24px rgba(16,27,41,.05)",
+                      }}
+                    >
+                      <div style={{ color: "var(--a)", fontSize: 16, letterSpacing: 2, marginBottom: 12 }}>★★★★★</div>
+                      <div style={{ fontFamily: "var(--body)", fontSize: 15, lineHeight: 1.6, color: "#2c3744" }}>{r?.quote}</div>
+                      {r?.author ? (
+                        <div style={{ marginTop: 14, fontFamily: "var(--head)", fontWeight: 700, fontSize: 14, color: "var(--p)" }}>— {r.author}</div>
+                      ) : null}
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
-          </div>
-        </section>
-      ),
+          </section>
+        )
+      },
     },
 
     // -----------------------------------------------------------------------
@@ -930,6 +937,398 @@ export const siteConfig: Config = {
           </div>
         </section>
       ),
+    },
+
+    // -----------------------------------------------------------------------
+    ProseSection: {
+      label: "Prose section",
+      fields: {
+        eyebrow: { type: "text", label: "Eyebrow" },
+        heading: { type: "text", label: "Section heading", contentEditable: true },
+        bodyHtml: { type: "textarea", label: "Body (HTML)" },
+        pullQuote: { type: "text", label: "Pull quote" },
+        ctaText: { type: "text", label: "CTA text" },
+        ctaHref: { type: "text", label: "CTA link" },
+      },
+      defaultProps: {
+        eyebrow: "Section label",
+        heading: "Section heading",
+        bodyHtml: "<p>Add your long-form, keyword-rich copy here.</p>",
+        pullQuote: "",
+        ctaText: "",
+        ctaHref: "",
+      },
+      render: ({ eyebrow, heading, bodyHtml, pullQuote, ctaText, ctaHref }: any) => (
+        <section style={{ background: "#fff" }}>
+          <div style={{ ...WRAP, padding: "64px 24px" }}>
+            <div className="lh-grid-2" style={{ display: "grid", gridTemplateColumns: "minmax(0, 360px) minmax(0, 1fr)", gap: 40, alignItems: "start" }}>
+              <div>
+                {eyebrow ? (
+                  <div style={{ fontFamily: "var(--body)", fontSize: 12.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--a)", marginBottom: 12 }}>
+                    {eyebrow}
+                  </div>
+                ) : null}
+                {heading ? (
+                  <h2 className="lh-h2" style={{ ...HEADING, fontSize: 30, fontWeight: 800, color: "var(--p)", margin: 0 }}>
+                    {heading}
+                  </h2>
+                ) : null}
+                {pullQuote ? (
+                  <blockquote style={{ borderLeft: "3px solid var(--a)", paddingLeft: 16, margin: "20px 0 0", fontFamily: "var(--head)", fontSize: 17, lineHeight: 1.4, color: "#2c3744" }}>
+                    {pullQuote}
+                  </blockquote>
+                ) : null}
+              </div>
+              <div>
+                <div
+                  className="lh-prose"
+                  style={{ fontFamily: "var(--body)", fontSize: 16, lineHeight: 1.7, color: "#42505f" }}
+                  dangerouslySetInnerHTML={{ __html: bodyHtml || "" }}
+                />
+                {ctaText ? (
+                  <a href={ctaHref || "#"} style={{ display: "inline-block", marginTop: 20, fontFamily: "var(--head)", fontWeight: 700, fontSize: 15, color: "var(--p)", textDecoration: "none" }}>
+                    {ctaText} →
+                  </a>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </section>
+      ),
+    },
+
+    // -----------------------------------------------------------------------
+    TypesGrid: {
+      label: "Types grid",
+      fields: {
+        heading: { type: "text", label: "Section heading", contentEditable: true },
+        intro: { type: "textarea", label: "Intro" },
+        items: {
+          type: "array",
+          label: "Cards",
+          arrayFields: {
+            title: { type: "text", label: "Title" },
+            body: { type: "textarea", label: "Body" },
+            href: { type: "text", label: "Link" },
+          },
+          getItemSummary: (item: any, i?: number) => item?.title || `Item ${(i ?? 0) + 1}`,
+        },
+      },
+      defaultProps: {
+        heading: "Section heading",
+        intro: "",
+        items: [],
+      },
+      render: ({ heading, intro, items }: any) => {
+        const list = (items || []).filter((it: any) => it && (it.title || it.body))
+        if (list.length === 0) return <></>
+        return (
+          <section style={{ background: "#fff" }}>
+            <div style={{ ...WRAP, padding: "64px 24px" }}>
+              {heading ? (
+                <h2 className="lh-h2" style={{ ...HEADING, fontSize: 32, fontWeight: 800, color: "var(--p)", textAlign: "center", margin: "0 0 12px" }}>
+                  {heading}
+                </h2>
+              ) : null}
+              {intro ? (
+                <p style={{ textAlign: "center", maxWidth: 640, margin: "0 auto 36px", fontSize: 15.5, lineHeight: 1.6, color: "#5a6675" }}>
+                  {intro}
+                </p>
+              ) : null}
+              <div className="lh-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 22 }}>
+                {list.map((it: any, i: number) => (
+                  <div
+                    key={i}
+                    style={{ border: "1px solid #eef1f5", borderRadius: 16, padding: 24, boxShadow: "0 8px 24px rgba(16,27,41,.05)", background: "#fff" }}
+                  >
+                    <div style={{ fontFamily: "var(--head)", fontWeight: 700, fontSize: 18, color: "var(--p)" }}>{it?.title}</div>
+                    <p style={{ color: "#5a6675", fontSize: 14.5, lineHeight: 1.55, marginTop: 8 }}>{it?.body}</p>
+                    {it?.href ? (
+                      <a href={it.href} style={{ display: "inline-block", marginTop: 12, fontFamily: "var(--head)", fontWeight: 700, fontSize: 14, color: "var(--p)", textDecoration: "none" }}>
+                        →
+                      </a>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )
+      },
+    },
+
+    // -----------------------------------------------------------------------
+    AreasServed: {
+      label: "Areas served",
+      fields: {
+        heading: { type: "text", label: "Section heading" },
+        intro: { type: "textarea", label: "Intro" },
+        singleLine: { type: "text", label: "Single-market sentence" },
+        areas: {
+          type: "array",
+          label: "Areas",
+          arrayFields: {
+            label: { type: "text", label: "Label" },
+            href: { type: "text", label: "Link" },
+          },
+          getItemSummary: (item: any, i?: number) => item?.label || `Item ${(i ?? 0) + 1}`,
+        },
+      },
+      defaultProps: {
+        heading: "Where we find deals",
+        intro: "",
+        singleLine: "",
+        areas: [],
+      },
+      render: ({ heading, intro, areas, singleLine }: any) => {
+        const list = (areas || []).filter((a: any) => a && a.label)
+        const hasMany = list.length >= 2
+        if (!hasMany && !singleLine) return <></>
+        return (
+          <section style={{ background: "color-mix(in srgb, var(--p) 5%, #fff)" }}>
+            <div style={{ ...WRAP, padding: "56px 24px", textAlign: "center" }}>
+              {heading ? (
+                <h2 className="lh-h2" style={{ ...HEADING, fontSize: 30, fontWeight: 800, color: "var(--p)", margin: "0 0 12px" }}>
+                  {heading}
+                </h2>
+              ) : null}
+              {hasMany ? (
+                <>
+                  {intro ? (
+                    <p style={{ maxWidth: 640, margin: "0 auto 24px", fontSize: 15.5, lineHeight: 1.6, color: "#5a6675" }}>
+                      {intro}
+                    </p>
+                  ) : null}
+                  <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 10 }}>
+                    {list.map((a: any, i: number) => {
+                      const chip = (
+                        <span
+                          style={{
+                            display: "inline-block",
+                            padding: "8px 16px",
+                            borderRadius: 999,
+                            background: "#fff",
+                            border: "1px solid color-mix(in srgb, var(--p) 14%, transparent)",
+                            fontFamily: "var(--body)",
+                            fontSize: 14,
+                            fontWeight: 600,
+                            color: "var(--p)",
+                          }}
+                        >
+                          {a.label}
+                        </span>
+                      )
+                      return a.href ? (
+                        <a key={i} href={a.href} style={{ textDecoration: "none" }}>{chip}</a>
+                      ) : (
+                        <span key={i}>{chip}</span>
+                      )
+                    })}
+                  </div>
+                </>
+              ) : (
+                <p style={{ maxWidth: 640, margin: "0 auto", fontSize: 16, lineHeight: 1.6, color: "#5a6675" }}>
+                  {singleLine}
+                </p>
+              )}
+            </div>
+          </section>
+        )
+      },
+    },
+
+    // -----------------------------------------------------------------------
+    ReviewsWall: {
+      label: "Reviews wall",
+      fields: {
+        heading: { type: "text", label: "Section heading", contentEditable: true },
+        emptyText: { type: "text", label: "Empty state message" },
+        reviews: {
+          type: "array",
+          label: "Reviews",
+          arrayFields: {
+            quote: { type: "textarea", label: "Quote" },
+            author: { type: "text", label: "Author" },
+            meta: { type: "text", label: "Meta" },
+          },
+          getItemSummary: (item: any, i?: number) => item?.quote || item?.author || `Item ${(i ?? 0) + 1}`,
+        },
+      },
+      defaultProps: {
+        heading: "What buyers say",
+        emptyText: "No reviews yet — they'll appear here as buyers close deals from the list.",
+        reviews: [],
+      },
+      render: ({ heading, reviews, emptyText }: any) => {
+        const list = (reviews || []).filter((r: any) => r && (r.quote || r.author))
+        return (
+          <section style={{ background: "#f7f8fa" }}>
+            <div style={{ ...WRAP, padding: "64px 24px" }}>
+              {heading ? (
+                <h2 className="lh-h2" style={{ ...HEADING, fontSize: 32, fontWeight: 800, color: "var(--p)", textAlign: "center", margin: "0 0 36px" }}>
+                  {heading}
+                </h2>
+              ) : null}
+              {list.length === 0 ? (
+                <p style={{ textAlign: "center", fontSize: 15, color: "inherit", opacity: 0.7 }}>
+                  {emptyText}
+                </p>
+              ) : (
+                <div className="lh-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 22 }}>
+                  {list.map((r: any, i: number) => (
+                    <div
+                      key={i}
+                      style={{ background: "#fff", border: "1px solid #eef1f5", borderRadius: 16, padding: 24, boxShadow: "0 8px 24px rgba(16,27,41,.05)" }}
+                    >
+                      <div style={{ color: "var(--a)", fontSize: 16, letterSpacing: 2, marginBottom: 12 }}>★★★★★</div>
+                      <div style={{ fontFamily: "var(--body)", fontSize: 15, lineHeight: 1.6, color: "#2c3744" }}>{r?.quote}</div>
+                      {r?.author ? (
+                        <div style={{ marginTop: 14, fontFamily: "var(--head)", fontWeight: 700, fontSize: 14, color: "var(--p)" }}>— {r.author}</div>
+                      ) : null}
+                      {r?.meta ? (
+                        <div style={{ marginTop: 2, fontSize: 12.5, color: "#8a94a2" }}>{r.meta}</div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+        )
+      },
+    },
+
+    // -----------------------------------------------------------------------
+    RecentPosts: {
+      label: "Recent posts",
+      fields: {
+        heading: { type: "text", label: "Section heading" },
+        intro: { type: "textarea", label: "Intro" },
+        posts: {
+          type: "array",
+          label: "Posts",
+          arrayFields: {
+            title: { type: "text", label: "Title" },
+            date: { type: "text", label: "Date" },
+            href: { type: "text", label: "Link" },
+            imageUrl: { type: "text", label: "Image URL" },
+          },
+          getItemSummary: (item: any, i?: number) => item?.title || `Item ${(i ?? 0) + 1}`,
+        },
+      },
+      defaultProps: {
+        heading: "From the blog",
+        intro: "",
+        posts: [],
+      },
+      render: ({ heading, intro, posts }: any) => {
+        const list = (posts || []).filter((p: any) => p && p.title)
+        if (list.length === 0) return <></>
+        const placeholder =
+          "radial-gradient(120% 90% at 78% 18%, color-mix(in srgb, var(--a) 22%, transparent), transparent 55%)," +
+          "linear-gradient(115deg, color-mix(in srgb, var(--p) 70%, #000), color-mix(in srgb, var(--p) 88%, #000))"
+        return (
+          <section style={{ background: "#fff" }}>
+            <div style={{ ...WRAP, padding: "64px 24px" }}>
+              {heading ? (
+                <h2 className="lh-h2" style={{ ...HEADING, fontSize: 32, fontWeight: 800, color: "var(--p)", textAlign: "center", margin: "0 0 12px" }}>
+                  {heading}
+                </h2>
+              ) : null}
+              {intro ? (
+                <p style={{ textAlign: "center", maxWidth: 640, margin: "0 auto 36px", fontSize: 15.5, lineHeight: 1.6, color: "#5a6675" }}>
+                  {intro}
+                </p>
+              ) : null}
+              <div className="lh-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 22 }}>
+                {list.map((p: any, i: number) => {
+                  const src = p.imageUrl ? (siteImage(p.imageUrl, { width: 800, quality: 80 }) ?? p.imageUrl) : null
+                  const card = (
+                    <>
+                      <div style={{ position: "relative", aspectRatio: "16 / 10", borderRadius: 14, overflow: "hidden", background: placeholder }}>
+                        {src ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={src}
+                            alt=""
+                            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).remove() }}
+                          />
+                        ) : null}
+                      </div>
+                      {p.date ? (
+                        <div style={{ marginTop: 12, fontFamily: "var(--mono, monospace)", fontSize: 12, color: "#8a94a2" }}>{p.date}</div>
+                      ) : null}
+                      <div style={{ marginTop: 4, fontFamily: "var(--head)", fontWeight: 700, fontSize: 17, color: "#0f1b29", lineHeight: 1.3 }}>{p.title}</div>
+                    </>
+                  )
+                  return p.href ? (
+                    <a key={i} href={p.href} style={{ textDecoration: "none", color: "inherit" }}>{card}</a>
+                  ) : (
+                    <div key={i}>{card}</div>
+                  )
+                })}
+              </div>
+            </div>
+          </section>
+        )
+      },
+    },
+
+    // -----------------------------------------------------------------------
+    ContactPanel: {
+      label: "Contact panel",
+      fields: {
+        heading: { type: "text", label: "Section heading" },
+        phone: { type: "text", label: "Phone" },
+        email: { type: "text", label: "Email" },
+        hours: { type: "text", label: "Hours" },
+        serviceArea: { type: "text", label: "Service area" },
+        note: { type: "textarea", label: "Note" },
+      },
+      defaultProps: {
+        heading: "Contact us",
+        phone: "",
+        email: "",
+        hours: "",
+        serviceArea: "",
+        note: "",
+      },
+      render: ({ heading, phone, email, hours, serviceArea, note }: any) => {
+        const rows = [
+          phone ? { label: "Phone", value: phone } : null,
+          email ? { label: "Email", value: email } : null,
+          hours ? { label: "Hours", value: hours } : null,
+          serviceArea ? { label: "Service area", value: serviceArea } : null,
+        ].filter(Boolean) as { label: string; value: string }[]
+        return (
+          <section style={{ background: "color-mix(in srgb, var(--p) 6%, #fff)" }}>
+            <div style={{ ...WRAP, padding: "64px 24px" }}>
+              <div className="lh-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 40, alignItems: "start" }}>
+                <div>
+                  {heading ? (
+                    <h2 className="lh-h2" style={{ ...HEADING, fontSize: 30, fontWeight: 800, color: "var(--p)", margin: "0 0 20px" }}>
+                      {heading}
+                    </h2>
+                  ) : null}
+                  {rows.map((r) => (
+                    <div key={r.label} style={{ display: "flex", justifyContent: "space-between", gap: 16, borderBottom: "1px solid color-mix(in srgb, var(--p) 12%, transparent)", padding: "10px 0" }}>
+                      <span style={{ fontSize: 13.5, color: "#5a6675" }}>{r.label}</span>
+                      <span style={{ fontSize: 14.5, fontWeight: 600, color: "#0f1b29" }}>{r.value}</span>
+                    </div>
+                  ))}
+                  {note ? (
+                    <p style={{ marginTop: 16, fontSize: 14.5, lineHeight: 1.6, color: "#5a6675" }}>{note}</p>
+                  ) : null}
+                </div>
+                <div>
+                  <LeadForm inline />
+                </div>
+              </div>
+            </div>
+          </section>
+        )
+      },
     },
 
     // -----------------------------------------------------------------------
