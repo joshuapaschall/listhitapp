@@ -109,7 +109,8 @@ export async function saveVerification(orgId: string, payload: unknown): Promise
     isNonEmpty(addressLine1) &&
     isNonEmpty(city) &&
     isNonEmpty(state) &&
-    isNonEmpty(zip)
+    isNonEmpty(zip) &&
+    isNonEmpty(phone)
   const einComplete = entityType === "ein_business" ? !!ein : true
   const status: VerificationStatus = baseComplete && einComplete ? "ready" : "draft"
 
