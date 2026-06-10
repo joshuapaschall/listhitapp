@@ -1,7 +1,7 @@
 import type { Data } from "@measured/puck"
 import type { SitePersona } from "../types"
 import type { SiteTemplateDef } from "./types"
-import { PERSONAS, PLACEHOLDER_REVIEWS } from "./personas"
+import { PERSONAS } from "./personas"
 
 const PRIMARY = "#0f2a43"
 const ACCENT = "#f0a500"
@@ -69,7 +69,7 @@ function build(persona: SitePersona): Data {
       { type: "PropertyGrid", props: { id: "PropertyGrid-oak", heading: "Recent deals" } },
       {
         type: "Testimonials",
-        props: { id: "Testimonials-oak", heading: "What buyers say", reviews: PLACEHOLDER_REVIEWS },
+        props: { id: "Testimonials-oak", heading: "What buyers say", reviews: [] },
       },
       {
         type: "Faq",
