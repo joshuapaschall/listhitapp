@@ -1,10 +1,15 @@
 "use client"
-import React, { useEffect, useState } from "react"
+import React, { useState } from "react"
+import { useRouter } from "next/navigation"
 import { useSiteForm } from "@/lib/site-builder/site-context"
-import { getPersonaForm, propertyTypeChoices, BUYER_TYPE_OPTIONS, PAYMENT_OPTIONS, PRICE_BANDS } from "@/lib/site-builder/persona-form"
-import type { BuyerTypeKey, PaymentKey } from "@/lib/buyer-taxonomy"
 
-// A self-contained lead capture form. Kept above the fold in every hero variant.
+// Step 1 of the lead flow: a short contact card (name / phone / email + the
+// two-checkbox consent). It POSTs to /api/public/buyers/signup immediately, so
+// the lead is captured even if they never finish Step 2. On success it stashes
+// the contact in sessionStorage and routes to the dedicated /get-on-the-list
+// profile page (Step 2). PII (phone/email) is never put in the URL.
+const LEAD_KEY = "lh_lead"
+
 const fieldStyle: React.CSSProperties = {
   width: "100%",
   padding: "12px 14px",
@@ -29,52 +34,6 @@ const primaryBtn: React.CSSProperties = {
   cursor: "pointer",
 }
 
-// Multi-select chip row.
-function Chips({
-  options,
-  selected,
-  onToggle,
-}: {
-  options: { key: string; label: string }[]
-  selected: string[]
-  onToggle: (key: string) => void
-}) {
-  return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-      {options.map((o) => {
-        const active = selected.includes(o.key)
-        return (
-          <button
-            key={o.key}
-            type="button"
-            onClick={() => onToggle(o.key)}
-            style={{
-              padding: "8px 12px",
-              borderRadius: 999,
-              fontSize: 13.5,
-              fontWeight: 600,
-              cursor: "pointer",
-              border: active ? "1px solid var(--p)" : "1px solid #d7dde4",
-              background: active ? "var(--p)" : "#fff",
-              color: active ? "#fff" : "#3a4554",
-            }}
-          >
-            {o.label}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <div style={{ fontSize: 13.5, fontWeight: 600, color: "#0f1b29", marginTop: 16 }}>{children}</div>
-}
-
-// Two-step buyer lead form. Step 1 captures contact + TCPA consent and posts to
-// the public signup endpoint; Step 2 captures persona-driven qualification and
-// dedup-merges into the same buyer. Posts same-origin; org is resolved by the
-// endpoint from the request Origin.
 export function LeadForm({
   title,
   subtitle,
@@ -89,22 +48,8 @@ export function LeadForm({
   onComplete?: () => void
 }) {
   const form = useSiteForm()
-  const cfg = getPersonaForm(form.persona)
-  const propChoices = propertyTypeChoices(cfg)
-  const hidePropControl = propChoices.length === 1
-  const buyerTypeOpts = BUYER_TYPE_OPTIONS.filter((o) => cfg.buyerTypeKeys.includes(o.key))
-  const paymentOpts = PAYMENT_OPTIONS.filter((o) => cfg.paymentKeys.includes(o.key))
+  const router = useRouter()
 
-  const [step, setStep] = useState<"contact" | "qualify" | "done">("contact")
-  useEffect(() => {
-    if (step === "done") {
-      onComplete?.()
-      // Notify the owner's ad tags (SiteAnalytics) so the conversion fires
-      // regardless of which parent rendered this form.
-      if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("lh:lead"))
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step])
   const [fname, setFname] = useState("")
   const [lname, setLname] = useState("")
   const [phone, setPhone] = useState("")
@@ -116,78 +61,9 @@ export function LeadForm({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
 
-  const [buyerTypes, setBuyerTypes] = useState<string[]>([])
-  const [payments, setPayments] = useState<string[]>([])
-  const [propertyTypes, setPropertyTypes] = useState<string[]>(() => (hidePropControl ? [propChoices[0]] : []))
-  const [locations, setLocations] = useState<string[]>([])
-  const [priceIdx, setPriceIdx] = useState<number | null>(null)
-  const [locQuery, setLocQuery] = useState("")
-  const [locResults, setLocResults] = useState<string[]>([])
-
-  useEffect(() => {
-    const q = locQuery.trim()
-    if (q.length < 2) {
-      setLocResults([])
-      return
-    }
-    const t = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/public/locations?q=${encodeURIComponent(q)}`, { credentials: "omit" })
-        const data = await res.json().catch(() => ({}))
-        if (data?.ok && Array.isArray(data.results)) setLocResults(data.results)
-      } catch {
-        /* ignore typeahead errors */
-      }
-    }, 250)
-    return () => clearTimeout(t)
-  }, [locQuery])
-
-  const toggle = (setter: React.Dispatch<React.SetStateAction<string[]>>, key: string) =>
-    setter((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]))
-
-  const addLocation = (loc: string) => {
-    setLocations((prev) => (prev.includes(loc) ? prev : [...prev, loc]))
-    setLocQuery("")
-    setLocResults([])
-  }
-
-  function basePayload() {
-    return {
-      fname,
-      lname: lname || undefined,
-      email,
-      phone,
-      // consent_text reflects the marketing disclosure shown (endpoint requires
-      // >=50 chars); the two booleans record which boxes the visitor checked.
-      consent_text: form.consentMarketing || form.disclosure,
-      marketing_consent: marketingConsent,
-      nonmarketing_consent: nonMarketingConsent,
-      source_url: typeof window !== "undefined" ? window.location.href : undefined,
-    }
-  }
-
-  async function post(payload: Record<string, any>): Promise<{ ok: boolean; error?: string }> {
-    try {
-      const res = await fetch("/api/public/buyers/signup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "omit",
-        body: JSON.stringify(payload),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) return { ok: false, error: data?.message || data?.error || "Submission failed" }
-      return { ok: true }
-    } catch {
-      return { ok: false, error: "Network error. Please try again." }
-    }
-  }
-
   // Consent is NEVER required to submit — the two checkboxes are optional and
   // only record opt-in preference.
-  const contactValid =
-    fname.trim().length > 0 &&
-    phone.trim().length > 0 &&
-    email.trim().length > 0
+  const contactValid = fname.trim().length > 0 && phone.trim().length > 0 && email.trim().length > 0
 
   async function submitContact() {
     if (!contactValid) {
@@ -196,38 +72,44 @@ export function LeadForm({
     }
     setSubmitting(true)
     setError("")
-    const r = await post(basePayload())
-    setSubmitting(false)
-    if (r.ok) setStep("qualify")
-    else setError(r.error || "Something went wrong. Please try again.")
-  }
-
-  async function submitQualify() {
-    const band = priceIdx != null ? PRICE_BANDS[priceIdx] : null
-    const hasData =
-      buyerTypes.length > 0 ||
-      payments.length > 0 ||
-      locations.length > 0 ||
-      propertyTypes.length > 0 ||
-      Boolean(band)
-    if (!hasData) {
-      setStep("done")
+    try {
+      const res = await fetch("/api/public/buyers/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "omit",
+        body: JSON.stringify({
+          fname,
+          lname: lname || undefined,
+          email,
+          phone,
+          consent_text: form.consentMarketing || form.disclosure,
+          marketing_consent: marketingConsent,
+          nonmarketing_consent: nonMarketingConsent,
+          source_url: typeof window !== "undefined" ? window.location.href : undefined,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data?.message || data?.error || "Submission failed")
+      }
+    } catch (e: any) {
+      setError(e?.message || "Network error. Please try again.")
+      setSubmitting(false)
       return
     }
-    setSubmitting(true)
-    setError("")
-    const r = await post({
-      ...basePayload(),
-      buyer_types: buyerTypes as BuyerTypeKey[],
-      payment_methods: payments as PaymentKey[],
-      property_types: propertyTypes,
-      locations,
-      asking_price_min: band?.min,
-      asking_price_max: band?.max,
-    })
-    setSubmitting(false)
-    if (r.ok) setStep("done")
-    else setError(r.error || "Something went wrong. Please try again.")
+
+    // Lead captured. Stash contact (PII stays out of the URL) and hand off to
+    // the dedicated Step-2 profile page.
+    try {
+      sessionStorage.setItem(LEAD_KEY, JSON.stringify({ fname, lname, phone, email }))
+    } catch {
+      /* sessionStorage unavailable — Step 2 falls back to home */
+    }
+    // Fire the conversion for the owner's ad tags (SiteAnalytics) regardless of
+    // which parent rendered this form.
+    if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("lh:lead"))
+    onComplete?.()
+    router.push(`/get-on-the-list?fname=${encodeURIComponent(fname)}`)
   }
 
   const card: React.CSSProperties = {
@@ -240,184 +122,15 @@ export function LeadForm({
     maxWidth: inline ? "none" : 420,
   }
 
-  if (step === "done") {
-    return (
-      <div style={card}>
-        <div style={{ fontFamily: "var(--head)", fontWeight: 800, fontSize: 22, color: "var(--p)" }}>
-          You&apos;re on the list 🎉
-        </div>
-        <p style={{ fontSize: 14.5, color: "#5a6675", marginTop: 8, lineHeight: 1.5 }}>
-          Check your phone and email — we&apos;ll send new deals as soon as they hit. Reply STOP anytime to opt out.
-        </p>
-      </div>
-    )
-  }
-
-  if (step === "qualify") {
-    return (
-      <div style={card}>
-        <div style={{ fontFamily: "var(--head)", fontWeight: 700, fontSize: 19, color: "#0f1b29" }}>
-          A few quick details
-        </div>
-        <div style={{ fontSize: 13.5, color: "#5a6675", marginTop: 4 }}>
-          Tell us what you want so we only send deals that fit.
-        </div>
-
-        {cfg.showBuyerTypes && buyerTypeOpts.length > 0 && (
-          <>
-            <FieldLabel>{cfg.buyerTypeQuestion || "What kind of buyer are you?"}</FieldLabel>
-            <Chips options={buyerTypeOpts} selected={buyerTypes} onToggle={(k) => toggle(setBuyerTypes, k)} />
-          </>
-        )}
-
-        {cfg.showPayments && paymentOpts.length > 0 && (
-          <>
-            <FieldLabel>How are you buying?</FieldLabel>
-            <Chips options={paymentOpts} selected={payments} onToggle={(k) => toggle(setPayments, k)} />
-          </>
-        )}
-
-        {!hidePropControl && (
-          <>
-            <FieldLabel>Property types</FieldLabel>
-            <Chips
-              options={propChoices.map((p) => ({ key: p, label: p }))}
-              selected={propertyTypes}
-              onToggle={(k) => toggle(setPropertyTypes, k)}
-            />
-          </>
-        )}
-
-        <FieldLabel>Where do you want deals?</FieldLabel>
-        {locations.length > 0 && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
-            {locations.map((loc) => (
-              <span
-                key={loc}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "5px 10px",
-                  borderRadius: 999,
-                  background: "color-mix(in srgb, var(--p) 10%, #fff)",
-                  color: "var(--p)",
-                  fontSize: 12.5,
-                  fontWeight: 600,
-                }}
-              >
-                {loc}
-                <span
-                  role="button"
-                  onClick={() => setLocations((prev) => prev.filter((l) => l !== loc))}
-                  style={{ cursor: "pointer" }}
-                >
-                  ×
-                </span>
-              </span>
-            ))}
-          </div>
-        )}
-        <div style={{ position: "relative", marginTop: 8 }}>
-          <input
-            style={fieldStyle}
-            placeholder="City, county, or state"
-            value={locQuery}
-            onChange={(e) => setLocQuery(e.target.value)}
-            aria-label="Search locations"
-          />
-          {locResults.length > 0 && (
-            <div
-              style={{
-                position: "absolute",
-                left: 0,
-                right: 0,
-                top: "100%",
-                zIndex: 20,
-                marginTop: 4,
-                background: "#fff",
-                border: "1px solid #e5e9ef",
-                borderRadius: 10,
-                boxShadow: "0 12px 30px rgba(16,27,41,.14)",
-                maxHeight: 220,
-                overflowY: "auto",
-              }}
-            >
-              {locResults.map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  onClick={() => addLocation(r)}
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    textAlign: "left",
-                    padding: "10px 12px",
-                    border: "none",
-                    background: "#fff",
-                    cursor: "pointer",
-                    fontSize: 14,
-                    color: "#0f1b29",
-                  }}
-                >
-                  {r}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <FieldLabel>Price range</FieldLabel>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-          {PRICE_BANDS.map((b, i) => {
-            const active = priceIdx === i
-            return (
-              <button
-                key={b.label}
-                type="button"
-                onClick={() => setPriceIdx(active ? null : i)}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 999,
-                  fontSize: 13.5,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  border: active ? "1px solid var(--p)" : "1px solid #d7dde4",
-                  background: active ? "var(--p)" : "#fff",
-                  color: active ? "#fff" : "#3a4554",
-                }}
-              >
-                {b.label}
-              </button>
-            )
-          })}
-        </div>
-
-        {error && <div style={{ color: "#b42318", fontSize: 13, marginTop: 12 }}>{error}</div>}
-
-        <button type="button" style={primaryBtn} onClick={submitQualify} disabled={submitting}>
-          {submitting ? "Saving…" : "Show me the deals"}
-        </button>
-        <div style={{ textAlign: "center", marginTop: 10 }}>
-          <span
-            role="button"
-            onClick={() => setStep("done")}
-            style={{ fontSize: 13, color: "#8a94a2", cursor: "pointer", textDecoration: "underline" }}
-          >
-            Skip for now
-          </span>
-        </div>
-      </div>
-    )
-  }
-
-  // step === "contact"
   return (
     <div style={card}>
       {title && (
         <div style={{ fontFamily: "var(--head)", fontWeight: 700, fontSize: 19, color: "#0f1b29" }}>{title}</div>
       )}
       {subtitle && <div style={{ fontSize: 13.5, color: "#5a6675", marginTop: 4 }}>{subtitle}</div>}
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--a)", marginTop: 8, letterSpacing: "0.04em" }}>
+        Step 1 of 2 · ~30 seconds
+      </div>
       <div
         className={inline ? "lh-form-2" : undefined}
         style={{
@@ -471,7 +184,7 @@ export function LeadForm({
         onClick={submitContact}
         disabled={!contactValid || submitting}
       >
-        {submitting ? "Submitting…" : ctaLabel || "Get started"}
+        {submitting ? "Submitting…" : ctaLabel || "Get Deals →"}
       </button>
       <div style={{ fontSize: 11.5, color: "#8a94a2", marginTop: 9, textAlign: "center" }}>
         No spam. Reply STOP anytime.
