@@ -40,6 +40,14 @@ export interface PersonaContent {
   howItWorks: { title: string; body: string }[]
   faqs: { q: string; a: string }[]
   about: { headline: string; body: string; trust: string[] }
+  // Long-form, keyword-rich editorial sections (feed ProseSection).
+  // bodyHtml is simple HTML (<p>, <b>, <a href="/...">) — tokens {Brand}/{City} allowed.
+  prose: { eyebrow: string; heading: string; bodyHtml: string; pullQuote?: string }[]
+  // "Types of deals" cards (feed TypesGrid). href is a relative path (e.g. "/properties").
+  types: { title: string; body: string; href: string }[]
+  // Areas-served copy (feed AreasServed). The block decides chips vs. single line by
+  // data; these are the surrounding strings only — no hardcoded place names.
+  areas: { heading: string; intro: string; singleLine: string }
 }
 
 export const DEFAULT_THEME: SiteTheme = {

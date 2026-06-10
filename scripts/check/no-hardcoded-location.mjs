@@ -4,7 +4,8 @@
 // tenant renders their own market.
 //
 // Usage: node scripts/check/no-hardcoded-location.mjs <file> [file...]
-// (PR 2 will pass personas.ts + templates as additional args.)
+// Wired (via package.json check:location) over blocks/config.tsx,
+// templates/personas.ts, and the lead-flow components.
 import { readFileSync } from "node:fs"
 
 const files = process.argv.slice(2)
