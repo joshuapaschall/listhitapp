@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import MainLayout from "@/components/layout/main-layout"
 import QuickActionButtons from "@/components/dashboard/QuickActionButtons"
@@ -15,7 +16,7 @@ import KpiStat from "@/components/dashboard/cockpit/KpiStat"
 import LiveDealsPanel from "@/components/dashboard/cockpit/LiveDealsPanel"
 import NeedsYouToday from "@/components/dashboard/cockpit/NeedsYouToday"
 import ProfitZone from "@/components/dashboard/cockpit/ProfitZone"
-import { Mail, MessageCircle, Phone } from "lucide-react"
+import { ArrowRight, Mail, MessageCircle, Phone } from "lucide-react"
 import type {
   CallTrend,
   DashboardKpis,
@@ -160,6 +161,16 @@ export default function DashboardPage() {
     placeholderData: keepPreviousData,
   })
 
+  const { data: onboarding } = useQuery({
+    queryKey: ["onboarding"],
+    queryFn: async () => {
+      const res = await fetch("/api/onboarding")
+      if (!res.ok) throw new Error("Failed to load onboarding")
+      return res.json() as Promise<{ doneCount: number; totalCount: number; completed: boolean }>
+    },
+    refetchOnWindowFocus: false,
+  })
+
   const kpis = dashboardData?.kpis ?? EMPTY_KPIS
   const profit = dashboardData?.profit ?? EMPTY_PROFIT
   const liveDeals = dashboardData?.liveDeals ?? []
@@ -182,6 +193,22 @@ export default function DashboardPage() {
   return (
     <MainLayout>
       <div className="min-h-full bg-muted/40 p-4 sm:p-6 space-y-4">
+        {onboarding && !onboarding.completed && (
+          <Link
+            href="/getting-started"
+            className="flex items-center gap-3 rounded-xl border border-border bg-card p-3.5 shadow-sm transition-colors hover:bg-muted/40"
+          >
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium text-foreground">Finish setting up your account</div>
+              <p className="text-xs text-muted-foreground">
+                {onboarding.doneCount} of {onboarding.totalCount} steps complete
+              </p>
+            </div>
+            <span className="flex items-center gap-1 text-sm font-medium text-brand">
+              Continue <ArrowRight className="h-4 w-4" />
+            </span>
+          </Link>
+        )}
         <DashboardGreeting briefing={briefing} name={firstName}>
           <ToggleTimeRange value={range} onChange={handleRangeChange} />
         </DashboardGreeting>
