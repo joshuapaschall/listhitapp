@@ -11,6 +11,7 @@ export interface SiteFormContext {
   disclosure: string   // exact opt-in text shown + stored as consent_text
   consentMarketing?: string     // marketing checkbox label (fixed system wording)
   consentNonMarketing?: string  // non-marketing checkbox label (fixed system wording)
+  legalDisplay?: string         // "Legal Name DBA Brand" for the footer, when they differ
   legalPaths: { terms: string; privacy: string }
   markets: SiteMarkets
   deals: DealSummary[]

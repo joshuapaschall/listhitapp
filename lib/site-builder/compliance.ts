@@ -32,39 +32,170 @@ export function buildConsentTexts(legalName: string): { marketing: string; nonMa
   }
 }
 
-// Single combined Terms of Use & Privacy Policy, served at BOTH /terms and
-// /privacy. Verbatim approved TCPA language; only business name, support email,
-// phone, and address are interpolated.
-export function buildTermsAndPrivacy(name: string, b: SiteBusiness): LegalDoc {
-  const email = b.email || "our support email"
-  const phone = b.phone || "our phone number"
-  const addr = fullAddress(b)
+// Auto-populated legal-doc inputs. Contact details come from the org so they
+// match the A2P application by construction.
+export interface LegalArgs {
+  legalName: string
+  brand?: string
+  phone: string
+  email: string
+  website: string
+  address: string
+}
+
+// "Legal Name DBA Brand" when a brand differs from the legal name, else the
+// legal name alone.
+function legalDisplayName(a: LegalArgs): string {
+  const brand = a.brand?.trim()
+  const legal = a.legalName.trim()
+  return brand && brand !== legal ? `${a.legalName} DBA ${a.brand}` : a.legalName
+}
+
+// Standalone Privacy Policy — distinct from the Terms page, with the carrier-
+// required SMS, data-protection, and non-sharing clauses verbatim.
+export function buildPrivacyPolicy(a: LegalArgs): LegalDoc {
+  const legalDisplay = legalDisplayName(a)
+  const phone = a.phone || "our phone number"
+  const email = a.email || "our support email"
+  const website = a.website || ""
+  const year = new Date().getFullYear()
   return {
-    title: "Terms of Use and Privacy Policy",
-    intro: "For Telemarketing and Text Message Purposes",
+    title: "Privacy Policy",
+    intro: `${legalDisplay} ("we," "us," or "our") operates ${website} and a text-messaging program for people who join our property buyer list. This policy explains what we collect, how we use it, and your choices. We do not sell, rent, trade, or share your information for anyone else's marketing.`,
     sections: [
       {
+        heading: "Information We Collect",
         paragraphs: [
-          `Telemarketing and Text Message Terms of Service and Privacy Policy are intended to supplement the provisions of the General Terms of Service and Privacy Policy specifically with respect to Telemarketing & Text Messaging (SMS and MMS) where you have provided "prior express written consent" within the meaning of the Telephone Consumer Protection Act ("TCPA"), you consent to receive telephone calls, including artificial voice calls, pre-recorded messages and/or calls delivered via automated technology and TEXT/SMS messages. Telephone number(s) that you provide are not required to provide this consent to obtain access, request info or purchase our product.`,
-          `Telemarketing and Text Message Terms of Service and Privacy Policy will not limit, supersede or override the General Terms of Service and Privacy Policy, and should be interpreted accordingly. In the event of a conflict between the Telemarketing and Text Message Terms of Service and Privacy Policy and the General Terms of Service and Privacy Policy, the Telemarketing and Text Message Terms of Service and Privacy Policy shall prevail with respect to issues specific to text messaging & telemarketing. For the avoidance of doubt, if there are terms and conditions in the General Terms of Service and Privacy Policy regarding subjects on which the Telemarketing and Text Message Terms of Service and Privacy Policy are silent, such silence will not constitute a conflict and the terms and conditions in the General Terms of Service and Privacy Policy will control in those situations.`,
-          `When you opt-in to the service, we will send you an SMS message to confirm your signup.`,
-          `This service is used to send you notifications about the status of your account or service, for scheduling appointments, to provide customer support, communicate product or feature announcements, or to send you promotional offers about our products and services even if your mobile number is registered on any state or federal do-not-call list.`,
-          `Overall message frequency varies and depends on account activity. However, text messages that are promotional in nature will be limited to 4 or less text messages per month. Promotional Text messages may include coupons, offers, upgrades, and new plans that we believe you may be interested in.`,
-          `You can cancel and opt out of future text messages, subscriptions and service at any time by texting one of the following words 'STOP', 'END', 'CANCEL', 'QUIT', 'OPT OUT', 'UNSUBSCRIBE'. After you send the message 'STOP', 'END', 'CANCEL', 'QUIT', 'OPT OUT', 'UNSUBSCRIBE' to us, we will send you a reply message to confirm that you have been unsubscribed. After this, you will no longer receive messages from us. If you want to join again, just text us 'Join', 'Resume' 'Start' or 'Opt In', or follow the instructions in the unsubscribe message or sign up as you did the first time, and we will start sending messages to you again.`,
-          `You may be provided in the unsubscribe confirmation with an option to unsubscribe for promotional offers only but continue to get text messages regarding account activities and notices. If you have chosen this option, please follow the instructions in the unsubscribe text message to unsubscribe to just promotional text messages.`,
-          `If at any time you forget what keywords are supported, just text us 'HELP' or 'INFO'. After you send the message 'HELP' or 'INFO' to us, we will respond with instructions on how to use our service as well as how to unsubscribe.`,
-          `Neither ${name} or the mobile network operators are liable for delayed or undelivered messages.`,
-          `We have a right to modify any telephone or short code we use to operate the service at any time. However, if this happens, ${name} will be clearly communicated in the text message and all the terms herein apply. In other words, you're opting in to receive text messages from ${name}, not from a specific sender ID or phone number. Your right to manage the type and frequency of messages will apply to all messages sent from ${name} to you regardless of the sender ID or phone number the messages are sent from.`,
-          `As always, Message and Data Rates May Apply for any messages sent to you from us and to us from you. If you have any questions about your text plan or data plan, it is best to contact your wireless provider. For all questions about the services provided by this text messaging program, you can send an email to: ${email}.`,
-          `Opt-in data and consent for text messaging will not be shared with any third parties except with technology partners for the purpose of enabling and operating our telemarketing & text messaging program (i.e., facilitating the sending and receiving of text messages).`,
+          `Contact information you give us: your name, phone number, email address, and any optional mailing address.`,
+          `Opt-in records: the exact consent wording shown to you when you opted in, together with a timestamp of your consent.`,
+          `Messaging history: the text messages exchanged between you and us.`,
+          `Non-personal data: IP address, browser and device information, usage analytics, and cookies.`,
         ],
       },
       {
-        heading: "Contacting Us",
+        heading: "How We Use Your Information",
         paragraphs: [
-          `If there are any questions regarding this Terms of Use and Privacy Policy you may contact us at ${email} or Call Us at ${phone}.`,
-          name,
-          ...(addr ? [addr] : []),
+          `To operate the buyer list and send you the property deal alerts and updates you opted into.`,
+          `To respond to your questions and send details on properties you ask about.`,
+          `To keep records of your consent.`,
+          `To operate, secure, and improve the site.`,
+        ],
+      },
+      {
+        heading: "SMS / Text Messaging",
+        paragraphs: [
+          `When you join our buyer list and opt in, we send text messages about new property deals, investment opportunities, and buyer-list updates, and we respond to your questions and send details on properties you ask about.`,
+          `Opt-in: we only send text messages to people who have explicitly opted in. We keep timestamped records of consent in accordance with the Telephone Consumer Protection Act (TCPA).`,
+          `Opt-out: you can opt out at any time by replying STOP, END, CANCEL, UNSUBSCRIBE, or QUIT. We send one confirmation message and then stop sending messages unless you re-join.`,
+          `Message frequency varies.`,
+          `Help: reply HELP at any time, or contact us at ${email} or ${phone}.`,
+          `Message and data rates may apply. Carriers are not liable for delayed or undelivered messages. Supported carriers include AT&T, Verizon, T-Mobile, and other major and regional carriers.`,
+        ],
+      },
+      {
+        heading: "SMS Data Protection Statement",
+        paragraphs: [
+          `No mobile information will be shared with third parties/affiliates for marketing/promotional purposes. Information sharing to subcontractors in support services, such as customer service, is permitted. All other use case categories exclude text messaging originator opt-in data and consent; this information will not be shared with any third parties.`,
+        ],
+      },
+      {
+        heading: "Information Sharing & Disclosure",
+        paragraphs: [
+          `We do not sell, rent, or trade your personal information, and we do not share it with third parties or affiliates for their own marketing.`,
+          `We share information only with service providers who operate the program (for example, our messaging provider) solely to deliver the messages you consented to, under confidentiality obligations; when required for legal compliance; and in connection with a business transfer.`,
+          `Text-messaging originator opt-in data and consent are excluded from any such sharing and are not shared with any third parties other than the provider delivering the messages you asked to receive.`,
+        ],
+      },
+      {
+        heading: "Data Security",
+        paragraphs: [
+          `We use reasonable administrative, technical, and physical safeguards to protect your information. No method of transmission or storage is 100% secure, however, and we cannot guarantee absolute security.`,
+        ],
+      },
+      {
+        heading: "Retention",
+        paragraphs: [
+          `We retain your information while you participate in the program or as needed to meet our legal obligations.`,
+        ],
+      },
+      {
+        heading: "Cookies & Tracking",
+        paragraphs: [
+          `We use cookies for analytics, to remember your preferences, and to improve the site. You can control cookies through your browser settings.`,
+        ],
+      },
+      {
+        heading: "Your Rights & Choices",
+        paragraphs: [
+          `Consent to receive automated marketing text messages is not a condition of any purchase or of joining the list.`,
+          `You can opt out of text messages at any time by replying STOP. You may also request to access, update, or delete your information, or withdraw consent, by contacting us using the details below.`,
+        ],
+      },
+      {
+        heading: "Third-Party Links",
+        paragraphs: [
+          `Our site may link to third-party websites. We are not responsible for the privacy practices of those sites.`,
+        ],
+      },
+      {
+        heading: "Changes to This Policy",
+        paragraphs: [
+          `We may update this policy from time to time. The latest version will always be posted here with its effective date.`,
+          `Effective ${year}.`,
+        ],
+      },
+      {
+        heading: "Contact Us",
+        paragraphs: [
+          legalDisplay,
+          `Phone: ${phone} · Email: ${email} · Website: ${website}`,
+          ...(a.address ? [a.address] : []),
+        ],
+      },
+    ],
+  }
+}
+
+// Standalone Terms of Service — distinct from the Privacy Policy. Must not grant
+// any data-sharing right the Privacy Policy denies.
+export function buildTermsOfService(a: LegalArgs): LegalDoc {
+  const legalDisplay = legalDisplayName(a)
+  const phone = a.phone || "our phone number"
+  const email = a.email || "our support email"
+  const website = a.website || ""
+  const year = new Date().getFullYear()
+  return {
+    title: "Terms of Service",
+    intro: `Effective ${year}.`,
+    sections: [
+      {
+        heading: "SMS Messaging Terms & Compliance",
+        paragraphs: [
+          `This messaging program is operated by ${legalDisplay}. When you join our buyer list at ${website} and opt in, you agree to receive recurring automated text messages about new property deals, investment opportunities, and buyer-list updates, and replies to questions and details on properties you ask about. Consent to receive automated marketing text messages is not a condition of any purchase.`,
+          `Cancellation: text STOP, END, CANCEL, UNSUBSCRIBE, or QUIT at any time. We send one confirmation message and then stop. You can re-join by signing up again.`,
+          `Help & support: reply HELP at any time, or contact us at ${email} or ${phone}.`,
+          `Carriers are not liable for delayed or undelivered messages.`,
+          `Message and data rates may apply, message frequency varies, and you should contact your wireless provider for questions about your plan.`,
+          `Supported carriers include AT&T, Verizon, T-Mobile, and other major and regional U.S. carriers.`,
+          `You must be 18 or older to opt in.`,
+          `If you have any questions regarding privacy, please read our privacy policy: ${website}/privacy`,
+          `This program is operated in compliance with the TCPA and CTIA messaging principles and guidelines.`,
+        ],
+      },
+      {
+        heading: "General Terms",
+        paragraphs: [
+          `This site is owned and operated by ${legalDisplay}. By using the site you agree to these Terms and to our Privacy Policy.`,
+          `We may update these Terms from time to time; the current version is always posted here.`,
+          `The materials on this site are our property and are provided for your personal, non-commercial use.`,
+          `The site is provided "as is" without warranties of any kind, to the fullest extent permitted by law.`,
+          `These Terms are governed by the laws of the state in which the business operates.`,
+        ],
+      },
+      {
+        heading: "Contact",
+        paragraphs: [
+          `${legalDisplay} · Phone: ${phone} · Email: ${email} · Website: ${website}`,
         ],
       },
     ],

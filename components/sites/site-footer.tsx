@@ -16,7 +16,7 @@ const SOCIAL_ICONS: Record<string, React.ReactNode> = {
 }
 
 export function SiteFooter({ text }: { text?: string }) {
-  const { brandName, markets, business, legalPaths } = useSiteForm()
+  const { brandName, markets, business, legalPaths, legalDisplay } = useSiteForm()
   const serving =
     markets.scope === "nationwide" || markets.markets.length === 0
       ? "Serving buyers nationwide"
@@ -77,6 +77,9 @@ export function SiteFooter({ text }: { text?: string }) {
         </div>
         <div style={{ borderTop: "1px solid #f1f4f8", marginTop: 32, paddingTop: 20, fontSize: 13, color: "#8a94a2" }}>
           {copyright}
+          {legalDisplay && legalDisplay !== brandName && (
+            <div style={{ fontSize: 12, color: "#a3acb8", marginTop: 4 }}>{legalDisplay}</div>
+          )}
         </div>
       </div>
     </footer>

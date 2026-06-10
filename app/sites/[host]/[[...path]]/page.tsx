@@ -3,7 +3,7 @@ import { cookies } from "next/headers"
 import { notFound } from "next/navigation"
 import { resolveSite, mergeThemeIntoRoot, resolveSiteByHost, injectBlogNavLink, getNavPages, injectPageNavLinks } from "@/lib/site-builder/resolve-site"
 import { DEFAULT_THEME, DEFAULT_BUSINESS, DEFAULT_MARKETS } from "@/lib/site-builder/types"
-import { buildTermsAndPrivacy, buildContactDoc, buildConsentTexts } from "@/lib/site-builder/compliance"
+import { buildPrivacyPolicy, buildTermsOfService, buildContactDoc, buildConsentTexts } from "@/lib/site-builder/compliance"
 import { supabaseAdmin } from "@/lib/supabase"
 import { SiteRendererRSC } from "@/components/sites/site-renderer-rsc"
 import { SiteJsonLd } from "@/components/sites/site-json-ld"
@@ -39,9 +39,9 @@ interface SitePageParams {
 // Legal/contact pages are generated (always in sync, never editable into
 // non-compliance) — handled before the Puck flow. /privacy and /terms render
 // the SAME combined document.
-const LEGAL_PATHS: Record<string, "legal" | "contact"> = {
-  "/privacy": "legal",
-  "/terms": "legal",
+const LEGAL_PATHS: Record<string, "privacy" | "terms" | "contact"> = {
+  "/privacy": "privacy",
+  "/terms": "terms",
   "/contact": "contact",
 }
 
@@ -100,7 +100,8 @@ export async function generateMetadata({
       const site = await resolveSiteByHost(host)
       if (!site) return { title: "Site not found" }
       const business = { ...DEFAULT_BUSINESS, ...(site.business_json || {}) }
-      const doc = legalKind === "legal" ? buildTermsAndPrivacy(site.name, business) : buildContactDoc(site.name, business)
+      const args = legalKind === "contact" ? null : await legalArgsFor(site, business)
+      const doc = buildLegalDoc(legalKind, args, site, business)
       return seoMeta(host, path, `${doc.title} · ${site.name}`, undefined, site.name)
     }
 
@@ -192,13 +193,46 @@ async function buildOptinContext(site: any) {
     .maybeSingle()
   const legalName = row?.legal_business_name?.trim() || site.name
   const consent = buildConsentTexts(legalName)
+  const brand = (site.name || "").trim()
+  const legalDisplay = brand && brand !== legalName.trim() ? `${legalName} DBA ${brand}` : legalName
   return {
     optinEnabled: true,
     requireConsent: true,
     disclosure: consent.marketing,
     consentMarketing: consent.marketing,
     consentNonMarketing: consent.nonMarketing,
+    legalDisplay,
   }
+}
+
+// Auto-populated args for the legal documents. Contact details come from the org
+// so they match the A2P application; legal name comes from business_verification.
+async function legalArgsFor(site: any, business: any) {
+  const [{ data: ver }, { data: org }] = await Promise.all([
+    supabaseAdmin
+      .from("business_verification")
+      .select("legal_business_name")
+      .eq("org_id", site.org_id)
+      .maybeSingle(),
+    supabaseAdmin.from("organizations").select("website_url").eq("id", site.org_id).maybeSingle(),
+  ])
+  const legalName = ver?.legal_business_name?.trim() || site.name
+  const cityState = [business.city, business.state].filter(Boolean).join(", ")
+  const address = [business.address, cityState, business.zip].filter(Boolean).join(", ")
+  return {
+    legalName,
+    brand: site.name,
+    phone: business.phone || "",
+    email: business.email || "",
+    website: (org?.website_url && org.website_url.trim()) || `https://${site.slug}.listhit.io`,
+    address,
+  }
+}
+
+function buildLegalDoc(kind: "privacy" | "terms" | "contact", args: any, site: any, business: any) {
+  if (kind === "privacy") return buildPrivacyPolicy(args)
+  if (kind === "terms") return buildTermsOfService(args)
+  return buildContactDoc(site.name, business)
 }
 
 export default async function SitePage({
@@ -217,7 +251,8 @@ export default async function SitePage({
     if (!site) notFound()
     const theme = { ...DEFAULT_THEME, ...(site.theme_json || {}) }
     const business = { ...DEFAULT_BUSINESS, ...(site.business_json || {}) }
-    const doc = legalKind === "legal" ? buildTermsAndPrivacy(site.name, business) : buildContactDoc(site.name, business)
+    const args = legalKind === "contact" ? null : await legalArgsFor(site, business)
+    const doc = buildLegalDoc(legalKind, args, site, business)
     return <LegalPage doc={doc} brandName={site.name} phone={business.phone} theme={theme} />
   }
 
