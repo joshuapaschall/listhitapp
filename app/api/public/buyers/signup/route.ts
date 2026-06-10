@@ -30,6 +30,8 @@ const bodySchema = z.object({
   asking_price_min: z.number().nonnegative().optional(),
   asking_price_max: z.number().nonnegative().optional(),
   consent_text: z.string().min(50),
+  marketing_consent: z.boolean().optional(),
+  nonmarketing_consent: z.boolean().optional(),
   source_url: z.string().url().optional(),
   utm: z.record(z.string()).optional(),
 })
@@ -150,6 +152,8 @@ export async function POST(request: NextRequest, event: NextFetchEvent) {
     await supabaseAdmin.from("buyer_consents").insert({
       buyer_id: buyerId,
       consent_text: payload.consent_text,
+      marketing_consent: payload.marketing_consent ?? false,
+      nonmarketing_consent: payload.nonmarketing_consent ?? false,
       source: "website_signup",
       source_url: payload.source_url || null,
       ip_address: ip,
