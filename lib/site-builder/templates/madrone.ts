@@ -59,6 +59,18 @@ function build(persona: SitePersona): Data {
         },
       },
       {
+        type: "ProseSection",
+        props: {
+          id: "ProseSection-1-madrone",
+          eyebrow: c.prose[0].eyebrow,
+          heading: c.prose[0].heading,
+          bodyHtml: c.prose[0].bodyHtml,
+          pullQuote: c.prose[0].pullQuote ?? "",
+          ctaText: "",
+          ctaHref: "",
+        },
+      },
+      {
         type: "FeatureGrid",
         props: { id: "FeatureGrid-madrone", heading: "What you get", features: c.features },
       },
@@ -66,10 +78,49 @@ function build(persona: SitePersona): Data {
         type: "HowItWorks",
         props: { id: "HowItWorks-madrone", heading: "How it works", steps: c.howItWorks },
       },
-      { type: "PropertyGrid", props: { id: "PropertyGrid-madrone", heading: "Recent deals" } },
       {
-        type: "Testimonials",
-        props: { id: "Testimonials-madrone", heading: "What buyers say", reviews: [] },
+        type: "TypesGrid",
+        props: { id: "TypesGrid-madrone", heading: "What we send", intro: "", items: c.types },
+      },
+      { type: "PropertyGrid", props: { id: "PropertyGrid-madrone", heading: "Recent deals" } },
+      ...(c.prose[1]
+        ? [
+            {
+              type: "ProseSection",
+              props: {
+                id: "ProseSection-2-madrone",
+                eyebrow: c.prose[1].eyebrow,
+                heading: c.prose[1].heading,
+                bodyHtml: c.prose[1].bodyHtml,
+                pullQuote: c.prose[1].pullQuote ?? "",
+                ctaText: "",
+                ctaHref: "",
+              },
+            },
+          ]
+        : []),
+      {
+        type: "AreasServed",
+        props: {
+          id: "AreasServed-madrone",
+          heading: c.areas.heading,
+          intro: c.areas.intro,
+          singleLine: c.areas.singleLine,
+          areas: [],
+        },
+      },
+      {
+        type: "ReviewsWall",
+        props: {
+          id: "ReviewsWall-madrone",
+          heading: "What buyers say",
+          emptyText: "No reviews yet — they'll appear here as buyers close deals from the list.",
+          reviews: [],
+        },
+      },
+      {
+        type: "RecentPosts",
+        props: { id: "RecentPosts-madrone", heading: "From the blog", intro: "", posts: [] },
       },
       {
         type: "Faq",
