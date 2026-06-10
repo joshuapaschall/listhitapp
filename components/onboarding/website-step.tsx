@@ -293,7 +293,7 @@ export function WebsiteStep() {
               Free, and live in minutes. Opt-in notice, privacy policy, and terms are built in — and we
               pull in your business info automatically.
             </p>
-            <Button type="button" variant="brand" onClick={() => router.push("/websites/new")}>
+            <Button type="button" variant="brand" onClick={() => router.push("/websites/new?from=onboarding")}>
               Build my site <ArrowRight className="h-3.5 w-3.5" />
             </Button>
           </Card>
