@@ -8,6 +8,8 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { SiteRendererRSC } from "@/components/sites/site-renderer-rsc"
 import { SiteJsonLd } from "@/components/sites/site-json-ld"
 import { LegalPage } from "@/components/sites/legal-page"
+import { BuyerProfilePage } from "@/components/sites/buyer-profile-page"
+import { WelcomePage } from "@/components/sites/welcome-page"
 import { PropertiesPage } from "@/components/sites/properties-page"
 import { PropertyPage } from "@/components/sites/property-page"
 import { PropertyJsonLd } from "@/components/sites/property-json-ld"
@@ -94,6 +96,11 @@ export async function generateMetadata({
   try {
     const host = decodeURIComponent(params.host)
     const path = normalizePath(params.path)
+
+    // Lead-flow pages are transactional — never index them.
+    if (path === "/get-on-the-list" || path === "/welcome") {
+      return { title: "Get on the list", robots: { index: false, follow: false } }
+    }
 
     const legalKind = LEGAL_PATHS[path]
     if (legalKind) {
@@ -254,6 +261,30 @@ export default async function SitePage({
     const args = legalKind === "contact" ? null : await legalArgsFor(site, business)
     const doc = buildLegalDoc(legalKind, args, site, business)
     return <LegalPage doc={doc} brandName={site.name} phone={business.phone} theme={theme} />
+  }
+
+  // Lead flow — dedicated Step-2 profile page and Step-3 success page. Reserved
+  // paths take precedence over Puck content (same as the other reserved paths).
+  if (path === "/get-on-the-list") {
+    const site = await resolveSiteByHost(host)
+    if (!site) notFound()
+    const theme = { ...DEFAULT_THEME, ...(site.theme_json || {}) }
+    const optin = await buildOptinContext(site)
+    return (
+      <BuyerProfilePage
+        persona={site.persona}
+        brandName={site.name}
+        theme={theme}
+        consentText={optin.consentMarketing || optin.disclosure}
+      />
+    )
+  }
+
+  if (path === "/welcome") {
+    const site = await resolveSiteByHost(host)
+    if (!site) notFound()
+    const theme = { ...DEFAULT_THEME, ...(site.theme_json || {}) }
+    return <WelcomePage brandName={site.name} theme={theme} />
   }
 
   if (path === "/properties") {
