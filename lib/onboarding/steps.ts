@@ -65,7 +65,7 @@ export const ONBOARDING_STEPS: OnboardingStepDef[] = [
     section: "approval",
     optional: false,
     dependsOn: "verify_business",
-    href: null,
+    href: "/getting-started/website",
     countsTowardProgress: true,
   },
   {
