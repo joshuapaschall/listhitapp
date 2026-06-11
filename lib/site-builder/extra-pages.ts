@@ -22,11 +22,22 @@ function reid(block: any, suffix: string) {
   if (block?.props?.id) block.props.id = `${block.props.id}${suffix}`
   return block
 }
+function conversionBand(suffix: string) {
+  return {
+    type: "ConversionBand",
+    props: {
+      id: `join-${suffix}`,
+      heading: "Ready to see the deals?",
+      body: "Join the buyers list and get new off-market deals by text and email — free, no contract.",
+      formTitle: "Get deals sent to you",
+      ctaLabel: "Send me deals",
+    },
+  }
+}
 
 export function buildAboutPage(home: any, persona: SitePersona) {
   const c = PERSONAS[persona]
   const nav = reid(rootRelativeAnchors(pick(home, "Nav")), "-about")
-  const cta = reid(pick(home, "CtaBand"), "-about")
   const footer = reid(pick(home, "Footer"), "-about")
   const about = {
     type: "AboutStory",
@@ -38,16 +49,15 @@ export function buildAboutPage(home: any, persona: SitePersona) {
       stats: [],
     },
   }
-  return { root: clone(home?.root || {}), content: [nav, about, cta, footer].filter(Boolean) }
+  return { root: clone(home?.root || {}), content: [nav, about, conversionBand("about"), footer].filter(Boolean) }
 }
 
 export function buildFaqPage(home: any, persona: SitePersona) {
   const c = PERSONAS[persona]
   const nav = reid(rootRelativeAnchors(pick(home, "Nav")), "-faq")
-  const cta = reid(pick(home, "CtaBand"), "-faq")
   const footer = reid(pick(home, "Footer"), "-faq")
   const faq = { type: "Faq", props: { id: "Faq-page", heading: "Questions & answers", items: c.faqs } }
-  return { root: clone(home?.root || {}), content: [nav, faq, cta, footer].filter(Boolean) }
+  return { root: clone(home?.root || {}), content: [nav, faq, conversionBand("faq"), footer].filter(Boolean) }
 }
 
 // Build a ProseSection from the persona's first prose section (guarded).
@@ -71,7 +81,6 @@ function proseFrom(c: (typeof PERSONAS)[SitePersona], suffix: string) {
 export function buildHowItWorksPage(home: any, persona: SitePersona) {
   const c = PERSONAS[persona]
   const nav = reid(rootRelativeAnchors(pick(home, "Nav")), "-howitworks")
-  const cta = reid(pick(home, "CtaBand"), "-howitworks")
   const footer = reid(pick(home, "Footer"), "-howitworks")
   const prose = proseFrom(c, "howitworks")
   const how = {
@@ -82,12 +91,11 @@ export function buildHowItWorksPage(home: any, persona: SitePersona) {
     type: "TypesGrid",
     props: { id: "TypesGrid-howitworks", heading: "What we send", intro: "", items: c.types },
   }
-  return { root: clone(home?.root || {}), content: [nav, prose, how, types, cta, footer].filter(Boolean) }
+  return { root: clone(home?.root || {}), content: [nav, prose, how, types, conversionBand("howitworks"), footer].filter(Boolean) }
 }
 
 export function buildReviewsPage(home: any) {
   const nav = reid(rootRelativeAnchors(pick(home, "Nav")), "-reviews")
-  const cta = reid(pick(home, "CtaBand"), "-reviews")
   const footer = reid(pick(home, "Footer"), "-reviews")
   const reviews = {
     type: "ReviewsWall",
@@ -98,7 +106,7 @@ export function buildReviewsPage(home: any) {
       reviews: [],
     },
   }
-  return { root: clone(home?.root || {}), content: [nav, reviews, cta, footer].filter(Boolean) }
+  return { root: clone(home?.root || {}), content: [nav, reviews, conversionBand("reviews"), footer].filter(Boolean) }
 }
 
 export function buildBuyersListPage(home: any, persona: SitePersona) {
