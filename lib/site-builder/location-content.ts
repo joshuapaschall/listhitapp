@@ -27,6 +27,12 @@ function stateName(stateId: string): string {
   return STATE_NAMES[stateId] || stateId
 }
 
+// The {City} value for a location page: city/county → the place; state → the
+// full state name (e.g. "Georgia", not "GA").
+export function marketCityLabel(m: ParsedMarket): string {
+  return m.kind === "state" ? stateName(m.stateId) : m.place
+}
+
 // "Atlanta, GA" for city/county; full state name for a state-level page.
 function placeLabelOf(m: ParsedMarket): string {
   if (m.kind === "state") return stateName(m.stateId)

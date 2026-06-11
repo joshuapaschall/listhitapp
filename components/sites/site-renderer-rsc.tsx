@@ -12,9 +12,22 @@ import type { SiteTheme } from "@/lib/site-builder/types"
 // SiteContextProvider wraps the server-rendered tree so those islands can read context.
 // The editor preview keeps the client renderer (site-renderer.tsx) — the <Puck> editor
 // cannot run in an RSC environment.
-export function SiteRendererRSC({ data, theme, form }: { data: any; theme: SiteTheme; form: SiteFormContext }) {
+export function SiteRendererRSC({
+  data,
+  theme,
+  form,
+  cityOverride,
+}: {
+  data: any
+  theme: SiteTheme
+  form: SiteFormContext
+  cityOverride?: string
+}) {
   const typeStyleId = (theme as Partial<SiteTheme>)?.typeStyleId
-  const display = interpolateSiteData(data, form?.brandName ?? "our team", cityFromMarkets(form?.markets))
+  // Location pages force {City} to the page's market; home callers pass nothing
+  // and fall back to the market-derived city exactly as before.
+  const city = cityOverride ?? cityFromMarkets(form?.markets)
+  const display = interpolateSiteData(data, form?.brandName ?? "our team", city)
   return (
     <div className="lh-site" style={themeToCssVars(theme)}>
       <SiteStyles />

@@ -24,8 +24,7 @@ import {
   type DealFilters,
 } from "@/services/site-deals-service"
 import { resolveLocationPage, locationHrefForDeal, PERSONA_URL_SLUG, buildAreaLinks } from "@/lib/site-builder/location-pages"
-import { locationCopy } from "@/lib/site-builder/location-content"
-import { LocationPage } from "@/components/sites/location-page"
+import { locationCopy, marketCityLabel } from "@/lib/site-builder/location-content"
 import { getPublishedPosts, getPublishedPostBySlug, getPublishedPostCount } from "@/services/site-posts-service"
 import { BlogIndexPage } from "@/components/sites/blog-index-page"
 import { BlogPostPage } from "@/components/sites/blog-post-page"
@@ -443,19 +442,37 @@ export default async function SitePage({
       notFound()
     }
     if (site && match) {
-      const theme = { ...DEFAULT_THEME, ...(site.theme_json || {}) }
       const business = { ...DEFAULT_BUSINESS, ...(site.business_json || {}) }
+      // Market-filtered deals (not the global home deals); empty → PR1 placeholders.
       const deals = await getPublishedDealsForMarket(site.org_id, match.market, 6).catch(() => [])
       const formContext = {
         persona: site.persona,
         brandName: site.name,
         ...(await buildOptinContext(site)),
         legalPaths: { terms: "/terms", privacy: "/privacy" },
+        // Full site markets stay in context so Areas We Serve + footer show
+        // sibling markets and link back home; only the {City} is overridden.
         markets: { ...DEFAULT_MARKETS, ...((site.markets_json as any) || {}) },
         deals,
         business,
       }
-      const copy = locationCopy(match.persona, match.market, site.name)
+      // Location pages mirror the home block stack: same home puck_data + the same
+      // injections, localized to this market via cityOverride.
+      const homeResult = await resolveSite(host, "/")
+      if (!homeResult) notFound()
+      let data = mergeThemeIntoRoot(homeResult.page.puck_data, homeResult.theme)
+      const postCount = await getPublishedPostCount(site.id, site.org_id).catch(() => 0)
+      if (postCount > 0) data = injectBlogNavLink(data)
+      const navPages = await getNavPages(site.id).catch(() => [])
+      data = injectPageNavLinks(data, navPages)
+      data = injectAreaLinks(data, buildAreaLinks(site))
+      const recentPosts = (await getPublishedPosts(site.id, site.org_id, 3).catch(() => [])).map((p) => ({
+        title: p.title,
+        href: `/blog/${p.slug}`,
+        imageUrl: p.featuredImageUrl || undefined,
+      }))
+      data = injectRecentPosts(data, recentPosts)
+      const cityOverride = marketCityLabel(match.market)
       return (
         <>
           <SiteJsonLd
@@ -464,7 +481,7 @@ export default async function SitePage({
             business={business}
             areaServed={{ city: match.market.kind === "city" ? match.market.place : undefined, state: match.market.stateId }}
           />
-          <LocationPage host={host} site={site} theme={theme} business={business} copy={copy} formContext={formContext} />
+          <SiteRendererRSC data={data} theme={homeResult.theme} form={formContext} cityOverride={cityOverride} />
         </>
       )
     }
