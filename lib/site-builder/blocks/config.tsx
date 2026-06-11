@@ -268,6 +268,7 @@ export const siteConfig: Config = {
             <>
             {heroSrc ? <link rel="preload" as="image" href={heroSrc} fetchPriority="high" /> : null}
             <section
+              id="join"
               className="lh-hero-photo"
               style={{
                 position: "relative",
@@ -349,7 +350,7 @@ export const siteConfig: Config = {
 
         if (variant === "centered") {
           return (
-            <section style={{ background: "color-mix(in srgb, var(--p) 7%, #fff)" }}>
+            <section id="join" style={{ background: "color-mix(in srgb, var(--p) 7%, #fff)" }}>
               <div style={{ ...WRAP, padding: "72px 24px", textAlign: "center" }}>
                 {eyebrowEl}
                 <h1 className="lh-hero-h1" style={{ ...HEADING, fontSize: 40, fontWeight: 800, color: "var(--p)", margin: "0 auto", maxWidth: 960, marginInline: "auto", textWrap: "balance" } as React.CSSProperties}>
@@ -368,7 +369,7 @@ export const siteConfig: Config = {
 
         if (variant === "split") {
           return (
-            <section style={{ background: "#fff" }}>
+            <section id="join" style={{ background: "#fff" }}>
               <div
                 className="lh-grid-2"
                 style={{
@@ -425,7 +426,7 @@ export const siteConfig: Config = {
 
         // band
         return (
-          <section>
+          <section id="join">
             <div style={{ background: "var(--p)" }}>
               <div
                 className="lh-grid-2"
@@ -556,11 +557,11 @@ export const siteConfig: Config = {
         },
       },
       defaultProps: {
-        heading: "Why homeowners choose us",
+        heading: "Why buyers join the list",
         features: [
-          { icon: "⚡", title: "Close fast", body: "Pick your closing date — as quick as 7 days." },
-          { icon: "💵", title: "Fair cash offer", body: "No lowballs. A real number you can count on." },
-          { icon: "🛠️", title: "Sell as-is", body: "No repairs, no cleaning, no showings." },
+          { icon: "⚡", title: "You move first", body: "New off-market deals hit your phone the moment we lock them up — before anyone else." },
+          { icon: "📊", title: "Numbers up front", body: "Every deal comes with the price, the repairs, and the ARV already run." },
+          { icon: "💵", title: "Free to join", body: "No fees, no contract. We make our money on the deals, not on the list." },
         ],
       },
       render: ({ heading, features }: any) => (
@@ -705,69 +706,6 @@ export const siteConfig: Config = {
     },
 
     // -----------------------------------------------------------------------
-    Testimonials: {
-      label: "Testimonials",
-      fields: {
-        heading: { type: "text", label: "Section heading", contentEditable: true },
-        emptyText: { type: "text", label: "Empty state message" },
-        reviews: {
-          type: "array",
-          label: "Reviews",
-          arrayFields: {
-            quote: { type: "textarea", label: "Quote" },
-            author: { type: "text", label: "Author" },
-          },
-          getItemSummary: (item: any, i?: number) => item?.quote || item?.author || `Item ${(i ?? 0) + 1}`,
-        },
-      },
-      defaultProps: {
-        heading: "What buyers say",
-        emptyText: "No reviews yet — they'll appear here as buyers close deals from the list.",
-        reviews: [],
-      },
-      render: ({ heading, reviews, emptyText }: any) => {
-        const list = (reviews || []).filter((r: any) => r && (r.quote || r.author))
-        return (
-          <section id="reviews" style={{ background: "#f7f8fa" }}>
-            <div style={{ ...WRAP, padding: "64px 24px" }}>
-              {heading && (
-                <h2 className="lh-h2" style={{ ...HEADING, fontSize: 32, fontWeight: 800, color: "var(--p)", textAlign: "center", margin: "0 0 36px" }}>
-                  {heading}
-                </h2>
-              )}
-              {list.length === 0 ? (
-                <p style={{ textAlign: "center", fontSize: 15, color: "inherit", opacity: 0.7 }}>
-                  {emptyText}
-                </p>
-              ) : (
-                <div className="lh-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 22 }}>
-                  {list.map((r: any, i: number) => (
-                    <div
-                      key={i}
-                      style={{
-                        background: "#fff",
-                        border: "1px solid #eef1f5",
-                        borderRadius: 16,
-                        padding: 24,
-                        boxShadow: "0 8px 24px rgba(16,27,41,.05)",
-                      }}
-                    >
-                      <div style={{ color: "var(--a)", fontSize: 16, letterSpacing: 2, marginBottom: 12 }}>★★★★★</div>
-                      <div style={{ fontFamily: "var(--body)", fontSize: 15, lineHeight: 1.6, color: "#2c3744" }}>{r?.quote}</div>
-                      {r?.author ? (
-                        <div style={{ marginTop: 14, fontFamily: "var(--head)", fontWeight: 700, fontSize: 14, color: "var(--p)" }}>— {r.author}</div>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
-        )
-      },
-    },
-
-    // -----------------------------------------------------------------------
     Faq: {
       label: "FAQ",
       fields: {
@@ -907,19 +845,21 @@ export const siteConfig: Config = {
         heading: { type: "text", label: "Section heading", contentEditable: true },
         body: { type: "textarea", label: "Body text", contentEditable: true },
         buttonLabel: { type: "text", label: "Button text", contentEditable: true },
+        buttonHref: { type: "text", label: "Button link" },
       },
       defaultProps: {
-        heading: "Ready for your offer?",
-        body: "Tell us about your property and get a fair cash offer today.",
-        buttonLabel: "Get my cash offer",
+        heading: "Ready to see the deals?",
+        body: "Join the buyers list and get new off-market deals by text and email — free, no contract.",
+        buttonLabel: "Join the buyers list",
+        buttonHref: "/#join",
       },
-      render: ({ heading, body, buttonLabel }: any) => (
+      render: ({ heading, body, buttonLabel, buttonHref }: any) => (
         <section style={{ background: "var(--p)" }}>
           <div style={{ ...WRAP, padding: "56px 24px", textAlign: "center" }}>
             <h2 className="lh-h2" style={{ ...HEADING, fontSize: 32, fontWeight: 800, color: "#fff", margin: 0 }}>{heading}</h2>
             {body && <p style={{ color: "rgba(255,255,255,.85)", fontSize: 17, marginTop: 12, maxWidth: 560, marginInline: "auto" }}>{body}</p>}
-            <button
-              type="button"
+            <a
+              href={buttonHref || "/#join"}
               style={{
                 marginTop: 22,
                 padding: "14px 28px",
@@ -930,10 +870,12 @@ export const siteConfig: Config = {
                 fontWeight: 700,
                 fontSize: 16,
                 cursor: "pointer",
+                textDecoration: "none",
+                display: "inline-block",
               }}
             >
               {buttonLabel}
-            </button>
+            </a>
           </div>
         </section>
       ),
@@ -1045,7 +987,7 @@ export const siteConfig: Config = {
                     <p style={{ color: "#5a6675", fontSize: 14.5, lineHeight: 1.55, marginTop: 8 }}>{it?.body}</p>
                     {it?.href ? (
                       <a href={it.href} style={{ display: "inline-block", marginTop: 12, fontFamily: "var(--head)", fontWeight: 700, fontSize: 14, color: "var(--p)", textDecoration: "none" }}>
-                        →
+                        Browse →
                       </a>
                     ) : null}
                   </div>
