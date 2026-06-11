@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import { cookies } from "next/headers"
-import { notFound } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
 import { resolveSite, mergeThemeIntoRoot, resolveSiteByHost, injectBlogNavLink, getNavPages, injectPageNavLinks, injectAreaLinks, injectRecentPosts, buildSiteNavLinks } from "@/lib/site-builder/resolve-site"
 import { DEFAULT_THEME, DEFAULT_BUSINESS, DEFAULT_MARKETS, type SitePersona } from "@/lib/site-builder/types"
 import { cityFromMarkets } from "@/lib/site-builder/interpolate"
@@ -23,7 +23,7 @@ import {
   getPublishedDealsForMarket,
   type DealFilters,
 } from "@/services/site-deals-service"
-import { resolveLocationPage, locationHrefForDeal, PERSONA_URL_SLUG, buildAreaLinks } from "@/lib/site-builder/location-pages"
+import { resolveLocationPage, locationHrefForDeal, PERSONA_URL_SLUG, buildAreaLinks, homeStateId, stateSlug } from "@/lib/site-builder/location-pages"
 import { locationCopy, marketCityLabel } from "@/lib/site-builder/location-content"
 import { getPublishedPosts, getPublishedPostBySlug, getPublishedPostCount } from "@/services/site-posts-service"
 import { BlogIndexPage } from "@/components/sites/blog-index-page"
@@ -169,7 +169,7 @@ export async function generateMetadata({
       }
     }
 
-    if (params.path?.length === 2) {
+    if ((params.path?.length === 2 || params.path?.length === 3) && params.path[0] !== "properties" && params.path[0] !== "blog") {
       const site = await resolveSiteByHost(host)
       if (site) {
         const match = resolveLocationPage(site, params.path)
@@ -433,9 +433,16 @@ export default async function SitePage({
 
   // Programmatic location landing pages (e.g. /investment-properties/atlanta-ga)
   // for sites running specific markets. Nationwide sites have none.
-  if (params.path?.length === 2 && params.path[0] !== "properties") {
+  if ((params.path?.length === 2 || params.path?.length === 3) && params.path[0] !== "properties" && params.path[0] !== "blog") {
     const site = await resolveSiteByHost(host)
     const match = site ? resolveLocationPage(site, params.path) : null
+    // State-as-home: the home's own state hub IS the home page → 301 to home.
+    const hs = site ? homeStateId(site) : null
+    if (site && hs && params.path.length === 2
+        && PERSONA_URL_SLUG[site.persona as keyof typeof PERSONA_URL_SLUG] === params.path[0]
+        && stateSlug(hs) === params.path[1]) {
+      redirect("/")
+    }
     // A claimed persona prefix on a site that has markets but an unknown market
     // is a 404 — don't silently fall through to the home page.
     const siteMarketCount = (site?.markets_json as any)?.markets?.length ?? 0

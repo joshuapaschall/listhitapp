@@ -141,6 +141,17 @@ function siteMarkets(site: any): { scope: string; markets: string[] } {
   return { scope: "nationwide", markets: [], ...(site?.markets_json || {}) }
 }
 
+// The state id when the home page itself targets a state: specific scope whose
+// primary (first) market is a state. Otherwise null. Drives the "state as home" pattern.
+export function homeStateId(site: any): string | null {
+  const markets = siteMarkets(site)
+  if (markets.scope !== "specific") return null
+  const first = markets.markets?.[0]
+  if (!first) return null
+  const m = parseMarket(first)
+  return m && m.kind === "state" ? m.stateId : null
+}
+
 export function resolveLocationPage(site: any, pathSegments: string[]): LocationMatch | null {
   if (!site || !Array.isArray(pathSegments)) return null
   const markets = siteMarkets(site)
@@ -182,13 +193,15 @@ export function locationPaths(site: any): string[] {
   if (!markets.markets || markets.markets.length === 0) return []
   const personaSlug = PERSONA_URL_SLUG[site.persona as SitePersona]
   if (!personaSlug) return []
+  const homeState = homeStateId(site)
 
   const out = new Set<string>()
-  // State hubs (explicit + implied)
+  // State hubs — excluding the home-state hub (it redirects to home).
   for (const stateId of statesInMarkets(markets.markets)) {
+    if (stateId === homeState) continue
     out.add(`/${personaSlug}/${stateSlug(stateId)}`)
   }
-  // Nested city/county pages
+  // Nested city/county pages (home-state cities included — they still resolve).
   for (const entry of markets.markets) {
     const m = parseMarket(entry)
     if (m && m.kind !== "state") out.add(marketPath(personaSlug, m))
@@ -211,11 +224,14 @@ export function buildAreaLinks(
   if (!markets.markets || markets.markets.length === 0) return []
   const personaSlug = PERSONA_URL_SLUG[site.persona as SitePersona]
   if (!personaSlug) return []
+  const homeState = homeStateId(site)
 
-  // CITY/COUNTY page: parent state first, then sibling cities (excluding self).
+  // CITY/COUNTY page: parent state first (→ home when it's the home-state), then siblings.
   if (current && current.kind !== "state") {
+    const parentHref =
+      current.stateId === homeState ? "/" : `/${personaSlug}/${stateSlug(current.stateId)}`
     const out: { label: string; href: string }[] = [
-      { label: stateName(current.stateId), href: `/${personaSlug}/${stateSlug(current.stateId)}` },
+      { label: stateName(current.stateId), href: parentHref },
     ]
     for (const m of citiesInState(markets.markets, current.stateId)) {
       if (placeSlug(m.place) === placeSlug(current.place)) continue
@@ -232,10 +248,18 @@ export function buildAreaLinks(
     }))
   }
 
-  // HOME (and footer): one link per state.
+  // HOME (and footer).
   const out: { label: string; href: string }[] = []
+  // When the home IS a state, it acts as that state's hub → link straight to its cities.
+  if (homeState) {
+    for (const m of citiesInState(markets.markets, homeState)) {
+      out.push({ label: m.place, href: marketPath(personaSlug, m) })
+    }
+  }
+  // Other states as hubs (and, when there's no home-state, ALL states — PR5 behavior).
   const seen = new Set<string>()
   for (const stateId of statesInMarkets(markets.markets)) {
+    if (stateId === homeState) continue
     if (seen.has(stateId)) continue
     seen.add(stateId)
     out.push({ label: stateName(stateId), href: `/${personaSlug}/${stateSlug(stateId)}` })
