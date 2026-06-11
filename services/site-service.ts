@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { DEFAULT_THEME, DEFAULT_BUSINESS, DEFAULT_MARKETS, type SitePersona, type SiteTemplateId, type SiteTheme, type SiteBusiness, type SiteMarkets } from "@/lib/site-builder/types"
 import { getSiteTemplate } from "@/lib/site-builder/templates"
 import { extractContent, applyContentToPuck } from "@/lib/site-builder/compose"
-import { buildAboutPage, buildFaqPage } from "@/lib/site-builder/extra-pages"
+import { EXTRA_PAGES } from "@/lib/site-builder/extra-pages"
 import { slugifySiteName, isReservedSlug } from "@/lib/site-builder/slug"
 import { addProjectDomain, removeProjectDomain, vercelConfigured } from "@/lib/vercel/domains"
 
@@ -118,28 +118,19 @@ export class SiteService {
     })
     if (pageError) throw new Error(pageError.message)
 
-    const { error: extraErr } = await client.from("site_pages").insert([
-      {
+    const { error: extraErr } = await client.from("site_pages").insert(
+      EXTRA_PAGES.map((e) => ({
         site_id: site.id,
         org_id: orgId,
-        path: "/about",
-        title: "About",
+        path: e.path,
+        title: e.title,
         meta_description: null,
-        puck_data: buildAboutPage(home, input.persona),
-        nav_label: "About",
-        sort_order: 10,
-      },
-      {
-        site_id: site.id,
-        org_id: orgId,
-        path: "/faq",
-        title: "Questions & answers",
-        meta_description: null,
-        puck_data: buildFaqPage(home, input.persona),
-        nav_label: "FAQ",
-        sort_order: 20,
-      },
-    ])
+        puck_data: e.build(home, input.persona),
+        nav_label: e.navLabel,
+        sort_order: e.sortOrder,
+        enabled: e.enabledByDefault,
+      })),
+    )
     if (extraErr) throw new Error(extraErr.message)
 
     return site

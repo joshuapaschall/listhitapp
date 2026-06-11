@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js"
 import { getSiteTemplate, PERSONAS } from "@/lib/site-builder/templates"
-import { buildAboutPage, buildFaqPage } from "@/lib/site-builder/extra-pages"
+import { EXTRA_PAGES } from "@/lib/site-builder/extra-pages"
 
 const APPLY = process.argv.includes("--apply")
 
@@ -93,13 +93,10 @@ async function main() {
       if (error) { console.error(`  ! ${site.id} home update failed: ${error.message}`); continue }
     }
 
-    // 3) About / FAQ pages (create if missing)
-    const extras: { path: string; title: string; label: string; sort: number; build: (h: any, p: any) => any }[] = [
-      { path: "/about", title: "About", label: "About", sort: 10, build: buildAboutPage },
-      { path: "/faq", title: "Questions & answers", label: "FAQ", sort: 20, build: buildFaqPage },
-    ]
+    // 3) Extra sub-pages (create if missing) — shared canonical list, so new
+    // sites and backfilled sites seed identical pages with the same defaults.
     const createdPaths: string[] = []
-    for (const e of extras) {
+    for (const e of EXTRA_PAGES) {
       const { data: row } = await db
         .from("site_pages").select("id").eq("site_id", site.id).eq("path", e.path).maybeSingle()
       if (row) continue
@@ -107,7 +104,7 @@ async function main() {
         const { error } = await db.from("site_pages").insert({
           site_id: site.id, org_id: site.org_id, path: e.path, title: e.title,
           meta_description: null, puck_data: e.build(puck, site.persona),
-          nav_label: e.label, sort_order: e.sort, enabled: true,
+          nav_label: e.navLabel, sort_order: e.sortOrder, enabled: e.enabledByDefault,
         })
         if (error) { console.error(`  ! ${site.id} ${e.path} insert failed: ${error.message}`); continue }
       }
