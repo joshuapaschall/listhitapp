@@ -65,7 +65,7 @@ function build(persona: SitePersona): Data {
       },
       {
         type: "FeatureGrid",
-        props: { id: "FeatureGrid-cedar", heading: "How it works", features: c.features },
+        props: { id: "FeatureGrid-cedar", heading: "Why people choose us", features: c.features },
       },
       {
         type: "SituationsGrid",

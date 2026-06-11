@@ -65,7 +65,7 @@ function build(persona: SitePersona): Data {
       },
       {
         type: "FeatureGrid",
-        props: { id: "FeatureGrid-oak", heading: "The simple way to sell", features: c.features },
+        props: { id: "FeatureGrid-oak", heading: "Why people choose us", features: c.features },
       },
       {
         type: "SituationsGrid",

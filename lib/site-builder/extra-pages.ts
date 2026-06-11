@@ -111,7 +111,19 @@ export function buildBuyersListPage(home: any, persona: SitePersona) {
     type: "TypesGrid",
     props: { id: "TypesGrid-buyers", heading: "What we send", intro: "", items: c.types },
   }
-  return { root: clone(home?.root || {}), content: [nav, prose, types, cta, footer].filter(Boolean) }
+  const contact = {
+    type: "ContactPanel",
+    props: {
+      id: "join",
+      heading: "Join the buyers list",
+      phone: "",
+      email: "",
+      hours: "",
+      serviceArea: "",
+      note: "Free to join. New off-market deals by text and email — reply STOP anytime.",
+    },
+  }
+  return { root: clone(home?.root || {}), content: [nav, prose, types, contact, cta, footer].filter(Boolean) }
 }
 
 // Canonical list of auto-seeded sub-pages — single source of truth for both

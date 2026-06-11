@@ -419,7 +419,14 @@ export default function WebsiteWizard(props: WizardProps) {
         : step === 2
           ? draft.markets.scope === "nationwide" || draft.markets.markets.length > 0
           : step === 5
-            ? Boolean(draft.business.email.trim() && draft.business.phone.trim())
+            ? Boolean(
+                /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.business.email.trim()) &&
+                  draft.business.phone.replace(/\D/g, "").length >= 10 &&
+                  draft.business.address.trim() &&
+                  draft.business.city.trim() &&
+                  draft.business.state.trim().length === 2 &&
+                  draft.business.zip.trim(),
+              )
             : true
 
   if (loading) {
@@ -957,7 +964,7 @@ export default function WebsiteWizard(props: WizardProps) {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Business email">
+                <Field label="Business email *">
                   <Input
                     type="email"
                     placeholder="you@company.com"
@@ -965,7 +972,7 @@ export default function WebsiteWizard(props: WizardProps) {
                     onChange={(e) => setBusiness({ email: e.target.value })}
                   />
                 </Field>
-                <Field label="Business phone">
+                <Field label="Business phone *">
                   <Input
                     placeholder="(555) 555-5555"
                     value={draft.business.phone}
@@ -977,7 +984,7 @@ export default function WebsiteWizard(props: WizardProps) {
                 </Field>
               </div>
 
-              <Field label="Street address">
+              <Field label="Street address *">
                 <Input
                   placeholder="123 Main St"
                   value={draft.business.address}
@@ -985,10 +992,10 @@ export default function WebsiteWizard(props: WizardProps) {
                 />
               </Field>
               <div className="grid grid-cols-3 gap-3">
-                <Field label="City">
+                <Field label="City *">
                   <Input value={draft.business.city} onChange={(e) => setBusiness({ city: e.target.value })} />
                 </Field>
-                <Field label="State">
+                <Field label="State *">
                   <Input
                     maxLength={2}
                     placeholder="GA"
@@ -996,7 +1003,7 @@ export default function WebsiteWizard(props: WizardProps) {
                     onChange={(e) => setBusiness({ state: e.target.value.toUpperCase() })}
                   />
                 </Field>
-                <Field label="ZIP">
+                <Field label="ZIP *">
                   <Input value={draft.business.zip} onChange={(e) => setBusiness({ zip: e.target.value })} />
                 </Field>
               </div>
