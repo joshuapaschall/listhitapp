@@ -24,8 +24,6 @@ function build(persona: SitePersona): Data {
           logoUrl: "",
           phone: "(555) 555-5555",
           links: [
-            { label: "How it works", href: "#how-it-works" },
-            { label: "Reviews", href: "#reviews" },
             { label: "Contact", href: "/contact" },
           ],
           layout: "stack",
