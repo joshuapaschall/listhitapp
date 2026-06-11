@@ -59,6 +59,18 @@ function build(persona: SitePersona): Data {
         },
       },
       {
+        type: "ProseSection",
+        props: {
+          id: "ProseSection-1-oak",
+          eyebrow: c.prose[0].eyebrow,
+          heading: c.prose[0].heading,
+          bodyHtml: c.prose[0].bodyHtml,
+          pullQuote: c.prose[0].pullQuote ?? "",
+          ctaText: "",
+          ctaHref: "",
+        },
+      },
+      {
         type: "FeatureGrid",
         props: { id: "FeatureGrid-oak", heading: "The simple way to sell", features: c.features },
       },
@@ -66,10 +78,49 @@ function build(persona: SitePersona): Data {
         type: "HowItWorks",
         props: { id: "HowItWorks-oak", heading: "How it works", steps: c.howItWorks },
       },
-      { type: "PropertyGrid", props: { id: "PropertyGrid-oak", heading: "Recent deals" } },
       {
-        type: "Testimonials",
-        props: { id: "Testimonials-oak", heading: "What buyers say", reviews: [] },
+        type: "TypesGrid",
+        props: { id: "TypesGrid-oak", heading: "What we send", intro: "", items: c.types },
+      },
+      { type: "PropertyGrid", props: { id: "PropertyGrid-oak", heading: "Recent deals" } },
+      ...(c.prose[1]
+        ? [
+            {
+              type: "ProseSection",
+              props: {
+                id: "ProseSection-2-oak",
+                eyebrow: c.prose[1].eyebrow,
+                heading: c.prose[1].heading,
+                bodyHtml: c.prose[1].bodyHtml,
+                pullQuote: c.prose[1].pullQuote ?? "",
+                ctaText: "",
+                ctaHref: "",
+              },
+            },
+          ]
+        : []),
+      {
+        type: "AreasServed",
+        props: {
+          id: "AreasServed-oak",
+          heading: c.areas.heading,
+          intro: c.areas.intro,
+          singleLine: c.areas.singleLine,
+          areas: [],
+        },
+      },
+      {
+        type: "ReviewsWall",
+        props: {
+          id: "ReviewsWall-oak",
+          heading: "What buyers say",
+          emptyText: "No reviews yet — they'll appear here as buyers close deals from the list.",
+          reviews: [],
+        },
+      },
+      {
+        type: "RecentPosts",
+        props: { id: "RecentPosts-oak", heading: "From the blog", intro: "", posts: [] },
       },
       {
         type: "Faq",
