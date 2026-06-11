@@ -8,6 +8,9 @@ export interface DealCardProps {
   locked?: boolean
   href?: string
   statusLabel?: string
+  // When set, renders an on-brand placeholder card (locked look, badge chip,
+  // blurred price when priceBlur, spec line). Never a link, never a real price.
+  placeholder?: { badge: string; specs: string[]; priceBlur: boolean }
 }
 
 function formatUsd(n: number | null): string | null {
@@ -27,13 +30,95 @@ function specLine(p: DealSummary): string {
 // hides the street address; "full" shows it. `locked` overlays a join-to-unlock
 // treatment and NEVER renders the address, regardless of variant. When `href` is
 // provided and the card is not locked, the whole card becomes a link.
-export function DealCard({ property, variant = "teaser", locked = false, href, statusLabel }: DealCardProps) {
+export function DealCard({ property, variant = "teaser", locked = false, href, statusLabel, placeholder }: DealCardProps) {
   const price = formatUsd(property.price)
   const cityState = [property.city, property.state].filter(Boolean).join(", ")
   const specs = specLine(property)
   const showAddress = !locked && variant === "full" && !!property.address
   const gradient =
     "linear-gradient(135deg, color-mix(in srgb, var(--p) 22%, #fff), color-mix(in srgb, var(--a) 22%, #fff))"
+
+  // Placeholder card: on-brand, visibly a placeholder (locked overlay + badge),
+  // never a link, never a real price. Fills the deals section before real
+  // properties are published; real deals replace these automatically.
+  if (placeholder) {
+    return (
+      <div
+        style={{
+          background: "#fff",
+          border: "1px solid #eef1f5",
+          borderRadius: 16,
+          overflow: "hidden",
+          boxShadow: "0 8px 24px rgba(16,27,41,.05)",
+          display: "flex",
+          flexDirection: "column",
+          height: "100%",
+        }}
+      >
+        <div style={{ position: "relative", height: 150, background: gradient }}>
+          <span
+            style={{
+              position: "absolute",
+              left: 12,
+              top: 12,
+              padding: "4px 10px",
+              borderRadius: 999,
+              fontSize: 11.5,
+              fontWeight: 700,
+              background: "var(--a)",
+              color: "#fff",
+            }}
+          >
+            {placeholder.badge}
+          </span>
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "linear-gradient(180deg, rgba(11,18,28,.18), rgba(11,18,28,.55))",
+            }}
+          >
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 7,
+                padding: "8px 14px",
+                borderRadius: 999,
+                background: "rgba(15,27,41,.88)",
+                color: "#fff",
+                fontSize: 12.5,
+                fontWeight: 700,
+              }}
+            >
+              🔒 Join to unlock
+            </span>
+          </div>
+        </div>
+        <div style={{ padding: 16 }}>
+          {placeholder.priceBlur ? (
+            <div
+              aria-hidden="true"
+              style={{ fontFamily: "var(--head)", fontWeight: 800, fontSize: 22, color: "var(--p)", lineHeight: 1.1, filter: "blur(5px)", userSelect: "none" }}
+            >
+              $1XX,X00
+            </div>
+          ) : null}
+          {placeholder.specs.length ? (
+            <div style={{ marginTop: placeholder.priceBlur ? 8 : 0, fontSize: 13, color: "#8a94a2" }}>
+              {placeholder.specs.join(" · ")}
+            </div>
+          ) : null}
+          <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 600, color: "var(--a)" }}>
+            🔒 Address &amp; full details after you join
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const card = (
     <div

@@ -1223,9 +1223,26 @@ export const siteConfig: Config = {
                 </h2>
               ) : null}
               {list.length === 0 ? (
-                <p style={{ textAlign: "center", fontSize: 15, color: "inherit", opacity: 0.7 }}>
-                  {emptyText}
-                </p>
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ color: "var(--a)", fontSize: 20, letterSpacing: 3, marginBottom: 10 }}>★★★★★</div>
+                  <div style={{ fontFamily: "var(--head)", fontWeight: 800, fontSize: 22, color: "var(--p)", marginBottom: 28 }}>
+                    Trusted by local buyers
+                  </div>
+                  <div className="lh-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 18 }}>
+                    {[
+                      { icon: "🆓", label: "Free to join", sub: "No fees, ever" },
+                      { icon: "📲", label: "Deals by text and email", sub: "In under 24h" },
+                      { icon: "🚫", label: "No spam", sub: "STOP anytime" },
+                      { icon: "📊", label: "Numbers up front", sub: "Price, repairs, ARV" },
+                    ].map((s, i) => (
+                      <div key={i} style={{ background: "#fff", border: "1px solid #eef1f5", borderRadius: 14, padding: "20px 16px" }}>
+                        <div style={{ fontSize: 22, marginBottom: 8 }}>{s.icon}</div>
+                        <div style={{ fontFamily: "var(--head)", fontWeight: 800, fontSize: 14.5, color: "var(--p)" }}>{s.label}</div>
+                        <div style={{ fontSize: 12.5, color: "#8a94a2", marginTop: 3 }}>{s.sub}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               ) : (
                 <div className="lh-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 22 }}>
                   {list.map((r: any, i: number) => (
@@ -1276,7 +1293,38 @@ export const siteConfig: Config = {
       },
       render: ({ heading, intro, posts }: any) => {
         const list = (posts || []).filter((p: any) => p && p.title)
-        if (list.length === 0) return <></>
+        if (list.length === 0) {
+          // No posts yet → a "Start here" resources rail of internal links, so
+          // the section stays present and adds internal links before the operator blogs.
+          const rail = [
+            { title: "How it works", href: "/how-it-works" },
+            { title: "Common questions", href: "/faq" },
+            { title: "About us", href: "/about" },
+            { title: "Browse deals", href: "/properties" },
+          ]
+          return (
+            <section style={{ background: "#fff" }}>
+              <div style={{ ...WRAP, padding: "64px 24px" }}>
+                <h2 className="lh-h2" style={{ ...HEADING, fontSize: 32, fontWeight: 800, color: "var(--p)", textAlign: "center", margin: "0 0 36px" }}>
+                  Start here
+                </h2>
+                <div className="lh-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 18 }}>
+                  {rail.map((r) => (
+                    // eslint-disable-next-line @next/next/no-html-link-for-pages -- public tenant site, not a dashboard route
+                    <a
+                      key={r.href}
+                      href={r.href}
+                      style={{ display: "block", border: "1px solid #eef1f5", borderRadius: 14, padding: "22px 20px", background: "#fff", textDecoration: "none" }}
+                    >
+                      <div style={{ fontFamily: "var(--head)", fontWeight: 800, fontSize: 16.5, color: "var(--p)" }}>{r.title}</div>
+                      <div style={{ marginTop: 8, fontFamily: "var(--head)", fontWeight: 700, fontSize: 13.5, color: "var(--a)" }}>Learn more →</div>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            </section>
+          )
+        }
         const placeholder =
           "radial-gradient(120% 90% at 78% 18%, color-mix(in srgb, var(--a) 22%, transparent), transparent 55%)," +
           "linear-gradient(115deg, color-mix(in srgb, var(--p) 70%, #000), color-mix(in srgb, var(--p) 88%, #000))"

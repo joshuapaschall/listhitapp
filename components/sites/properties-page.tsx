@@ -1,5 +1,6 @@
 import { themeToCssVars } from "@/lib/site-builder/theme"
 import { SiteFonts } from "@/components/sites/site-fonts"
+import { SiteHeader } from "@/components/sites/site-header"
 import type { SiteTheme, SiteBusiness, DealSummary } from "@/lib/site-builder/types"
 import type { SiteFormContext } from "@/lib/site-builder/site-context"
 import { DealCard } from "@/components/sites/deal-card"
@@ -18,6 +19,7 @@ export function PropertiesPage({
   count,
   publicMode,
   filters,
+  navLinks = [],
 }: {
   brandName: string
   theme: SiteTheme
@@ -28,6 +30,7 @@ export function PropertiesPage({
   count: number
   publicMode?: boolean
   filters?: { sort: string; beds: string; baths: string; terms: string }
+  navLinks?: { label: string; href: string }[]
 }) {
   // Public sites and cookie-unlocked sites both show full cards; only public
   // sites link each card to its (indexable) detail page — detail pages 404 when
@@ -55,16 +58,7 @@ export function PropertiesPage({
     >
       <SiteFonts typeStyleId={theme.typeStyleId} />
 
-      <header style={{ borderBottom: "1px solid #eef1f5", background: "#fff" }}>
-        <div style={{ maxWidth: 1120, margin: "0 auto", padding: "16px 24px" }}>
-          {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- public tenant site, not a dashboard route */}
-          <a href="/" style={{ textDecoration: "none" }}>
-            <span style={{ fontFamily: "var(--head)", fontWeight: 800, fontSize: 20, color: "var(--p)" }}>
-              {brandName}
-            </span>
-          </a>
-        </div>
-      </header>
+      <SiteHeader brandName={brandName} phone={business.phone} links={navLinks} />
 
       <main style={{ flex: 1, background: "color-mix(in srgb, var(--p) 5%, #fff)" }}>
         <div style={{ maxWidth: 1120, margin: "0 auto", padding: "48px 24px" }}>
