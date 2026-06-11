@@ -226,33 +226,28 @@ export const siteConfig: Config = {
         // Social-proof row built from `stat`: decorative avatars + stars + the stat line.
         const trustRow = () =>
           stat ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 28 }}>
-              <div style={{ display: "flex" }}>
-                {["JD", "MK", "RP", "+"].map((t, i) => (
-                  <span
-                    key={i}
-                    style={{
-                      width: 34,
-                      height: 34,
-                      borderRadius: "50%",
-                      border: "2px solid #0c1420",
-                      marginLeft: i === 0 ? 0 : -10,
-                      background: "#3a4a5e",
-                      display: "grid",
-                      placeItems: "center",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: "#dfe7f0",
-                    }}
-                  >
-                    {t}
-                  </span>
-                ))}
-              </div>
-              <div>
-                <div style={{ color: "#ffb733", letterSpacing: 2, fontSize: 15 }}>★★★★★</div>
-                <div style={{ fontSize: 13.5, color: "rgba(255,255,255,.72)", marginTop: 2 }}>{stat}</div>
-              </div>
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 10,
+                marginTop: 28,
+                padding: "10px 16px",
+                borderRadius: 999,
+                background: "rgba(255,255,255,.10)",
+                border: "1px solid rgba(255,255,255,.18)",
+              }}
+            >
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  background: "var(--a)",
+                  boxShadow: "0 0 0 4px color-mix(in srgb, var(--a) 30%, transparent)",
+                }}
+              />
+              <span style={{ fontSize: 14, color: "rgba(255,255,255,.88)", fontWeight: 600 }}>{stat}</span>
             </div>
           ) : null
 
@@ -415,7 +410,7 @@ export const siteConfig: Config = {
                         fontWeight: 700,
                       }}
                     >
-                      ★ {stat}
+                      {stat}
                     </div>
                   )}
                 </div>
@@ -447,7 +442,7 @@ export const siteConfig: Config = {
                   )}
                   {h("#fff", { fontSize: 40, maxWidth: 960, marginInline: "auto", textWrap: "balance" } as React.CSSProperties)}
                   {sub("rgba(255,255,255,.86)")}
-                  {stat && <div style={{ marginTop: 16, color: "#fff", fontWeight: 700 }}>★ {stat}</div>}
+                  {stat && <div style={{ marginTop: 16, color: "#fff", fontWeight: 700 }}>{stat}</div>}
                 </div>
                 <LeadForm title={formTitle} subtitle={formSubtitle} ctaLabel={ctaLabel} />
               </div>
@@ -630,7 +625,7 @@ export const siteConfig: Config = {
           <div
             style={{
               background: "var(--a)",
-              color: "#3a2700",
+              color: "var(--a-ink)",
               textAlign: "center",
               fontFamily: "var(--body)",
               fontSize: 13,
@@ -866,7 +861,7 @@ export const siteConfig: Config = {
                 borderRadius: 10,
                 border: "none",
                 background: "var(--a)",
-                color: "#fff",
+                color: "var(--a-ink)",
                 fontWeight: 700,
                 fontSize: 16,
                 cursor: "pointer",
@@ -1166,9 +1161,8 @@ export const siteConfig: Config = {
               ) : null}
               {list.length === 0 ? (
                 <div style={{ textAlign: "center" }}>
-                  <div style={{ color: "var(--a)", fontSize: 20, letterSpacing: 3, marginBottom: 10 }}>★★★★★</div>
                   <div style={{ fontFamily: "var(--head)", fontWeight: 800, fontSize: 22, color: "var(--p)", marginBottom: 28 }}>
-                    Trusted by local buyers
+                    Why buyers join the list
                   </div>
                   <div className="lh-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 18 }}>
                     {[
@@ -1192,7 +1186,6 @@ export const siteConfig: Config = {
                       key={i}
                       style={{ background: "#fff", border: "1px solid #eef1f5", borderRadius: 16, padding: 24, boxShadow: "0 8px 24px rgba(16,27,41,.05)" }}
                     >
-                      <div style={{ color: "var(--a)", fontSize: 16, letterSpacing: 2, marginBottom: 12 }}>★★★★★</div>
                       <div style={{ fontFamily: "var(--body)", fontSize: 15, lineHeight: 1.6, color: "#2c3744" }}>{r?.quote}</div>
                       {r?.author ? (
                         <div style={{ marginTop: 14, fontFamily: "var(--head)", fontWeight: 700, fontSize: 14, color: "var(--p)" }}>— {r.author}</div>

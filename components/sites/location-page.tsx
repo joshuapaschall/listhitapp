@@ -128,7 +128,7 @@ export function LocationPage({
                 gap: 8,
                 marginTop: 22,
                 background: "var(--a)",
-                color: "#fff",
+                color: "var(--a-ink)",
                 fontWeight: 700,
                 fontSize: 15.5,
                 textDecoration: "none",

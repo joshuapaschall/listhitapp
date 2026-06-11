@@ -59,6 +59,24 @@ export function DealCard({ property, variant = "teaser", locked = false, href, s
           <span
             style={{
               position: "absolute",
+              right: 12,
+              top: 12,
+              zIndex: 1,
+              padding: "4px 10px",
+              borderRadius: 999,
+              fontSize: 10.5,
+              fontWeight: 700,
+              letterSpacing: ".06em",
+              textTransform: "uppercase",
+              background: "rgba(15,27,41,.72)",
+              color: "#fff",
+            }}
+          >
+            Sample
+          </span>
+          <span
+            style={{
+              position: "absolute",
               left: 12,
               top: 12,
               padding: "4px 10px",
@@ -66,7 +84,7 @@ export function DealCard({ property, variant = "teaser", locked = false, href, s
               fontSize: 11.5,
               fontWeight: 700,
               background: "var(--a)",
-              color: "#fff",
+              color: "var(--a-ink)",
             }}
           >
             {placeholder.badge}
@@ -159,7 +177,7 @@ export function DealCard({ property, variant = "teaser", locked = false, href, s
               fontSize: 11.5,
               fontWeight: 700,
               background: "var(--a)",
-              color: "#fff",
+              color: "var(--a-ink)",
             }}
           >
             {statusLabel || "For Sale"}

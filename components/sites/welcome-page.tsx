@@ -92,7 +92,7 @@ export function WelcomePage({ brandName, theme }: { brandName: string; theme: Si
             padding: "14px 28px",
             borderRadius: 12,
             background: "var(--a)",
-            color: "#fff",
+            color: "var(--a-ink)",
             fontFamily: "var(--head)",
             fontWeight: 800,
             fontSize: 16,
