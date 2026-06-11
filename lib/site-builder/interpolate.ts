@@ -1,12 +1,12 @@
 import type { SiteMarkets } from "@/lib/site-builder/types"
+import { cityLabelForMarket } from "@/lib/site-builder/location-pages"
 
-// "Atlanta (GA)" -> "Atlanta". Nationwide or empty -> "your area".
+// "Atlanta (GA)" -> "Atlanta", "GA, USA" -> "Georgia". Nationwide or empty -> "your area".
 export function cityFromMarkets(markets?: SiteMarkets | null): string {
   if (!markets || markets.scope !== "specific") return "your area"
   const first = (markets.markets || [])[0]
   if (!first) return "your area"
-  const cut = first.indexOf(" (")
-  return (cut > 0 ? first.slice(0, cut) : first).trim() || "your area"
+  return cityLabelForMarket(first) || "your area"
 }
 
 // Deep-clone Puck data and replace {Brand}/{City} in every string value.

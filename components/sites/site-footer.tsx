@@ -2,7 +2,7 @@
 import React from "react"
 import { useSiteForm } from "@/lib/site-builder/site-context"
 import { WRAP } from "@/lib/site-builder/blocks/primitives"
-import { buildAreaLinks } from "@/lib/site-builder/location-pages"
+import { buildAreaLinks, formatMarketLabel } from "@/lib/site-builder/location-pages"
 
 function socialHref(v: string) {
   return v.startsWith("http") ? v : `https://${v}`
@@ -24,7 +24,7 @@ export function SiteFooter({ text }: { text?: string }) {
   const serving =
     markets.scope === "nationwide" || markets.markets.length === 0
       ? "Serving buyers nationwide"
-      : `Serving ${markets.markets.slice(0, 6).join(" · ")}`
+      : `Serving ${markets.markets.slice(0, 6).map(formatMarketLabel).join(" · ")}`
   const socials = (Object.keys(SOCIAL_ICONS) as Array<keyof typeof business.social>)
     .map((k) => ({ k, v: (business.social as any)[k] as string | undefined }))
     .filter((s) => s.v && s.v.trim().length > 0)

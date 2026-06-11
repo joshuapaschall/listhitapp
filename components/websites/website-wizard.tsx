@@ -22,6 +22,7 @@ import { TYPE_STYLES, resolveTypeFonts, DEFAULT_TYPE_STYLE_ID } from "@/lib/site
 import { PALETTES } from "@/lib/site-builder/palettes"
 import { DEFAULT_THEME, DEFAULT_BUSINESS, DEFAULT_MARKETS, type SitePersona, type SiteTemplateId, type SiteTheme, type SiteBusiness, type SiteMarkets } from "@/lib/site-builder/types"
 import { useLocationSuggestions } from "@/components/buyers/use-location-suggestions"
+import { formatMarketLabel } from "@/lib/site-builder/location-pages"
 
 type WizardProps = { mode: "new" } | { mode: "edit"; siteId: string }
 
@@ -876,63 +877,68 @@ export default function WebsiteWizard(props: WizardProps) {
                 </button>
               </div>
 
-              {draft.markets.scope === "nationwide" ? (
-                <p className="text-sm text-muted-foreground">
-                  Your site will position as nationwide — buyers anywhere can join your list.
-                </p>
-              ) : (
-                <div className="space-y-2">
+              <div className="space-y-2">
+                {draft.markets.scope === "nationwide" ? (
+                  <>
+                    <p className="text-sm text-muted-foreground">
+                      Your site positions as nationwide — buyers anywhere can join your list.
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Optional: add the states you want to rank in. We&apos;ll build a dedicated location page for each and link to them from your home page. Your home page stays nationwide — these just help you show up in state-level searches.
+                    </p>
+                  </>
+                ) : (
                   <p className="text-xs text-muted-foreground">
                     Add the cities, counties, or states you source and market deals in.
                   </p>
-                  {draft.markets.markets.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {draft.markets.markets.map((m) => (
-                        <span
-                          key={m}
-                          className="inline-flex items-center gap-1.5 rounded-full bg-brand/10 px-2.5 py-1 text-xs font-medium text-brand"
+                )}
+                {draft.markets.markets.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {draft.markets.markets.map((m) => (
+                      <span
+                        key={m}
+                        className="inline-flex items-center gap-1.5 rounded-full bg-brand/10 px-2.5 py-1 text-xs font-medium text-brand"
+                      >
+                        {formatMarketLabel(m)}
+                        <button
+                          type="button"
+                          onClick={() => setMarkets({ markets: draft.markets.markets.filter((x) => x !== m) })}
+                          aria-label={`Remove ${formatMarketLabel(m)}`}
                         >
-                          {m}
-                          <button
-                            type="button"
-                            onClick={() => setMarkets({ markets: draft.markets.markets.filter((x) => x !== m) })}
-                            aria-label={`Remove ${m}`}
-                          >
-                            ×
-                          </button>
-                        </span>
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="relative">
+                  <Input
+                    placeholder="City, county, or state"
+                    value={marketQuery}
+                    onChange={(e) => setMarketQuery(e.target.value)}
+                    disabled={draft.markets.markets.length >= 25}
+                  />
+                  {marketQuery.trim().length > 1 && marketSuggestions.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-auto rounded-md border border-border bg-popover shadow-md">
+                      {marketSuggestions.map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => {
+                            if (!draft.markets.markets.includes(s) && draft.markets.markets.length < 25) {
+                              setMarkets({ markets: [...draft.markets.markets, s] })
+                            }
+                            setMarketQuery("")
+                          }}
+                          className="block w-full px-3 py-2 text-left text-sm hover:bg-muted"
+                        >
+                          {s}
+                        </button>
                       ))}
                     </div>
                   )}
-                  <div className="relative">
-                    <Input
-                      placeholder="City, county, or state"
-                      value={marketQuery}
-                      onChange={(e) => setMarketQuery(e.target.value)}
-                      disabled={draft.markets.markets.length >= 25}
-                    />
-                    {marketQuery.trim().length > 1 && marketSuggestions.length > 0 && (
-                      <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-auto rounded-md border border-border bg-popover shadow-md">
-                        {marketSuggestions.map((s) => (
-                          <button
-                            key={s}
-                            type="button"
-                            onClick={() => {
-                              if (!draft.markets.markets.includes(s) && draft.markets.markets.length < 25) {
-                                setMarkets({ markets: [...draft.markets.markets, s] })
-                              }
-                              setMarketQuery("")
-                            }}
-                            className="block w-full px-3 py-2 text-left text-sm hover:bg-muted"
-                          >
-                            {s}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
                 </div>
-              )}
+              </div>
             </div>
           )}
 

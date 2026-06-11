@@ -436,9 +436,10 @@ export default async function SitePage({
   if (params.path?.length === 2 && params.path[0] !== "properties") {
     const site = await resolveSiteByHost(host)
     const match = site ? resolveLocationPage(site, params.path) : null
-    // A claimed persona prefix on a specific-market site but an unknown market
+    // A claimed persona prefix on a site that has markets but an unknown market
     // is a 404 — don't silently fall through to the home page.
-    if (site && PERSONA_URL_SLUG[site.persona as keyof typeof PERSONA_URL_SLUG] === params.path[0] && site.markets_json?.scope === "specific" && !match) {
+    const siteMarketCount = (site?.markets_json as any)?.markets?.length ?? 0
+    if (site && PERSONA_URL_SLUG[site.persona as keyof typeof PERSONA_URL_SLUG] === params.path[0] && siteMarketCount > 0 && !match) {
       notFound()
     }
     if (site && match) {
