@@ -1,11 +1,11 @@
 import type { SiteTemplateId } from "../types"
 import type { SiteTemplateDef } from "./types"
-import { aspen } from "./aspen"
-import { cedar } from "./cedar"
-import { madrone } from "./madrone"
-import { oak } from "./oak"
+import { marquee } from "./marquee"
+import { haven } from "./haven"
+import { vantage } from "./vantage"
+import { forge } from "./forge"
 
-export const ALL_SITE_TEMPLATES: SiteTemplateDef[] = [aspen, cedar, madrone, oak]
+export const ALL_SITE_TEMPLATES: SiteTemplateDef[] = [marquee, haven, vantage, forge]
 
 export function getSiteTemplate(id: SiteTemplateId): SiteTemplateDef | undefined {
   return ALL_SITE_TEMPLATES.find((t) => t.id === id)

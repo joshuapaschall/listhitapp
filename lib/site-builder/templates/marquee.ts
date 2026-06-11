@@ -3,8 +3,8 @@ import type { SitePersona } from "../types"
 import type { SiteTemplateDef } from "./types"
 import { PERSONAS } from "./personas"
 
-const PRIMARY = "#1f5d4c"
-const ACCENT = "#d98c2b"
+const PRIMARY = "#173b5e"
+const ACCENT = "#e8833a"
 const HEADING_FONT = "'Bricolage Grotesque', serif"
 
 function build(persona: SitePersona): Data {
@@ -14,31 +14,31 @@ function build(persona: SitePersona): Data {
     content: [
       {
         type: "AnnouncementBar",
-        props: { id: "AnnouncementBar-cedar", text: c.announcement, enabled: "hide" },
+        props: { id: "AnnouncementBar-marquee", text: c.announcement, enabled: "show" },
       },
       {
         type: "Nav",
         props: {
-          id: "Nav-cedar",
+          id: "Nav-marquee",
           brandName: "Your Company",
           logoUrl: "",
           phone: "(555) 555-5555",
           links: [
             { label: "Contact", href: "/contact" },
           ],
-          layout: "center",
+          layout: "split",
         },
       },
       {
         type: "Hero",
         props: {
-          id: "Hero-cedar",
-          variant: "centered",
+          id: "Hero-marquee",
+          variant: "photo",
           eyebrow: c.eyebrow,
           headline: c.headline,
           subhead: c.subhead,
           stat: c.stat,
-          imageUrl: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1600",
+          imageUrl: "https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=1600",
           formTitle: c.formTitle,
           formSubtitle: c.formSubtitle,
           ctaLabel: c.ctaLabel,
@@ -47,14 +47,14 @@ function build(persona: SitePersona): Data {
       {
         type: "TrustBar",
         props: {
-          id: "TrustBar-cedar",
+          id: "TrustBar-marquee",
           items: c.trustBar,
         },
       },
       {
         type: "ProseSection",
         props: {
-          id: "ProseSection-1-cedar",
+          id: "ProseSection-1-marquee",
           eyebrow: c.prose[0].eyebrow,
           heading: c.prose[0].heading,
           bodyHtml: c.prose[0].bodyHtml,
@@ -65,12 +65,12 @@ function build(persona: SitePersona): Data {
       },
       {
         type: "FeatureGrid",
-        props: { id: "FeatureGrid-cedar", heading: "Why people choose us", features: c.features },
+        props: { id: "FeatureGrid-marquee", heading: "Why people choose us", features: c.features },
       },
       {
         type: "SituationsGrid",
         props: {
-          id: "SituationsGrid-cedar",
+          id: "SituationsGrid-marquee",
           heading: c.situations.heading,
           intro: c.situations.intro,
           items: c.situations.items,
@@ -78,19 +78,19 @@ function build(persona: SitePersona): Data {
       },
       {
         type: "HowItWorks",
-        props: { id: "HowItWorks-cedar", heading: "How it works", steps: c.howItWorks },
+        props: { id: "HowItWorks-marquee", heading: "How it works", steps: c.howItWorks },
       },
       {
         type: "TypesGrid",
-        props: { id: "TypesGrid-cedar", heading: "What we send", intro: "", items: c.types },
+        props: { id: "TypesGrid-marquee", heading: "What we send", intro: "", items: c.types },
       },
-      { type: "PropertyGrid", props: { id: "PropertyGrid-cedar", heading: "Recent deals" } },
+      { type: "PropertyGrid", props: { id: "PropertyGrid-marquee", heading: "Recent deals" } },
       ...(c.prose[1]
         ? [
             {
               type: "ProseSection",
               props: {
-                id: "ProseSection-2-cedar",
+                id: "ProseSection-2-marquee",
                 eyebrow: c.prose[1].eyebrow,
                 heading: c.prose[1].heading,
                 bodyHtml: c.prose[1].bodyHtml,
@@ -104,7 +104,7 @@ function build(persona: SitePersona): Data {
       {
         type: "AreasServed",
         props: {
-          id: "AreasServed-cedar",
+          id: "AreasServed-marquee",
           heading: c.areas.heading,
           intro: c.areas.intro,
           singleLine: c.areas.singleLine,
@@ -114,7 +114,7 @@ function build(persona: SitePersona): Data {
       {
         type: "ReviewsWall",
         props: {
-          id: "ReviewsWall-cedar",
+          id: "ReviewsWall-marquee",
           heading: "What buyers say",
           emptyText: "No reviews yet — they'll appear here as buyers close deals from the list.",
           reviews: [],
@@ -122,29 +122,29 @@ function build(persona: SitePersona): Data {
       },
       {
         type: "RecentPosts",
-        props: { id: "RecentPosts-cedar", heading: "From the blog", intro: "", posts: [] },
+        props: { id: "RecentPosts-marquee", heading: "From the blog", intro: "", posts: [] },
       },
       {
         type: "Faq",
-        props: { id: "Faq-cedar", heading: "Questions & answers", items: c.faqs },
+        props: { id: "Faq-marquee", heading: "Questions & answers", items: c.faqs },
       },
       {
         type: "CtaBand",
-        props: { id: "CtaBand-cedar", heading: "Let's get started", body: c.subhead, buttonLabel: c.bannerCta },
+        props: { id: "CtaBand-marquee", heading: "Ready when you are", body: c.subhead, buttonLabel: c.bannerCta },
       },
-      { type: "Footer", props: { id: "Footer-cedar", text: "© Your Company. All rights reserved." } },
+      { type: "Footer", props: { id: "Footer-marquee", text: "© Your Company. All rights reserved." } },
     ],
   }
   return data as Data
 }
 
-export const cedar: SiteTemplateDef = {
-  id: "cedar",
-  name: "Cedar",
-  description: "Calm centered hero with an inline form row — friendly, editorial, and easy to scan.",
-  defaultTheme: { primary: PRIMARY, accent: ACCENT, headerLayout: "center", banner: false },
-  heroVariant: "centered",
+export const marquee: SiteTemplateDef = {
+  id: "marquee",
+  name: "Aspen",
+  description: "Bold full-bleed photo hero with a floating lead form — high-impact and trust-forward.",
+  defaultTheme: { primary: PRIMARY, accent: ACCENT, headerLayout: "split", banner: true },
+  heroVariant: "photo",
   build,
 }
 
-export default cedar
+export default marquee
