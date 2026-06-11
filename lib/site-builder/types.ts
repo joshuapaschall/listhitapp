@@ -33,6 +33,10 @@ export interface PersonaContent {
   formSubtitle: string
   ctaLabel: string
   bannerCta: string
+  // Stats strip (feed TrustBar). Persona-specific — 4 short value/label pairs.
+  // `value` renders large/bold (~34px); keep it to ~1–3 words. `label` is the
+  // small supporting line. Tokens {Brand}/{City} are interpolated at render time.
+  trustBar: { value: string; label: string }[]
   features: { icon: string; title: string; body: string }[]
   // Expanded site copy. `{Brand}` / `{City}` are render-time placeholders
   // (City falls back to "your area" on nationwide sites).
