@@ -108,6 +108,22 @@ export function mergeThemeIntoRoot(puckData: any, theme: SiteTheme): any {
   return data
 }
 
+// Sets the home AreasServed block's `areas` to the operator's per-market location
+// links (replace, not append). No-op when there are no links (nationwide sites),
+// leaving the block to fall back to its single-line copy or render nothing.
+export function injectAreaLinks(puckData: any, links: { label: string; href: string }[]): any {
+  if (!links || links.length === 0) return puckData
+  const data = { ...(puckData || {}) }
+  const content = Array.isArray(data.content) ? data.content.map((b: any) => ({ ...b })) : []
+  for (const block of content) {
+    if (block?.type === "AreasServed") {
+      block.props = { ...(block.props || {}), areas: links }
+    }
+  }
+  data.content = content
+  return data
+}
+
 // Adds a "Blog" link to the Puck Nav block's links array (home page nav).
 // Idempotent: no-op if a /blog link is already present or there is no Nav block.
 export function injectBlogNavLink(puckData: any): any {

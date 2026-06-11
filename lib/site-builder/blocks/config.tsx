@@ -1135,7 +1135,7 @@ export const siteConfig: Config = {
       },
       render: ({ heading, intro, areas, singleLine }: any) => {
         const list = (areas || []).filter((a: any) => a && a.label)
-        const hasMany = list.length >= 2
+        const hasMany = list.length >= 1
         if (!hasMany && !singleLine) return <></>
         return (
           <section style={{ background: "color-mix(in srgb, var(--p) 5%, #fff)" }}>

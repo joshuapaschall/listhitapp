@@ -2,6 +2,7 @@
 import React from "react"
 import { useSiteForm } from "@/lib/site-builder/site-context"
 import { WRAP } from "@/lib/site-builder/blocks/primitives"
+import { buildAreaLinks } from "@/lib/site-builder/location-pages"
 
 function socialHref(v: string) {
   return v.startsWith("http") ? v : `https://${v}`
@@ -16,7 +17,10 @@ const SOCIAL_ICONS: Record<string, React.ReactNode> = {
 }
 
 export function SiteFooter({ text }: { text?: string }) {
-  const { brandName, markets, business, legalPaths, legalDisplay } = useSiteForm()
+  const { brandName, persona, markets, business, legalPaths, legalDisplay } = useSiteForm()
+  // One source of truth for the area label/href math (location-pages.ts). The
+  // context's `markets` is the markets_json shape buildAreaLinks expects.
+  const areaLinks = buildAreaLinks({ persona, markets_json: markets })
   const serving =
     markets.scope === "nationwide" || markets.markets.length === 0
       ? "Serving buyers nationwide"
@@ -66,6 +70,16 @@ export function SiteFooter({ text }: { text?: string }) {
             <a href={legalPaths.terms} style={link}>Terms of Use</a>
             {/* eslint-enable @next/next/no-html-link-for-pages */}
           </div>
+          {/* Locations — operator's specific markets (hidden on nationwide). */}
+          {areaLinks.length > 0 && (
+            <div>
+              <div style={colHead}>Locations</div>
+              {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+              {areaLinks.map((a) => (
+                <a key={a.href} href={a.href} style={link}>{a.label}</a>
+              ))}
+            </div>
+          )}
           {/* Contact */}
           {(business.phone || business.email) && (
             <div>
