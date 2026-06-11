@@ -96,6 +96,41 @@ export function marketToSlug(m: ParsedMarket): string {
   return slug(`${m.place}-${m.stateId}`)
 }
 
+export function stateSlug(stateId: string): string {
+  return slug(stateName(stateId))            // "GA" -> "georgia", "NC" -> "north-carolina"
+}
+function placeSlug(place: string): string {
+  return slug(place)                          // "Atlanta" -> "atlanta", "Fulton County" -> "fulton-county"
+}
+
+// Full path under the persona hub. State -> /persona/state. City/county -> /persona/state/place.
+export function marketPath(personaSlug: string, m: ParsedMarket): string {
+  if (m.kind === "state") return `/${personaSlug}/${stateSlug(m.stateId)}`
+  return `/${personaSlug}/${stateSlug(m.stateId)}/${placeSlug(m.place)}`
+}
+
+// Distinct state ids present in the market list — explicit ("GA, USA") OR implied by a city/county ("Atlanta (GA)").
+function statesInMarkets(markets: string[]): string[] {
+  const ids = new Set<string>()
+  for (const e of markets) { const m = parseMarket(e); if (m) ids.add(m.stateId) }
+  return Array.from(ids)
+}
+
+// City/county markets within a given state.
+function citiesInState(markets: string[], stateId: string): ParsedMarket[] {
+  const out: ParsedMarket[] = []
+  for (const e of markets) {
+    const m = parseMarket(e)
+    if (m && m.kind !== "state" && m.stateId === stateId) out.push(m)
+  }
+  return out
+}
+
+// Synthesize a state ParsedMarket from an id (for implied state pages).
+function stateMarket(stateId: string): ParsedMarket {
+  return { kind: "state", label: `${stateId}, USA`, place: "", stateId }
+}
+
 export interface LocationMatch {
   persona: SitePersona
   personaSlug: string
@@ -107,7 +142,7 @@ function siteMarkets(site: any): { scope: string; markets: string[] } {
 }
 
 export function resolveLocationPage(site: any, pathSegments: string[]): LocationMatch | null {
-  if (!site || !Array.isArray(pathSegments) || pathSegments.length !== 2) return null
+  if (!site || !Array.isArray(pathSegments)) return null
   const markets = siteMarkets(site)
   if (!markets.markets || markets.markets.length === 0) return null
 
@@ -115,12 +150,30 @@ export function resolveLocationPage(site: any, pathSegments: string[]): Location
   const personaSlug = PERSONA_URL_SLUG[persona]
   if (!personaSlug || pathSegments[0] !== personaSlug) return null
 
-  for (const entry of markets.markets) {
-    const parsed = parseMarket(entry)
-    if (parsed && marketToSlug(parsed) === pathSegments[1]) {
-      return { persona, personaSlug, market: parsed }
+  // State page: /persona/state  (matches any explicit or implied state)
+  if (pathSegments.length === 2) {
+    const want = pathSegments[1]
+    for (const stateId of statesInMarkets(markets.markets)) {
+      if (stateSlug(stateId) === want) {
+        return { persona, personaSlug, market: stateMarket(stateId) }
+      }
     }
+    return null
   }
+
+  // City/county page: /persona/state/place
+  if (pathSegments.length === 3) {
+    const wantState = pathSegments[1]
+    const wantPlace = pathSegments[2]
+    for (const entry of markets.markets) {
+      const m = parseMarket(entry)
+      if (m && m.kind !== "state" && stateSlug(m.stateId) === wantState && placeSlug(m.place) === wantPlace) {
+        return { persona, personaSlug, market: m }
+      }
+    }
+    return null
+  }
+
   return null
 }
 
@@ -131,9 +184,14 @@ export function locationPaths(site: any): string[] {
   if (!personaSlug) return []
 
   const out = new Set<string>()
+  // State hubs (explicit + implied)
+  for (const stateId of statesInMarkets(markets.markets)) {
+    out.add(`/${personaSlug}/${stateSlug(stateId)}`)
+  }
+  // Nested city/county pages
   for (const entry of markets.markets) {
-    const parsed = parseMarket(entry)
-    if (parsed) out.add(`/${personaSlug}/${marketToSlug(parsed)}`)
+    const m = parseMarket(entry)
+    if (m && m.kind !== "state") out.add(marketPath(personaSlug, m))
   }
   return Array.from(out)
 }
@@ -142,22 +200,45 @@ export function locationPaths(site: any): string[] {
 // internal-linking structure. Specific-market sites only; nationwide returns [].
 // Accepts the site shape (persona + markets_json); the footer passes
 // `{ persona, markets_json: markets }` so the slug/label math has one home.
-export function buildAreaLinks(site: any): { label: string; href: string }[] {
+// current = null/undefined -> HOME (link to states)
+// current = state           -> STATE page (link to its cities)
+// current = city/county      -> CITY page (link to siblings in the state + the parent state)
+export function buildAreaLinks(
+  site: any,
+  current?: ParsedMarket | null,
+): { label: string; href: string }[] {
   const markets = siteMarkets(site)
   if (!markets.markets || markets.markets.length === 0) return []
   const personaSlug = PERSONA_URL_SLUG[site.persona as SitePersona]
   if (!personaSlug) return []
 
+  // CITY/COUNTY page: parent state first, then sibling cities (excluding self).
+  if (current && current.kind !== "state") {
+    const out: { label: string; href: string }[] = [
+      { label: stateName(current.stateId), href: `/${personaSlug}/${stateSlug(current.stateId)}` },
+    ]
+    for (const m of citiesInState(markets.markets, current.stateId)) {
+      if (placeSlug(m.place) === placeSlug(current.place)) continue
+      out.push({ label: m.place, href: marketPath(personaSlug, m) })
+    }
+    return out
+  }
+
+  // STATE page: its cities only.
+  if (current && current.kind === "state") {
+    return citiesInState(markets.markets, current.stateId).map((m) => ({
+      label: m.place,
+      href: marketPath(personaSlug, m),
+    }))
+  }
+
+  // HOME (and footer): one link per state.
   const out: { label: string; href: string }[] = []
   const seen = new Set<string>()
-  for (const entry of markets.markets) {
-    const parsed = parseMarket(entry)
-    if (!parsed) continue
-    const href = `/${personaSlug}/${marketToSlug(parsed)}`
-    if (seen.has(href)) continue
-    seen.add(href)
-    const label = parsed.kind === "state" ? stateName(parsed.stateId) : parsed.place
-    out.push({ label, href })
+  for (const stateId of statesInMarkets(markets.markets)) {
+    if (seen.has(stateId)) continue
+    seen.add(stateId)
+    out.push({ label: stateName(stateId), href: `/${personaSlug}/${stateSlug(stateId)}` })
   }
   return out
 }
@@ -172,19 +253,16 @@ export function locationHrefForDeal(site: any, city: string | null, state: strin
   const wantCity = (city || "").toLowerCase()
   const wantState = state || ""
 
-  // Pass 1: exact city match.
+  // Pass 1: exact city match -> nested city path.
   for (const entry of markets.markets) {
-    const parsed = parseMarket(entry)
-    if (parsed && parsed.kind === "city" && parsed.place.toLowerCase() === wantCity && parsed.stateId === wantState) {
-      return `/${personaSlug}/${marketToSlug(parsed)}`
+    const m = parseMarket(entry)
+    if (m && m.kind === "city" && m.place.toLowerCase() === wantCity && m.stateId === wantState) {
+      return marketPath(personaSlug, m)
     }
   }
-  // Pass 2: state-level fallback.
-  for (const entry of markets.markets) {
-    const parsed = parseMarket(entry)
-    if (parsed && parsed.kind === "state" && parsed.stateId === wantState) {
-      return `/${personaSlug}/${marketToSlug(parsed)}`
-    }
+  // Pass 2: state hub fallback (explicit or implied by any market in that state).
+  if (wantState && statesInMarkets(markets.markets).includes(wantState)) {
+    return `/${personaSlug}/${stateSlug(wantState)}`
   }
   return null
 }
