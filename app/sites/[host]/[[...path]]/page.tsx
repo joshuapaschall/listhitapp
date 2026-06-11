@@ -2,7 +2,9 @@ import type { Metadata } from "next"
 import { cookies } from "next/headers"
 import { notFound } from "next/navigation"
 import { resolveSite, mergeThemeIntoRoot, resolveSiteByHost, injectBlogNavLink, getNavPages, injectPageNavLinks } from "@/lib/site-builder/resolve-site"
-import { DEFAULT_THEME, DEFAULT_BUSINESS, DEFAULT_MARKETS } from "@/lib/site-builder/types"
+import { DEFAULT_THEME, DEFAULT_BUSINESS, DEFAULT_MARKETS, type SitePersona } from "@/lib/site-builder/types"
+import { cityFromMarkets } from "@/lib/site-builder/interpolate"
+import { pageSeo } from "@/lib/site-builder/seo"
 import { buildPrivacyPolicy, buildTermsOfService, buildContactDoc, buildConsentTexts } from "@/lib/site-builder/compliance"
 import { supabaseAdmin } from "@/lib/supabase"
 import { SiteRendererRSC } from "@/components/sites/site-renderer-rsc"
@@ -181,6 +183,18 @@ export async function generateMetadata({
 
     const result = await resolveSite(host, path)
     if (!result) return { title: "Site not found" }
+
+    // Operator override: a custom meta_description set in the studio wins.
+    if (result.page.meta_description) {
+      return seoMeta(host, path, result.page.title || result.site.name, result.page.meta_description, result.site.name)
+    }
+    // Otherwise auto-generate keyword-first SEO from the persona + market.
+    const brand = (result.site.name || "").trim()
+    const city = cityFromMarkets((result.site.markets_json as any) || null)
+    const seo = pageSeo(result.site.persona as SitePersona, path, brand, city)
+    if (seo) {
+      return { ...seoMeta(host, path, seo.title, seo.description, result.site.name), robots: { index: true, follow: true } }
+    }
     return seoMeta(host, path, result.page.title || result.site.name, result.page.meta_description || undefined, result.site.name)
   } catch {
     return { title: "Site not found" }
