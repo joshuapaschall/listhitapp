@@ -79,6 +79,12 @@ export const PERSONAS: Record<SitePersona, PersonaContent> = {
       intro: "We lock up off-market deals across {City} and nearby — browse by area:",
       singleLine: "We find off-market deals throughout {City} and the surrounding area.",
     },
+    trustBar: [
+      { value: "$0", label: "Fees to join" },
+      { value: "<24h", label: "New deals to your inbox" },
+      { value: "All cash", label: "Fast, certain closings" },
+      { value: "Off-market", label: "Deals you won't find online" },
+    ],
   },
   investor: {
     label: "Investor buyers",
@@ -153,6 +159,12 @@ export const PERSONAS: Record<SitePersona, PersonaContent> = {
       intro: "We source off-market investment properties across {City} and nearby — browse by area:",
       singleLine: "We source off-market investment properties throughout {City} and the surrounding area.",
     },
+    trustBar: [
+      { value: "$0", label: "Free to join" },
+      { value: "Numbers run", label: "Repairs & ARV included" },
+      { value: "30–50%", label: "Under retail value" },
+      { value: "Off-market", label: "Before it hits the market" },
+    ],
   },
   rto: {
     label: "Rent-to-own buyers",
@@ -227,6 +239,12 @@ export const PERSONAS: Record<SitePersona, PersonaContent> = {
       intro: "We have rent-to-own homes across {City} and nearby — browse by area:",
       singleLine: "We work with rent-to-own homes throughout {City} and the surrounding area.",
     },
+    trustBar: [
+      { value: "$0", label: "No application fee" },
+      { value: "Move-in ready", label: "Homes available now" },
+      { value: "Credit-flexible", label: "Build toward owning" },
+      { value: "Rent-to-own", label: "Buy when you're ready" },
+    ],
   },
   owner: {
     label: "Owner-finance buyers",
@@ -301,6 +319,12 @@ export const PERSONAS: Record<SitePersona, PersonaContent> = {
       intro: "We have owner-financed homes across {City} and nearby — browse by area:",
       singleLine: "We work with owner-financed homes throughout {City} and the surrounding area.",
     },
+    trustBar: [
+      { value: "$0", label: "Free to join" },
+      { value: "No bank", label: "Buy direct from the owner" },
+      { value: "Flexible terms", label: "Down-payment options" },
+      { value: "Owner-financed", label: "Homes you won't find listed" },
+    ],
   },
   creative: {
     label: "Creative-finance buyers",
@@ -375,6 +399,12 @@ export const PERSONAS: Record<SitePersona, PersonaContent> = {
       intro: "We find creative-finance deals across {City} and nearby — browse by area:",
       singleLine: "We find creative-finance deals throughout {City} and the surrounding area.",
     },
+    trustBar: [
+      { value: "$0", label: "Free to join" },
+      { value: "No bank", label: "Control without a loan" },
+      { value: "Low down", label: "Subject-to & seller terms" },
+      { value: "Off-market", label: "Creative deals sent first" },
+    ],
   },
   land: {
     label: "Land buyers",
@@ -449,6 +479,12 @@ export const PERSONAS: Record<SitePersona, PersonaContent> = {
       intro: "We source off-market land across {City} and nearby — browse by area:",
       singleLine: "We source off-market land throughout {City} and the surrounding area.",
     },
+    trustBar: [
+      { value: "$0", label: "Free to join" },
+      { value: "<24h", label: "New parcels to your inbox" },
+      { value: "Below market", label: "Priced to move" },
+      { value: "Off-market", label: "Land you won't find listed" },
+    ],
   },
   commercial: {
     label: "Commercial buyers",
@@ -523,6 +559,12 @@ export const PERSONAS: Record<SitePersona, PersonaContent> = {
       intro: "We source off-market commercial across {City} and nearby — browse by area:",
       singleLine: "We source off-market commercial deals throughout {City} and the surrounding area.",
     },
+    trustBar: [
+      { value: "$0", label: "Free to join" },
+      { value: "Real numbers", label: "Rent rolls & financials" },
+      { value: "Value-add", label: "Upside on every deal" },
+      { value: "Off-market", label: "Before brokers list it" },
+    ],
   },
   agent: {
     label: "Agents & realtors",
@@ -597,6 +639,12 @@ export const PERSONAS: Record<SitePersona, PersonaContent> = {
       intro: "We source off-market inventory across {City} and nearby — browse by area:",
       singleLine: "We source off-market inventory throughout {City} and the surrounding area.",
     },
+    trustBar: [
+      { value: "$0", label: "Free to join" },
+      { value: "Off-market", label: "Pocket & unlisted inventory" },
+      { value: "For your buyers", label: "Bring them deals first" },
+      { value: "<24h", label: "New inventory to your inbox" },
+    ],
   },
 }
 
