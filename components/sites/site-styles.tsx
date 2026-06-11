@@ -19,6 +19,8 @@ export function SiteStyles(): React.JSX.Element {
         __html: `
 .lh-site { container-type: inline-size; }
 .lh-site img { max-width: 100%; }
+.lh-site h1, .lh-site h2, .lh-hero-h1, .lh-h2 { text-wrap: balance; }
+.lh-site p { text-wrap: pretty; }
 
 /* tablet: 3-up grids become 2-up */
 @container (max-width: 1024px) {
@@ -41,6 +43,8 @@ export function SiteStyles(): React.JSX.Element {
   .lh-h2 { font-size: 26px !important; }
   .lh-grid-3 { grid-template-columns: 1fr !important; }
   .lh-form-2 { grid-template-columns: 1fr !important; }
+  .lh-hero-trust { display: none !important; }
+  .lh-hero-grid { padding-top: 44px !important; }
 }
 `,
       }}

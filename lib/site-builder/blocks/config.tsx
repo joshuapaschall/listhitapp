@@ -227,6 +227,7 @@ export const siteConfig: Config = {
         const trustRow = () =>
           stat ? (
             <div
+              className="lh-hero-trust"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -871,6 +872,46 @@ export const siteConfig: Config = {
             >
               {buttonLabel}
             </a>
+          </div>
+        </section>
+      ),
+    },
+
+    // -----------------------------------------------------------------------
+    ConversionBand: {
+      label: "Conversion band (inline form)",
+      fields: {
+        heading: { type: "text", label: "Section heading", contentEditable: true },
+        body: { type: "textarea", label: "Body text", contentEditable: true },
+        formTitle: { type: "text", label: "Form title" },
+        ctaLabel: { type: "text", label: "Button text" },
+      },
+      defaultProps: {
+        heading: "Ready to see the deals?",
+        body: "Join the buyers list and get new off-market deals by text and email — free, no contract, numbers already run.",
+        formTitle: "Get deals sent to you",
+        ctaLabel: "Send me deals",
+      },
+      render: ({ heading, body, formTitle, ctaLabel, id }: any) => (
+        <section id={id || "join"} style={{ background: "var(--p)", position: "relative", overflow: "hidden" }}>
+          <div
+            style={{
+              ...WRAP,
+              padding: "64px 24px",
+              display: "grid",
+              gridTemplateColumns: "1.1fr .9fr",
+              gap: 48,
+              alignItems: "center",
+            }}
+            className="lh-grid-2"
+          >
+            <div>
+              <h2 className="lh-h2" style={{ ...HEADING, fontSize: 32, fontWeight: 800, color: "#fff", margin: 0 }}>{heading}</h2>
+              {body && <p style={{ color: "rgba(255,255,255,.85)", fontSize: 17, lineHeight: 1.6, marginTop: 12 }}>{body}</p>}
+            </div>
+            <div style={{ background: "#fff", borderRadius: 18, padding: 24, boxShadow: "0 30px 70px rgba(5,12,24,.40)" }}>
+              <LeadForm title={formTitle} ctaLabel={ctaLabel} />
+            </div>
           </div>
         </section>
       ),
