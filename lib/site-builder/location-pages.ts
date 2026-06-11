@@ -43,6 +43,43 @@ function slug(input: string): string {
     .replace(/^-|-$/g, "")
 }
 
+// Single source of truth for state-id → full state name (imported by
+// location-content.ts and interpolate.ts via the display helpers below).
+export const STATE_NAMES: Record<string, string> = {
+  AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California",
+  CO: "Colorado", CT: "Connecticut", DE: "Delaware", FL: "Florida", GA: "Georgia",
+  HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa",
+  KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland",
+  MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi", MO: "Missouri",
+  MT: "Montana", NE: "Nebraska", NV: "Nevada", NH: "New Hampshire", NJ: "New Jersey",
+  NM: "New Mexico", NY: "New York", NC: "North Carolina", ND: "North Dakota", OH: "Ohio",
+  OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania", RI: "Rhode Island", SC: "South Carolina",
+  SD: "South Dakota", TN: "Tennessee", TX: "Texas", UT: "Utah", VT: "Vermont",
+  VA: "Virginia", WA: "Washington", WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming",
+  DC: "Washington, D.C.",
+}
+
+export function stateName(stateId: string): string {
+  return STATE_NAMES[stateId] || stateId
+}
+
+// For {City} interpolation: city/county -> place; state -> full state name.
+// "Atlanta (GA)" -> "Atlanta", "Fulton County (GA)" -> "Fulton County", "GA, USA" -> "Georgia"
+export function cityLabelForMarket(entry: string): string {
+  const m = parseMarket(entry)
+  if (!m) return entry
+  return m.kind === "state" ? stateName(m.stateId) : m.place
+}
+
+// For chips / "Serving" lists: city/county -> "Place, ST"; state -> full state name.
+// "Atlanta (GA)" -> "Atlanta, GA", "GA, USA" -> "Georgia"
+export function formatMarketLabel(entry: string): string {
+  const m = parseMarket(entry)
+  if (!m) return entry
+  if (m.kind === "state") return stateName(m.stateId)
+  return `${m.place}, ${m.stateId}`
+}
+
 export const PERSONA_URL_SLUG: Record<SitePersona, string> = {
   cash: "investment-properties",
   investor: "investment-deals",
@@ -55,7 +92,7 @@ export const PERSONA_URL_SLUG: Record<SitePersona, string> = {
 }
 
 export function marketToSlug(m: ParsedMarket): string {
-  if (m.kind === "state") return m.stateId.toLowerCase()
+  if (m.kind === "state") return slug(stateName(m.stateId))   // "GA" -> "georgia", "NC" -> "north-carolina"
   return slug(`${m.place}-${m.stateId}`)
 }
 
@@ -72,7 +109,7 @@ function siteMarkets(site: any): { scope: string; markets: string[] } {
 export function resolveLocationPage(site: any, pathSegments: string[]): LocationMatch | null {
   if (!site || !Array.isArray(pathSegments) || pathSegments.length !== 2) return null
   const markets = siteMarkets(site)
-  if (markets.scope !== "specific") return null
+  if (!markets.markets || markets.markets.length === 0) return null
 
   const persona = site.persona as SitePersona
   const personaSlug = PERSONA_URL_SLUG[persona]
@@ -89,7 +126,7 @@ export function resolveLocationPage(site: any, pathSegments: string[]): Location
 
 export function locationPaths(site: any): string[] {
   const markets = siteMarkets(site)
-  if (markets.scope !== "specific") return []
+  if (!markets.markets || markets.markets.length === 0) return []
   const personaSlug = PERSONA_URL_SLUG[site.persona as SitePersona]
   if (!personaSlug) return []
 
@@ -107,7 +144,7 @@ export function locationPaths(site: any): string[] {
 // `{ persona, markets_json: markets }` so the slug/label math has one home.
 export function buildAreaLinks(site: any): { label: string; href: string }[] {
   const markets = siteMarkets(site)
-  if (markets.scope !== "specific") return []
+  if (!markets.markets || markets.markets.length === 0) return []
   const personaSlug = PERSONA_URL_SLUG[site.persona as SitePersona]
   if (!personaSlug) return []
 
@@ -119,7 +156,7 @@ export function buildAreaLinks(site: any): { label: string; href: string }[] {
     const href = `/${personaSlug}/${marketToSlug(parsed)}`
     if (seen.has(href)) continue
     seen.add(href)
-    const label = parsed.kind === "state" ? parsed.stateId : parsed.place
+    const label = parsed.kind === "state" ? stateName(parsed.stateId) : parsed.place
     out.push({ label, href })
   }
   return out
@@ -128,7 +165,7 @@ export function buildAreaLinks(site: any): { label: string; href: string }[] {
 // Deep-links a property's breadcrumb to its city's (or state's) landing page.
 export function locationHrefForDeal(site: any, city: string | null, state: string | null): string | null {
   const markets = siteMarkets(site)
-  if (markets.scope !== "specific") return null
+  if (!markets.markets || markets.markets.length === 0) return null
   const personaSlug = PERSONA_URL_SLUG[site.persona as SitePersona]
   if (!personaSlug) return null
 
