@@ -124,6 +124,25 @@ export function injectAreaLinks(puckData: any, links: { label: string; href: str
   return data
 }
 
+// Sets the home RecentPosts block's `posts` to the site's real published posts
+// (replace, not append). No-op when posts is empty, leaving the block to render
+// its "Start here" resources rail instead.
+export function injectRecentPosts(
+  puckData: any,
+  posts: { title: string; date?: string; href: string; imageUrl?: string }[],
+): any {
+  if (!posts || posts.length === 0) return puckData
+  const data = { ...(puckData || {}) }
+  const content = Array.isArray(data.content) ? data.content.map((b: any) => ({ ...b })) : []
+  for (const block of content) {
+    if (block?.type === "RecentPosts") {
+      block.props = { ...(block.props || {}), posts }
+    }
+  }
+  data.content = content
+  return data
+}
+
 // Adds a "Blog" link to the Puck Nav block's links array (home page nav).
 // Idempotent: no-op if a /blog link is already present or there is no Nav block.
 export function injectBlogNavLink(puckData: any): any {
@@ -146,6 +165,34 @@ export interface NavPage {
   path: string
   nav_label: string
   sort_order: number
+}
+
+// Canonical nav link list for a site, so the home Puck Nav and the shared
+// sub-page <SiteHeader> agree. Order mirrors injectPageNavLinks/injectBlogNavLink:
+// Home, Deals, Buyers list, then enabled sub-pages (Reviews/About/How it works/
+// FAQ in their stored order), then Blog when there are posts. De-duped by href.
+export function buildSiteNavLinks(opts: {
+  hasPosts: boolean
+  enabledPages: NavPage[]
+}): { label: string; href: string }[] {
+  const links: { label: string; href: string }[] = [
+    { label: "Home", href: "/" },
+    { label: "Deals", href: "/properties" },
+    { label: "Buyers list", href: "/get-on-the-list" },
+  ]
+  for (const p of opts.enabledPages || []) {
+    if (p?.nav_label && p?.path) links.push({ label: p.nav_label, href: p.path })
+  }
+  if (opts.hasPosts) links.push({ label: "Blog", href: "/blog" })
+
+  const seen = new Set<string>()
+  const norm = (h: string) => (h || "").replace(/\/$/, "") || "/"
+  return links.filter((l) => {
+    const key = norm(l.href)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 // Enabled, nav-labeled sub-pages (excluding the home "/"), ordered for the nav.
