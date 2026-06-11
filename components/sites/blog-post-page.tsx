@@ -3,6 +3,7 @@ import { sanitizePostHtml } from "@/lib/blog/sanitize"
 import { themeToCssVars } from "@/lib/site-builder/theme"
 import { siteImage, siteSrcSet } from "@/lib/site-builder/image-url"
 import { SiteFonts } from "@/components/sites/site-fonts"
+import { SiteHeader } from "@/components/sites/site-header"
 import { SiteStyles } from "@/components/sites/site-styles"
 import { SiteContextProvider, type SiteFormContext } from "@/lib/site-builder/site-context"
 import { LeadForm } from "@/components/sites/lead-form"
@@ -28,6 +29,7 @@ export function BlogPostPage({
   business,
   formContext,
   post,
+  navLinks = [],
 }: {
   host: string
   site: any
@@ -35,6 +37,7 @@ export function BlogPostPage({
   business: SiteBusiness
   formContext: SiteFormContext
   post: PostDetail
+  navLinks?: { label: string; href: string }[]
 }) {
   const brandName = formContext.brandName
   const dateLine = formatDate(post.publishedAt)
@@ -54,20 +57,7 @@ export function BlogPostPage({
       <SiteStyles />
       <SiteFonts typeStyleId={theme.typeStyleId} />
       <SiteContextProvider value={formContext}>
-        {/* Brand header */}
-        <header style={{ borderBottom: "1px solid #eef1f5", background: "#fff" }}>
-          <div className="lh-nav" style={{ ...WRAP, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 24px" }}>
-            {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- public tenant site, not a dashboard route */}
-            <a href="/" style={{ textDecoration: "none" }}>
-              <span style={{ fontFamily: "var(--head)", fontWeight: 800, fontSize: 20, color: "var(--p)" }}>{brandName}</span>
-            </a>
-            {business.phone ? (
-              <a href={`tel:${business.phone}`} style={{ fontSize: 14.5, fontWeight: 700, color: "var(--p)", textDecoration: "none" }}>
-                {business.phone}
-              </a>
-            ) : null}
-          </div>
-        </header>
+        <SiteHeader brandName={brandName} phone={business.phone} links={navLinks} />
 
         <main style={{ background: "color-mix(in srgb, var(--p) 4%, #fff)" }}>
           <div style={{ ...WRAP, maxWidth: 820, padding: "24px 24px 56px" }}>

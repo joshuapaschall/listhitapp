@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { cookies } from "next/headers"
 import { notFound } from "next/navigation"
-import { resolveSite, mergeThemeIntoRoot, resolveSiteByHost, injectBlogNavLink, getNavPages, injectPageNavLinks, injectAreaLinks } from "@/lib/site-builder/resolve-site"
+import { resolveSite, mergeThemeIntoRoot, resolveSiteByHost, injectBlogNavLink, getNavPages, injectPageNavLinks, injectAreaLinks, injectRecentPosts, buildSiteNavLinks } from "@/lib/site-builder/resolve-site"
 import { DEFAULT_THEME, DEFAULT_BUSINESS, DEFAULT_MARKETS, type SitePersona } from "@/lib/site-builder/types"
 import { cityFromMarkets } from "@/lib/site-builder/interpolate"
 import { pageSeo } from "@/lib/site-builder/seo"
@@ -226,6 +226,16 @@ async function buildOptinContext(site: any) {
   }
 }
 
+// Canonical nav links for a resolved site — one computation shared by every
+// sub-page's <SiteHeader> so they match the home nav.
+async function navLinksFor(site: any) {
+  const [enabledPages, postCount] = await Promise.all([
+    getNavPages(site.id).catch(() => []),
+    getPublishedPostCount(site.id, site.org_id).catch(() => 0),
+  ])
+  return buildSiteNavLinks({ hasPosts: postCount > 0, enabledPages })
+}
+
 // Auto-populated args for the legal documents. Contact details come from the org
 // so they match the A2P application; legal name comes from business_verification.
 async function legalArgsFor(site: any, business: any) {
@@ -318,6 +328,7 @@ export default async function SitePage({
       business,
     }
     const { filters, values } = readDealFilters(searchParams)
+    const navLinks = await navLinksFor(site)
     // Public sites: full, ungated list — every card links to its indexable
     // detail page. No address stripping, no cookie gate.
     if (publicMode) {
@@ -325,14 +336,14 @@ export default async function SitePage({
         getPublishedDeals(site.org_id, 24, 0, filters).catch(() => []),
         getPublishedDealCount(site.org_id, filters).catch(() => 0),
       ])
-      return <PropertiesPage brandName={site.name} theme={theme} business={business} formContext={formContext} publicMode unlocked deals={deals} count={count} filters={values} />
+      return <PropertiesPage brandName={site.name} theme={theme} business={business} formContext={formContext} publicMode unlocked deals={deals} count={count} filters={values} navLinks={navLinks} />
     }
     if (unlocked) {
       const [deals, count] = await Promise.all([
         getPublishedDeals(site.org_id, 24, 0, filters).catch(() => []),
         getPublishedDealCount(site.org_id, filters).catch(() => 0),
       ])
-      return <PropertiesPage brandName={site.name} theme={theme} business={business} formContext={formContext} unlocked deals={deals} count={count} filters={values} />
+      return <PropertiesPage brandName={site.name} theme={theme} business={business} formContext={formContext} unlocked deals={deals} count={count} filters={values} navLinks={navLinks} />
     }
     const [count, teaser] = await Promise.all([
       getPublishedDealCount(site.org_id).catch(() => 0),
@@ -341,7 +352,7 @@ export default async function SitePage({
     // Locked gate shows real photos/price/city as proof, but the street address
     // — the carrot — is stripped server-side so it never reaches the client.
     const lockedDeals = teaser.map((d) => ({ ...d, address: null }))
-    return <PropertiesPage brandName={site.name} theme={theme} business={business} formContext={formContext} unlocked={false} deals={lockedDeals} count={count} />
+    return <PropertiesPage brandName={site.name} theme={theme} business={business} formContext={formContext} unlocked={false} deals={lockedDeals} count={count} navLinks={navLinks} />
   }
 
   // Individual property detail page — public + indexable when deals_public.
@@ -365,10 +376,11 @@ export default async function SitePage({
     // Deep-link the breadcrumb to this property's city (or state) landing page
     // when the site runs specific markets; null on nationwide sites.
     const cityLocationHref = locationHrefForDeal(site, deal.city, deal.state)
+    const navLinks = await navLinksFor(site)
     return (
       <>
         <PropertyJsonLd deal={deal} host={host} brandName={site.name} />
-        <PropertyPage host={host} site={site} theme={theme} business={business} deal={deal} nearby={nearby} formContext={formContext} cityLocationHref={cityLocationHref} />
+        <PropertyPage host={host} site={site} theme={theme} business={business} deal={deal} nearby={nearby} formContext={formContext} cityLocationHref={cityLocationHref} navLinks={navLinks} />
       </>
     )
   }
@@ -411,10 +423,11 @@ export default async function SitePage({
       deals,
       business,
     }
+    const navLinks = await navLinksFor(site)
     return (
       <>
         <PostJsonLd post={post} host={host} brandName={site.name} />
-        <BlogPostPage host={host} site={site} theme={theme} business={business} formContext={formContext} post={post} />
+        <BlogPostPage host={host} site={site} theme={theme} business={business} formContext={formContext} post={post} navLinks={navLinks} />
       </>
     )
   }
@@ -467,6 +480,14 @@ export default async function SitePage({
   const navPages = await getNavPages(result.site.id).catch(() => [])
   data = injectPageNavLinks(data, navPages)
   data = injectAreaLinks(data, buildAreaLinks(result.site))
+  // Real published posts → home RecentPosts block; when none, the block renders
+  // its "Start here" resources rail instead.
+  const recentPosts = (await getPublishedPosts(result.site.id, result.site.org_id, 3).catch(() => [])).map((p) => ({
+    title: p.title,
+    href: `/blog/${p.slug}`,
+    imageUrl: p.featuredImageUrl || undefined,
+  }))
+  data = injectRecentPosts(data, recentPosts)
 
   const business = { ...DEFAULT_BUSINESS, ...((result.site.business_json as any) || {}) }
   const deals = await getPublishedDeals(result.site.org_id, 6).catch(() => [])
