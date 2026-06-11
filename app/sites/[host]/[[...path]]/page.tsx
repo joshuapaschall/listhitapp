@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { cookies } from "next/headers"
 import { notFound } from "next/navigation"
-import { resolveSite, mergeThemeIntoRoot, resolveSiteByHost, injectBlogNavLink, getNavPages, injectPageNavLinks } from "@/lib/site-builder/resolve-site"
+import { resolveSite, mergeThemeIntoRoot, resolveSiteByHost, injectBlogNavLink, getNavPages, injectPageNavLinks, injectAreaLinks } from "@/lib/site-builder/resolve-site"
 import { DEFAULT_THEME, DEFAULT_BUSINESS, DEFAULT_MARKETS, type SitePersona } from "@/lib/site-builder/types"
 import { cityFromMarkets } from "@/lib/site-builder/interpolate"
 import { pageSeo } from "@/lib/site-builder/seo"
@@ -23,7 +23,7 @@ import {
   getPublishedDealsForMarket,
   type DealFilters,
 } from "@/services/site-deals-service"
-import { resolveLocationPage, locationHrefForDeal, PERSONA_URL_SLUG } from "@/lib/site-builder/location-pages"
+import { resolveLocationPage, locationHrefForDeal, PERSONA_URL_SLUG, buildAreaLinks } from "@/lib/site-builder/location-pages"
 import { locationCopy } from "@/lib/site-builder/location-content"
 import { LocationPage } from "@/components/sites/location-page"
 import { getPublishedPosts, getPublishedPostBySlug, getPublishedPostCount } from "@/services/site-posts-service"
@@ -466,6 +466,7 @@ export default async function SitePage({
   if (postCount > 0) data = injectBlogNavLink(data)
   const navPages = await getNavPages(result.site.id).catch(() => [])
   data = injectPageNavLinks(data, navPages)
+  data = injectAreaLinks(data, buildAreaLinks(result.site))
 
   const business = { ...DEFAULT_BUSINESS, ...((result.site.business_json as any) || {}) }
   const deals = await getPublishedDeals(result.site.org_id, 6).catch(() => [])

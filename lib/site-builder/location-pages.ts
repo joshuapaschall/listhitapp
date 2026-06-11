@@ -101,6 +101,30 @@ export function locationPaths(site: any): string[] {
   return Array.from(out)
 }
 
+// Labelled links to each specific-market location page — the "Areas We Serve"
+// internal-linking structure. Specific-market sites only; nationwide returns [].
+// Accepts the site shape (persona + markets_json); the footer passes
+// `{ persona, markets_json: markets }` so the slug/label math has one home.
+export function buildAreaLinks(site: any): { label: string; href: string }[] {
+  const markets = siteMarkets(site)
+  if (markets.scope !== "specific") return []
+  const personaSlug = PERSONA_URL_SLUG[site.persona as SitePersona]
+  if (!personaSlug) return []
+
+  const out: { label: string; href: string }[] = []
+  const seen = new Set<string>()
+  for (const entry of markets.markets) {
+    const parsed = parseMarket(entry)
+    if (!parsed) continue
+    const href = `/${personaSlug}/${marketToSlug(parsed)}`
+    if (seen.has(href)) continue
+    seen.add(href)
+    const label = parsed.kind === "state" ? parsed.stateId : parsed.place
+    out.push({ label, href })
+  }
+  return out
+}
+
 // Deep-links a property's breadcrumb to its city's (or state's) landing page.
 export function locationHrefForDeal(site: any, city: string | null, state: string | null): string | null {
   const markets = siteMarkets(site)
