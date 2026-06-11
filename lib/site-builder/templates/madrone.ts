@@ -73,6 +73,15 @@ function build(persona: SitePersona): Data {
         props: { id: "FeatureGrid-madrone", heading: "What you get", features: c.features },
       },
       {
+        type: "SituationsGrid",
+        props: {
+          id: "SituationsGrid-madrone",
+          heading: c.situations.heading,
+          intro: c.situations.intro,
+          items: c.situations.items,
+        },
+      },
+      {
         type: "HowItWorks",
         props: { id: "HowItWorks-madrone", heading: "How it works", steps: c.howItWorks },
       },

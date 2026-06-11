@@ -73,6 +73,15 @@ function build(persona: SitePersona): Data {
         props: { id: "FeatureGrid-aspen", heading: "Why people choose us", features: c.features },
       },
       {
+        type: "SituationsGrid",
+        props: {
+          id: "SituationsGrid-aspen",
+          heading: c.situations.heading,
+          intro: c.situations.intro,
+          items: c.situations.items,
+        },
+      },
+      {
         type: "HowItWorks",
         props: { id: "HowItWorks-aspen", heading: "How it works", steps: c.howItWorks },
       },

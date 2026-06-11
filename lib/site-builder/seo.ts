@@ -32,7 +32,7 @@ export function pageSeo(
     case "/":
       return {
         title: `${s.titleKw}${inCity} — ${tc(s.listName)}`,
-        description: `Get ${s.metaWhat}${inCity}, sent first by text. Join the ${s.listName} free — no fees, no contract.`,
+        description: `Get ${s.metaWhat}${inCity}, sent first by text and email. Join the ${s.listName} free — no fees, no contract.`,
       }
     case "/how-it-works":
       return {
@@ -42,7 +42,7 @@ export function pageSeo(
     case "/buyers":
       return {
         title: `Join the ${tc(s.listName)}${inCity}`,
-        description: `Join the ${s.listName} and get ${s.metaWhat}${inCity} by text. Free to join, no contract.`,
+        description: `Join the ${s.listName} and get ${s.metaWhat}${inCity} by text and email. Free to join, no contract.`,
       }
     case "/faq":
       return {
