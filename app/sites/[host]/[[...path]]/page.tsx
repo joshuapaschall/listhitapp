@@ -466,7 +466,7 @@ export default async function SitePage({
       if (postCount > 0) data = injectBlogNavLink(data)
       const navPages = await getNavPages(site.id).catch(() => [])
       data = injectPageNavLinks(data, navPages)
-      data = injectAreaLinks(data, buildAreaLinks(site))
+      data = injectAreaLinks(data, buildAreaLinks(site, match.market))
       const recentPosts = (await getPublishedPosts(site.id, site.org_id, 3).catch(() => [])).map((p) => ({
         title: p.title,
         href: `/blog/${p.slug}`,
