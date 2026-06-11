@@ -51,7 +51,7 @@ export function SiteHeader({
             href={ctaHref}
             style={{
               background: "var(--a)",
-              color: "#fff",
+              color: "var(--a-ink)",
               fontWeight: 700,
               fontSize: 14.5,
               textDecoration: "none",
