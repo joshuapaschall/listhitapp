@@ -319,7 +319,7 @@ export function BuyerProfilePage({
             borderRadius: 12,
             border: "none",
             background: "var(--a)",
-            color: "#fff",
+            color: "var(--a-ink)",
             fontFamily: "var(--head)",
             fontWeight: 800,
             fontSize: 16.5,

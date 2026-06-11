@@ -42,7 +42,7 @@ export function DealsSection({ heading }: { heading?: string }) {
         ) : (
           <>
             <p style={{ fontSize: 15, color: "#5a6675", lineHeight: 1.6, margin: "0 0 22px", maxWidth: 720 }}>
-              New off-market deals drop here every week — join the list to unlock the address, photos, and numbers, and get the next one by text and email.
+              These are examples of the kind of deals we send. Join the list and we&apos;ll text you real ones — with the address, photos, and numbers — the moment we lock them up.
             </p>
             <div className="lh-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 22 }}>
               {placeholders.map((p, i) => (

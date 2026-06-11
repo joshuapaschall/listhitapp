@@ -28,7 +28,7 @@ const primaryBtn: React.CSSProperties = {
   borderRadius: 10,
   border: "none",
   background: "var(--a)",
-  color: "#fff",
+  color: "var(--a-ink)",
   fontWeight: 700,
   fontSize: 15.5,
   cursor: "pointer",
