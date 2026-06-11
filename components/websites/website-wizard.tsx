@@ -40,10 +40,10 @@ const PERSONA_BLURBS: Record<SitePersona, string> = {
 }
 
 const TEMPLATE_BLURBS: Record<string, string> = {
-  aspen: "Bold full-bleed photo hero with a floating form.",
-  cedar: "Calm centered hero with an inline form row.",
-  madrone: "Split hero: form left, photo + stat right.",
-  oak: "High-contrast color band hero, inline form.",
+  marquee: "Bold full-bleed photo hero with a floating form.",
+  haven: "Calm centered hero with an inline form row.",
+  vantage: "Split hero: form left, photo + stat right.",
+  forge: "High-contrast color band hero, inline form.",
 }
 
 function seedContent(name: string, persona: SitePersona): WizardContent {
@@ -124,7 +124,7 @@ export default function WebsiteWizard(props: WizardProps) {
   const [draft, setDraft] = useState<Draft>(() => ({
     name: "",
     persona: "cash",
-    templateId: "aspen",
+    templateId: "marquee",
     theme: { ...DEFAULT_THEME },
     content: seedContent("", "cash"),
     business: { ...DEFAULT_BUSINESS },
@@ -177,7 +177,7 @@ export default function WebsiteWizard(props: WizardProps) {
         setDraft({
           name: site.name || "",
           persona: (site.persona as SitePersona) || "cash",
-          templateId: (site.template_id as SiteTemplateId) || "aspen",
+          templateId: (site.template_id as SiteTemplateId) || "marquee",
           theme,
           content,
           // Opt-in is mandatory and not user-editable — force it on regardless of

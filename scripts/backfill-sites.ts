@@ -53,7 +53,7 @@ async function main() {
   let statFixes = 0, blockInserts = 0, pagesCreated = 0, changedSites = 0
 
   for (const site of sites) {
-    const tpl = getSiteTemplate(site.template_id) || getSiteTemplate("aspen")
+    const tpl = getSiteTemplate(site.template_id) || getSiteTemplate("marquee")
     if (!tpl) continue
     const canonical = tpl.build(site.persona)
     const canonTypes: string[] = (canonical.content || []).map((b: any) => b.type)

@@ -8,7 +8,7 @@ export type SitePersona =
   | "commercial"
   | "agent"
 
-export type SiteTemplateId = "aspen" | "cedar" | "madrone" | "oak"
+export type SiteTemplateId = "marquee" | "haven" | "vantage" | "forge"
 
 export type HeaderLayout = "split" | "center" | "stack"
 

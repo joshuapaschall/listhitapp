@@ -3,8 +3,8 @@ import type { SitePersona } from "../types"
 import type { SiteTemplateDef } from "./types"
 import { PERSONAS } from "./personas"
 
-const PRIMARY = "#173b5e"
-const ACCENT = "#e8833a"
+const PRIMARY = "#0f2a43"
+const ACCENT = "#f0a500"
 const HEADING_FONT = "'Bricolage Grotesque', serif"
 
 function build(persona: SitePersona): Data {
@@ -14,31 +14,31 @@ function build(persona: SitePersona): Data {
     content: [
       {
         type: "AnnouncementBar",
-        props: { id: "AnnouncementBar-aspen", text: c.announcement, enabled: "show" },
+        props: { id: "AnnouncementBar-forge", text: c.announcement, enabled: "show" },
       },
       {
         type: "Nav",
         props: {
-          id: "Nav-aspen",
+          id: "Nav-forge",
           brandName: "Your Company",
           logoUrl: "",
           phone: "(555) 555-5555",
           links: [
             { label: "Contact", href: "/contact" },
           ],
-          layout: "split",
+          layout: "stack",
         },
       },
       {
         type: "Hero",
         props: {
-          id: "Hero-aspen",
-          variant: "photo",
+          id: "Hero-forge",
+          variant: "band",
           eyebrow: c.eyebrow,
           headline: c.headline,
           subhead: c.subhead,
           stat: c.stat,
-          imageUrl: "https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=1600",
+          imageUrl: "https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=1600",
           formTitle: c.formTitle,
           formSubtitle: c.formSubtitle,
           ctaLabel: c.ctaLabel,
@@ -47,14 +47,14 @@ function build(persona: SitePersona): Data {
       {
         type: "TrustBar",
         props: {
-          id: "TrustBar-aspen",
+          id: "TrustBar-forge",
           items: c.trustBar,
         },
       },
       {
         type: "ProseSection",
         props: {
-          id: "ProseSection-1-aspen",
+          id: "ProseSection-1-forge",
           eyebrow: c.prose[0].eyebrow,
           heading: c.prose[0].heading,
           bodyHtml: c.prose[0].bodyHtml,
@@ -65,12 +65,12 @@ function build(persona: SitePersona): Data {
       },
       {
         type: "FeatureGrid",
-        props: { id: "FeatureGrid-aspen", heading: "Why people choose us", features: c.features },
+        props: { id: "FeatureGrid-forge", heading: "Why people choose us", features: c.features },
       },
       {
         type: "SituationsGrid",
         props: {
-          id: "SituationsGrid-aspen",
+          id: "SituationsGrid-forge",
           heading: c.situations.heading,
           intro: c.situations.intro,
           items: c.situations.items,
@@ -78,19 +78,19 @@ function build(persona: SitePersona): Data {
       },
       {
         type: "HowItWorks",
-        props: { id: "HowItWorks-aspen", heading: "How it works", steps: c.howItWorks },
+        props: { id: "HowItWorks-forge", heading: "How it works", steps: c.howItWorks },
       },
       {
         type: "TypesGrid",
-        props: { id: "TypesGrid-aspen", heading: "What we send", intro: "", items: c.types },
+        props: { id: "TypesGrid-forge", heading: "What we send", intro: "", items: c.types },
       },
-      { type: "PropertyGrid", props: { id: "PropertyGrid-aspen", heading: "Recent deals" } },
+      { type: "PropertyGrid", props: { id: "PropertyGrid-forge", heading: "Recent deals" } },
       ...(c.prose[1]
         ? [
             {
               type: "ProseSection",
               props: {
-                id: "ProseSection-2-aspen",
+                id: "ProseSection-2-forge",
                 eyebrow: c.prose[1].eyebrow,
                 heading: c.prose[1].heading,
                 bodyHtml: c.prose[1].bodyHtml,
@@ -104,7 +104,7 @@ function build(persona: SitePersona): Data {
       {
         type: "AreasServed",
         props: {
-          id: "AreasServed-aspen",
+          id: "AreasServed-forge",
           heading: c.areas.heading,
           intro: c.areas.intro,
           singleLine: c.areas.singleLine,
@@ -114,7 +114,7 @@ function build(persona: SitePersona): Data {
       {
         type: "ReviewsWall",
         props: {
-          id: "ReviewsWall-aspen",
+          id: "ReviewsWall-forge",
           heading: "What buyers say",
           emptyText: "No reviews yet — they'll appear here as buyers close deals from the list.",
           reviews: [],
@@ -122,29 +122,29 @@ function build(persona: SitePersona): Data {
       },
       {
         type: "RecentPosts",
-        props: { id: "RecentPosts-aspen", heading: "From the blog", intro: "", posts: [] },
+        props: { id: "RecentPosts-forge", heading: "From the blog", intro: "", posts: [] },
       },
       {
         type: "Faq",
-        props: { id: "Faq-aspen", heading: "Questions & answers", items: c.faqs },
+        props: { id: "Faq-forge", heading: "Questions & answers", items: c.faqs },
       },
       {
         type: "CtaBand",
-        props: { id: "CtaBand-aspen", heading: "Ready when you are", body: c.subhead, buttonLabel: c.bannerCta },
+        props: { id: "CtaBand-forge", heading: "Your offer is waiting", body: c.subhead, buttonLabel: c.bannerCta },
       },
-      { type: "Footer", props: { id: "Footer-aspen", text: "© Your Company. All rights reserved." } },
+      { type: "Footer", props: { id: "Footer-forge", text: "© Your Company. All rights reserved." } },
     ],
   }
   return data as Data
 }
 
-export const aspen: SiteTemplateDef = {
-  id: "aspen",
-  name: "Aspen",
-  description: "Bold full-bleed photo hero with a floating lead form — high-impact and trust-forward.",
-  defaultTheme: { primary: PRIMARY, accent: ACCENT, headerLayout: "split", banner: true },
-  heroVariant: "photo",
+export const forge: SiteTemplateDef = {
+  id: "forge",
+  name: "Oak",
+  description: "High-contrast color band hero with an inline form — punchy, urgent, and impossible to miss.",
+  defaultTheme: { primary: PRIMARY, accent: ACCENT, headerLayout: "stack", banner: true },
+  heroVariant: "band",
   build,
 }
 
-export default aspen
+export default forge

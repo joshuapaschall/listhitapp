@@ -14,12 +14,12 @@ function build(persona: SitePersona): Data {
     content: [
       {
         type: "AnnouncementBar",
-        props: { id: "AnnouncementBar-madrone", text: c.announcement, enabled: "show" },
+        props: { id: "AnnouncementBar-vantage", text: c.announcement, enabled: "show" },
       },
       {
         type: "Nav",
         props: {
-          id: "Nav-madrone",
+          id: "Nav-vantage",
           brandName: "Your Company",
           logoUrl: "",
           phone: "(555) 555-5555",
@@ -32,7 +32,7 @@ function build(persona: SitePersona): Data {
       {
         type: "Hero",
         props: {
-          id: "Hero-madrone",
+          id: "Hero-vantage",
           variant: "split",
           eyebrow: c.eyebrow,
           headline: c.headline,
@@ -47,14 +47,14 @@ function build(persona: SitePersona): Data {
       {
         type: "TrustBar",
         props: {
-          id: "TrustBar-madrone",
+          id: "TrustBar-vantage",
           items: c.trustBar,
         },
       },
       {
         type: "ProseSection",
         props: {
-          id: "ProseSection-1-madrone",
+          id: "ProseSection-1-vantage",
           eyebrow: c.prose[0].eyebrow,
           heading: c.prose[0].heading,
           bodyHtml: c.prose[0].bodyHtml,
@@ -65,12 +65,12 @@ function build(persona: SitePersona): Data {
       },
       {
         type: "FeatureGrid",
-        props: { id: "FeatureGrid-madrone", heading: "What you get", features: c.features },
+        props: { id: "FeatureGrid-vantage", heading: "What you get", features: c.features },
       },
       {
         type: "SituationsGrid",
         props: {
-          id: "SituationsGrid-madrone",
+          id: "SituationsGrid-vantage",
           heading: c.situations.heading,
           intro: c.situations.intro,
           items: c.situations.items,
@@ -78,19 +78,19 @@ function build(persona: SitePersona): Data {
       },
       {
         type: "HowItWorks",
-        props: { id: "HowItWorks-madrone", heading: "How it works", steps: c.howItWorks },
+        props: { id: "HowItWorks-vantage", heading: "How it works", steps: c.howItWorks },
       },
       {
         type: "TypesGrid",
-        props: { id: "TypesGrid-madrone", heading: "What we send", intro: "", items: c.types },
+        props: { id: "TypesGrid-vantage", heading: "What we send", intro: "", items: c.types },
       },
-      { type: "PropertyGrid", props: { id: "PropertyGrid-madrone", heading: "Recent deals" } },
+      { type: "PropertyGrid", props: { id: "PropertyGrid-vantage", heading: "Recent deals" } },
       ...(c.prose[1]
         ? [
             {
               type: "ProseSection",
               props: {
-                id: "ProseSection-2-madrone",
+                id: "ProseSection-2-vantage",
                 eyebrow: c.prose[1].eyebrow,
                 heading: c.prose[1].heading,
                 bodyHtml: c.prose[1].bodyHtml,
@@ -104,7 +104,7 @@ function build(persona: SitePersona): Data {
       {
         type: "AreasServed",
         props: {
-          id: "AreasServed-madrone",
+          id: "AreasServed-vantage",
           heading: c.areas.heading,
           intro: c.areas.intro,
           singleLine: c.areas.singleLine,
@@ -114,7 +114,7 @@ function build(persona: SitePersona): Data {
       {
         type: "ReviewsWall",
         props: {
-          id: "ReviewsWall-madrone",
+          id: "ReviewsWall-vantage",
           heading: "What buyers say",
           emptyText: "No reviews yet — they'll appear here as buyers close deals from the list.",
           reviews: [],
@@ -122,24 +122,24 @@ function build(persona: SitePersona): Data {
       },
       {
         type: "RecentPosts",
-        props: { id: "RecentPosts-madrone", heading: "From the blog", intro: "", posts: [] },
+        props: { id: "RecentPosts-vantage", heading: "From the blog", intro: "", posts: [] },
       },
       {
         type: "Faq",
-        props: { id: "Faq-madrone", heading: "Questions & answers", items: c.faqs },
+        props: { id: "Faq-vantage", heading: "Questions & answers", items: c.faqs },
       },
       {
         type: "CtaBand",
-        props: { id: "CtaBand-madrone", heading: "Get your offer today", body: c.subhead, buttonLabel: c.bannerCta },
+        props: { id: "CtaBand-vantage", heading: "Get your offer today", body: c.subhead, buttonLabel: c.bannerCta },
       },
-      { type: "Footer", props: { id: "Footer-madrone", text: "© Your Company. All rights reserved." } },
+      { type: "Footer", props: { id: "Footer-vantage", text: "© Your Company. All rights reserved." } },
     ],
   }
   return data as Data
 }
 
-export const madrone: SiteTemplateDef = {
-  id: "madrone",
+export const vantage: SiteTemplateDef = {
+  id: "vantage",
   name: "Madrone",
   description: "Split hero with the form left and a photo + stat overlay right — conversion-focused and modern.",
   defaultTheme: { primary: PRIMARY, accent: ACCENT, headerLayout: "split", banner: true },
@@ -147,4 +147,4 @@ export const madrone: SiteTemplateDef = {
   build,
 }
 
-export default madrone
+export default vantage
