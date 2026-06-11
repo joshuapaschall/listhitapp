@@ -48,6 +48,12 @@ export interface PersonaContent {
   // Areas-served copy (feed AreasServed). The block decides chips vs. single line by
   // data; these are the surrounding strings only — no hardcoded place names.
   areas: { heading: string; intro: string; singleLine: string }
+  // "Situations we buy" cards (feed SituationsGrid).
+  situations: {
+    heading: string
+    intro: string
+    items: { icon: string; title: string; body: string; href: string }[]
+  }
 }
 
 export const DEFAULT_THEME: SiteTheme = {

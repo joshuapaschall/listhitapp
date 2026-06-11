@@ -187,8 +187,8 @@ export const siteConfig: Config = {
           </div>
         ) : null
 
-        const h = (color: string) => (
-          <h1 className="lh-hero-h1" style={{ ...HEADING, fontSize: 44, fontWeight: 800, color, margin: 0 }}>{headline}</h1>
+        const h = (color: string, extra?: React.CSSProperties) => (
+          <h1 className="lh-hero-h1" style={{ ...HEADING, fontSize: 44, fontWeight: 800, color, margin: 0, ...extra }}>{headline}</h1>
         )
         const sub = (color: string) => (
           <p style={{ fontSize: 18, lineHeight: 1.5, color, marginTop: 14, maxWidth: 520 }}>{subhead}</p>
@@ -352,7 +352,7 @@ export const siteConfig: Config = {
             <section style={{ background: "color-mix(in srgb, var(--p) 7%, #fff)" }}>
               <div style={{ ...WRAP, padding: "72px 24px", textAlign: "center" }}>
                 {eyebrowEl}
-                <h1 className="lh-hero-h1" style={{ ...HEADING, fontSize: 46, fontWeight: 800, color: "var(--p)", margin: "0 auto", maxWidth: 760 }}>
+                <h1 className="lh-hero-h1" style={{ ...HEADING, fontSize: 40, fontWeight: 800, color: "var(--p)", margin: "0 auto", maxWidth: 960, marginInline: "auto", textWrap: "balance" } as React.CSSProperties}>
                   {headline}
                 </h1>
                 <p style={{ fontSize: 18, lineHeight: 1.5, color: "#42505f", margin: "14px auto 0", maxWidth: 600 }}>
@@ -444,7 +444,7 @@ export const siteConfig: Config = {
                       {eyebrow}
                     </div>
                   )}
-                  {h("#fff")}
+                  {h("#fff", { fontSize: 40, maxWidth: 960, marginInline: "auto", textWrap: "balance" } as React.CSSProperties)}
                   {sub("rgba(255,255,255,.86)")}
                   {stat && <div style={{ marginTop: 16, color: "#fff", fontWeight: 700 }}>★ {stat}</div>}
                 </div>
@@ -1046,6 +1046,59 @@ export const siteConfig: Config = {
                     {it?.href ? (
                       <a href={it.href} style={{ display: "inline-block", marginTop: 12, fontFamily: "var(--head)", fontWeight: 700, fontSize: 14, color: "var(--p)", textDecoration: "none" }}>
                         →
+                      </a>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )
+      },
+    },
+
+    // -----------------------------------------------------------------------
+    SituationsGrid: {
+      label: "Situations grid",
+      fields: {
+        heading: { type: "text", label: "Section heading", contentEditable: true },
+        intro: { type: "textarea", label: "Intro" },
+        items: {
+          type: "array",
+          label: "Situations",
+          arrayFields: {
+            icon: { type: "text", label: "Icon (emoji)" },
+            title: { type: "text", label: "Title" },
+            body: { type: "textarea", label: "Body" },
+            href: { type: "text", label: "Link" },
+          },
+          getItemSummary: (item: any, i?: number) => item?.title || `Item ${(i ?? 0) + 1}`,
+        },
+      },
+      defaultProps: { heading: "Situations we buy", intro: "", items: [] },
+      render: ({ heading, intro, items }: any) => {
+        const list = (items || []).filter((it: any) => it && (it.title || it.body))
+        if (list.length === 0) return <></>
+        return (
+          <section style={{ background: "#fff" }}>
+            <div style={{ ...WRAP, padding: "64px 24px" }}>
+              <div style={{ textAlign: "center", maxWidth: 680, margin: "0 auto 40px" }}>
+                {heading ? (
+                  <h2 className="lh-h2" style={{ ...HEADING, fontSize: 32, fontWeight: 800, color: "var(--p)", margin: 0 }}>{heading}</h2>
+                ) : null}
+                {intro ? (
+                  <p style={{ fontSize: 16, color: "#5a6675", marginTop: 12, lineHeight: 1.6 }}>{intro}</p>
+                ) : null}
+              </div>
+              <div className="lh-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 18 }}>
+                {list.map((it: any, i: number) => (
+                  <div key={i} style={{ border: "1px solid #eef1f5", borderRadius: 14, padding: "22px 22px", background: "#fff" }}>
+                    {it?.icon ? <div style={{ fontSize: 22, marginBottom: 10 }}>{it.icon}</div> : null}
+                    <div style={{ fontFamily: "var(--head)", fontWeight: 800, fontSize: 16.5, color: "var(--p)" }}>{it?.title}</div>
+                    {it?.body ? <p style={{ color: "#5a6675", fontSize: 14, lineHeight: 1.6, marginTop: 7 }}>{it.body}</p> : null}
+                    {it?.href ? (
+                      <a href={it.href} style={{ display: "inline-block", marginTop: 10, fontFamily: "var(--head)", fontWeight: 700, fontSize: 13.5, color: "var(--a)", textDecoration: "none" }}>
+                        Learn more →
                       </a>
                     ) : null}
                   </div>

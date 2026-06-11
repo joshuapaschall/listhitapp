@@ -19,13 +19,13 @@ export const PERSONAS: Record<SitePersona, PersonaContent> = {
     bannerCta: "Join the buyers list",
     features: [
       { icon: "🏠", title: "Off-market access", body: "Deals direct from distressed sellers, probate, and tax-delinquent owners — never on the MLS." },
-      { icon: "⚡", title: "You move first", body: "Cash buyers on the list get every new deal by text the moment we lock it up. First to reply, first to lock it." },
+      { icon: "⚡", title: "You move first", body: "Cash buyers on the list get every new deal by text and email the moment we lock it up. First to reply, first to lock it." },
       { icon: "💵", title: "Free to join", body: "No fees, no contracts. We make our money on the deals, not on the list." },
     ],
     announcement: "New off-market deals in {City} every week — join free and get them first.",
     howItWorks: [
       { title: "Join the list", body: "Drop your name and number. It takes 30 seconds and it's free." },
-      { title: "Get deals by text", body: "We text you new properties with the price, repairs, and ARV already run." },
+      { title: "Get deals by text and email", body: "We text and email you new properties with the price, repairs, and ARV already run." },
       { title: "Lock it up", body: "See one you like? Reply and we hand you the contract. Close fast, all cash." },
     ],
     faqs: [
@@ -44,24 +44,36 @@ export const PERSONAS: Record<SitePersona, PersonaContent> = {
     prose: [
       {
         eyebrow: "Why {Brand}",
-        heading: "Off-market wholesale deals, before anyone else sees them.",
-        bodyHtml: `<p>The deals worth buying rarely hit the MLS — by the time a property is listed, the spread is gone. {Brand} works the off-market side: we find motivated sellers across {City} — distressed, probate, tax-delinquent, tired landlords — lock up the property, and send it straight to our <b>cash buyers</b> list with the price, repairs, and ARV already run. <b>Wholesale deals</b> 30 to 50% under retail, the moment they're available.</p><p>You see the numbers up front and decide fast — no chasing, no bidding war. It's free to join, no contract, and we make our money on the deal spread, not on you. <a href="/how-it-works">See exactly how it works →</a></p>`,
+        heading: "Off-market wholesale deals in {City}, before they ever hit the MLS.",
+        bodyHtml: `<p>The wholesale deals worth buying rarely make it to the MLS. By the time a property in {City} is publicly listed, a dozen buyers have already seen it, the price has been bid up, and the spread that made it a deal is gone. <b>{Brand}</b> works the other side of that market — the off-market side — so the cash buyers on our list see real <b>off-market wholesale deals in {City}</b> before anyone else does.</p><p>Here's how it works in practice. We spend our days finding <b>motivated sellers</b> across the area — owners in pre-foreclosure, inherited and probate properties, tax-delinquent homes, and burnt-out landlords ready to walk away. We lock the property up under contract, run the numbers ourselves, and then text and email the deal straight to our <b>cash buyers list</b> with the asking price, the estimated repairs, and the after-repair value (ARV) already laid out. These are <b>wholesale properties priced 30 to 50% under retail</b> — the kind of <b>discount investment properties in {City}</b> that move in hours, not weeks.</p><h3>Built for cash buyers and flippers who move fast</h3><p>Because we've already done the underwriting, you can evaluate a deal in minutes instead of spending your weekend pulling comps. Whether you <b>fix and flip</b>, BRRRR, or buy and hold rentals, every property we send includes the spread up front so you can decide fast and lock it up. Cash and hard-money buyers get first look because they close fastest — but if you fund another way, tell us and we'll match you to deals you can actually close. It's free to join, no contract, and we make our money on the wholesale spread, not on you. <a href="/how-it-works">See exactly how it works →</a> or <a href="/properties">browse this week's off-market properties in {City} →</a>.</p>`,
         pullQuote: "We'd rather send you one deal you actually close than flood you with junk.",
       },
       {
         eyebrow: "Buying in {City}",
-        heading: "Where our off-market deals in {City} come from.",
-        bodyHtml: `<p>Motivated sellers are everywhere in {City} — owners facing foreclosure, inherited homes nobody wants, burnt-out landlords, and properties too distressed for a retail sale. Those are the <b>off-market deals</b> with real spread, and finding them before they're ever listed is exactly what we do.</p><p>We publish new <a href="/properties">wholesale and discount properties</a> as we lock them up and text the buyers list first. Want first access? <a href="/get-on-the-list">Join the cash buyers list free</a> — it takes 30 seconds.</p>`,
+        heading: "Why {City} is one of the best markets to buy off-market deals.",
+        bodyHtml: `<p>Strong rental demand, steady motivated-seller volume, and neighborhoods at every price point make {City} a productive market for cash buyers and flippers. The trick is finding the <b>off-market deals in {City}</b> before they're ever listed — and that's exactly what we do.</p><h3>Where the deals are</h3><p>Motivated sellers are everywhere. We find <b>distressed and discount properties</b> from owners facing foreclosure, probate, and back taxes, plus tired landlords selling rentals off-market. Closer in you'll find flips with strong resale comps; further out, <b>rental properties in {City}</b> that cash-flow on day one. We publish new <a href="/properties">wholesale and discount properties for sale →</a> as we lock them up and notify the buyers list first by text and email.</p><h3>Why off-market beats the MLS here</h3><p>On the MLS, a deal worth buying gets picked over by a dozen investors before you ever get a showing, and the margin is usually gone. Off-market is the opposite: you're one of a handful of cash buyers who even know the property exists, the price already reflects the discount, and there's no bidding war eating your spread. That's the entire reason the list exists — to put you first. <a href="/get-on-the-list">Join the {City} cash buyers list free →</a> and tell us your buy box. We'll only send deals that fit it.</p>`,
       },
     ],
     types: [
-      { title: "Fixer-uppers", body: "Distressed off-market homes that need work — the bread and butter of a good flip.", href: "/properties" },
-      { title: "Wholesale deals", body: "Properties we've locked up and assign to you with real spread, 30–50% under retail.", href: "/properties" },
-      { title: "Distressed & motivated-seller", body: "Homes from owners who need to sell fast — foreclosure, probate, tax-delinquent.", href: "/properties" },
-      { title: "Buy-and-hold rentals", body: "Off-market single-family and small multifamily that cash-flow.", href: "/properties" },
-      { title: "Below-market & discount", body: "Deals priced well under retail because we buy them right.", href: "/properties" },
-      { title: "Probate & inherited", body: "Off-market homes from estates and inherited owners — often the deepest discounts.", href: "/properties" },
+      { title: "Wholesale properties", body: "Locked-up deals we assign to you with real spread, 30–50% under retail.", href: "/properties" },
+      { title: "Bank-owned & REO properties", body: "Bank-owned homes and REO deals priced to move, off-market where we can get them.", href: "/properties" },
+      { title: "Foreclosure properties", body: "Pre-foreclosure and foreclosure homes from owners who need to sell fast.", href: "/properties" },
+      { title: "Fixer-uppers & distressed", body: "Off-market homes that need work — the bread and butter of a good flip.", href: "/properties" },
+      { title: "Probate & inherited homes", body: "Off-market homes from estates and inherited owners — often the deepest discounts.", href: "/properties" },
+      { title: "Buy-and-hold rentals", body: "Off-market single-family and small multifamily in {City} that cash-flow.", href: "/properties" },
     ],
+    situations: {
+      heading: "The situations we buy in {City}",
+      intro: "Most of our off-market deals come from owners who need to sell fast for reasons that never make it onto the MLS. These are the situations that produce the deepest discounts.",
+      items: [
+        { icon: "🏛️", title: "Foreclosure & pre-foreclosure", body: "Owners behind on payments who need to sell before the auction — often the most motivated, and the deepest spread.", href: "/properties" },
+        { icon: "📜", title: "Probate & inherited homes", body: "Heirs who inherited a house they don't want to manage or repair, and would rather take a clean cash offer.", href: "/properties" },
+        { icon: "🧾", title: "Tax-delinquent properties", body: "Owners facing back-tax pressure who need out fast — frequently vacant and well below market.", href: "/properties" },
+        { icon: "🔑", title: "Tired & out-of-state landlords", body: "Burnt-out landlords done with tenants and repairs, selling rentals off-market at a discount.", href: "/properties" },
+        { icon: "🛠️", title: "Distressed & fixer-uppers", body: "Homes too rough for a retail sale — code violations, fire, water, deferred maintenance — perfect for a flip.", href: "/properties" },
+        { icon: "🏚️", title: "Vacant & code-violation homes", body: "Empty properties costing the owner money every month, where a fast cash close is the easiest exit.", href: "/properties" },
+      ],
+    },
     areas: {
       heading: "Where we find deals",
       intro: "We lock up off-market deals across {City} and nearby — browse by area:",
@@ -87,7 +99,7 @@ export const PERSONAS: Record<SitePersona, PersonaContent> = {
     announcement: "New underwritten investment properties in {City} every week — investor list gets them first.",
     howItWorks: [
       { title: "Tell us your buy box", body: "Flip or hold, price range, areas, property type. Thirty seconds and you're in." },
-      { title: "Get matched deals by text", body: "We send off-market investment properties that fit your box, with the numbers already run." },
+      { title: "Get matched deals by text and email", body: "We send off-market investment properties that fit your box, with the numbers already run." },
       { title: "Lock it up and close", body: "Reply to claim it. We hand you a clean, title-ready contract and you close fast — cash or your lender." },
     ],
     faqs: [
@@ -106,26 +118,36 @@ export const PERSONAS: Record<SitePersona, PersonaContent> = {
     prose: [
       {
         eyebrow: "Why {Brand}",
-        heading: "Off-market investment properties, with the numbers already run.",
-        bodyHtml:
-          "<p>By the time a real <b>investment property</b> hits the MLS, the margin is usually gone — picked over by a dozen buyers before you ever get a showing. {Brand} works the other side of the market. We source off-market <b>fix-and-flip</b> and <b>rental</b> deals straight from motivated sellers, probate, and tax-delinquent owners, then underwrite each one before it goes out: recent comps, an honest rehab estimate, a conservative ARV, and the <b>spread</b> laid out plainly.</p><p>That means you evaluate a deal in minutes instead of chasing comps all weekend. Whether you flip, <b>BRRRR</b>, or buy and hold, our list is built to match properties to your buy box — and it's completely free, with no contract and no fee to buy. We make our money on the wholesale spread, not on you. <a href='/how-it-works'>See exactly how it works →</a></p>",
+        heading: "Off-market investment properties in {City}, with the numbers already run.",
+        bodyHtml: `<p>By the time a real <b>investment property</b> hits the MLS in {City}, the margin is usually gone — picked over by a dozen buyers before you ever get a showing. {Brand} works the other side of the market. We source off-market <b>fix-and-flip</b> and <b>rental</b> deals straight from motivated sellers, probate, and tax-delinquent owners, then underwrite each one before it goes out: recent comps, an honest rehab estimate, a conservative ARV, and the <b>spread</b> laid out plainly.</p><p>That means you evaluate a deal in minutes instead of chasing comps all weekend. Whether you flip, <b>BRRRR</b>, or buy and hold, our list is built to match <b>investment properties in {City}</b> to your buy box — and it's completely free, with no contract and no fee to buy. We make our money on the wholesale spread, not on you, and we send every new deal by text and email the moment we lock it up.</p><h3>Deals that actually pencil</h3><p>We keep a tight list of serious investors on purpose: reliable closers earn the best deals first. Cash and hard money get first look because they close fastest, but tell us how you fund and we'll match you to deals you can actually close. <a href="/how-it-works">See exactly how it works →</a> or <a href="/properties">browse discount investment properties for sale in {City} →</a>.</p>`,
         pullQuote: "We'd rather send you one deal you actually fund than flood your inbox with listings that don't pencil.",
       },
       {
         eyebrow: "Investing in {City}",
         heading: "Why {City} keeps producing deals for flippers and landlords.",
-        bodyHtml:
-          "<p>Steady rental demand, motivated sellers, and neighborhoods at every price point make {City} a productive market for real estate investors. Whether you're flipping closer in or cash-flowing rentals further out, the spread is there if you know where to look — and finding the off-market <b>investment properties</b> that actually hit your numbers is exactly what we do.</p><p>We publish <a href='/properties'>discount investment properties for sale</a> as they go live and update the buyers list the moment a new wholesale or distressed deal lands. Want first look? <a href='/get-on-the-list'>Join the investor list free</a> and tell us your buy box — we'll only send deals that fit it.</p>",
+        bodyHtml: `<p>Steady rental demand, motivated sellers, and neighborhoods at every price point make {City} a productive market for real estate investors. Whether you're flipping closer in or cash-flowing rentals further out, the spread is there if you know where to look.</p><h3>Flips vs. rentals</h3><p>We send both. <b>Fix-and-flip</b> deals with strong resale comps for investors who want a fast turn, and <b>cash-flowing rental properties in {City}</b> for buy-and-hold investors building a portfolio. Every deal lands with comps, rehab, and ARV so you can run your own return before you commit.</p><h3>First look beats the open market</h3><p>Finding the off-market <b>investment properties</b> that actually hit your numbers is exactly what we do. We publish <a href="/properties">discount investment properties for sale →</a> as they go live and update the buyers list the moment a new wholesale or distressed deal lands. <a href="/get-on-the-list">Join the investor list free →</a> and tell us your buy box — we'll only send deals that fit it.</p>`,
       },
     ],
     types: [
-      { title: "Fix & flip deals", body: "Distressed off-market homes with real spread; rehab and ARV already estimated.", href: "/properties" },
-      { title: "Buy-and-hold rentals", body: "Cash-flowing single-family and small multifamily priced to hit your return targets.", href: "/properties" },
-      { title: "BRRRR properties", body: "Bought-right homes that fit buy-rehab-rent-refinance, with equity built in from day one.", href: "/properties" },
-      { title: "Below-market & discount", body: "Off-market homes 30–50% under retail, direct from motivated sellers.", href: "/properties" },
-      { title: "Small multifamily", body: "Duplexes through small apartment buildings with value-add upside.", href: "/properties" },
-      { title: "Probate & inherited", body: "Off-market homes from estates and inherited owners — often the deepest discounts we see.", href: "/properties" },
+      { title: "Fix-and-flip deals", body: "Off-market homes with strong resale comps and the rehab already estimated.", href: "/properties" },
+      { title: "Cash-flow rentals", body: "Single-family and small multifamily that cash-flow from day one.", href: "/properties" },
+      { title: "BRRRR-ready properties", body: "Distressed deals that refinance cleanly once rehabbed and rented.", href: "/properties" },
+      { title: "Bank-owned & REO", body: "Bank-owned and REO investment properties priced to move.", href: "/properties" },
+      { title: "Wholesale & assignment deals", body: "Locked-up contracts we assign to you with the spread already run.", href: "/properties" },
+      { title: "Value-add multifamily", body: "Small multifamily in {City} with room to push rents and value.", href: "/properties" },
     ],
+    situations: {
+      heading: "Where our {City} investment deals come from",
+      intro: "We underwrite off-market deals from the situations that produce real spread — then send the ones that pencil straight to the investor list.",
+      items: [
+        { icon: "📊", title: "Underwritten flips", body: "Comps, rehab estimate, and ARV done before it ever reaches you — verify the spread yourself.", href: "/properties" },
+        { icon: "🏘️", title: "Off-market rentals", body: "Cash-flowing single-family and small multifamily from tired landlords selling direct.", href: "/properties" },
+        { icon: "📜", title: "Probate & estate sales", body: "Inherited properties from heirs who want a fast, clean close over a retail listing.", href: "/properties" },
+        { icon: "🏛️", title: "Pre-foreclosure", body: "Motivated owners who need to move before the auction — frequently the deepest discounts.", href: "/properties" },
+        { icon: "🧾", title: "Tax-delinquent", body: "Owners under back-tax pressure, often with vacant properties priced well under market.", href: "/properties" },
+        { icon: "🔨", title: "Distressed & value-add", body: "Rough properties and underperforming rentals with clear upside for the right buyer.", href: "/properties" },
+      ],
+    },
     areas: {
       heading: "Where we find deals",
       intro: "We source off-market investment properties across {City} and nearby — browse by area:",
@@ -151,7 +173,7 @@ export const PERSONAS: Record<SitePersona, PersonaContent> = {
     announcement: "New rent-to-own homes in {City} every week — join free and see them first.",
     howItWorks: [
       { title: "Tell us what you need", body: "Bedrooms, budget, the areas you want. Thirty seconds, and no credit pull to get started." },
-      { title: "Get matched homes", body: "We text you rent-to-own homes that fit, with the terms in plain English." },
+      { title: "Get matched homes", body: "We text and email you rent-to-own homes that fit, with the terms in plain English." },
       { title: "Move in, then buy", body: "Pick your home, move in, and work toward owning it on a timeline that fits your life." },
     ],
     faqs: [
@@ -169,27 +191,37 @@ export const PERSONAS: Record<SitePersona, PersonaContent> = {
     },
     prose: [
       {
-        eyebrow: "How it works",
-        heading: "Rent-to-own: move in today, buy when you're ready.",
-        bodyHtml:
-          "<p>If you're ready to stop renting but the bank keeps saying \"not yet,\" you're not out of options. A <b>rent-to-own home</b> lets you move in now and lock in the right to buy the home later, at a price set up front. Part of what you pay each month can go toward the purchase — so instead of handing a landlord money you'll never see again, you're building toward owning the place you live in.</p><p>{Brand} matches buyers in {City} with <b>lease-to-own homes</b> and walks you through every term in plain English. Bad credit, thin credit, self-employed income — we look at your whole situation, not just a score, and help you map the path to qualifying. <a href='/how-it-works'>See how rent-to-own works →</a></p>",
-        pullQuote: "The goal isn't to keep you renting. It's to get you owning.",
+        eyebrow: "Why {Brand}",
+        heading: "Rent-to-own homes in {City} you can move into now and buy when you're ready.",
+        bodyHtml: `<p>If a bank turned you down — or you're just not mortgage-ready yet — that doesn't mean you can't get into a home. {Brand} matches families in {City} with <b>rent-to-own homes</b> and <b>lease-option</b> properties: you move in now, rent while you get mortgage-ready, and lock in your price to buy later. No bank approval to get started, and a real path to ownership instead of paying someone else's mortgage forever.</p><p>Join our list and we'll send <b>rent-to-own homes in {City}</b> by text and email as they come available, with the monthly payment, the move-in amount, and the terms laid out up front. No surprises, no runaround — just homes you can actually qualify for and a clear path to owning them.</p><h3>Built for buyers banks said no to</h3><p>Bruised credit, self-employed income, a recent move, a short time on the job — the things that make banks nervous don't disqualify you here. We work with <b>lease-purchase</b> and <b>rent-to-own</b> buyers every day. <a href="/how-it-works">See how rent-to-own works →</a> or <a href="/properties">browse available rent-to-own homes in {City} →</a>.</p>`,
+        pullQuote: "Rent-to-own is the bridge between renting now and owning soon.",
       },
       {
-        eyebrow: "Rent-to-own in {City}",
-        heading: "Finding a rent-to-own home in {City} — without the runaround.",
-        bodyHtml:
-          "<p>Good <b>rent-to-own homes in {City}</b> go fast, and a lot of what's online is outdated or too good to be true. We keep a current list of real lease-to-own homes and send them to our buyers the moment they're available — with honest terms and zero pressure.</p><p>Tell us your budget and the areas you'd like to live, and we'll only send homes that actually fit, and that you have a real shot at owning. <a href='/get-on-the-list'>Join free</a> and see what's available before it's gone.</p>",
+        eyebrow: "Renting to own in {City}",
+        heading: "How rent-to-own gets you into a {City} home sooner.",
+        bodyHtml: `<p>A <b>rent-to-own home</b> (also called a lease-option or lease-purchase) lets you move into the house now under a rental agreement, with the option to buy it at a price set up front. Part of the deal is simple: you live there, you get your credit and savings where they need to be, and when you're ready you buy.</p><h3>What you get up front</h3><p>Every home we send comes with the monthly payment, the option/move-in amount, and the purchase price spelled out — so you know exactly what it takes to get in and what it takes to own. No guessing, no hidden terms.</p><h3>A real path, not a trap</h3><p>The best rent-to-own deals are the ones where the numbers actually work for you. We publish <a href="/properties">available rent-to-own homes in {City} →</a> as they come up and notify the list first by text and email. <a href="/get-on-the-list">Join the rent-to-own list free →</a> and tell us what you're looking for and your budget — we'll match you to homes you can realistically move into and buy.</p>`,
       },
     ],
     types: [
-      { title: "Single-family rent-to-own", body: "Houses you can move into now and buy later: yards, garages, room to grow.", href: "/properties" },
-      { title: "Bad-credit friendly", body: "Homes open to buyers still working on credit. Your score isn't the whole story.", href: "/properties" },
-      { title: "Self-employed & 1099", body: "Paths for buyers whose income doesn't fit a bank's box but who can clearly afford a home.", href: "/properties" },
-      { title: "Low-down-payment options", body: "Get into a home with far less up front than a traditional purchase.", href: "/properties" },
-      { title: "Flexible move-in", body: "Homes available now; move in on a timeline that works for your family.", href: "/properties" },
-      { title: "Path-to-purchase terms", body: "Clear, written terms that put part of your rent toward owning the home.", href: "/properties" },
+      { title: "Rent-to-own homes", body: "Move in now, rent while you get ready, and buy at a price locked up front.", href: "/properties" },
+      { title: "Lease-option homes", body: "Rent with the option to buy — you choose whether to purchase later.", href: "/properties" },
+      { title: "Lease-purchase deals", body: "A clear path to ownership with terms set from day one.", href: "/properties" },
+      { title: "Bad-credit-friendly homes", body: "Homes for buyers banks said no to — no mortgage approval to start.", href: "/properties" },
+      { title: "Low move-in homes", body: "Get into a home without a 20% down payment hanging over you.", href: "/properties" },
+      { title: "Move-in-ready homes", body: "Homes ready for you to move into now while you work toward owning.", href: "/properties" },
     ],
+    situations: {
+      heading: "Who we help into a {City} home",
+      intro: "Rent-to-own exists for buyers who are ready to own but aren't bank-ready yet. If any of these is you, the list is built for you.",
+      items: [
+        { icon: "📉", title: "Bruised or rebuilding credit", body: "Move in now and use the rental period to get your score where lenders want it.", href: "/properties" },
+        { icon: "💼", title: "Self-employed income", body: "Hard to document on a mortgage app — but no problem on a rent-to-own.", href: "/properties" },
+        { icon: "💰", title: "Saving the down payment", body: "Get into a home now while you build the savings to buy it later.", href: "/properties" },
+        { icon: "🆕", title: "New job or recent move", body: "Banks want time on the job; we don't. Get settled now.", href: "/properties" },
+        { icon: "🏠", title: "Tired of renting", body: "Stop paying a landlord's mortgage — put those payments toward your own home.", href: "/properties" },
+        { icon: "📝", title: "Past bankruptcy or foreclosure", body: "A rough patch doesn't disqualify you from a path back to ownership.", href: "/properties" },
+      ],
+    },
     areas: {
       heading: "Where we have homes",
       intro: "We have rent-to-own homes across {City} and nearby — browse by area:",
@@ -215,7 +247,7 @@ export const PERSONAS: Record<SitePersona, PersonaContent> = {
     announcement: "New owner-financed homes in {City} every week — join free to see them first.",
     howItWorks: [
       { title: "Tell us what you want", body: "Budget, the down payment you can put down, and the areas you like. Thirty seconds." },
-      { title: "Get matched homes", body: "We text you owner-financed homes that fit, with the terms spelled out clearly." },
+      { title: "Get matched homes", body: "We text and email you owner-financed homes that fit, with the terms spelled out clearly." },
       { title: "Agree terms and close", body: "Negotiate directly with the owner, sign, and get your keys — no bank approval needed." },
     ],
     faqs: [
@@ -233,27 +265,37 @@ export const PERSONAS: Record<SitePersona, PersonaContent> = {
     },
     prose: [
       {
-        eyebrow: "How it works",
-        heading: "Owner financing: buy the home, skip the bank.",
-        bodyHtml:
-          "<p>Not everyone fits neatly into a bank's lending box — and not everyone wants to. With an <b>owner-financed home</b>, you buy directly from the seller and pay them over time on terms the two of you agree to. There's no mortgage application, no underwriting committee, and no months of bank red tape between you and the keys.</p><p>{Brand} matches buyers in {City} with <b>seller-financed homes</b> and lays out every term — down payment, rate, length — in plain English before you sign. It's a flexible, established way to own, especially if you're self-employed, rebuilding credit, or just want to close fast. <a href='/how-it-works'>See how owner financing works →</a></p>",
-        pullQuote: "Your situation matters more than a single credit score.",
+        eyebrow: "Why {Brand}",
+        heading: "Owner-financed homes in {City} — buy direct from the seller, no bank.",
+        bodyHtml: `<p>Bank financing isn't the only way to buy a house. {Brand} connects buyers in {City} with <b>owner-financed homes</b> — properties where the seller carries the financing, so you buy directly from them with a down payment and monthly payments, no mortgage lender involved. For self-employed buyers, investors maxed out on conventional loans, and anyone the banks make jump through hoops, <b>seller financing</b> is often the fastest, simplest way into a home.</p><p>Join our list and we'll send <b>owner-financed homes in {City}</b> by text and email as they come available, each with the down payment, monthly payment, interest rate, and terms laid out up front. You see the whole deal before you ever talk to anyone — no surprises, no bank underwriting, no waiting weeks for an approval that may never come.</p><h3>Why buyers choose owner financing</h3><p>Flexible terms you can actually negotiate, a faster close than any bank can offer, and qualification based on the deal — not a credit committee. <a href="/how-it-works">See how owner financing works →</a> or <a href="/properties">browse available owner-financed homes in {City} →</a>.</p>`,
+        pullQuote: "Owner financing puts the deal between you and the seller — not a bank.",
       },
       {
         eyebrow: "Owner financing in {City}",
-        heading: "Finding owner-financed homes in {City}.",
-        bodyHtml:
-          "<p>Owner-financed homes don't sit on the open market for long, and they're rarely advertised clearly. We keep a current list of <b>owner-financed homes in {City}</b> and send them to our buyers as they come available — with the terms spelled out and nothing hidden.</p><p>Tell us your budget and how much you can put down, and we'll send the homes that genuinely fit. <a href='/get-on-the-list'>Join free</a> and see what's available before someone else does.</p>",
+        heading: "How owner financing gets you into a {City} home without a bank.",
+        bodyHtml: `<p>With an <b>owner-financed</b> (or <b>seller-financed</b>) home, the seller acts as the bank. You agree on a price, a down payment, an interest rate, and a monthly payment — and you start building equity from day one, without a mortgage lender in the middle.</p><h3>What you get up front</h3><p>Every owner-finance deal we send comes with the down payment, the monthly payment, and the terms spelled out, so you know exactly what it takes to get in and what you'll pay each month. The terms are negotiable in a way bank loans never are.</p><h3>Built for buyers banks overlook</h3><p>Self-employed, 1099, recently relocated, or just done with bank red tape — owner financing is built for you. We publish <a href="/properties">available owner-financed homes in {City} →</a> as they come up and notify the list first by text and email. <a href="/get-on-the-list">Join the owner-finance list free →</a> and tell us your budget and down payment — we'll match you to homes you can buy on terms that work.</p>`,
       },
     ],
     types: [
-      { title: "Owner-financed houses", body: "Single-family homes you can buy directly from the owner on agreed terms.", href: "/properties" },
-      { title: "Low-down-payment homes", body: "Properties where the owner is flexible on the money down.", href: "/properties" },
-      { title: "Self-employed friendly", body: "Homes for buyers whose income doesn't fit a bank's box.", href: "/properties" },
-      { title: "Credit-building path", body: "Buy now on owner terms, refinance with a bank once you qualify.", href: "/properties" },
-      { title: "Owner-financed land", body: "Lots and acreage available directly from the owner on terms.", href: "/properties" },
-      { title: "Faster-closing deals", body: "No bank in the middle means you can close in a fraction of the time.", href: "/properties" },
+      { title: "Owner-financed homes", body: "Buy direct from the seller with a down payment and monthly payments — no bank.", href: "/properties" },
+      { title: "Seller-financed houses", body: "The seller carries the note; you build equity from day one.", href: "/properties" },
+      { title: "Low-down-payment homes", body: "Get in without the 20% a conventional loan demands.", href: "/properties" },
+      { title: "Self-employed friendly", body: "Qualification based on the deal, not two years of tax returns.", href: "/properties" },
+      { title: "No-bank deals", body: "Skip the lender, the underwriting, and the weeks of waiting.", href: "/properties" },
+      { title: "Flexible-terms homes", body: "Down payment, rate, and timeline you can actually negotiate.", href: "/properties" },
     ],
+    situations: {
+      heading: "Who owner financing is built for in {City}",
+      intro: "If a bank makes buying harder than it should be, owner financing is often the cleaner path. These buyers use it every day.",
+      items: [
+        { icon: "💼", title: "Self-employed & 1099", body: "Income that's hard to document for a mortgage is no obstacle here.", href: "/properties" },
+        { icon: "🏦", title: "Maxed-out investors", body: "Already at your conventional-loan limit? Owner financing keeps you buying.", href: "/properties" },
+        { icon: "💰", title: "Want lower down", body: "Negotiate a down payment that fits instead of a fixed 20%.", href: "/properties" },
+        { icon: "⏱️", title: "Need to close fast", body: "No bank underwriting means a close measured in days, not weeks.", href: "/properties" },
+        { icon: "📉", title: "Credit banks won't touch", body: "Qualification based on the deal and the down payment, not a score.", href: "/properties" },
+        { icon: "🤝", title: "Want negotiable terms", body: "Price, rate, and timeline are between you and the seller.", href: "/properties" },
+      ],
+    },
     areas: {
       heading: "Where we have homes",
       intro: "We have owner-financed homes across {City} and nearby — browse by area:",
@@ -279,7 +321,7 @@ export const PERSONAS: Record<SitePersona, PersonaContent> = {
     announcement: "New creative-finance deals in {City} weekly — sent to our buyers first.",
     howItWorks: [
       { title: "Tell us how you structure", body: "Subject-to, seller finance, lease option, wrap — and your buy box. Thirty seconds." },
-      { title: "Get matched deals", body: "We text you off-market properties with sellers open to terms, the situation laid out." },
+      { title: "Get matched deals", body: "We text and email you off-market properties with sellers open to terms, the situation laid out." },
       { title: "Structure and close", body: "Reply to claim it; we connect you with the seller and you build the deal that works." },
     ],
     faqs: [
@@ -298,26 +340,36 @@ export const PERSONAS: Record<SitePersona, PersonaContent> = {
     prose: [
       {
         eyebrow: "Why {Brand}",
-        heading: "Off-market deals built for creative financing.",
-        bodyHtml:
-          "<p>The best <b>creative-finance deals</b> never look like deals to the average buyer — they're motivated sellers with a problem, open to terms if someone shows up with a structure. {Brand} finds those sellers across {City} before they ever list, qualifies them for motivation and openness to terms, and sends the situation straight to our buyers. <b>Subject-to</b>, <b>seller financing</b>, lease options, wraps — the deals that let you control a property with little money down.</p><p>Instead of cold-pitching creative structures to skeptical sellers, you get properties where the door is already open. It's free to join, no contract, and we make our money on the spread, not on you. <a href='/how-it-works'>See how it works →</a></p>",
-        pullQuote: "We don't send you listings. We send you sellers who are open to terms.",
+        heading: "Creative-finance real estate deals in {City} — structured to close without a bank.",
+        bodyHtml: `<p>The best deals often aren't bankable in the traditional sense — and that's exactly where the opportunity is. {Brand} sources off-market properties in {City} built for <b>creative financing</b>: <b>subject-to</b>, <b>seller carry</b>, and <b>lease options</b>. Instead of a new bank loan, you take over existing financing or buy on terms the seller carries — which means lower entry costs, faster closes, and deals other buyers can't touch.</p><p>Join our list and we'll send <b>creative-finance deals in {City}</b> by text and email as we lock them up, each with the structure, the existing terms, and your monthly numbers laid out up front. You see exactly how the deal is built before you commit — no guesswork, no scrambling to figure out the financing after the fact.</p><h3>Built for buyers who know terms</h3><p>If you understand <b>subject-to</b> and <b>seller financing</b>, you already know these deals close faster and cheaper than anything a bank touches. <a href="/how-it-works">See how it works →</a> or <a href="/properties">browse available creative-finance deals in {City} →</a>.</p>`,
+        pullQuote: "The deal that can't get a bank loan is often the best deal on the table.",
       },
       {
-        eyebrow: "Creative deals in {City}",
-        heading: "Where creative-finance deals come from in {City}.",
-        bodyHtml:
-          "<p>Motivated sellers are everywhere in {City} — behind on payments, inherited a property they don't want, tired landlords, divorces, relocations. The ones open to <b>creative financing</b> are the deals a sharp buyer can turn into a low-money-down acquisition. Finding them and qualifying them is the hard part, and it's exactly what we do.</p><p>We send new structurable deals as they come in and tell you the seller's situation so you can move fast. <a href='/get-on-the-list'>Join free</a> and get first look before anyone else.</p>",
+        eyebrow: "Creative financing in {City}",
+        heading: "How creative-finance deals work in {City}.",
+        bodyHtml: `<p><b>Creative financing</b> covers any way to buy a property without a new conventional mortgage. The three most common: <b>subject-to</b> (you take over the seller's existing loan), <b>seller carry</b> (the seller finances the sale), and <b>lease options</b> (you control the property with the right to buy later).</p><h3>Why the structure matters</h3><p>Each structure changes your entry cost, your monthly obligation, and your exit. We lay all of it out on every deal — the existing loan, the terms the seller will carry, the monthly PITI — so you can underwrite the structure, not just the property.</p><h3>Deals built for terms buyers</h3><p>We publish <a href="/properties">available creative-finance deals in {City} →</a> as we lock them up and notify the list first by text and email. <a href="/get-on-the-list">Join the deals list free →</a> and tell us the structures you work with — subject-to, seller carry, lease option — and we'll send the ones that fit how you buy.</p>`,
       },
     ],
     types: [
-      { title: "Subject-to deals", body: "Take over the existing financing on a property; control it with little money down.", href: "/properties" },
-      { title: "Seller-financed deals", body: "Buy directly from the owner on terms, no bank in the middle.", href: "/properties" },
-      { title: "Lease-option deals", body: "Control now with the right to buy later, minimal money up front.", href: "/properties" },
-      { title: "Wrap-around deals", body: "Structure a wrap where it makes sense and acquire without new bank debt.", href: "/properties" },
-      { title: "Low-money-down deals", body: "Properties priced and positioned to acquire with minimal cash in.", href: "/properties" },
-      { title: "Motivated-seller leads", body: "Off-market sellers open to terms, with the situation already qualified.", href: "/properties" },
+      { title: "Subject-to deals", body: "Take over the seller's existing financing and keep the low rate in place.", href: "/properties" },
+      { title: "Seller-carry deals", body: "The seller finances the sale on terms you negotiate together.", href: "/properties" },
+      { title: "Lease options", body: "Control the property now with the right to buy it later.", href: "/properties" },
+      { title: "Low-entry deals", body: "Get in with far less cash than a conventional purchase requires.", href: "/properties" },
+      { title: "No-new-loan deals", body: "Skip the bank entirely with existing or seller-carried financing.", href: "/properties" },
+      { title: "Terms-flexible properties", body: "Structures you can shape to fit your strategy and exit.", href: "/properties" },
     ],
+    situations: {
+      heading: "Deal structures we send in {City}",
+      intro: "Every creative deal we lock up comes with the structure spelled out so you can underwrite the terms, not just the property.",
+      items: [
+        { icon: "🔑", title: "Subject-to", body: "Take title and take over the existing loan — often at a rate you'll never get today.", href: "/properties" },
+        { icon: "🤝", title: "Seller carry", body: "The seller finances the deal; you negotiate the down, rate, and term.", href: "/properties" },
+        { icon: "📄", title: "Lease option", body: "Control the property and lock the purchase price while you decide.", href: "/properties" },
+        { icon: "💵", title: "Low cash to close", body: "Creative structures keep your entry costs far below a conventional buy.", href: "/properties" },
+        { icon: "⚡", title: "Fast close, no bank", body: "No underwriting means you close on the deal in days.", href: "/properties" },
+        { icon: "📊", title: "Numbers laid out", body: "Existing terms and monthly PITI on every deal, before you commit.", href: "/properties" },
+      ],
+    },
     areas: {
       heading: "Where we find deals",
       intro: "We find creative-finance deals across {City} and nearby — browse by area:",
@@ -343,7 +395,7 @@ export const PERSONAS: Record<SitePersona, PersonaContent> = {
     announcement: "New off-market land in {City} every week — land list gets it first.",
     howItWorks: [
       { title: "Tell us what you're after", body: "Acreage, budget, area, and use: build, invest, or recreation. Thirty seconds." },
-      { title: "Get matched parcels", body: "We text you off-market land that fits, with acreage, access, and zoning spelled out." },
+      { title: "Get matched parcels", body: "We text and email you off-market land that fits, with acreage, access, and zoning spelled out." },
       { title: "Lock it up", body: "Reply to claim it and we hand you a clean contract; close fast." },
     ],
     faqs: [
@@ -362,26 +414,36 @@ export const PERSONAS: Record<SitePersona, PersonaContent> = {
     prose: [
       {
         eyebrow: "Why {Brand}",
-        heading: "Off-market land and acreage, before it's listed.",
-        bodyHtml:
-          "<p>The best <b>land deals</b> rarely make it to a listing site — they're motivated owners with raw lots, inherited acreage, or tax-burdened parcels who want a clean, fast sale. {Brand} sources these off-market across {City}, works out acreage, access, and zoning, and sends the parcel straight to our land buyers. Buildable lots, recreational tracts, investment <b>acreage</b> — priced below market because we buy them right.</p><p>You get the details up front so you're not driving an hour to a dead end, and you get first look before the parcel is ever advertised. Free to join, no contract. <a href='/how-it-works'>See how it works →</a></p>",
-        pullQuote: "The best land never makes it to a listing site. That's where we work.",
+        heading: "Off-market land and acreage in {City} — priced below market, sent first.",
+        bodyHtml: `<p>Good land deals don't sit on the MLS. By the time a parcel is listed and marketed, the price reflects it. {Brand} works the off-market side: we find <b>vacant land</b>, <b>acreage</b>, and <b>buildable lots</b> in and around {City} directly from owners who need to sell — back taxes, inherited parcels, tired holders — and send them to our land buyers list before they're ever publicly listed.</p><p>Join our list and we'll send <b>off-market land in {City}</b> by text and email as we lock it up, each with the acreage, zoning, access, utilities, and price laid out up front. Whether you're buying to build, to hold, or to flip, you get the details that actually matter for land — not a vague listing — so you can move fast on the parcels worth moving on.</p><h3>Built for land buyers and developers</h3><p>Infill lots, rural acreage, recreational tracts, and development parcels — we source the kind of <b>land for sale in {City}</b> that has real spread because we buy it right. <a href="/how-it-works">See how it works →</a> or <a href="/properties">browse available land and lots in {City} →</a>.</p>`,
+        pullQuote: "The land worth buying is gone before it's ever listed — unless you're on the list.",
       },
       {
-        eyebrow: "Land in {City}",
-        heading: "Finding off-market land and lots in {City}.",
-        bodyHtml:
-          "<p>Whether you're building, investing, or looking for recreational <b>acreage</b>, the right parcel in {City} is out there — it's just rarely on the open market. We track down off-market lots and land from motivated owners and send them to our buyers with acreage, access, and zoning spelled out.</p><p>Tell us the acreage and area you want, and we'll only send parcels that fit. <a href='/get-on-the-list'>Join free</a> and get first look at <a href='/properties'>land for sale</a> before it's listed.</p>",
+        eyebrow: "Buying land in {City}",
+        heading: "What to know about buying off-market land in {City}.",
+        bodyHtml: `<p>Land is its own game. Zoning, access, utilities, flood, and buildability matter far more than they do on a house — and the difference between a great lot and a useless one comes down to those details.</p><h3>The details we put up front</h3><p>Every parcel we send includes acreage, zoning/use, road access, and whether utilities are at the street — the things that decide whether a lot is buildable and what it's worth. No driving out to discover a dead deal.</p><h3>From infill lots to rural acreage</h3><p>We source <b>buildable lots</b> for builders, <b>acreage</b> for buyers who want room, and discounted parcels for investors who flip land. We publish <a href="/properties">available land and lots in {City} →</a> as we lock them up and notify the list first by text and email. <a href="/get-on-the-list">Join the land buyers list free →</a> and tell us what you're after — lot size, use, and budget — and we'll send parcels that fit.</p>`,
       },
     ],
     types: [
-      { title: "Buildable lots", body: "Build-ready parcels with access and utilities, priced below market.", href: "/properties" },
-      { title: "Acreage & large tracts", body: "Bigger parcels for investment, development, or recreation.", href: "/properties" },
-      { title: "Recreational & hunting land", body: "Tracts for hunting, camping, and getaways, away from the crowd.", href: "/properties" },
-      { title: "Investment land", body: "Parcels in the path of growth, bought right for upside.", href: "/properties" },
-      { title: "Owner-financed land", body: "Lots and acreage where the owner is open to terms.", href: "/properties" },
-      { title: "Below-market parcels", body: "Off-market land 30–50% under retail, direct from motivated owners.", href: "/properties" },
+      { title: "Buildable lots", body: "Infill and ready-to-build lots with access and utilities sorted.", href: "/properties" },
+      { title: "Acreage & rural land", body: "Larger tracts for buyers who want room to build or hold.", href: "/properties" },
+      { title: "Off-market parcels", body: "Land direct from motivated owners, never listed publicly.", href: "/properties" },
+      { title: "Recreational land", body: "Hunting, camping, and getaway tracts priced below market.", href: "/properties" },
+      { title: "Development parcels", body: "Larger pieces with upside for builders and developers.", href: "/properties" },
+      { title: "Below-market lots", body: "Discounted lots we lock up from tax-delinquent and inherited owners.", href: "/properties" },
     ],
+    situations: {
+      heading: "Where our {City} land deals come from",
+      intro: "Most off-market land comes from owners who'd rather take a fast, clean offer than wait out a listing. These are the situations that produce the best parcels.",
+      items: [
+        { icon: "🧾", title: "Tax-delinquent parcels", body: "Owners under back-tax pressure on land they no longer want to hold.", href: "/properties" },
+        { icon: "📜", title: "Inherited land", body: "Heirs who inherited acreage they have no plans for and want to cash out.", href: "/properties" },
+        { icon: "🗺️", title: "Out-of-state owners", body: "Absentee owners holding land they've never used and want off the books.", href: "/properties" },
+        { icon: "🏗️", title: "Buildable infill lots", body: "City and suburban lots ready for a build, with access and utilities.", href: "/properties" },
+        { icon: "🌲", title: "Rural acreage", body: "Larger tracts for building, holding, or recreation, priced to move.", href: "/properties" },
+        { icon: "💵", title: "Below-market flips", body: "Discounted parcels with spread for buyers who flip land.", href: "/properties" },
+      ],
+    },
     areas: {
       heading: "Where we find land",
       intro: "We source off-market land across {City} and nearby — browse by area:",
@@ -426,26 +488,36 @@ export const PERSONAS: Record<SitePersona, PersonaContent> = {
     prose: [
       {
         eyebrow: "Why {Brand}",
-        heading: "Off-market commercial and multifamily, before it's shopped.",
-        bodyHtml:
-          "<p>By the time a <b>commercial</b> or <b>multi-family</b> deal is packaged and emailed around by a broker, the upside is usually priced in. {Brand} works upstream — we source off-market commercial deals across {City} directly from owners, including value-add plays the market hasn't seen, and send them to our buyers list with the key numbers up front.</p><p>That means you screen units, rents, occupancy, and the value-add thesis in minutes, and you see the deal before it becomes a bidding contest. Free to join, no contract — we're paid on the deal, not on you. <a href='/how-it-works'>See how it works →</a></p>",
-        pullQuote: "We see the deal before it becomes a bidding war.",
+        heading: "Off-market commercial and multifamily in {City} — with upside, sent first.",
+        bodyHtml: `<p>The commercial deals worth chasing rarely reach a broker's listing. {Brand} sources off-market <b>commercial real estate</b> and <b>multifamily</b> in {City} — apartments, retail, office, and mixed-use — direct from owners ready to sell, and sends them to our commercial buyers list before they ever hit the open market or a broker's inbox.</p><p>Join our list and we'll send <b>off-market commercial and multifamily deals in {City}</b> by text and email as we lock them up, each with the units, building size, current rents, <b>cap rate</b>, and <b>value-add</b> story laid out up front. You get enough to underwrite the deal on first look — not a teaser that makes you sign an NDA just to see the numbers.</p><h3>Built for buyers who close</h3><p>Whether you're acquiring stabilized cash-flow or hunting <b>value-add multifamily</b> with room to push rents, we send the <b>investment property</b> deals that actually pencil. <a href="/how-it-works">See how it works →</a> or <a href="/properties">browse available commercial deals in {City} →</a>.</p>`,
+        pullQuote: "We'd rather send you one deal that pencils than ten that waste your time.",
       },
       {
-        eyebrow: "Commercial in {City}",
-        heading: "Where off-market commercial deals come from in {City}.",
-        bodyHtml:
-          "<p>{City} has owners ready to sell apartments, retail, and mixed-use quietly — tired operators, estates, partnership splits, and value-add properties that need a sharper hand. Those are the off-market <b>commercial real estate</b> deals with real upside, and finding them before they're shopped is what we do.</p><p>Tell us your asset type and return targets, and we'll send the deals that fit. <a href='/get-on-the-list'>Join free</a> and get first look at <a href='/properties'>commercial property for sale</a> before the broker blast.</p>",
+        eyebrow: "Investing in {City}",
+        heading: "Why {City} commercial and multifamily still has room to run.",
+        bodyHtml: `<p>Steady demand, rent growth in the right submarkets, and owners ready to trade out make {City} a productive market for commercial and multifamily buyers — if you can find the off-market deals before they're shopped around.</p><h3>Stabilized vs. value-add</h3><p>We send both: stabilized assets for buyers who want cash-flow on day one, and <b>value-add</b> deals — under-rented units, deferred maintenance, mismanaged buildings — for buyers who want to force appreciation. Every deal lands with the rent roll basics and a cap rate so you can decide fast.</p><h3>First look beats the open market</h3><p>We publish <a href="/properties">available commercial and multifamily deals in {City} →</a> as we lock them up and notify the list first by text and email. <a href="/get-on-the-list">Join the commercial buyers list free →</a> and tell us your buy box — asset type, size, and return targets — and we'll send the deals that fit.</p>`,
       },
     ],
     types: [
-      { title: "Multi-family & apartments", body: "Duplexes through apartment buildings, including value-add.", href: "/properties" },
-      { title: "Retail & strip centers", body: "Off-market retail with occupancy or repositioning upside.", href: "/properties" },
-      { title: "Office & medical", body: "Office and medical assets direct from owners.", href: "/properties" },
-      { title: "Industrial & warehouse", body: "Industrial, flex, and warehouse in the path of demand.", href: "/properties" },
-      { title: "Mixed-use", body: "Mixed-use buildings with multiple income streams.", href: "/properties" },
-      { title: "Value-add plays", body: "Underperforming assets priced for a sharper operator to reposition.", href: "/properties" },
+      { title: "Multifamily & apartments", body: "Off-market apartment buildings and small multifamily with upside.", href: "/properties" },
+      { title: "Retail & strip centers", body: "Off-market retail with in-place income and room to improve.", href: "/properties" },
+      { title: "Office & flex", body: "Office and flex space priced below replacement cost.", href: "/properties" },
+      { title: "Mixed-use", body: "Mixed-use buildings combining income streams in one asset.", href: "/properties" },
+      { title: "Value-add deals", body: "Under-rented, mismanaged, or distressed assets with forced-appreciation upside.", href: "/properties" },
+      { title: "Stabilized cash-flow", body: "Performing assets for buyers who want day-one income.", href: "/properties" },
     ],
+    situations: {
+      heading: "Where our {City} commercial deals come from",
+      intro: "Off-market commercial comes from owners ready to trade out quietly. These are the situations that produce real upside.",
+      items: [
+        { icon: "🏢", title: "Tired owners", body: "Long-time holders ready to sell and move on without a public listing.", href: "/properties" },
+        { icon: "📉", title: "Under-rented buildings", body: "Rents below market with clear room to push value through management.", href: "/properties" },
+        { icon: "🛠️", title: "Deferred maintenance", body: "Assets that scare retail buyers but pencil for a value-add operator.", href: "/properties" },
+        { icon: "🧾", title: "Distressed & note sales", body: "Owners under financial pressure who need a fast, certain close.", href: "/properties" },
+        { icon: "📜", title: "Estate & partnership exits", body: "Inherited assets and partner buyouts that need to sell cleanly.", href: "/properties" },
+        { icon: "📊", title: "Stabilized trades", body: "Performing buildings traded off-market for buyers wanting day-one cash-flow.", href: "/properties" },
+      ],
+    },
     areas: {
       heading: "Where we find deals",
       intro: "We source off-market commercial across {City} and nearby — browse by area:",
@@ -471,7 +543,7 @@ export const PERSONAS: Record<SitePersona, PersonaContent> = {
     announcement: "New off-market and pocket listings in {City} weekly — agents get first access.",
     howItWorks: [
       { title: "Tell us your buyers' boxes", body: "Areas, price, property type your clients want. Thirty seconds." },
-      { title: "Get matched inventory", body: "We text you off-market and pocket listings that fit your buyers." },
+      { title: "Get matched inventory", body: "We text and email you off-market and pocket listings that fit your buyers." },
       { title: "Bring your buyer", body: "Show it, write it up, and close: your client, your commission." },
     ],
     faqs: [
@@ -490,26 +562,36 @@ export const PERSONAS: Record<SitePersona, PersonaContent> = {
     prose: [
       {
         eyebrow: "Why {Brand}",
-        heading: "Off-market inventory to bring your buyers.",
-        bodyHtml:
-          "<p>When the MLS is dry, the agent who has something to show wins. {Brand} gives agents across {City} first access to <b>off-market</b> and <b>pocket listings</b> — distressed, motivated-seller, and wholesale properties that never hit the open market. You bring real inventory to your buyers when no one else can, and you keep your client and your commission.</p><p>We work the deal side; you work the relationship. It's free to join, with no contract — we make our money on the deal we control, not on your commission. <a href='/how-it-works'>See how it works →</a></p>",
-        pullQuote: "Be the agent who always has something to show.",
+        heading: "Off-market and pocket listings in {City} — for agents with ready buyers.",
+        bodyHtml: `<p>Your buyers are tired of losing every bidding war on the MLS. {Brand} gives agents in {City} access to <b>off-market</b> and <b>pocket listings</b> — properties that aren't on the open market yet — so you can bring your buyers something nobody else can show them. Less competition, more spread, and a reason for buyers to stick with you.</p><p>Join our list and we'll send <b>off-market and pocket listings in {City}</b> by text and email as they come available, each with the details and price laid out up front. Show your buyers homes before they're public, write cleaner offers with less competition, and close more of the deals you're already working.</p><h3>Built for buyer's agents</h3><p>Whether your client wants a primary home or an investment property, off-market inventory is the edge that keeps buyers loyal. <a href="/how-it-works">See how it works →</a> or <a href="/properties">browse available off-market listings in {City} →</a>.</p>`,
+        pullQuote: "The agent who can show off-market inventory keeps the buyer.",
       },
       {
-        eyebrow: "For agents in {City}",
-        heading: "Win more buyers in {City} with off-market inventory.",
-        bodyHtml:
-          "<p>Buyers in {City} are competing over a thin MLS, and the agent who can show them something off-market stands out. We send our agent list <b>pocket listings</b> and off-market deals as they come available, matched to the buyers you're working with.</p><p>Tell us what your clients are looking for, and we'll send inventory that fits. <a href='/get-on-the-list'>Join free</a> and get first access before these properties are ever listed.</p>",
+        eyebrow: "Working {City} off-market",
+        heading: "Why off-market inventory wins {City} buyers.",
+        bodyHtml: `<p>On the open market, your buyer is one of ten offers and the price is already bid up. Off-market is the opposite: fewer eyes on the property, more room to negotiate, and a home your buyer couldn't have found on Zillow.</p><h3>What you get</h3><p>We send <b>pocket listings</b>, coming-soon homes, and off-market deals with the details and price up front, so you can match them to the buyers in your pipeline and move fast. It's free to join, and you keep your client — we're sourcing inventory, not your relationship.</p><h3>Inventory that keeps buyers loyal</h3><p>We publish <a href="/properties">available off-market listings in {City} →</a> as they come up and notify the list first by text and email. <a href="/get-on-the-list">Join the agent list free →</a> and tell us what your buyers are after — price range, area, and type — and we'll send the off-market homes that fit.</p>`,
       },
     ],
     types: [
-      { title: "Pocket listings", body: "Off-market properties you can show buyers before they're listed.", href: "/properties" },
-      { title: "Distressed & motivated-seller", body: "Below-market homes from sellers who need to move.", href: "/properties" },
-      { title: "Wholesale inventory", body: "Controlled properties you can bring to your cash and investor clients.", href: "/properties" },
-      { title: "Fixer-uppers", body: "Off-market homes that need work, for your flip and rehab buyers.", href: "/properties" },
-      { title: "Investment properties", body: "Cash-flow and value-add deals for your investor clients.", href: "/properties" },
-      { title: "Off-market land", body: "Lots and acreage for your land and builder clients.", href: "/properties" },
+      { title: "Pocket listings", body: "Off-market homes you can show buyers before anyone else.", href: "/properties" },
+      { title: "Coming-soon homes", body: "Properties about to list — get your buyers in first.", href: "/properties" },
+      { title: "Off-market deals", body: "Homes never publicly listed, with less competition and more room.", href: "/properties" },
+      { title: "Investment properties", body: "Off-market deals for your investor clients building portfolios.", href: "/properties" },
+      { title: "Below-market homes", body: "Discounted inventory your buyers won't find on the MLS.", href: "/properties" },
+      { title: "Exclusive inventory", body: "Properties we source direct, available to agents on the list.", href: "/properties" },
     ],
+    situations: {
+      heading: "Off-market inventory we send agents in {City}",
+      intro: "We source the kind of inventory that gives your buyers an edge and keeps them loyal to you.",
+      items: [
+        { icon: "🔑", title: "Pocket listings", body: "Homes held off the MLS that you can show before they're public.", href: "/properties" },
+        { icon: "⏳", title: "Coming-soon homes", body: "Properties about to list — get your buyer in before the crowd.", href: "/properties" },
+        { icon: "💼", title: "Investor inventory", body: "Off-market deals for your investor clients' buy boxes.", href: "/properties" },
+        { icon: "🏠", title: "Off-market resale", body: "Owner-direct homes your retail buyers won't find online.", href: "/properties" },
+        { icon: "💵", title: "Below-market deals", body: "Discounted properties that help your buyer win without overpaying.", href: "/properties" },
+        { icon: "🤝", title: "You keep the client", body: "We source the inventory; the relationship stays yours.", href: "/properties" },
+      ],
+    },
     areas: {
       heading: "Where we have inventory",
       intro: "We source off-market inventory across {City} and nearby — browse by area:",
