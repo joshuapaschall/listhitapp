@@ -106,7 +106,7 @@ export function PropertiesPage({
             gap: 12,
           }}
         >
-          <span style={{ fontSize: 13, color: "#8a94a2" }}>© {brandName}. All rights reserved.</span>
+          <span style={{ fontSize: 13, color: "#5a6675" }}>© {brandName}. All rights reserved.</span>
           <nav style={{ display: "flex", flexWrap: "wrap", gap: 18 }}>
             {footerLinks.map((l) => (
               // eslint-disable-next-line @next/next/no-html-link-for-pages -- public tenant site, not a dashboard route

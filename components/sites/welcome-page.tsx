@@ -101,7 +101,7 @@ export function WelcomePage({ brandName, theme }: { brandName: string; theme: Si
         >
           See current deals →
         </a>
-        <div style={{ marginTop: 24, fontSize: 13, color: "#8a94a2" }}>{brandName}</div>
+        <div style={{ marginTop: 24, fontSize: 13, color: "#5a6675" }}>{brandName}</div>
       </div>
     </div>
   )

@@ -62,7 +62,7 @@ export function BlogPostPage({
         <main style={{ background: "color-mix(in srgb, var(--p) 4%, #fff)" }}>
           <div style={{ ...WRAP, maxWidth: 820, padding: "24px 24px 56px" }}>
             {/* Breadcrumb */}
-            <nav style={{ fontFamily: "var(--body)", fontSize: 13, color: "#8a94a2", marginBottom: 20 }}>
+            <nav style={{ fontFamily: "var(--body)", fontSize: 13, color: "#5a6675", marginBottom: 20 }}>
               {/* eslint-disable @next/next/no-html-link-for-pages -- public tenant site, not a dashboard route */}
               <a href="/" style={{ color: "#5a6675", textDecoration: "none" }}>Home</a>
               <span style={{ margin: "0 8px" }}>/</span>

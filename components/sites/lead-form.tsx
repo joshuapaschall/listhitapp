@@ -128,7 +128,7 @@ export function LeadForm({
         <div style={{ fontFamily: "var(--head)", fontWeight: 700, fontSize: 19, color: "#0f1b29" }}>{title}</div>
       )}
       {subtitle && <div style={{ fontSize: 13.5, color: "#5a6675", marginTop: 4 }}>{subtitle}</div>}
-      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--a)", marginTop: 8, letterSpacing: "0.04em" }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--p)", marginTop: 8, letterSpacing: "0.04em" }}>
         Step 1 of 2 · ~30 seconds
       </div>
       <div
@@ -186,7 +186,7 @@ export function LeadForm({
       >
         {submitting ? "Submitting…" : ctaLabel || "Get Deals →"}
       </button>
-      <div style={{ fontSize: 11.5, color: "#8a94a2", marginTop: 9, textAlign: "center" }}>
+      <div style={{ fontSize: 11.5, color: "#5a6675", marginTop: 9, textAlign: "center" }}>
         No spam. Reply STOP anytime.
       </div>
     </div>

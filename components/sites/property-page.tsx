@@ -44,7 +44,7 @@ function usd(n: number | null): string | null {
 function Fact({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: ".04em", textTransform: "uppercase", color: "#8a94a2" }}>
+      <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: ".04em", textTransform: "uppercase", color: "#5a6675" }}>
         {label}
       </div>
       <div style={{ marginTop: 3, fontSize: 15, fontWeight: 600, color: "#0f1b29" }}>{value}</div>
@@ -127,7 +127,7 @@ export function PropertyPage({
         <main style={{ background: "color-mix(in srgb, var(--p) 4%, #fff)" }}>
           <div style={{ ...WRAP, padding: "24px 24px 56px" }}>
             {/* Breadcrumbs */}
-            <nav style={{ fontFamily: "var(--body)", fontSize: 13, color: "#8a94a2", marginBottom: 20 }}>
+            <nav style={{ fontFamily: "var(--body)", fontSize: 13, color: "#5a6675", marginBottom: 20 }}>
               {/* eslint-disable @next/next/no-html-link-for-pages -- public tenant site, not a dashboard route */}
               <a href="/" style={{ color: "#5a6675", textDecoration: "none" }}>Home</a>
               <span style={{ margin: "0 8px" }}>/</span>

@@ -34,7 +34,9 @@ export function SiteRendererRSC({
       <SiteStyles />
       <SiteFonts typeStyleId={typeStyleId} />
       <SiteContextProvider value={form}>
-        <Render config={siteConfig} data={display} />
+        <main>
+          <Render config={siteConfig} data={display} />
+        </main>
       </SiteContextProvider>
     </div>
   )

@@ -14,7 +14,11 @@ export function SiteRenderer({ data, theme, form }: { data: any; theme: SiteThem
   const typeStyleId = (theme as Partial<SiteTheme>)?.typeStyleId
   const display = interpolateSiteData(data, form?.brandName ?? "our team", cityFromMarkets(form?.markets))
   const layout = (data as any)?.root?.props?.layout
-  const rendered = <Render config={siteConfig} data={display} />
+  const rendered = (
+    <main>
+      <Render config={siteConfig} data={display} />
+    </main>
+  )
   return (
     <div className={`lh-site${layout ? ` lh-lay-${layout}` : ""}`} style={themeToCssVars(theme)}>
       <SiteStyles />
