@@ -129,8 +129,14 @@ function build(persona: SitePersona): Data {
         props: { id: "Faq-haven", heading: "Questions & answers", items: c.faqs },
       },
       {
-        type: "CtaBand",
-        props: { id: "CtaBand-haven", heading: "Let's get started", body: c.subhead, buttonLabel: c.bannerCta },
+        type: "ConversionBand",
+        props: {
+          id: "ConversionBand-haven",
+          heading: "Ready to see the deals?",
+          body: c.subhead,
+          formTitle: c.formTitle,
+          ctaLabel: c.ctaLabel,
+        },
       },
       { type: "Footer", props: { id: "Footer-haven", text: "© Your Company. All rights reserved." } },
     ],
@@ -140,8 +146,8 @@ function build(persona: SitePersona): Data {
 
 export const haven: SiteTemplateDef = {
   id: "haven",
-  name: "Cedar",
-  description: "Calm centered hero with an inline form row — friendly, editorial, and easy to scan.",
+  name: "Haven",
+  description: "Calm, centered editorial hero with an inline form — refined and trustworthy.",
   defaultTheme: { primary: PRIMARY, accent: ACCENT, headerLayout: "center", banner: false },
   heroVariant: "centered",
   build,

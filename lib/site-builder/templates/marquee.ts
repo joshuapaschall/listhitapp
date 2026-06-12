@@ -129,8 +129,14 @@ function build(persona: SitePersona): Data {
         props: { id: "Faq-marquee", heading: "Questions & answers", items: c.faqs },
       },
       {
-        type: "CtaBand",
-        props: { id: "CtaBand-marquee", heading: "Ready when you are", body: c.subhead, buttonLabel: c.bannerCta },
+        type: "ConversionBand",
+        props: {
+          id: "ConversionBand-marquee",
+          heading: "Ready to see the deals?",
+          body: c.subhead,
+          formTitle: c.formTitle,
+          ctaLabel: c.ctaLabel,
+        },
       },
       { type: "Footer", props: { id: "Footer-marquee", text: "© Your Company. All rights reserved." } },
     ],
@@ -140,8 +146,8 @@ function build(persona: SitePersona): Data {
 
 export const marquee: SiteTemplateDef = {
   id: "marquee",
-  name: "Aspen",
-  description: "Bold full-bleed photo hero with a floating lead form — high-impact and trust-forward.",
+  name: "Marquee",
+  description: "Bold full-bleed photo hero with a floating form — high-impact and trust-forward.",
   defaultTheme: { primary: PRIMARY, accent: ACCENT, headerLayout: "split", banner: true },
   heroVariant: "photo",
   build,

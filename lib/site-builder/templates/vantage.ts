@@ -129,8 +129,14 @@ function build(persona: SitePersona): Data {
         props: { id: "Faq-vantage", heading: "Questions & answers", items: c.faqs },
       },
       {
-        type: "CtaBand",
-        props: { id: "CtaBand-vantage", heading: "Get your offer today", body: c.subhead, buttonLabel: c.bannerCta },
+        type: "ConversionBand",
+        props: {
+          id: "ConversionBand-vantage",
+          heading: "Ready to see the deals?",
+          body: c.subhead,
+          formTitle: c.formTitle,
+          ctaLabel: c.ctaLabel,
+        },
       },
       { type: "Footer", props: { id: "Footer-vantage", text: "© Your Company. All rights reserved." } },
     ],
@@ -140,8 +146,8 @@ function build(persona: SitePersona): Data {
 
 export const vantage: SiteTemplateDef = {
   id: "vantage",
-  name: "Madrone",
-  description: "Split hero with the form left and a photo + stat overlay right — conversion-focused and modern.",
+  name: "Vantage",
+  description: "Split hero with the form front-and-left — built for maximum conversion.",
   defaultTheme: { primary: PRIMARY, accent: ACCENT, headerLayout: "split", banner: true },
   heroVariant: "split",
   build,
