@@ -561,7 +561,7 @@ export const siteConfig: Config = {
         ],
       },
       render: ({ heading, features }: any) => (
-        <section style={{ background: "#fff" }}>
+        <section className="lh-sec" style={{ background: "#fff" }}>
           <div style={{ ...WRAP, padding: "64px 24px" }}>
             {heading && (
               <h2 className="lh-h2" style={{ ...HEADING, fontSize: 32, fontWeight: 800, color: "var(--p)", textAlign: "center", margin: "0 0 36px" }}>
@@ -664,7 +664,7 @@ export const siteConfig: Config = {
         ],
       },
       render: ({ heading, steps }: any) => (
-        <section id="how-it-works" style={{ background: "#fff" }}>
+        <section className="lh-sec" id="how-it-works" style={{ background: "#fff" }}>
           <div style={{ ...WRAP, padding: "64px 24px" }}>
             {heading && (
               <h2 className="lh-h2" style={{ ...HEADING, fontSize: 32, fontWeight: 800, color: "var(--p)", textAlign: "center", margin: "0 0 36px" }}>
@@ -724,7 +724,7 @@ export const siteConfig: Config = {
         ],
       },
       render: ({ heading, items }: any) => (
-        <section style={{ background: "#fff" }}>
+        <section className="lh-sec" style={{ background: "#fff" }}>
           <div style={{ ...WRAP, padding: "64px 24px", maxWidth: 820 }}>
             {heading && (
               <h2 className="lh-h2" style={{ ...HEADING, fontSize: 32, fontWeight: 800, color: "var(--p)", textAlign: "center", margin: "0 0 32px" }}>
@@ -772,7 +772,7 @@ export const siteConfig: Config = {
         stats: [],
       },
       render: ({ headline, body, trust, stats }: any) => (
-        <section style={{ background: "#fff" }}>
+        <section className="lh-sec" style={{ background: "#fff" }}>
           <div style={{ ...WRAP, padding: "64px 24px" }}>
             {headline && (
               <h2 className="lh-h2" style={{ ...HEADING, fontSize: 32, fontWeight: 800, color: "var(--p)", textAlign: "center", margin: "0 0 18px" }}>
@@ -893,7 +893,7 @@ export const siteConfig: Config = {
         ctaLabel: "Send me deals",
       },
       render: ({ heading, body, formTitle, ctaLabel, id }: any) => (
-        <section id={id || "join"} style={{ background: "var(--p)", position: "relative", overflow: "hidden" }}>
+        <section className="lh-sec" id={id || "join"} style={{ background: "var(--p)", position: "relative", overflow: "hidden" }}>
           <div
             style={{
               ...WRAP,
@@ -937,7 +937,7 @@ export const siteConfig: Config = {
         ctaHref: "",
       },
       render: ({ eyebrow, heading, bodyHtml, pullQuote, ctaText, ctaHref }: any) => (
-        <section style={{ background: "#fff" }}>
+        <section className="lh-sec" style={{ background: "#fff" }}>
           <div style={{ ...WRAP, padding: "64px 24px" }}>
             <div className="lh-grid-2" style={{ display: "grid", gridTemplateColumns: "minmax(0, 360px) minmax(0, 1fr)", gap: 40, alignItems: "start" }}>
               <div>
@@ -1001,7 +1001,7 @@ export const siteConfig: Config = {
         const list = (items || []).filter((it: any) => it && (it.title || it.body))
         if (list.length === 0) return <></>
         return (
-          <section style={{ background: "#fff" }}>
+          <section className="lh-sec" style={{ background: "#fff" }}>
             <div style={{ ...WRAP, padding: "64px 24px" }}>
               {heading ? (
                 <h2 className="lh-h2" style={{ ...HEADING, fontSize: 32, fontWeight: 800, color: "var(--p)", textAlign: "center", margin: "0 0 12px" }}>
@@ -1058,7 +1058,7 @@ export const siteConfig: Config = {
         const list = (items || []).filter((it: any) => it && (it.title || it.body))
         if (list.length === 0) return <></>
         return (
-          <section style={{ background: "#fff" }}>
+          <section className="lh-sec" style={{ background: "#fff" }}>
             <div style={{ ...WRAP, padding: "64px 24px" }}>
               <div style={{ textAlign: "center", maxWidth: 680, margin: "0 auto 40px" }}>
                 {heading ? (
@@ -1116,7 +1116,7 @@ export const siteConfig: Config = {
         const hasMany = list.length >= 1
         if (!hasMany && !singleLine) return <></>
         return (
-          <section style={{ background: "color-mix(in srgb, var(--p) 5%, #fff)" }}>
+          <section className="lh-sec" style={{ background: "color-mix(in srgb, var(--p) 5%, #fff)" }}>
             <div style={{ ...WRAP, padding: "56px 24px", textAlign: "center" }}>
               {heading ? (
                 <h2 className="lh-h2" style={{ ...HEADING, fontSize: 30, fontWeight: 800, color: "var(--p)", margin: "0 0 12px" }}>
@@ -1193,7 +1193,7 @@ export const siteConfig: Config = {
       render: ({ heading, reviews, emptyText }: any) => {
         const list = (reviews || []).filter((r: any) => r && (r.quote || r.author))
         return (
-          <section style={{ background: "#f7f8fa" }}>
+          <section className="lh-sec" style={{ background: "#f7f8fa" }}>
             <div style={{ ...WRAP, padding: "64px 24px" }}>
               {heading ? (
                 <h2 className="lh-h2" style={{ ...HEADING, fontSize: 32, fontWeight: 800, color: "var(--p)", textAlign: "center", margin: "0 0 36px" }}>
@@ -1279,7 +1279,7 @@ export const siteConfig: Config = {
             { title: "Browse deals", href: "/properties" },
           ]
           return (
-            <section style={{ background: "#fff" }}>
+            <section className="lh-sec" style={{ background: "#fff" }}>
               <div style={{ ...WRAP, padding: "64px 24px" }}>
                 <h2 className="lh-h2" style={{ ...HEADING, fontSize: 32, fontWeight: 800, color: "var(--p)", textAlign: "center", margin: "0 0 36px" }}>
                   Start here
@@ -1305,7 +1305,7 @@ export const siteConfig: Config = {
           "radial-gradient(120% 90% at 78% 18%, color-mix(in srgb, var(--a) 22%, transparent), transparent 55%)," +
           "linear-gradient(115deg, color-mix(in srgb, var(--p) 70%, #000), color-mix(in srgb, var(--p) 88%, #000))"
         return (
-          <section style={{ background: "#fff" }}>
+          <section className="lh-sec" style={{ background: "#fff" }}>
             <div style={{ ...WRAP, padding: "64px 24px" }}>
               {heading ? (
                 <h2 className="lh-h2" style={{ ...HEADING, fontSize: 32, fontWeight: 800, color: "var(--p)", textAlign: "center", margin: "0 0 12px" }}>

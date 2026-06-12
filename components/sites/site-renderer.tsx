@@ -13,9 +13,10 @@ export function SiteRenderer({ data, theme, form }: { data: any; theme: SiteThem
   // the default pairing rather than throwing.
   const typeStyleId = (theme as Partial<SiteTheme>)?.typeStyleId
   const display = interpolateSiteData(data, form?.brandName ?? "our team", cityFromMarkets(form?.markets))
+  const layout = (data as any)?.root?.props?.layout
   const rendered = <Render config={siteConfig} data={display} />
   return (
-    <div className="lh-site" style={themeToCssVars(theme)}>
+    <div className={`lh-site${layout ? ` lh-lay-${layout}` : ""}`} style={themeToCssVars(theme)}>
       <SiteStyles />
       <SiteFonts typeStyleId={typeStyleId} />
       {form ? <SiteContextProvider value={form}>{rendered}</SiteContextProvider> : rendered}
