@@ -173,6 +173,7 @@ export const siteConfig: Config = {
       render: ({ variant, eyebrow, headline, subhead, stat, imageUrl, formTitle, formSubtitle, ctaLabel }: any) => {
         const eyebrowEl = eyebrow ? (
           <div
+            className="lh-hero-eyebrow"
             style={{
               display: "inline-block",
               fontSize: 13,
@@ -191,12 +192,13 @@ export const siteConfig: Config = {
           <h1 className="lh-hero-h1" style={{ ...HEADING, fontSize: 44, fontWeight: 800, color, margin: 0, ...extra }}>{headline}</h1>
         )
         const sub = (color: string) => (
-          <p style={{ fontSize: 18, lineHeight: 1.5, color, marginTop: 14, maxWidth: 520 }}>{subhead}</p>
+          <p className="lh-hero-sub" style={{ fontSize: 18, lineHeight: 1.5, color, marginTop: 14, maxWidth: 520 }}>{subhead}</p>
         )
 
         // Eyebrow for dark heroes: white label with an accent dot + halo.
         const eyebrowDark = eyebrow ? (
           <div
+            className="lh-hero-eyebrow"
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -327,7 +329,7 @@ export const siteConfig: Config = {
                     {headline}
                   </h1>
                   {subhead && (
-                    <p style={{ fontFamily: "var(--body)", fontSize: 18, lineHeight: 1.6, color: "rgba(255,255,255,.80)", marginTop: 18, maxWidth: 520 }}>
+                    <p className="lh-hero-sub" style={{ fontFamily: "var(--body)", fontSize: 18, lineHeight: 1.6, color: "rgba(255,255,255,.80)", marginTop: 18, maxWidth: 520 }}>
                       {subhead}
                     </p>
                   )}
@@ -375,7 +377,7 @@ export const siteConfig: Config = {
                 <h1 className="lh-hero-h1" style={{ ...HEADING, fontSize: 40, fontWeight: 800, color: "var(--p)", margin: "0 auto", maxWidth: 960, marginInline: "auto", textWrap: "balance" } as React.CSSProperties}>
                   {headline}
                 </h1>
-                <p style={{ fontSize: 18, lineHeight: 1.5, color: "#42505f", margin: "14px auto 0", maxWidth: 600 }}>
+                <p className="lh-hero-sub" style={{ fontSize: 18, lineHeight: 1.5, color: "#42505f", margin: "14px auto 0", maxWidth: 600 }}>
                   {subhead}
                 </p>
                 <div style={{ maxWidth: 720, margin: "24px auto 0" }}>

@@ -44,7 +44,9 @@ export function SiteStyles(): React.JSX.Element {
   .lh-grid-3 { grid-template-columns: 1fr !important; }
   .lh-form-2 { grid-template-columns: 1fr !important; }
   .lh-hero-trust { display: none !important; }
-  .lh-hero-grid { padding-top: 44px !important; }
+  .lh-hero-sub { display: none !important; }
+  .lh-hero-eyebrow { margin-bottom: 12px !important; }
+  .lh-hero-grid { padding-top: 28px !important; }
 }
 
 /* ---- Per-template layout treatments (brand-agnostic). Marquee = base. ---- */
