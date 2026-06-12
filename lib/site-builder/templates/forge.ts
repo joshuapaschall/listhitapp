@@ -10,7 +10,7 @@ const HEADING_FONT = "'Bricolage Grotesque', serif"
 function build(persona: SitePersona): Data {
   const c = PERSONAS[persona]
   const data = {
-    root: { props: { primary: PRIMARY, accent: ACCENT, headingFont: HEADING_FONT } },
+    root: { props: { primary: PRIMARY, accent: ACCENT, headingFont: HEADING_FONT, layout: "forge" } },
     content: [
       {
         type: "AnnouncementBar",

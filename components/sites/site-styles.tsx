@@ -46,6 +46,17 @@ export function SiteStyles(): React.JSX.Element {
   .lh-hero-trust { display: none !important; }
   .lh-hero-grid { padding-top: 44px !important; }
 }
+
+/* ---- Per-template layout treatments (brand-agnostic). Marquee = base. ---- */
+/* HAVEN — editorial: centered headings, airy sections */
+.lh-lay-haven .lh-h2 { text-align: center !important; margin-left: auto !important; margin-right: auto !important; }
+.lh-lay-haven .lh-sec { padding-top: 82px !important; padding-bottom: 82px !important; }
+/* VANTAGE — conversion: left headings with an accent bar, denser sections */
+.lh-lay-vantage .lh-h2 { text-align: left !important; margin-left: 0 !important; margin-right: 0 !important; border-left: 4px solid var(--a); padding-left: 14px; }
+.lh-lay-vantage .lh-sec { padding-top: 50px !important; padding-bottom: 50px !important; }
+/* FORGE — bold: heavy uppercase headers */
+.lh-lay-forge .lh-h2 { text-transform: uppercase; font-weight: 900 !important; letter-spacing: -0.01em; }
+.lh-lay-forge .lh-sec { padding-top: 58px !important; padding-bottom: 58px !important; }
 `,
       }}
     />

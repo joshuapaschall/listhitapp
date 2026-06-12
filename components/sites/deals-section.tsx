@@ -28,7 +28,7 @@ export function DealsSection({ heading }: { heading?: string }) {
   const hasReal = deals.length > 0
   const placeholders = hasReal ? [] : placeholderDealsFor(persona)
   return (
-    <section style={{ background: "color-mix(in srgb, var(--p) 5%, #fff)" }}>
+    <section className="lh-sec" style={{ background: "color-mix(in srgb, var(--p) 5%, #fff)" }}>
       <div style={{ ...WRAP, padding: "64px 24px" }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 28, flexWrap: "wrap", gap: 10 }}>
           <h2 style={{ ...HEADING, fontSize: 32, fontWeight: 800, color: "var(--p)", margin: 0 }}>{heading}</h2>

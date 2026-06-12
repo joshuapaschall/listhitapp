@@ -28,8 +28,9 @@ export function SiteRendererRSC({
   // and fall back to the market-derived city exactly as before.
   const city = cityOverride ?? cityFromMarkets(form?.markets)
   const display = interpolateSiteData(data, form?.brandName ?? "our team", city)
+  const layout = (data as any)?.root?.props?.layout
   return (
-    <div className="lh-site" style={themeToCssVars(theme)}>
+    <div className={`lh-site${layout ? ` lh-lay-${layout}` : ""}`} style={themeToCssVars(theme)}>
       <SiteStyles />
       <SiteFonts typeStyleId={typeStyleId} />
       <SiteContextProvider value={form}>
