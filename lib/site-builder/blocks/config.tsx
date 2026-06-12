@@ -258,28 +258,50 @@ export const siteConfig: Config = {
             "radial-gradient(120% 90% at 78% 18%, color-mix(in srgb, var(--a) 22%, transparent), transparent 55%)," +
             "radial-gradient(120% 90% at 18% 92%, color-mix(in srgb, var(--p) 45%, #000), transparent 60%)," +
             "linear-gradient(115deg, color-mix(in srgb, var(--p) 78%, #000), color-mix(in srgb, var(--p) 90%, #000))"
-          const heroSrc = imageUrl ? (siteImage(imageUrl, { width: 1920, quality: 80 }) ?? imageUrl) : null
-          const background = heroSrc ? `${scrim}, url(${heroSrc})` : themedFallback
+          const heroSrc = imageUrl ? (siteImage(imageUrl, { width: 1600, quality: 60 }) ?? imageUrl) : null
+          const heroSrcSet = imageUrl ? siteSrcSet(imageUrl, [640, 960, 1280, 1600], 60) : undefined
           return (
             <>
-            {heroSrc ? <link rel="preload" as="image" href={heroSrc} fetchPriority="high" /> : null}
+            {heroSrc ? (
+              <link
+                rel="preload"
+                as="image"
+                href={heroSrc}
+                {...(heroSrcSet ? { imageSrcSet: heroSrcSet, imageSizes: "100vw" } : {})}
+                fetchPriority="high"
+              />
+            ) : null}
             <section
               id="join"
               className="lh-hero-photo"
               style={{
                 position: "relative",
+                overflow: "hidden",
                 minHeight: 720,
                 display: "flex",
                 alignItems: "center",
-                background,
-                backgroundSize: "cover",
-                backgroundPosition: "center",
+                background: themedFallback,
               }}
             >
+              {heroSrc ? (
+                <img
+                  src={heroSrc}
+                  {...(heroSrcSet ? { srcSet: heroSrcSet, sizes: "100vw" } : {})}
+                  alt=""
+                  aria-hidden="true"
+                  decoding="async"
+                  loading="eager"
+                  fetchPriority="high"
+                  style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 0 }}
+                />
+              ) : null}
+              <div aria-hidden="true" style={{ position: "absolute", inset: 0, background: scrim, zIndex: 1 }} />
               <div
                 className="lh-hero-grid"
                 style={{
                   ...WRAP,
+                  position: "relative",
+                  zIndex: 2,
                   width: "100%",
                   display: "grid",
                   gridTemplateColumns: "1.15fr .85fr",

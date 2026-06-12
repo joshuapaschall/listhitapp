@@ -17,6 +17,31 @@ function transformsEnabled(): boolean {
   return process.env.NEXT_PUBLIC_SITE_IMAGE_TRANSFORM !== "0"
 }
 
+function isUnsplash(url: string): boolean {
+  try {
+    return new URL(url).hostname === "images.unsplash.com"
+  } catch {
+    return false
+  }
+}
+
+// Unsplash serves on-the-fly transforms via query params on its own CDN.
+// auto=format negotiates WebP/AVIF; q trims weight; w right-sizes. We strip any
+// sizing/format params already on the URL so ours win, and keep the rest (ixid, crop).
+function optimizedUnsplash(url: string, width: number, quality: number): string {
+  try {
+    const u = new URL(url)
+    ;["w", "q", "auto", "fm", "fit", "width", "quality", "dpr"].forEach((p) => u.searchParams.delete(p))
+    u.searchParams.set("w", String(Math.round(width)))
+    u.searchParams.set("q", String(quality))
+    u.searchParams.set("auto", "format")
+    u.searchParams.set("fit", "crop")
+    return u.toString()
+  } catch {
+    return url
+  }
+}
+
 /**
  * Returns a width-constrained, quality-tuned Supabase render URL for a stored
  * public object URL. Non-Supabase or empty inputs are returned unchanged
@@ -27,6 +52,7 @@ export function siteImage(
   opts: { width: number; quality?: number } = { width: 1200 },
 ): string | undefined {
   if (!url) return undefined
+  if (isUnsplash(url)) return optimizedUnsplash(url, opts.width, opts.quality ?? 60)
   if (!transformsEnabled()) return url
   const i = url.indexOf(OBJECT_PUBLIC)
   if (i === -1) return url // not a Supabase public object URL — leave as-is
@@ -48,6 +74,7 @@ export function siteSrcSet(
   quality = 75,
 ): string | undefined {
   if (!url) return undefined
+  if (isUnsplash(url)) return widths.map((w) => `${optimizedUnsplash(url, w, quality)} ${w}w`).join(", ")
   if (!transformsEnabled()) return undefined
   if (url.indexOf(OBJECT_PUBLIC) === -1) return undefined // Supabase URLs only
   return widths
