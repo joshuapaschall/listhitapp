@@ -161,6 +161,27 @@ export function injectBlogNavLink(puckData: any): any {
   return data
 }
 
+// Forces the Nav block's brandName to the site's real brand whenever it holds the
+// legacy "Your Company" placeholder or is empty. The wizard historically wrote a
+// separate nav brandName field (defaulting to "Your Company"), so {Brand} interpolation
+// never reached it and the footer (context-based) and nav (prop-based) disagreed.
+// Any genuinely custom nav name is preserved.
+export function injectBrandName(puckData: any, brandName?: string): any {
+  if (!brandName || !brandName.trim() || brandName === "our team") return puckData
+  const data = { ...(puckData || {}) }
+  const content = Array.isArray(data.content) ? data.content.map((b: any) => ({ ...b })) : []
+  for (const block of content) {
+    if (block?.type === "Nav") {
+      const cur = (block.props?.brandName || "").trim()
+      if (!cur || cur === "Your Company") {
+        block.props = { ...(block.props || {}), brandName }
+      }
+    }
+  }
+  data.content = content
+  return data
+}
+
 export interface NavPage {
   path: string
   nav_label: string
