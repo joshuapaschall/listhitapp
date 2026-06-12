@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { supabase, type Message } from "@/lib/supabase"
 import unlockAudio from "@/utils/unlock-audio"
+import { isPublicSiteHost } from "@/lib/is-public-site"
 
 export default function useRealtimeNotifications() {
   const [isAudioUnlocked, setIsAudioUnlocked] = useState(false)
@@ -11,6 +12,7 @@ export default function useRealtimeNotifications() {
 
   useEffect(() => {
     if (typeof window === "undefined") return
+    if (isPublicSiteHost()) return
 
     const audio = new Audio("/sounds/new-message.mp3")
     const cleanup = unlockAudio(audio, () => {

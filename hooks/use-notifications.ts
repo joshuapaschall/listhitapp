@@ -4,6 +4,7 @@ import { createContext, createElement, useCallback, useContext, useEffect, useSt
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { supabase, type Notification } from "@/lib/supabase"
+import { isPublicSiteHost } from "@/lib/is-public-site"
 
 interface NotificationsContextValue {
   notifications: Notification[]
@@ -31,11 +32,12 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       return res.json() as Promise<Notification[]>
     },
     refetchInterval: 60_000,
-    enabled: mounted,
+    enabled: mounted && !isPublicSiteHost(),
   })
 
   useEffect(() => {
     if (!mounted) return
+    if (isPublicSiteHost()) return
 
     const channel = supabase
       .channel("notifications:realtime")
