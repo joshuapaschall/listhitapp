@@ -346,8 +346,9 @@ export const siteConfig: Config = {
 
         if (variant === "centered") {
           return (
-            <section id="join" style={{ background: "color-mix(in srgb, var(--p) 7%, #fff)" }}>
+            <section id="join" style={{ background: "color-mix(in srgb, var(--a) 6%, #fff)" }}>
               <div style={{ ...WRAP, padding: "72px 24px", textAlign: "center" }}>
+                <div aria-hidden style={{ width: 52, height: 3, background: "var(--a)", borderRadius: 2, margin: "0 auto 22px" }} />
                 {eyebrowEl}
                 <h1 className="lh-hero-h1" style={{ ...HEADING, fontSize: 40, fontWeight: 800, color: "var(--p)", margin: "0 auto", maxWidth: 960, marginInline: "auto", textWrap: "balance" } as React.CSSProperties}>
                   {headline}
@@ -404,8 +405,9 @@ export const siteConfig: Config = {
                         position: "absolute",
                         left: 18,
                         bottom: 18,
-                        background: "rgba(11,22,36,.82)",
-                        color: "#fff",
+                        background: "#fff",
+                        color: "var(--p)",
+                        boxShadow: "0 12px 30px rgba(5,12,24,.30)",
                         padding: "10px 14px",
                         borderRadius: 12,
                         fontWeight: 700,
@@ -423,11 +425,14 @@ export const siteConfig: Config = {
         // band
         return (
           <section id="join">
-            <div style={{ background: "var(--p)" }}>
+            <div style={{ background: "var(--p)", position: "relative", overflow: "hidden" }}>
+              <div aria-hidden style={{ position: "absolute", top: "-30%", right: "-12%", width: "50%", height: "160%", background: "var(--a)", transform: "skewX(-12deg)" }} />
               <div
                 className="lh-grid-2"
                 style={{
                   ...WRAP,
+                  position: "relative",
+                  zIndex: 1,
                   display: "grid",
                   gridTemplateColumns: "minmax(0,1fr) minmax(280px,420px)",
                   gap: 36,
@@ -441,7 +446,7 @@ export const siteConfig: Config = {
                       {eyebrow}
                     </div>
                   )}
-                  {h("#fff", { fontSize: 40, maxWidth: 960, marginInline: "auto", textWrap: "balance" } as React.CSSProperties)}
+                  {h("#fff", { fontSize: 46, fontWeight: 800, textTransform: "uppercase", letterSpacing: "-.02em", maxWidth: 560, textWrap: "balance" } as React.CSSProperties)}
                   {sub("rgba(255,255,255,.86)")}
                   {stat && <div style={{ marginTop: 16, color: "#fff", fontWeight: 700 }}>{stat}</div>}
                 </div>
