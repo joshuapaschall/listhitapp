@@ -110,6 +110,26 @@ export function injectNavPages(data: any, pages: { path: string; navLabel: strin
   return clone
 }
 
+// Client-safe mirror of resolve-site.ts#injectBrandName. Forces the Nav block's
+// brandName to the real brand when it holds the legacy "Your Company" placeholder
+// or is empty; custom names survive. Pure — safe in the browser (the editor
+// preview can't import resolve-site, which pulls in the server-only admin client).
+export function injectBrandName(data: any, brandName?: string): any {
+  if (!brandName || !brandName.trim() || brandName === "our team") return data
+  const clone = JSON.parse(JSON.stringify(data || {}))
+  const items: any[] = Array.isArray(clone.content) ? clone.content : []
+  for (const block of items) {
+    if (block?.type === "Nav") {
+      const cur = (block.props?.brandName || "").trim()
+      if (!cur || cur === "Your Company") {
+        block.props = { ...(block.props || {}), brandName }
+      }
+    }
+  }
+  clone.content = items
+  return clone
+}
+
 export function composePreview(
   templateId: SiteTemplateId,
   persona: SitePersona,
