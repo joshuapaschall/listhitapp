@@ -260,19 +260,12 @@ export const siteConfig: Config = {
             "radial-gradient(120% 90% at 78% 18%, color-mix(in srgb, var(--a) 22%, transparent), transparent 55%)," +
             "radial-gradient(120% 90% at 18% 92%, color-mix(in srgb, var(--p) 45%, #000), transparent 60%)," +
             "linear-gradient(115deg, color-mix(in srgb, var(--p) 78%, #000), color-mix(in srgb, var(--p) 90%, #000))"
-          const heroSrc = imageUrl ? (siteImage(imageUrl, { width: 1440, quality: 50 }) ?? imageUrl) : null
-          const heroSrcSet = imageUrl ? siteSrcSet(imageUrl, [480, 768, 1024, 1440], 50) : undefined
+          // Photo shows on desktop only. Below the two-column breakpoint the background-image is
+          // never set, so the hero's themed gradient shows — phones don't download the photo at all,
+          // which makes the LCP element the headline text instead of a large network image.
+          const heroDesktop = imageUrl ? (siteImage(imageUrl, { width: 1440, quality: 60 }) ?? imageUrl) : null
           return (
             <>
-            {heroSrc ? (
-              <link
-                rel="preload"
-                as="image"
-                href={heroSrc}
-                {...(heroSrcSet ? { imageSrcSet: heroSrcSet, imageSizes: "100vw" } : {})}
-                fetchPriority="high"
-              />
-            ) : null}
             <section
               id="join"
               className="lh-hero-photo"
@@ -285,17 +278,19 @@ export const siteConfig: Config = {
                 background: themedFallback,
               }}
             >
-              {heroSrc ? (
-                <img
-                  src={heroSrc}
-                  {...(heroSrcSet ? { srcSet: heroSrcSet, sizes: "100vw" } : {})}
-                  alt=""
-                  aria-hidden="true"
-                  decoding="async"
-                  loading="eager"
-                  fetchPriority="high"
-                  style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 0 }}
-                />
+              {heroDesktop ? (
+                <>
+                  <style
+                    dangerouslySetInnerHTML={{
+                      __html: `@container (min-width:901px){#lh-hero-photo-bg{background-image:url("${heroDesktop}")}}`,
+                    }}
+                  />
+                  <div
+                    id="lh-hero-photo-bg"
+                    aria-hidden="true"
+                    style={{ position: "absolute", inset: 0, backgroundSize: "cover", backgroundPosition: "center", zIndex: 0 }}
+                  />
+                </>
               ) : null}
               <div aria-hidden="true" style={{ position: "absolute", inset: 0, background: scrim, zIndex: 1 }} />
               <div
