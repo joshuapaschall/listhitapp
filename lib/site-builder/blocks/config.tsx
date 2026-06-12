@@ -260,8 +260,8 @@ export const siteConfig: Config = {
             "radial-gradient(120% 90% at 78% 18%, color-mix(in srgb, var(--a) 22%, transparent), transparent 55%)," +
             "radial-gradient(120% 90% at 18% 92%, color-mix(in srgb, var(--p) 45%, #000), transparent 60%)," +
             "linear-gradient(115deg, color-mix(in srgb, var(--p) 78%, #000), color-mix(in srgb, var(--p) 90%, #000))"
-          const heroSrc = imageUrl ? (siteImage(imageUrl, { width: 1600, quality: 60 }) ?? imageUrl) : null
-          const heroSrcSet = imageUrl ? siteSrcSet(imageUrl, [640, 960, 1280, 1600], 60) : undefined
+          const heroSrc = imageUrl ? (siteImage(imageUrl, { width: 1440, quality: 50 }) ?? imageUrl) : null
+          const heroSrcSet = imageUrl ? siteSrcSet(imageUrl, [480, 768, 1024, 1440], 50) : undefined
           return (
             <>
             {heroSrc ? (

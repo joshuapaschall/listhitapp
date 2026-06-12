@@ -24,6 +24,7 @@ export function SiteFonts({ typeStyleId }: { typeStyleId?: string }) {
     <>
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+      <link rel="preconnect" href="https://images.unsplash.com" crossOrigin="" />
       {sb ? <link rel="preconnect" href={sb} /> : null}
       {/* Non-blocking font load: preload the CSS, attach the stylesheet on mount. */}
       <link rel="preload" as="style" href={href} />
