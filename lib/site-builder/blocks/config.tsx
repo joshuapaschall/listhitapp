@@ -1338,6 +1338,7 @@ export const siteConfig: Config = {
       label: "Contact panel",
       fields: {
         heading: { type: "text", label: "Section heading" },
+        intro: { type: "textarea", label: "Intro" },
         phone: { type: "text", label: "Phone" },
         email: { type: "text", label: "Email" },
         hours: { type: "text", label: "Hours" },
@@ -1346,13 +1347,14 @@ export const siteConfig: Config = {
       },
       defaultProps: {
         heading: "Contact us",
+        intro: "",
         phone: "",
         email: "",
         hours: "",
         serviceArea: "",
         note: "",
       },
-      render: ({ heading, phone, email, hours, serviceArea, note }: any) => {
+      render: ({ heading, intro, phone, email, hours, serviceArea, note }: any) => {
         const rows = [
           phone ? { label: "Phone", value: phone } : null,
           email ? { label: "Email", value: email } : null,
@@ -1368,6 +1370,9 @@ export const siteConfig: Config = {
                     <h2 className="lh-h2" style={{ ...HEADING, fontSize: 30, fontWeight: 800, color: "var(--p)", margin: "0 0 20px" }}>
                       {heading}
                     </h2>
+                  ) : null}
+                  {intro ? (
+                    <p style={{ margin: "0 0 20px", fontSize: 15.5, lineHeight: 1.6, color: "#42505f" }}>{intro}</p>
                   ) : null}
                   {rows.map((r) => (
                     <div key={r.label} style={{ display: "flex", justifyContent: "space-between", gap: 16, borderBottom: "1px solid color-mix(in srgb, var(--p) 12%, transparent)", padding: "10px 0" }}>

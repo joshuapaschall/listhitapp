@@ -134,6 +134,29 @@ export function buildBuyersListPage(home: any, persona: SitePersona) {
   return { root: clone(home?.root || {}), content: [nav, prose, types, contact, cta, footer].filter(Boolean) }
 }
 
+export function buildContactPage(
+  home: any,
+  opts: { phone?: string; email?: string; hours?: string; serviceArea?: string },
+) {
+  const nav = reid(rootRelativeAnchors(pick(home, "Nav")), "-contact")
+  const footer = reid(pick(home, "Footer"), "-contact")
+  const contact = {
+    type: "ContactPanel",
+    props: {
+      id: "join",
+      heading: "Contact {Brand}",
+      intro:
+        "Have a question about a deal or about joining the list? Reach us directly, or drop your details and we'll send new off-market deals straight to you.",
+      phone: opts.phone || "",
+      email: opts.email || "",
+      hours: opts.hours || "",
+      serviceArea: opts.serviceArea || "",
+      note: "Free to join. New off-market deals by text and email — reply STOP anytime.",
+    },
+  }
+  return { root: clone(home?.root || {}), content: [nav, contact, footer].filter(Boolean) }
+}
+
 // Canonical list of auto-seeded sub-pages — single source of truth for both
 // seeders (SiteService.create + scripts/backfill-sites.ts) and the onboarding
 // wizard's page toggles. /contact is a compliance page (LEGAL_PATHS) and is not

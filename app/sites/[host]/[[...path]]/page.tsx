@@ -5,7 +5,7 @@ import { resolveSite, mergeThemeIntoRoot, resolveSiteByHost, injectBlogNavLink, 
 import { DEFAULT_THEME, DEFAULT_BUSINESS, DEFAULT_MARKETS, type SitePersona } from "@/lib/site-builder/types"
 import { cityFromMarkets } from "@/lib/site-builder/interpolate"
 import { pageSeo } from "@/lib/site-builder/seo"
-import { buildPrivacyPolicy, buildTermsOfService, buildContactDoc, buildConsentTexts } from "@/lib/site-builder/compliance"
+import { buildPrivacyPolicy, buildTermsOfService, buildConsentTexts } from "@/lib/site-builder/compliance"
 import { supabaseAdmin } from "@/lib/supabase"
 import { SiteRendererRSC } from "@/components/sites/site-renderer-rsc"
 import { SiteJsonLd } from "@/components/sites/site-json-ld"
@@ -23,7 +23,8 @@ import {
   getPublishedDealsForMarket,
   type DealFilters,
 } from "@/services/site-deals-service"
-import { resolveLocationPage, locationHrefForDeal, PERSONA_URL_SLUG, buildAreaLinks, homeStateId, stateSlug } from "@/lib/site-builder/location-pages"
+import { resolveLocationPage, locationHrefForDeal, PERSONA_URL_SLUG, buildAreaLinks, homeStateId, stateSlug, formatMarketLabel } from "@/lib/site-builder/location-pages"
+import { buildContactPage } from "@/lib/site-builder/extra-pages"
 import { locationCopy, marketCityLabel } from "@/lib/site-builder/location-content"
 import { getPublishedPosts, getPublishedPostBySlug, getPublishedPostCount } from "@/services/site-posts-service"
 import { BlogIndexPage } from "@/components/sites/blog-index-page"
@@ -39,13 +40,12 @@ interface SitePageParams {
   path?: string[]
 }
 
-// Legal/contact pages are generated (always in sync, never editable into
-// non-compliance) — handled before the Puck flow. /privacy and /terms render
-// the SAME combined document.
-const LEGAL_PATHS: Record<string, "privacy" | "terms" | "contact"> = {
+// Legal pages are generated (always in sync, never editable into non-compliance)
+// — handled before the Puck flow. /privacy and /terms render the SAME combined
+// document. (/contact renders a real ContactPanel page, not a legal doc.)
+const LEGAL_PATHS: Record<string, "privacy" | "terms"> = {
   "/privacy": "privacy",
   "/terms": "terms",
-  "/contact": "contact",
 }
 
 function normalizePath(path?: string[]): string {
@@ -103,13 +103,19 @@ export async function generateMetadata({
       return { title: "Get on the list", robots: { index: false, follow: false } }
     }
 
+    if (path === "/contact") {
+      const site = await resolveSiteByHost(host)
+      if (!site) return { title: "Site not found" }
+      return seoMeta(host, "/contact", `Contact · ${site.name}`, `Get in touch with ${site.name} or join the buyers list for new off-market deals by text and email.`, site.name)
+    }
+
     const legalKind = LEGAL_PATHS[path]
     if (legalKind) {
       const site = await resolveSiteByHost(host)
       if (!site) return { title: "Site not found" }
       const business = { ...DEFAULT_BUSINESS, ...(site.business_json || {}) }
-      const args = legalKind === "contact" ? null : await legalArgsFor(site, business)
-      const doc = buildLegalDoc(legalKind, args, site, business)
+      const args = await legalArgsFor(site, business)
+      const doc = buildLegalDoc(legalKind, args)
       return seoMeta(host, path, `${doc.title} · ${site.name}`, undefined, site.name)
     }
 
@@ -259,10 +265,9 @@ async function legalArgsFor(site: any, business: any) {
   }
 }
 
-function buildLegalDoc(kind: "privacy" | "terms" | "contact", args: any, site: any, business: any) {
+function buildLegalDoc(kind: "privacy" | "terms", args: any) {
   if (kind === "privacy") return buildPrivacyPolicy(args)
-  if (kind === "terms") return buildTermsOfService(args)
-  return buildContactDoc(site.name, business)
+  return buildTermsOfService(args)
 }
 
 export default async function SitePage({
@@ -281,9 +286,43 @@ export default async function SitePage({
     if (!site) notFound()
     const theme = { ...DEFAULT_THEME, ...(site.theme_json || {}) }
     const business = { ...DEFAULT_BUSINESS, ...(site.business_json || {}) }
-    const args = legalKind === "contact" ? null : await legalArgsFor(site, business)
-    const doc = buildLegalDoc(legalKind, args, site, business)
+    const args = await legalArgsFor(site, business)
+    const doc = buildLegalDoc(legalKind, args)
     return <LegalPage doc={doc} brandName={site.name} phone={business.phone} theme={theme} />
+  }
+
+  // Real /contact page: home nav + footer + a populated ContactPanel (with the
+  // built-in lead form), rendered through SiteRendererRSC so the form gets its
+  // context. Built on-the-fly — no DB seeding; existing sites are fixed at once.
+  if (path === "/contact") {
+    const site = await resolveSiteByHost(host)
+    if (!site) notFound()
+    const theme = { ...DEFAULT_THEME, ...(site.theme_json || {}) }
+    const business = { ...DEFAULT_BUSINESS, ...(site.business_json || {}) }
+    const homeResult = await resolveSite(host, "/")
+    if (!homeResult) notFound()
+    const markets = { ...DEFAULT_MARKETS, ...((site.markets_json as any) || {}) }
+    const marketList: string[] = Array.isArray(markets.markets) ? markets.markets : []
+    const serviceArea =
+      markets.scope === "specific" && marketList.length > 0
+        ? marketList.slice(0, 3).map(formatMarketLabel).join(", ")
+        : [business.city, business.state].filter(Boolean).join(", ")
+    const data = buildContactPage(homeResult.page.puck_data, {
+      phone: business.phone,
+      email: business.email,
+      hours: (business as any).hours,
+      serviceArea,
+    })
+    const formContext = {
+      persona: site.persona,
+      brandName: site.name,
+      ...(await buildOptinContext(site)),
+      legalPaths: { terms: "/terms", privacy: "/privacy" },
+      markets,
+      deals: [],
+      business,
+    }
+    return <SiteRendererRSC data={data} theme={theme} form={formContext} />
   }
 
   // Lead flow — dedicated Step-2 profile page and Step-3 success page. Reserved
