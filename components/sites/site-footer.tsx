@@ -43,7 +43,7 @@ export function SiteFooter({ text }: { text?: string }) {
           {/* Brand */}
           <div>
             <div style={{ fontFamily: "var(--head)", fontWeight: 800, fontSize: 20, color: "var(--p)" }}>{brandName}</div>
-            <div style={{ fontSize: 13.5, color: "#8a94a2", marginTop: 8 }}>{serving}</div>
+            <div style={{ fontSize: 13.5, color: "#5a6675", marginTop: 8 }}>{serving}</div>
             {socials.length > 0 && (
               <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
                 {socials.map((s) => (
@@ -92,7 +92,7 @@ export function SiteFooter({ text }: { text?: string }) {
             </div>
           )}
         </div>
-        <div style={{ borderTop: "1px solid #f1f4f8", marginTop: 32, paddingTop: 20, fontSize: 13, color: "#8a94a2", textAlign: "center" }}>
+        <div style={{ borderTop: "1px solid #f1f4f8", marginTop: 32, paddingTop: 20, fontSize: 13, color: "#5a6675", textAlign: "center" }}>
           {copyright}
           {legalDisplay && legalDisplay !== brandName && (
             <div style={{ fontSize: 12, color: "#a3acb8", marginTop: 4 }}>{legalDisplay}</div>

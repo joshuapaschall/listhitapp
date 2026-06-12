@@ -351,7 +351,7 @@ export const siteConfig: Config = {
                       gap: 7,
                       fontSize: 12.5,
                       fontWeight: 700,
-                      color: "var(--a)",
+                      color: "var(--p)",
                       background: "color-mix(in srgb, var(--a) 12%, #fff)",
                       padding: "6px 12px",
                       borderRadius: 999,
@@ -1244,7 +1244,7 @@ export const siteConfig: Config = {
                       <div style={{ marginTop: 14, fontFamily: "var(--head)", fontWeight: 700, fontSize: 14, color: "var(--p)" }}>— {r.author}</div>
                     ) : null}
                     {r?.meta ? (
-                      <div style={{ marginTop: 2, fontSize: 12.5, color: "#8a94a2" }}>{r.meta}</div>
+                      <div style={{ marginTop: 2, fontSize: 12.5, color: "#5a6675" }}>{r.meta}</div>
                     ) : null}
                   </div>
                 ))}
@@ -1317,7 +1317,7 @@ export const siteConfig: Config = {
                         ) : null}
                       </div>
                       {p.date ? (
-                        <div style={{ marginTop: 12, fontFamily: "var(--mono, monospace)", fontSize: 12, color: "#8a94a2" }}>{p.date}</div>
+                        <div style={{ marginTop: 12, fontFamily: "var(--mono, monospace)", fontSize: 12, color: "#5a6675" }}>{p.date}</div>
                       ) : null}
                       <div style={{ marginTop: 4, fontFamily: "var(--head)", fontWeight: 700, fontSize: 17, color: "#0f1b29", lineHeight: 1.3 }}>{p.title}</div>
                     </>

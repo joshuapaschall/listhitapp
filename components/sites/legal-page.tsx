@@ -102,7 +102,7 @@ export function LegalPage({
             gap: 12,
           }}
         >
-          <span style={{ fontSize: 13, color: "#8a94a2" }}>
+          <span style={{ fontSize: 13, color: "#5a6675" }}>
             © {brandName}. All rights reserved.
           </span>
           <nav style={{ display: "flex", flexWrap: "wrap", gap: 18 }}>

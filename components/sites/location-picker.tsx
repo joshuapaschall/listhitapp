@@ -141,7 +141,7 @@ export function LocationPicker({
         )}
       </div>
 
-      <p style={{ marginTop: 8, fontSize: 13, color: "#8a94a2" }}>{helper}</p>
+      <p style={{ marginTop: 8, fontSize: 13, color: "#5a6675" }}>{helper}</p>
     </div>
   )
 }

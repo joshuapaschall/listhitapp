@@ -126,7 +126,7 @@ export function DealCard({ property, variant = "teaser", locked = false, href, s
             </div>
           ) : null}
           {placeholder.specs.length ? (
-            <div style={{ marginTop: placeholder.priceBlur ? 8 : 0, fontSize: 13, color: "#8a94a2" }}>
+            <div style={{ marginTop: placeholder.priceBlur ? 8 : 0, fontSize: 13, color: "#5a6675" }}>
               {placeholder.specs.join(" · ")}
             </div>
           ) : null}
@@ -247,7 +247,7 @@ export function DealCard({ property, variant = "teaser", locked = false, href, s
             🔒 Address &amp; full details after you join
           </div>
         ) : specs ? (
-          <div style={{ marginTop: 8, fontSize: 13, color: "#8a94a2" }}>{specs}</div>
+          <div style={{ marginTop: 8, fontSize: 13, color: "#5a6675" }}>{specs}</div>
         ) : null}
       </div>
     </div>

@@ -109,7 +109,7 @@ export function BlogIndexPage({
                           <p style={{ fontSize: 14, lineHeight: 1.55, color: "#5a6675", margin: 0 }}>{p.excerpt}</p>
                         ) : null}
                         {p.publishedAt ? (
-                          <div style={{ fontSize: 12.5, color: "#8a94a2", marginTop: 2 }}>{formatDate(p.publishedAt)}</div>
+                          <div style={{ fontSize: 12.5, color: "#5a6675", marginTop: 2 }}>{formatDate(p.publishedAt)}</div>
                         ) : null}
                       </div>
                     </div>

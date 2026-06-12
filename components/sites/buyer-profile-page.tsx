@@ -333,7 +333,7 @@ export function BuyerProfilePage({
           <span
             role="button"
             onClick={() => submit(true)}
-            style={{ fontSize: 14, color: "#8a94a2", cursor: "pointer", textDecoration: "underline" }}
+            style={{ fontSize: 14, color: "#5a6675", cursor: "pointer", textDecoration: "underline" }}
           >
             Skip — just send me everything.
           </span>
