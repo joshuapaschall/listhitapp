@@ -20,7 +20,7 @@ function build(persona: SitePersona): Data {
         type: "Nav",
         props: {
           id: "Nav-forge",
-          brandName: "Your Company",
+          brandName: "{Brand}",
           logoUrl: "",
           phone: "(555) 555-5555",
           links: [
@@ -138,7 +138,7 @@ function build(persona: SitePersona): Data {
           ctaLabel: c.ctaLabel,
         },
       },
-      { type: "Footer", props: { id: "Footer-forge", text: "© Your Company. All rights reserved." } },
+      { type: "Footer", props: { id: "Footer-forge", text: "" } },
     ],
   }
   return data as Data
