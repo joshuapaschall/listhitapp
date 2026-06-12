@@ -29,7 +29,10 @@ export function SiteFooter({ text }: { text?: string }) {
     .map((k) => ({ k, v: (business.social as any)[k] as string | undefined }))
     .filter((s) => s.v && s.v.trim().length > 0)
   const year = new Date().getFullYear()
-  const copyright = text && text.trim().length > 0 ? text : `© ${year} ${brandName}. All rights reserved.`
+  // Treat the legacy template default as empty so the org's real brand is used
+  // (older saved sites still carry the literal "© Your Company. All rights reserved.").
+  const isPlaceholder = !text || !text.trim() || text.trim() === "© Your Company. All rights reserved."
+  const copyright = isPlaceholder ? `© ${year} ${brandName}. All rights reserved.` : text
   const colHead: React.CSSProperties = { fontSize: 12, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: "#0f1b29", marginBottom: 12 }
   const link: React.CSSProperties = { color: "#5a6675", textDecoration: "none", fontSize: 14, display: "block", marginBottom: 8 }
 
@@ -89,7 +92,7 @@ export function SiteFooter({ text }: { text?: string }) {
             </div>
           )}
         </div>
-        <div style={{ borderTop: "1px solid #f1f4f8", marginTop: 32, paddingTop: 20, fontSize: 13, color: "#8a94a2" }}>
+        <div style={{ borderTop: "1px solid #f1f4f8", marginTop: 32, paddingTop: 20, fontSize: 13, color: "#8a94a2", textAlign: "center" }}>
           {copyright}
           {legalDisplay && legalDisplay !== brandName && (
             <div style={{ fontSize: 12, color: "#a3acb8", marginTop: 4 }}>{legalDisplay}</div>
