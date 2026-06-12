@@ -57,6 +57,10 @@ export function SiteStyles(): React.JSX.Element {
 /* FORGE — bold: heavy uppercase headers */
 .lh-lay-forge .lh-h2 { text-transform: uppercase; font-weight: 900 !important; letter-spacing: -0.01em; }
 .lh-lay-forge .lh-sec { padding-top: 58px !important; padding-bottom: 58px !important; }
+
+/* Prose subheads (ProseSection bodyHtml injects <h3>/<p> into .lh-prose) */
+.lh-site .lh-prose h3 { font-family: var(--head); font-weight: 800; font-size: 18px; line-height: 1.25; letter-spacing: -.005em; color: var(--p); margin: 22px 0 8px; }
+.lh-site .lh-prose p { margin: 0 0 12px; }
 `,
       }}
     />
