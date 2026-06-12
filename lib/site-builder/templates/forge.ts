@@ -129,8 +129,14 @@ function build(persona: SitePersona): Data {
         props: { id: "Faq-forge", heading: "Questions & answers", items: c.faqs },
       },
       {
-        type: "CtaBand",
-        props: { id: "CtaBand-forge", heading: "Your offer is waiting", body: c.subhead, buttonLabel: c.bannerCta },
+        type: "ConversionBand",
+        props: {
+          id: "ConversionBand-forge",
+          heading: "Ready to see the deals?",
+          body: c.subhead,
+          formTitle: c.formTitle,
+          ctaLabel: c.ctaLabel,
+        },
       },
       { type: "Footer", props: { id: "Footer-forge", text: "© Your Company. All rights reserved." } },
     ],
@@ -140,8 +146,8 @@ function build(persona: SitePersona): Data {
 
 export const forge: SiteTemplateDef = {
   id: "forge",
-  name: "Oak",
-  description: "High-contrast color band hero with an inline form — punchy, urgent, and impossible to miss.",
+  name: "Forge",
+  description: "Bold high-contrast color-band hero — high-energy and confident.",
   defaultTheme: { primary: PRIMARY, accent: ACCENT, headerLayout: "stack", banner: true },
   heroVariant: "band",
   build,
