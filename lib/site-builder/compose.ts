@@ -4,6 +4,7 @@
 
 import { getSiteTemplate, ALL_SITE_TEMPLATES } from "@/lib/site-builder/templates"
 import type { SitePersona, SiteTemplateId, SiteTheme } from "@/lib/site-builder/types"
+import { buildSiteNavLinks, setNavLinks } from "@/lib/site-builder/nav-links"
 
 export interface WizardContent {
   brandName: string
@@ -85,31 +86,6 @@ export function applyContentToPuck(data: any, content: Partial<WizardContent>, t
   return clone
 }
 
-// Client-safe mirror of resolve-site.ts#injectPageNavLinks. Inserts a nav link
-// for each enabled sub-page before the "/contact" link (else appended).
-// Idempotent: skips any href already present. Pure — safe in the browser.
-export function injectNavPages(data: any, pages: { path: string; navLabel: string }[]): any {
-  if (!Array.isArray(pages) || !pages.length) return data
-  const clone = JSON.parse(JSON.stringify(data || {}))
-  const items: any[] = Array.isArray(clone.content) ? clone.content : []
-  const nav = items.find((b) => b?.type === "Nav")
-  if (nav) {
-    const links = Array.isArray(nav.props?.links) ? [...nav.props.links] : []
-    const norm = (h: any) => (h || "").replace(/\/$/, "")
-    const contactIdx = links.findIndex((l: any) => norm(l?.href) === "/contact")
-    let at = contactIdx >= 0 ? contactIdx : links.length
-    for (const p of pages) {
-      if (!p?.navLabel || !p?.path) continue
-      if (links.some((l: any) => norm(l?.href) === norm(p.path))) continue
-      links.splice(at, 0, { label: p.navLabel, href: p.path })
-      at++
-    }
-    nav.props = { ...(nav.props || {}), links }
-  }
-  clone.content = items
-  return clone
-}
-
 // Client-safe mirror of resolve-site.ts#injectBrandName. Forces the Nav block's
 // brandName to the real brand when it holds the legacy "Your Company" placeholder
 // or is empty; custom names survive. Pure — safe in the browser (the editor
@@ -130,6 +106,11 @@ export function injectBrandName(data: any, brandName?: string): any {
   return clone
 }
 
+// Wizard navPages ({path, navLabel}) → canonical NavPage[] (order = sort order).
+function navPagesToCanonical(navPages: { path: string; navLabel: string }[]) {
+  return (navPages || []).map((p, i) => ({ path: p.path, nav_label: p.navLabel, sort_order: i }))
+}
+
 export function composePreview(
   templateId: SiteTemplateId,
   persona: SitePersona,
@@ -139,7 +120,9 @@ export function composePreview(
 ): any {
   const tpl = getSiteTemplate(templateId) || ALL_SITE_TEMPLATES[0]
   const base = tpl.build(persona)
-  return injectNavPages(applyContentToPuck(base, content, theme), navPages)
+  const withContent = applyContentToPuck(base, content, theme)
+  const links = buildSiteNavLinks({ hasPosts: false, enabledPages: navPagesToCanonical(navPages) })
+  return setNavLinks(withContent, links)
 }
 
 // Hydrate a WizardContent from stored Puck data (edit mode). Blanks → "".

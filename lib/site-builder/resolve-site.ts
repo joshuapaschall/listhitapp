@@ -1,5 +1,10 @@
 import { supabaseAdmin } from "@/lib/supabase/admin"
 import { DEFAULT_THEME, type SiteTheme } from "./types"
+import type { NavPage } from "./nav-links"
+// Canonical nav helpers live in the pure, client-safe nav-links module so the
+// browser Studio preview can share them; re-exported here so existing server
+// importers (the published [[...path]] route) keep importing from resolve-site.
+export { buildSiteNavLinks, setNavLinks, type NavPage } from "./nav-links"
 
 // Public traffic is sessionless, so this module must use the service-role admin
 // client. The anon client would return zero rows under RLS for anonymous reads.
@@ -143,22 +148,6 @@ export function injectRecentPosts(
   return data
 }
 
-// Force the Puck Nav block's links array to the canonical site nav list (replace,
-// not append). Single source of truth shared with the sub-page SiteHeader, so the
-// home/Puck-page header and the reserved-page header always match. No-op if there
-// is no Nav block.
-export function setNavLinks(puckData: any, links: { label: string; href: string }[]): any {
-  const data = { ...(puckData || {}) }
-  const content = Array.isArray(data.content) ? data.content.map((b: any) => ({ ...b })) : []
-  for (const block of content) {
-    if (block?.type === "Nav") {
-      block.props = { ...(block.props || {}), links }
-    }
-  }
-  data.content = content
-  return data
-}
-
 // Forces the Nav block's brandName to the site's real brand whenever it holds the
 // legacy "Your Company" placeholder or is empty. The wizard historically wrote a
 // separate nav brandName field (defaulting to "Your Company"), so {Brand} interpolation
@@ -178,41 +167,6 @@ export function injectBrandName(puckData: any, brandName?: string): any {
   }
   data.content = content
   return data
-}
-
-export interface NavPage {
-  path: string
-  nav_label: string
-  sort_order: number
-}
-
-// THE single canonical nav link list — used by the header on every page and the
-// footer's Explore column. Order: Home, Deals, enabled toggleable sub-pages
-// (About/FAQ/How it works/Buyers list/Reviews in sort_order), Blog when there are
-// posts, then Contact. Phone + the "Get deals" CTA are rendered separately by the
-// header and are NOT members of this list. De-duped by normalized href.
-export function buildSiteNavLinks(opts: {
-  hasPosts: boolean
-  enabledPages: NavPage[]
-}): { label: string; href: string }[] {
-  const links: { label: string; href: string }[] = [
-    { label: "Home", href: "/" },
-    { label: "Deals", href: "/properties" },
-  ]
-  for (const p of opts.enabledPages || []) {
-    if (p?.nav_label && p?.path) links.push({ label: p.nav_label, href: p.path })
-  }
-  if (opts.hasPosts) links.push({ label: "Blog", href: "/blog" })
-  links.push({ label: "Contact", href: "/contact" })
-
-  const seen = new Set<string>()
-  const norm = (h: string) => (h || "").replace(/\/$/, "") || "/"
-  return links.filter((l) => {
-    const key = norm(l.href)
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
 }
 
 // Enabled, nav-labeled sub-pages (excluding the home "/"), ordered for the nav.
