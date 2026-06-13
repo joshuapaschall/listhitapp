@@ -17,7 +17,7 @@ const SOCIAL_ICONS: Record<string, React.ReactNode> = {
 }
 
 export function SiteFooter({ text }: { text?: string }) {
-  const { brandName, persona, markets, business, legalPaths, legalDisplay } = useSiteForm()
+  const { brandName, persona, markets, business, legalPaths, legalDisplay, navLinks } = useSiteForm()
   // One source of truth for the area label/href math (location-pages.ts). The
   // context's `markets` is the markets_json shape buildAreaLinks expects.
   const areaLinks = buildAreaLinks({ persona, markets_json: markets })
@@ -33,6 +33,12 @@ export function SiteFooter({ text }: { text?: string }) {
   // (older saved sites still carry the literal "© Your Company. All rights reserved.").
   const isPlaceholder = !text || !text.trim() || text.trim() === "© Your Company. All rights reserved."
   const copyright = isPlaceholder ? `© ${year} ${brandName}. All rights reserved.` : text
+  // Explore column mirrors the canonical site nav (so footer parity follows the
+  // wizard page toggles). Legal hrefs live in the Legal column, so exclude them.
+  const explore = (navLinks && navLinks.length
+    ? navLinks
+    : [{ label: "Home", href: "/" }, { label: "Deals", href: "/properties" }, { label: "Contact", href: "/contact" }]
+  ).filter((l) => l.href !== "/privacy" && l.href !== "/terms")
   const colHead: React.CSSProperties = { fontSize: 12, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: "#0f1b29", marginBottom: 12 }
   const link: React.CSSProperties = { color: "#5a6675", textDecoration: "none", fontSize: 14, display: "block", marginBottom: 8 }
 
@@ -60,9 +66,9 @@ export function SiteFooter({ text }: { text?: string }) {
           <div>
             <div style={colHead}>Explore</div>
             {/* eslint-disable @next/next/no-html-link-for-pages */}
-            <a href="/" style={link}>Home</a>
-            <a href="/properties" style={link}>Deals</a>
-            <a href="/contact" style={link}>Contact</a>
+            {explore.map((l) => (
+              <a key={l.href} href={l.href} style={link}>{l.label}</a>
+            ))}
             {/* eslint-enable @next/next/no-html-link-for-pages */}
           </div>
           {/* Legal */}

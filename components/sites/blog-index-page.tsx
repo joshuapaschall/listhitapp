@@ -5,6 +5,7 @@ import { SiteFonts } from "@/components/sites/site-fonts"
 import { SiteStyles } from "@/components/sites/site-styles"
 import { SiteContextProvider, type SiteFormContext } from "@/lib/site-builder/site-context"
 import { SiteFooter } from "@/components/sites/site-footer"
+import { SiteHeader } from "@/components/sites/site-header"
 import { WRAP } from "@/lib/site-builder/blocks/primitives"
 import type { SiteTheme, SiteBusiness, PostSummary } from "@/lib/site-builder/types"
 
@@ -26,6 +27,7 @@ export function BlogIndexPage({
   business,
   formContext,
   posts,
+  navLinks = [],
 }: {
   host: string
   site: any
@@ -33,6 +35,7 @@ export function BlogIndexPage({
   business: SiteBusiness
   formContext: SiteFormContext
   posts: PostSummary[]
+  navLinks?: { label: string; href: string }[]
 }) {
   const brandName = formContext.brandName
 
@@ -50,20 +53,7 @@ export function BlogIndexPage({
       <SiteStyles />
       <SiteFonts typeStyleId={theme.typeStyleId} />
       <SiteContextProvider value={formContext}>
-        {/* Brand header */}
-        <header style={{ borderBottom: "1px solid #eef1f5", background: "#fff" }}>
-          <div className="lh-nav" style={{ ...WRAP, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 24px" }}>
-            {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- public tenant site, not a dashboard route */}
-            <a href="/" style={{ textDecoration: "none" }}>
-              <span style={{ fontFamily: "var(--head)", fontWeight: 800, fontSize: 20, color: "var(--p)" }}>{brandName}</span>
-            </a>
-            {business.phone ? (
-              <a href={`tel:${business.phone}`} style={{ fontSize: 14.5, fontWeight: 700, color: "var(--p)", textDecoration: "none" }}>
-                {business.phone}
-              </a>
-            ) : null}
-          </div>
-        </header>
+        <SiteHeader brandName={brandName} logoUrl={theme.logoUrl ?? null} phone={business.phone} links={navLinks} />
 
         <main style={{ background: "color-mix(in srgb, var(--p) 4%, #fff)" }}>
           <div style={{ ...WRAP, padding: "40px 24px 64px" }}>

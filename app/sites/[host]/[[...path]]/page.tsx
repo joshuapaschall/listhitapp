@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { cookies } from "next/headers"
 import { notFound, redirect } from "next/navigation"
-import { resolveSite, mergeThemeIntoRoot, resolveSiteByHost, injectBlogNavLink, getNavPages, injectPageNavLinks, injectAreaLinks, injectRecentPosts, buildSiteNavLinks } from "@/lib/site-builder/resolve-site"
+import { resolveSite, mergeThemeIntoRoot, resolveSiteByHost, setNavLinks, getNavPages, injectAreaLinks, injectRecentPosts, buildSiteNavLinks } from "@/lib/site-builder/resolve-site"
 import { DEFAULT_THEME, DEFAULT_BUSINESS, DEFAULT_MARKETS, type SitePersona } from "@/lib/site-builder/types"
 import { cityFromMarkets } from "@/lib/site-builder/interpolate"
 import { pageSeo } from "@/lib/site-builder/seo"
@@ -288,7 +288,18 @@ export default async function SitePage({
     const business = { ...DEFAULT_BUSINESS, ...(site.business_json || {}) }
     const args = await legalArgsFor(site, business)
     const doc = buildLegalDoc(legalKind, args)
-    return <LegalPage doc={doc} brandName={site.name} phone={business.phone} theme={theme} />
+    const navLinks = await navLinksFor(site)
+    const formContext = {
+      persona: site.persona,
+      brandName: site.name,
+      ...(await buildOptinContext(site)),
+      legalPaths: { terms: "/terms", privacy: "/privacy" },
+      markets: { ...DEFAULT_MARKETS, ...((site.markets_json as any) || {}) },
+      deals: [],
+      business,
+      navLinks,
+    }
+    return <LegalPage doc={doc} brandName={site.name} phone={business.phone} theme={theme} business={business} navLinks={navLinks} formContext={formContext} />
   }
 
   // Real /contact page: home nav + footer + a populated ContactPanel (with the
@@ -307,12 +318,16 @@ export default async function SitePage({
       markets.scope === "specific" && marketList.length > 0
         ? marketList.slice(0, 3).map(formatMarketLabel).join(", ")
         : [business.city, business.state].filter(Boolean).join(", ")
-    const data = buildContactPage(homeResult.page.puck_data, {
-      phone: business.phone,
-      email: business.email,
-      hours: (business as any).hours,
-      serviceArea,
-    })
+    const navLinks = await navLinksFor(site)
+    const data = setNavLinks(
+      buildContactPage(homeResult.page.puck_data, {
+        phone: business.phone,
+        email: business.email,
+        hours: (business as any).hours,
+        serviceArea,
+      }),
+      navLinks,
+    )
     const formContext = {
       persona: site.persona,
       brandName: site.name,
@@ -321,6 +336,7 @@ export default async function SitePage({
       markets,
       deals: [],
       business,
+      navLinks,
     }
     return <SiteRendererRSC data={data} theme={theme} form={formContext} />
   }
@@ -356,6 +372,7 @@ export default async function SitePage({
     const business = { ...DEFAULT_BUSINESS, ...(site.business_json || {}) }
     const publicMode = site.deals_public !== false
     const unlocked = cookies().get("lh_deals_unlocked")?.value === "1"
+    const navLinks = await navLinksFor(site)
     const formContext = {
       persona: site.persona,
       brandName: site.name,
@@ -364,9 +381,9 @@ export default async function SitePage({
       markets: { ...DEFAULT_MARKETS, ...((site.markets_json as any) || {}) },
       deals: [],
       business,
+      navLinks,
     }
     const { filters, values } = readDealFilters(searchParams)
-    const navLinks = await navLinksFor(site)
     // Public sites: full, ungated list — every card links to its indexable
     // detail page. No address stripping, no cookie gate.
     if (publicMode) {
@@ -402,6 +419,7 @@ export default async function SitePage({
     const theme = { ...DEFAULT_THEME, ...(site.theme_json || {}) }
     const business = { ...DEFAULT_BUSINESS, ...(site.business_json || {}) }
     const nearby = await getNearbyPublishedDeals(site.org_id, deal.city, deal.state, deal.id, 3).catch(() => [])
+    const navLinks = await navLinksFor(site)
     const formContext = {
       persona: site.persona,
       brandName: site.name,
@@ -410,11 +428,11 @@ export default async function SitePage({
       markets: { ...DEFAULT_MARKETS, ...((site.markets_json as any) || {}) },
       deals: nearby,
       business,
+      navLinks,
     }
     // Deep-link the breadcrumb to this property's city (or state) landing page
     // when the site runs specific markets; null on nationwide sites.
     const cityLocationHref = locationHrefForDeal(site, deal.city, deal.state)
-    const navLinks = await navLinksFor(site)
     return (
       <>
         <PropertyJsonLd deal={deal} host={host} brandName={site.name} />
@@ -431,6 +449,7 @@ export default async function SitePage({
     const business = { ...DEFAULT_BUSINESS, ...(site.business_json || {}) }
     const deals = await getPublishedDeals(site.org_id, 6).catch(() => [])
     const posts = await getPublishedPosts(site.id, site.org_id, 12).catch(() => [])
+    const navLinks = await navLinksFor(site)
     const formContext = {
       persona: site.persona,
       brandName: site.name,
@@ -439,8 +458,9 @@ export default async function SitePage({
       markets: { ...DEFAULT_MARKETS, ...((site.markets_json as any) || {}) },
       deals,
       business,
+      navLinks,
     }
-    return <BlogIndexPage host={host} site={site} theme={theme} business={business} formContext={formContext} posts={posts} />
+    return <BlogIndexPage host={host} site={site} theme={theme} business={business} formContext={formContext} posts={posts} navLinks={navLinks} />
   }
 
   // Blog post — must precede the 2-segment location branch (it also matches length===2).
@@ -452,6 +472,7 @@ export default async function SitePage({
     const theme = { ...DEFAULT_THEME, ...(site.theme_json || {}) }
     const business = { ...DEFAULT_BUSINESS, ...(site.business_json || {}) }
     const deals = await getPublishedDeals(site.org_id, 6).catch(() => [])
+    const navLinks = await navLinksFor(site)
     const formContext = {
       persona: site.persona,
       brandName: site.name,
@@ -460,8 +481,8 @@ export default async function SitePage({
       markets: { ...DEFAULT_MARKETS, ...((site.markets_json as any) || {}) },
       deals,
       business,
+      navLinks,
     }
-    const navLinks = await navLinksFor(site)
     return (
       <>
         <PostJsonLd post={post} host={host} brandName={site.name} />
@@ -492,6 +513,7 @@ export default async function SitePage({
       const business = { ...DEFAULT_BUSINESS, ...(site.business_json || {}) }
       // Market-filtered deals (not the global home deals); empty → PR1 placeholders.
       const deals = await getPublishedDealsForMarket(site.org_id, match.market, 6).catch(() => [])
+      const navLinks = await navLinksFor(site)
       const formContext = {
         persona: site.persona,
         brandName: site.name,
@@ -502,16 +524,14 @@ export default async function SitePage({
         markets: { ...DEFAULT_MARKETS, ...((site.markets_json as any) || {}) },
         deals,
         business,
+        navLinks,
       }
       // Location pages mirror the home block stack: same home puck_data + the same
       // injections, localized to this market via cityOverride.
       const homeResult = await resolveSite(host, "/")
       if (!homeResult) notFound()
       let data = mergeThemeIntoRoot(homeResult.page.puck_data, homeResult.theme)
-      const postCount = await getPublishedPostCount(site.id, site.org_id).catch(() => 0)
-      if (postCount > 0) data = injectBlogNavLink(data)
-      const navPages = await getNavPages(site.id).catch(() => [])
-      data = injectPageNavLinks(data, navPages)
+      data = setNavLinks(data, navLinks)
       data = injectAreaLinks(data, buildAreaLinks(site, match.market))
       const recentPosts = (await getPublishedPosts(site.id, site.org_id, 3).catch(() => [])).map((p) => ({
         title: p.title,
@@ -539,10 +559,8 @@ export default async function SitePage({
   if (result.page.enabled === false) notFound()
 
   let data = mergeThemeIntoRoot(result.page.puck_data, result.theme)
-  const postCount = await getPublishedPostCount(result.site.id, result.site.org_id).catch(() => 0)
-  if (postCount > 0) data = injectBlogNavLink(data)
-  const navPages = await getNavPages(result.site.id).catch(() => [])
-  data = injectPageNavLinks(data, navPages)
+  const navLinks = await navLinksFor(result.site)
+  data = setNavLinks(data, navLinks)
   data = injectAreaLinks(data, buildAreaLinks(result.site))
   // Real published posts → home RecentPosts block; when none, the block renders
   // its "Start here" resources rail instead.
@@ -563,6 +581,7 @@ export default async function SitePage({
     markets: { ...DEFAULT_MARKETS, ...((result.site.markets_json as any) || {}) },
     deals,
     business,
+    navLinks,
   }
 
   return (

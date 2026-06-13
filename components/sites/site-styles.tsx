@@ -22,6 +22,11 @@ export function SiteStyles(): React.JSX.Element {
 .lh-site h1, .lh-site h2, .lh-hero-h1, .lh-h2 { text-wrap: balance; }
 .lh-site p { text-wrap: pretty; }
 
+/* Mobile nav: burger button + drawer (hidden on desktop; shown via the 768 query). */
+.lh-nav-burger { display: none; align-items: center; justify-content: center; width: 40px; height: 40px; border: none; background: transparent; cursor: pointer; padding: 0; }
+.lh-nav-drawer { display: none; }
+.lh-nav-drawer[data-open="true"] { display: block; position: absolute; left: 0; right: 0; top: 100%; background: #fff; border-bottom: 1px solid #eef1f5; box-shadow: 0 18px 40px rgba(5,12,24,.12); z-index: 40; }
+
 /* tablet: 3-up grids become 2-up */
 @container (max-width: 1024px) {
   .lh-grid-3 { grid-template-columns: repeat(2, minmax(0,1fr)) !important; }
@@ -35,8 +40,9 @@ export function SiteStyles(): React.JSX.Element {
 
 /* phones */
 @container (max-width: 768px) {
-  .lh-nav { flex-direction: column !important; align-items: center !important; text-align: center !important; gap: 10px !important; }
-  .lh-nav-links { flex-wrap: wrap !important; justify-content: center !important; gap: 14px !important; }
+  .lh-nav { flex-direction: row !important; align-items: center !important; justify-content: space-between !important; text-align: left !important; gap: 12px !important; }
+  .lh-nav-links { display: none !important; }
+  .lh-nav-burger { display: inline-flex !important; }
   .lh-hero-grid { padding: 92px 20px 60px !important; }
   .lh-hero-photo { min-height: auto !important; }
   .lh-hero-h1 { font-size: clamp(26px, 7.5cqw, 40px) !important; }

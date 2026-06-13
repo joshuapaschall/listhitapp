@@ -5,6 +5,7 @@ import { WRAP, HEADING } from "./primitives"
 import { LeadForm } from "@/components/sites/lead-form"
 import { DealsSection } from "@/components/sites/deals-section"
 import { SiteFooter } from "@/components/sites/site-footer"
+import { SiteHeader } from "@/components/sites/site-header"
 import { siteImage, siteSrcSet } from "@/lib/site-builder/image-url"
 
 
@@ -81,58 +82,15 @@ export const siteConfig: Config = {
         links: [{ label: "Deals", href: "/properties" }, { label: "Contact", href: "/contact" }],
         layout: "split",
       },
-      render: ({ brandName, logoUrl, phone, links, layout }: any) => {
-        const isCenter = layout === "center"
-        const isStack = layout === "stack"
-        const brand = (
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {logoUrl ? (
-              <img src={logoUrl} alt={brandName} style={{ height: 30 }} />
-            ) : null}
-            <span style={{ fontFamily: "var(--head)", fontWeight: 800, fontSize: 20, color: "var(--p)" }}>
-              {brandName}
-            </span>
-          </div>
-        )
-        const linkRow = (
-          <nav className="lh-nav-links" style={{ display: "flex", gap: 22, alignItems: "center" }}>
-            {(links || []).map((l: any, i: number) => (
-              // eslint-disable-next-line @next/next/no-html-link-for-pages -- public tenant site
-              <a key={i} href={l?.href || "#"} style={{ color: "#3a4554", textDecoration: "none", fontSize: 14.5 }}>
-                {l?.label}
-              </a>
-            ))}
-            {phone && (
-              <a
-                href={`tel:${phone}`}
-                style={{ color: "var(--p)", fontWeight: 700, textDecoration: "none", fontSize: 14.5 }}
-              >
-                {phone}
-              </a>
-            )}
-          </nav>
-        )
-        return (
-          <header style={{ borderBottom: "1px solid #eef1f5", background: "#fff" }}>
-            <div
-              className="lh-nav"
-              style={{
-                ...WRAP,
-                display: "flex",
-                flexDirection: isStack ? "column" : "row",
-                alignItems: "center",
-                justifyContent: isCenter ? "center" : "space-between",
-                gap: 12,
-                padding: "16px 24px",
-                textAlign: isCenter ? "center" : "left",
-              }}
-            >
-              {brand}
-              {linkRow}
-            </div>
-          </header>
-        )
-      },
+      render: ({ brandName, logoUrl, phone, links, layout }: any) => (
+        <SiteHeader
+          brandName={brandName}
+          logoUrl={logoUrl}
+          phone={phone}
+          links={links || []}
+          layout={layout === "center" ? "center" : "split"}
+        />
+      ),
     },
 
     // -----------------------------------------------------------------------
