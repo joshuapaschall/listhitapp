@@ -1,8 +1,10 @@
 import { themeToCssVars } from "@/lib/site-builder/theme"
 import { SiteFonts } from "@/components/sites/site-fonts"
+import { SiteStyles } from "@/components/sites/site-styles"
 import { SiteHeader } from "@/components/sites/site-header"
+import { SiteFooter } from "@/components/sites/site-footer"
 import type { SiteTheme, SiteBusiness, DealSummary } from "@/lib/site-builder/types"
-import type { SiteFormContext } from "@/lib/site-builder/site-context"
+import { SiteContextProvider, type SiteFormContext } from "@/lib/site-builder/site-context"
 import { DealCard } from "@/components/sites/deal-card"
 import { PropertiesGate } from "./properties-gate"
 import { PropertiesFilterBar } from "@/components/sites/properties-filter-bar"
@@ -37,15 +39,10 @@ export function PropertiesPage({
   // deals_public is off, so the unlocked-but-gated funnel must not link out.
   const showFull = publicMode || unlocked
   const filtersActive = !!filters && (filters.beds !== "0" || filters.baths !== "0" || filters.terms !== "any")
-  const footerLinks = [
-    { label: "Home", href: "/" },
-    { label: "Contact", href: "/contact" },
-    { label: "Privacy Policy", href: "/privacy" },
-    { label: "Terms of Use", href: "/terms" },
-  ]
 
   return (
     <div
+      className="lh-site"
       style={{
         ...themeToCssVars(theme),
         fontFamily: "var(--body)",
@@ -56,8 +53,9 @@ export function PropertiesPage({
         flexDirection: "column",
       }}
     >
+      <SiteStyles />
       <SiteFonts typeStyleId={theme.typeStyleId} />
-
+      <SiteContextProvider value={formContext}>
       <SiteHeader brandName={brandName} phone={business.phone} links={navLinks} />
 
       <main style={{ flex: 1, background: "color-mix(in srgb, var(--p) 5%, #fff)" }}>
@@ -93,30 +91,8 @@ export function PropertiesPage({
         </div>
       </main>
 
-      <footer style={{ borderTop: "1px solid #eef1f5", background: "#fff" }}>
-        <div
-          style={{
-            maxWidth: 1120,
-            margin: "0 auto",
-            padding: "24px",
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-          }}
-        >
-          <span style={{ fontSize: 13, color: "#5a6675" }}>© {brandName}. All rights reserved.</span>
-          <nav style={{ display: "flex", flexWrap: "wrap", gap: 18 }}>
-            {footerLinks.map((l) => (
-              // eslint-disable-next-line @next/next/no-html-link-for-pages -- public tenant site, not a dashboard route
-              <a key={l.href} href={l.href} style={{ fontSize: 13, color: "#5a6675", textDecoration: "none" }}>
-                {l.label}
-              </a>
-            ))}
-          </nav>
-        </div>
-      </footer>
+      <SiteFooter />
+      </SiteContextProvider>
     </div>
   )
 }

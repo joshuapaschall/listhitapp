@@ -16,6 +16,7 @@ export interface SiteFormContext {
   markets: SiteMarkets
   deals: DealSummary[]
   business: SiteBusiness
+  navLinks?: { label: string; href: string }[]
 }
 
 const DEFAULT_FORM_CONTEXT: SiteFormContext = {
@@ -30,6 +31,7 @@ const DEFAULT_FORM_CONTEXT: SiteFormContext = {
   markets: { scope: "nationwide", markets: [] },
   deals: [],
   business: DEFAULT_BUSINESS,
+  navLinks: [],
 }
 
 const Ctx = createContext<SiteFormContext>(DEFAULT_FORM_CONTEXT)

@@ -109,15 +109,25 @@ export function buildReviewsPage(home: any) {
   return { root: clone(home?.root || {}), content: [nav, reviews, conversionBand("reviews"), footer].filter(Boolean) }
 }
 
+// The "membership / what you get" page. Distinct from /how-it-works (the process
+// page): no ProseSection or TypesGrid here, so the two pages don't overlap.
 export function buildBuyersListPage(home: any, persona: SitePersona) {
   const c = PERSONAS[persona]
   const nav = reid(rootRelativeAnchors(pick(home, "Nav")), "-buyers")
   const cta = reid(pick(home, "CtaBand"), "-buyers")
   const footer = reid(pick(home, "Footer"), "-buyers")
-  const prose = proseFrom(c, "buyers")
-  const types = {
-    type: "TypesGrid",
-    props: { id: "TypesGrid-buyers", heading: "What we send", intro: "", items: c.types },
+  const features = {
+    type: "FeatureGrid",
+    props: { id: "FeatureGrid-buyers", heading: "What you get on the list", features: c.features },
+  }
+  const situations = {
+    type: "SituationsGrid",
+    props: {
+      id: "SituationsGrid-buyers",
+      heading: c.situations.heading,
+      intro: c.situations.intro,
+      items: c.situations.items,
+    },
   }
   const contact = {
     type: "ContactPanel",
@@ -131,7 +141,7 @@ export function buildBuyersListPage(home: any, persona: SitePersona) {
       note: "Free to join. New off-market deals by text and email — reply STOP anytime.",
     },
   }
-  return { root: clone(home?.root || {}), content: [nav, prose, types, contact, cta, footer].filter(Boolean) }
+  return { root: clone(home?.root || {}), content: [nav, features, situations, contact, cta, footer].filter(Boolean) }
 }
 
 export function buildContactPage(

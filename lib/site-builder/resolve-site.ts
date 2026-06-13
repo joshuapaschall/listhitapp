@@ -143,18 +143,16 @@ export function injectRecentPosts(
   return data
 }
 
-// Adds a "Blog" link to the Puck Nav block's links array (home page nav).
-// Idempotent: no-op if a /blog link is already present or there is no Nav block.
-export function injectBlogNavLink(puckData: any): any {
+// Force the Puck Nav block's links array to the canonical site nav list (replace,
+// not append). Single source of truth shared with the sub-page SiteHeader, so the
+// home/Puck-page header and the reserved-page header always match. No-op if there
+// is no Nav block.
+export function setNavLinks(puckData: any, links: { label: string; href: string }[]): any {
   const data = { ...(puckData || {}) }
   const content = Array.isArray(data.content) ? data.content.map((b: any) => ({ ...b })) : []
-  const nav = content.find((b: any) => b?.type === "Nav")
-  if (nav) {
-    const links = Array.isArray(nav.props?.links) ? [...nav.props.links] : []
-    const hasBlog = links.some((l: any) => (l?.href || "").replace(/\/$/, "") === "/blog")
-    if (!hasBlog) {
-      links.push({ label: "Blog", href: "/blog" })
-      nav.props = { ...(nav.props || {}), links }
+  for (const block of content) {
+    if (block?.type === "Nav") {
+      block.props = { ...(block.props || {}), links }
     }
   }
   data.content = content
@@ -188,10 +186,11 @@ export interface NavPage {
   sort_order: number
 }
 
-// Canonical nav link list for a site, so the home Puck Nav and the shared
-// sub-page <SiteHeader> agree. Order mirrors injectPageNavLinks/injectBlogNavLink:
-// Home, Deals, Buyers list, then enabled sub-pages (Reviews/About/How it works/
-// FAQ in their stored order), then Blog when there are posts. De-duped by href.
+// THE single canonical nav link list — used by the header on every page and the
+// footer's Explore column. Order: Home, Deals, enabled toggleable sub-pages
+// (About/FAQ/How it works/Buyers list/Reviews in sort_order), Blog when there are
+// posts, then Contact. Phone + the "Get deals" CTA are rendered separately by the
+// header and are NOT members of this list. De-duped by normalized href.
 export function buildSiteNavLinks(opts: {
   hasPosts: boolean
   enabledPages: NavPage[]
@@ -199,12 +198,12 @@ export function buildSiteNavLinks(opts: {
   const links: { label: string; href: string }[] = [
     { label: "Home", href: "/" },
     { label: "Deals", href: "/properties" },
-    { label: "Buyers list", href: "/get-on-the-list" },
   ]
   for (const p of opts.enabledPages || []) {
     if (p?.nav_label && p?.path) links.push({ label: p.nav_label, href: p.path })
   }
   if (opts.hasPosts) links.push({ label: "Blog", href: "/blog" })
+  links.push({ label: "Contact", href: "/contact" })
 
   const seen = new Set<string>()
   const norm = (h: string) => (h || "").replace(/\/$/, "") || "/"
@@ -227,28 +226,4 @@ export async function getNavPages(siteId: string): Promise<NavPage[]> {
     .neq("path", "/")
     .order("sort_order", { ascending: true })
   return (data || []) as NavPage[]
-}
-
-// Inject nav links for enabled pages, mirroring injectBlogNavLink. Each link is
-// inserted before the existing "/contact" link when present, else appended.
-// Idempotent: skips any href already in the nav.
-export function injectPageNavLinks(puckData: any, pages: NavPage[]): any {
-  const data = { ...(puckData || {}) }
-  const content = Array.isArray(data.content) ? data.content.map((b: any) => ({ ...b })) : []
-  const nav = content.find((b: any) => b?.type === "Nav")
-  if (nav && Array.isArray(pages) && pages.length) {
-    const links = Array.isArray(nav.props?.links) ? [...nav.props.links] : []
-    const norm = (h: any) => (h || "").replace(/\/$/, "")
-    const contactIdx = links.findIndex((l: any) => norm(l?.href) === "/contact")
-    let insertAt = contactIdx >= 0 ? contactIdx : links.length
-    for (const p of pages) {
-      if (!p?.nav_label || !p?.path) continue
-      if (links.some((l: any) => norm(l?.href) === norm(p.path))) continue
-      links.splice(insertAt, 0, { label: p.nav_label, href: p.path })
-      insertAt++
-    }
-    nav.props = { ...(nav.props || {}), links }
-  }
-  data.content = content
-  return data
 }
