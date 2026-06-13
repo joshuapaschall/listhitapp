@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { SiteRenderer } from "@/components/sites/site-renderer"
 import { composePreview, type WizardContent } from "@/lib/site-builder/compose"
+import { buildSiteNavLinks } from "@/lib/site-builder/nav-links"
 import { SiteFonts } from "@/components/sites/site-fonts"
 import { buildConsentTexts } from "@/lib/site-builder/compliance"
 import type { SiteFormContext } from "@/lib/site-builder/site-context"
@@ -34,6 +35,10 @@ export function SitePreview({ templateId, persona, theme, content, business, mar
   const form = useMemo<SiteFormContext>(() => {
     const brandName = content.brandName || "your team"
     const consent = buildConsentTexts(brandName)
+    const navLinks = buildSiteNavLinks({
+      hasPosts: false,
+      enabledPages: (navPages || []).map((p, i) => ({ path: p.path, nav_label: p.navLabel, sort_order: i })),
+    })
     return {
       persona,
       brandName,
@@ -48,8 +53,9 @@ export function SitePreview({ templateId, persona, theme, content, business, mar
       markets,
       deals: [],
       business,
+      navLinks,
     }
-  }, [persona, content.brandName, business, markets])
+  }, [persona, content.brandName, business, markets, navPages])
 
   return (
     <div className="flex h-full flex-col">
