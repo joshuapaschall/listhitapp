@@ -23,8 +23,20 @@ import { PALETTES } from "@/lib/site-builder/palettes"
 import { DEFAULT_THEME, DEFAULT_BUSINESS, DEFAULT_MARKETS, type SitePersona, type SiteTemplateId, type SiteTheme, type SiteBusiness, type SiteMarkets } from "@/lib/site-builder/types"
 import { useLocationSuggestions } from "@/components/buyers/use-location-suggestions"
 import { formatMarketLabel } from "@/lib/site-builder/location-pages"
+import { EXTRA_PAGES } from "@/lib/site-builder/extra-pages"
 
 type WizardProps = { mode: "new" } | { mode: "edit"; siteId: string }
+
+// Default toggleable nav pages, sorted by the canonical sort order and seeded
+// immediately so the wizard preview shows the full nav/footer from step 1 —
+// before the site row (and its site_pages) exist. Reconciled with the DB once
+// the site is created / hydrated.
+const DEFAULT_NAV_PAGES = [...EXTRA_PAGES]
+  .sort((a, b) => a.sortOrder - b.sortOrder)
+  .map((p) => ({ path: p.path, nav_label: p.navLabel, enabled: p.enabledByDefault }))
+
+// path → canonical sort order, used to keep DB-returned pages in published order.
+const PAGE_SORT_ORDER = new Map(EXTRA_PAGES.map((p) => [p.path, p.sortOrder]))
 
 const STEPS = ["Who it's for", "Template", "Your area", "Brand", "Message", "Texting", "Launch"]
 
@@ -119,7 +131,9 @@ export default function WebsiteWizard(props: WizardProps) {
   const [published, setPublished] = useState(false)
   const [copiedLive, setCopiedLive] = useState(false)
   const [mobilePreview, setMobilePreview] = useState(false)
-  const [pages, setPages] = useState<{ path: string; nav_label: string; enabled: boolean }[]>([])
+  const [pages, setPages] = useState<{ path: string; nav_label: string; enabled: boolean }[]>(
+    DEFAULT_NAV_PAGES,
+  )
 
   const [draft, setDraft] = useState<Draft>(() => ({
     name: "",
@@ -159,6 +173,7 @@ export default function WebsiteWizard(props: WizardProps) {
     (rows || [])
       .filter((p) => p?.nav_label && p?.path !== "/")
       .map((p) => ({ path: p.path, nav_label: p.nav_label, enabled: p.enabled !== false }))
+      .sort((a, b) => (PAGE_SORT_ORDER.get(a.path) ?? 999) - (PAGE_SORT_ORDER.get(b.path) ?? 999))
 
   // Edit mode: hydrate from the API and jump to the Brand step.
   useEffect(() => {
