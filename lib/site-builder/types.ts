@@ -19,6 +19,7 @@ export interface SiteTheme {
   headingFont: string   // resolved CSS font-family value (kept for back-compat / Root props)
   bodyFont: string      // resolved CSS font-family value
   logoUrl?: string
+  faviconUrl?: string
   headerLayout: HeaderLayout
   banner: boolean
 }

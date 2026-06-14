@@ -1,6 +1,15 @@
+import type { Metadata } from "next"
 import { SiteBeacon } from "@/components/sites/site-beacon"
 import { SiteAnalytics } from "@/components/sites/site-analytics"
 import { resolveSiteByHost } from "@/lib/site-builder/resolve-site"
+
+export async function generateMetadata({ params }: { params: { host: string } }): Promise<Metadata> {
+  const host = decodeURIComponent(params.host)
+  const site = await resolveSiteByHost(host).catch(() => null)
+  const favicon = (site?.theme_json as any)?.faviconUrl
+  if (!favicon) return {}
+  return { icons: { icon: favicon, shortcut: favicon, apple: favicon } }
+}
 
 // Wraps every public tenant page: the first-party analytics beacon plus the
 // site owner's own ad tags (only loaded when they've configured IDs).
