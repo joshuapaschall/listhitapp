@@ -3,7 +3,12 @@ import { searchLocations } from "@/lib/location-utils"
 import { ALLOWED_ORIGINS, corsHeaders, isRateLimited, isTenantSubdomainOrigin } from "@/lib/public-api"
 
 function originOk(origin: string) {
-  return ALLOWED_ORIGINS.includes(origin) || isTenantSubdomainOrigin(origin)
+  // Same-origin GET requests send no Origin header (unlike POST), so a published
+  // tenant page's own typeahead arrives with origin === "". Treat a missing
+  // Origin as same-origin/allowed: this endpoint returns only public US place
+  // names and is IP rate-limited, so empty-origin is safe. Genuine cross-origin
+  // GETs still send an Origin header and remain gated by the allow-list below.
+  return origin === "" || ALLOWED_ORIGINS.includes(origin) || isTenantSubdomainOrigin(origin)
 }
 
 export async function OPTIONS(request: NextRequest) {
