@@ -169,6 +169,48 @@ export function injectBrandName(puckData: any, brandName?: string): any {
   return data
 }
 
+// Forces the Nav block's brand identity from the canonical site sources at render
+// time, so every page (home and sub-pages rendered from stored Puck data) shows
+// the same logo, brand name, and phone — regardless of what was seeded.
+// - brandName: only replaces the legacy "Your Company"/empty placeholder.
+// - logoUrl:   always set from the site theme (propagates uploads AND removals).
+// - phone:     replaces empty / "(555) 555-5555" placeholder with the real number.
+export function injectNavIdentity(
+  puckData: any,
+  identity: { brandName?: string; logoUrl?: string | null; phone?: string | null },
+): any {
+  const data = { ...(puckData || {}) }
+  const content = Array.isArray(data.content) ? data.content.map((b: any) => ({ ...b })) : []
+  for (const block of content) {
+    if (block?.type === "Nav") {
+      const props = { ...(block.props || {}) }
+
+      const curBrand = (props.brandName || "").trim()
+      if (
+        identity.brandName &&
+        identity.brandName.trim() &&
+        identity.brandName !== "our team" &&
+        (!curBrand || curBrand === "Your Company")
+      ) {
+        props.brandName = identity.brandName
+      }
+
+      if (identity.logoUrl !== undefined) {
+        props.logoUrl = identity.logoUrl || ""
+      }
+
+      const curPhone = (props.phone || "").trim()
+      if (identity.phone && identity.phone.trim() && (!curPhone || curPhone === "(555) 555-5555")) {
+        props.phone = identity.phone
+      }
+
+      block.props = props
+    }
+  }
+  data.content = content
+  return data
+}
+
 // Enabled, nav-labeled sub-pages (excluding the home "/"), ordered for the nav.
 export async function getNavPages(siteId: string): Promise<NavPage[]> {
   const { data } = await supabaseAdmin

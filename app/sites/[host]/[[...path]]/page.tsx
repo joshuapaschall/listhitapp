@@ -319,14 +319,17 @@ export default async function SitePage({
         ? marketList.slice(0, 3).map(formatMarketLabel).join(", ")
         : [business.city, business.state].filter(Boolean).join(", ")
     const navLinks = await navLinksFor(site)
-    const data = setNavLinks(
-      buildContactPage(homeResult.page.puck_data, {
-        phone: business.phone,
-        email: business.email,
-        hours: (business as any).hours,
-        serviceArea,
-      }),
-      navLinks,
+    const data = mergeThemeIntoRoot(
+      setNavLinks(
+        buildContactPage(homeResult.page.puck_data, {
+          phone: business.phone,
+          email: business.email,
+          hours: (business as any).hours,
+          serviceArea,
+        }),
+        navLinks,
+      ),
+      theme,
     )
     const formContext = {
       persona: site.persona,

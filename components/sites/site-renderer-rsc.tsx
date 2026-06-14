@@ -5,7 +5,7 @@ import { SiteFonts } from "@/components/sites/site-fonts"
 import { SiteContextProvider, type SiteFormContext } from "@/lib/site-builder/site-context"
 import { SiteStyles } from "@/components/sites/site-styles"
 import { interpolateSiteData, cityFromMarkets } from "@/lib/site-builder/interpolate"
-import { injectBrandName } from "@/lib/site-builder/resolve-site"
+import { injectNavIdentity } from "@/lib/site-builder/resolve-site"
 import type { SiteTheme } from "@/lib/site-builder/types"
 
 // Public tenant sites render server-side: static blocks become HTML on the server,
@@ -29,7 +29,11 @@ export function SiteRendererRSC({
   // and fall back to the market-derived city exactly as before.
   const city = cityOverride ?? cityFromMarkets(form?.markets)
   let display = interpolateSiteData(data, form?.brandName ?? "our team", city)
-  display = injectBrandName(display, form?.brandName)
+  display = injectNavIdentity(display, {
+    brandName: form?.brandName,
+    logoUrl: (theme as any)?.logoUrl,
+    phone: (form as any)?.business?.phone,
+  })
   const layout = (data as any)?.root?.props?.layout
   return (
     <div className={`lh-site${layout ? ` lh-lay-${layout}` : ""}`} style={themeToCssVars(theme)}>

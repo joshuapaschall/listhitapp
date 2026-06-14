@@ -43,7 +43,7 @@ export function LegalPage({
       <SiteStyles />
       <SiteFonts typeStyleId={theme.typeStyleId} />
       <SiteContextProvider value={formContext}>
-        <SiteHeader brandName={brandName} logoUrl={business?.logoUrl ?? null} phone={phone} links={navLinks} />
+        <SiteHeader brandName={brandName} logoUrl={theme.logoUrl ?? null} phone={phone} links={navLinks} />
 
         <main style={{ flex: 1 }}>
           <div style={{ maxWidth: 760, margin: "0 auto", padding: "48px 24px" }}>
