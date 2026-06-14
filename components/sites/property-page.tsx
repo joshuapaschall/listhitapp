@@ -122,7 +122,7 @@ export function PropertyPage({
       <SiteFonts typeStyleId={theme.typeStyleId} />
       <SiteContextProvider value={formContext}>
         {/* Brand header */}
-        <SiteHeader brandName={brandName} phone={business.phone} links={navLinks} />
+        <SiteHeader brandName={brandName} logoUrl={theme.logoUrl ?? null} phone={business.phone} links={navLinks} />
 
         <main style={{ background: "color-mix(in srgb, var(--p) 4%, #fff)" }}>
           <div style={{ ...WRAP, padding: "24px 24px 56px" }}>

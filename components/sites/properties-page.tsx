@@ -56,7 +56,7 @@ export function PropertiesPage({
       <SiteStyles />
       <SiteFonts typeStyleId={theme.typeStyleId} />
       <SiteContextProvider value={formContext}>
-      <SiteHeader brandName={brandName} phone={business.phone} links={navLinks} />
+      <SiteHeader brandName={brandName} logoUrl={theme.logoUrl ?? null} phone={business.phone} links={navLinks} />
 
       <main style={{ flex: 1, background: "color-mix(in srgb, var(--p) 5%, #fff)" }}>
         <div style={{ maxWidth: 1120, margin: "0 auto", padding: "48px 24px" }}>
