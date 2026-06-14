@@ -15,6 +15,13 @@ import type { SiteTheme, SitePersona } from "@/lib/site-builder/types"
 
 const LEAD_KEY = "lh_lead"
 
+// Neutral surface palette (brand-agnostic; brand comes only from --p/--a tokens).
+const INK = "#0f1b29"
+const MUT = "#5a6675"
+const LINE = "#e8ebf1"
+const PAGE = "#f6f7f9"
+const CHIP_BORDER = "#d9dee6"
+
 type Lead = { fname?: string; phone?: string; email?: string; lname?: string }
 
 function maskPhone(phone: string): string {
@@ -28,6 +35,38 @@ function maskEmail(email: string): string {
   return `${(local || "").slice(0, 1)}•••@${domain}`
 }
 
+function IconCheck({ size = 13 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M5 12.5l4.5 4.5L19 7" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+function IconCircleCheck({ size = 15 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" fill="currentColor" />
+      <path d="M7.5 12.4l3 3 6-6.4" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+function IconLock({ size = 12 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" strokeWidth="2" />
+      <path d="M8 11V8a4 4 0 018 0v3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function BrandLockup({ logoUrl, brandName }: { logoUrl?: string; brandName: string }) {
+  if (logoUrl) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={logoUrl} alt={brandName} style={{ height: 32, maxHeight: 32, width: "auto", maxWidth: 180, objectFit: "contain", display: "block" }} />
+  }
+  return <span style={{ fontFamily: "var(--head)", fontWeight: 800, fontSize: 18, color: "var(--p)" }}>{brandName}</span>
+}
+
 function Chips({
   options,
   selected,
@@ -38,7 +77,7 @@ function Chips({
   onToggle: (key: string) => void
 }) {
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
       {options.map((o) => {
         const active = selected.includes(o.key)
         return (
@@ -47,16 +86,20 @@ function Chips({
             type="button"
             onClick={() => onToggle(o.key)}
             style={{
-              padding: "12px 18px",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "8px 13px",
               borderRadius: 999,
-              fontSize: 15,
-              fontWeight: 600,
+              fontSize: 13.5,
+              fontWeight: 500,
               cursor: "pointer",
-              border: active ? "2px solid var(--p)" : "1px solid #d7dde4",
+              border: active ? "1.5px solid var(--p)" : `1px solid ${CHIP_BORDER}`,
               background: active ? "color-mix(in srgb, var(--p) 8%, #fff)" : "#fff",
               color: active ? "var(--p)" : "#3a4554",
             }}
           >
+            {active && <IconCheck />}
             {o.label}
           </button>
         )
@@ -65,30 +108,31 @@ function Chips({
   )
 }
 
-function SectionTitle({ n, children }: { n: number; children: React.ReactNode }) {
+function SectionTitle({ n, title, helper }: { n: number; title: string; helper?: string }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
-      <span
-        style={{
-          flexShrink: 0,
-          width: 28,
-          height: 28,
-          borderRadius: 999,
-          background: "var(--p)",
-          color: "#fff",
-          fontFamily: "var(--head)",
-          fontWeight: 800,
-          fontSize: 14,
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        {n}
-      </span>
-      <h2 style={{ fontFamily: "var(--head)", fontSize: 19, fontWeight: 700, color: "#0f1b29", margin: 0 }}>
-        {children}
-      </h2>
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+        <span
+          style={{
+            flexShrink: 0,
+            width: 25,
+            height: 25,
+            borderRadius: 999,
+            background: "var(--p)",
+            color: "#fff",
+            fontFamily: "var(--head)",
+            fontWeight: 800,
+            fontSize: 13,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {n}
+        </span>
+        <h2 style={{ fontFamily: "var(--head)", fontSize: 17, fontWeight: 700, color: INK, margin: 0 }}>{title}</h2>
+      </div>
+      {helper && <p style={{ margin: "5px 0 0 36px", fontSize: 12.5, color: MUT, lineHeight: 1.45 }}>{helper}</p>}
     </div>
   )
 }
@@ -123,7 +167,7 @@ export function BuyerProfilePage({
   const [error, setError] = useState("")
 
   // Read the Step-1 contact from sessionStorage. If phone/email are missing
-  // (direct hit on this URL), send them back to Step 1 (home) — simplest path.
+  // (direct hit on this URL), send them back to Step 1 (home).
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem(LEAD_KEY)
@@ -191,96 +235,93 @@ export function BuyerProfilePage({
 
   if (!ready || !lead) {
     return (
-      <div style={{ ...themeToCssVars(theme), minHeight: "100vh", background: "#f7f8fa" }}>
+      <div style={{ ...themeToCssVars(theme), minHeight: "100vh", background: PAGE }}>
         <SiteFonts typeStyleId={theme.typeStyleId} />
       </div>
     )
   }
 
+  // Sequential step numbers across only the sections this persona shows.
+  const sectionKeys: string[] = []
+  const showBuyer = cfg.showBuyerTypes && buyerTypeOpts.length > 0
+  const showPay = cfg.showPayments && paymentOpts.length > 0
+  if (showBuyer) sectionKeys.push("buyer")
+  if (!hidePropControl) sectionKeys.push("prop")
+  sectionKeys.push("loc")
+  if (showPay) sectionKeys.push("pay")
+  sectionKeys.push("price")
+  const stepNo = (k: string) => sectionKeys.indexOf(k) + 1
+
   const card: React.CSSProperties = {
     background: "#fff",
-    border: "1px solid #eef1f5",
-    borderRadius: 16,
-    padding: 24,
-    marginTop: 20,
+    border: `1px solid ${LINE}`,
+    borderRadius: 14,
+    padding: 18,
+    marginTop: 12,
+    boxShadow: "0 1px 2px rgba(16,27,41,.04)",
   }
 
   return (
-    <div
-      style={{
-        ...themeToCssVars(theme),
-        fontFamily: "var(--body)",
-        color: "#0f1b29",
-        background: "#f7f8fa",
-        minHeight: "100vh",
-      }}
-    >
+    <div style={{ ...themeToCssVars(theme), fontFamily: "var(--body)", color: INK, background: PAGE, minHeight: "100vh" }}>
       <SiteFonts typeStyleId={theme.typeStyleId} />
-      <div style={{ maxWidth: 720, margin: "0 auto", padding: "40px 20px 64px" }}>
-        <div style={{ fontFamily: "var(--body)", fontSize: 12.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--a)" }}>
-          Step 2 of 2 · Last step
+
+      <header style={{ position: "sticky", top: 0, zIndex: 30, background: "#fff", borderBottom: `1px solid ${LINE}` }}>
+        <div style={{ maxWidth: 460, margin: "0 auto", padding: "13px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <BrandLockup logoUrl={theme.logoUrl} brandName={brandName} />
+          <span style={{ fontSize: 12, color: MUT }}>Step 2 of 2</span>
         </div>
-        <div style={{ height: 6, borderRadius: 999, background: "#e6eaf0", marginTop: 10, overflow: "hidden" }}>
-          <div style={{ width: "100%", height: "100%", background: "var(--p)" }} />
+      </header>
+
+      <div style={{ maxWidth: 460, margin: "0 auto", padding: "26px 20px 56px" }}>
+        <div style={{ height: 5, borderRadius: 999, background: "#e6eaf0", overflow: "hidden", marginBottom: 18 }}>
+          <div style={{ width: "92%", height: "100%", background: "var(--a)" }} />
         </div>
 
-        <h1 style={{ fontFamily: "var(--head)", fontSize: 30, fontWeight: 800, color: "var(--p)", margin: "24px 0 8px", letterSpacing: "-.01em" }}>
-          {fname ? `${fname}, what should we send you?` : "What should we send you?"}
+        <div style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--a)" }}>
+          Last step · 30 seconds
+        </div>
+        <h1 style={{ fontFamily: "var(--head)", fontSize: 26, fontWeight: 800, color: "var(--p)", margin: "8px 0 8px", letterSpacing: "-.01em", lineHeight: 1.14 }}>
+          {fname ? `${fname}, let's match you to the right deals.` : "Let's match you to the right deals."}
         </h1>
-        <p style={{ fontSize: 15.5, color: "#5a6675", margin: 0, lineHeight: 1.6 }}>
-          You&apos;re already on the list — this just tightens what we send so you only get deals that fit.
+        <p style={{ fontSize: 14.5, color: MUT, margin: 0, lineHeight: 1.55 }}>
+          You&apos;re already on the list. This just sharpens what we send — so every text and email is a deal worth your time.
         </p>
 
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 10, marginTop: 16, padding: "8px 14px", borderRadius: 999, background: "#fff", border: "1px solid #e6eaf0", fontSize: 13, color: "#5a6675" }}>
-          <span>
-            Sending to {maskPhone(lead.phone || "")} &amp; {maskEmail(lead.email || "")}
-          </span>
-          <span
-            role="button"
-            onClick={editContact}
-            style={{ cursor: "pointer", fontWeight: 700, color: "var(--p)", textDecoration: "underline" }}
-          >
-            Edit
-          </span>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 8, marginTop: 14, padding: "8px 13px", borderRadius: 999, background: "#fff", border: `1px solid ${LINE}`, fontSize: 12.5, color: MUT, flexWrap: "wrap" }}>
+          <span style={{ color: "#1d9e75", display: "inline-flex" }}><IconCircleCheck /></span>
+          <span>Sending to {maskPhone(lead.phone || "")} &amp; {maskEmail(lead.email || "")}</span>
+          <span role="button" onClick={editContact} style={{ cursor: "pointer", fontWeight: 600, color: "var(--a)", textDecoration: "underline" }}>Edit</span>
         </div>
 
-        {cfg.showBuyerTypes && buyerTypeOpts.length > 0 && (
+        {showBuyer && (
           <div style={card}>
-            <SectionTitle n={1}>{cfg.buyerTypeQuestion || "Your strategy"}</SectionTitle>
+            <SectionTitle n={stepNo("buyer")} title={cfg.buyerTypeQuestion || "What kind of buyer are you?"} helper="Pick all that apply." />
             <Chips options={buyerTypeOpts} selected={buyerTypes} onToggle={(k) => toggle(setBuyerTypes, k)} />
           </div>
         )}
 
         {!hidePropControl && (
           <div style={card}>
-            <SectionTitle n={2}>What you buy</SectionTitle>
-            <Chips
-              options={propChoices.map((p) => ({ key: p, label: p }))}
-              selected={propertyTypes}
-              onToggle={(k) => toggle(setPropertyTypes, k)}
-            />
+            <SectionTitle n={stepNo("prop")} title="What you're after" helper="The property types you actually buy." />
+            <Chips options={propChoices.map((p) => ({ key: p, label: p }))} selected={propertyTypes} onToggle={(k) => toggle(setPropertyTypes, k)} />
           </div>
         )}
 
         <div style={card}>
-          <SectionTitle n={3}>Where do you want deals?</SectionTitle>
-          <p style={{ margin: "0 0 14px", fontSize: 14, color: "#5a6675", lineHeight: 1.6 }}>
-            Search by state, county, or city — add as many as you&apos;d like. We&apos;ll only text you deals in
-            the places you pick.
-          </p>
+          <SectionTitle n={stepNo("loc")} title="Where you want deals" helper="Add any state, county, or city — we'll only send deals inside them." />
           <LocationPicker value={locations} onChange={setLocations} />
         </div>
 
-        {cfg.showPayments && paymentOpts.length > 0 && (
+        {showPay && (
           <div style={card}>
-            <SectionTitle n={4}>How you fund deals</SectionTitle>
+            <SectionTitle n={stepNo("pay")} title="How you close" helper="So we flag the deals that fit your money." />
             <Chips options={paymentOpts} selected={payments} onToggle={(k) => toggle(setPayments, k)} />
           </div>
         )}
 
         <div style={card}>
-          <SectionTitle n={5}>Your price range</SectionTitle>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+          <SectionTitle n={stepNo("price")} title="Your price range" helper="Ballpark is fine — change it anytime." />
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {PRICE_BANDS.map((b, i) => {
               const active = priceIdx === i
               return (
@@ -289,16 +330,20 @@ export function BuyerProfilePage({
                   type="button"
                   onClick={() => setPriceIdx(active ? null : i)}
                   style={{
-                    padding: "12px 18px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "8px 13px",
                     borderRadius: 999,
-                    fontSize: 15,
-                    fontWeight: 600,
+                    fontSize: 13.5,
+                    fontWeight: 500,
                     cursor: "pointer",
-                    border: active ? "2px solid var(--p)" : "1px solid #d7dde4",
+                    border: active ? "1.5px solid var(--p)" : `1px solid ${CHIP_BORDER}`,
                     background: active ? "color-mix(in srgb, var(--p) 8%, #fff)" : "#fff",
                     color: active ? "var(--p)" : "#3a4554",
                   }}
                 >
+                  {active && <IconCheck />}
                   {b.label}
                 </button>
               )
@@ -313,30 +358,31 @@ export function BuyerProfilePage({
           onClick={() => submit(false)}
           disabled={submitting}
           style={{
-            marginTop: 24,
+            marginTop: 22,
             width: "100%",
-            padding: "16px",
+            padding: "15px",
             borderRadius: 12,
             border: "none",
             background: "var(--a)",
             color: "var(--a-ink)",
             fontFamily: "var(--head)",
             fontWeight: 800,
-            fontSize: 16.5,
+            fontSize: 16,
             cursor: "pointer",
             opacity: submitting ? 0.6 : 1,
           }}
         >
           {submitting ? "Saving…" : "Start sending me deals →"}
         </button>
-        <div style={{ textAlign: "center", marginTop: 14 }}>
-          <span
-            role="button"
-            onClick={() => submit(true)}
-            style={{ fontSize: 14, color: "#5a6675", cursor: "pointer", textDecoration: "underline" }}
-          >
-            Skip — just send me everything.
-          </span>
+        <button
+          type="button"
+          onClick={() => submit(true)}
+          style={{ display: "block", width: "100%", textAlign: "center", marginTop: 12, fontSize: 13.5, color: MUT, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
+        >
+          Skip for now — send me everything
+        </button>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 11, fontSize: 11.5, color: MUT }}>
+          <span style={{ display: "inline-flex" }}><IconLock /></span> You&apos;re in control. Reply STOP anytime.
         </div>
       </div>
     </div>
