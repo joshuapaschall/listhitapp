@@ -55,9 +55,14 @@ export function SiteHeader({
         <a href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
           {logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={logoUrl} alt={brandName} style={{ height: 30 }} />
-          ) : null}
-          <span style={{ fontFamily: "var(--head)", fontWeight: 800, fontSize: 20, color: "var(--p)" }}>{brandName}</span>
+            <img
+              src={logoUrl}
+              alt={brandName}
+              style={{ height: 34, maxHeight: 34, width: "auto", maxWidth: 190, objectFit: "contain", display: "block" }}
+            />
+          ) : (
+            <span style={{ fontFamily: "var(--head)", fontWeight: 800, fontSize: 20, color: "var(--p)" }}>{brandName}</span>
+          )}
         </a>
 
         <nav className="lh-nav-links" style={{ display: "flex", gap: 22, alignItems: "center", flexWrap: "wrap" }}>

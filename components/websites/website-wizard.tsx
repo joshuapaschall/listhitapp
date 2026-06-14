@@ -239,9 +239,11 @@ export default function WebsiteWizard(props: WizardProps) {
   // Brand-asset uploads (logo + hero photo).
   const [logoUploading, setLogoUploading] = useState(false)
   const [heroUploading, setHeroUploading] = useState(false)
+  const [faviconUploading, setFaviconUploading] = useState(false)
   const [assetError, setAssetError] = useState("")
   const logoInputRef = useRef<HTMLInputElement>(null)
   const heroInputRef = useRef<HTMLInputElement>(null)
+  const faviconInputRef = useRef<HTMLInputElement>(null)
 
   async function handleAssetUpload(
     file: File | undefined,
@@ -764,6 +766,10 @@ export default function WebsiteWizard(props: WizardProps) {
                     )}
                   </Button>
                 )}
+                <p className="text-xs text-muted-foreground">
+                  PNG, JPG, WEBP or SVG. A wide logo (around 400×140) looks best; crop out blank space.
+                  Your logo replaces the business name in the header.
+                </p>
                 <details className="group">
                   <summary className="cursor-pointer list-none text-xs text-muted-foreground hover:text-foreground">
                     or paste a URL
@@ -776,6 +782,48 @@ export default function WebsiteWizard(props: WizardProps) {
                   />
                 </details>
                 {assetError && <p className="text-xs text-destructive">{assetError}</p>}
+              </div>
+              <div className="space-y-1.5">
+                <Label>Site icon (favicon)</Label>
+                <input
+                  ref={faviconInputRef}
+                  type="file"
+                  accept={ASSET_ACCEPT}
+                  className="hidden"
+                  onChange={(e) => {
+                    handleAssetUpload(e.target.files?.[0], setFaviconUploading, (url) => setTheme({ faviconUrl: url }))
+                    e.target.value = ""
+                  }}
+                />
+                {draft.theme.faviconUrl ? (
+                  <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/40 p-2.5">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={draft.theme.faviconUrl}
+                      alt="Site icon preview"
+                      className="h-8 w-8 rounded bg-white object-contain"
+                    />
+                    <div className="ml-auto flex items-center gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => faviconInputRef.current?.click()} disabled={faviconUploading}>
+                        {faviconUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Replace"}
+                      </Button>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setTheme({ faviconUrl: "" })} disabled={faviconUploading}>
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button type="button" variant="outline" className="w-full" onClick={() => faviconInputRef.current?.click()} disabled={faviconUploading}>
+                    {faviconUploading ? (
+                      <><Loader2 className="h-4 w-4 animate-spin" /> Uploading…</>
+                    ) : (
+                      <><Upload className="h-4 w-4" /> Upload site icon</>
+                    )}
+                  </Button>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  The small icon in the browser tab. Use a square PNG or SVG (at least 64×64). PNG, JPG, WEBP or SVG.
+                </p>
               </div>
             </div>
           )}
