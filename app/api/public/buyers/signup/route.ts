@@ -1,4 +1,4 @@
-import { NextFetchEvent, NextRequest, NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 
 import { deriveProfile, personaBaseTags, type BuyerTypeKey, type PaymentKey, sanitizeLocations, sanitizePropertyTypes } from "@/lib/buyer-taxonomy"
@@ -55,7 +55,7 @@ export async function OPTIONS(request: NextRequest) {
   return new NextResponse(null, { status: 204, headers: corsHeaders(origin) })
 }
 
-export async function POST(request: NextRequest, event: NextFetchEvent) {
+export async function POST(request: NextRequest) {
   const origin = request.headers.get("origin") || ""
   const host = originHost(origin)
   const site = host ? await resolveSiteByHost(host) : null
@@ -83,10 +83,33 @@ export async function POST(request: NextRequest, event: NextFetchEvent) {
 
   try {
     const emailNorm = normalizeEmail(payload.email)
-    let query = supabaseAdmin.from("buyers").select("id,fname,lname,status,tags,locations,property_type,investor,cash_buyer,owner_financing,first_time_buyer,can_receive_sms,is_unsubscribed").eq("phone_norm", phoneE164.replace(/^\+1/, ""))
-    if (emailNorm) query = query.or(`phone_norm.eq.${phoneE164.replace(/^\+1/, "")},email_norm.eq.${emailNorm}`)
-    if (orgId) query = query.eq("org_id", orgId)
-    const { data: existing } = await query.limit(1).maybeSingle()
+    const phoneNorm = phoneE164.replace(/^\+1/, "")
+
+    const DEDUP_COLS =
+      "id,org_id,fname,lname,status,tags,locations,property_type,investor,cash_buyer,owner_financing,first_time_buyer,can_receive_sms,is_unsubscribed"
+
+    // Dedup MUST be matched at the SAME scope as the unique indexes on buyers.
+    // buyers_email_norm_idx and buyers_phone_norm_idx are GLOBAL (cross-org)
+    // unique indexes, so this lookup is intentionally NOT org-scoped. A lead is
+    // a duplicate if it matches an existing row by phone_norm OR email_norm.
+    // NOTE: if those indexes are ever migrated to org-scoped partial unique
+    // indexes on (org_id, *), this lookup MUST add .eq("org_id", orgId).
+    const orParts = [`phone_norm.eq.${phoneNorm}`]
+    if (emailNorm) orParts.push(`email_norm.eq.${emailNorm}`)
+    const orFilter = orParts.join(",")
+
+    async function findExistingBuyer() {
+      const { data, error } = await supabaseAdmin
+        .from("buyers")
+        .select(DEDUP_COLS)
+        .or(orFilter)
+        .limit(1)
+        .maybeSingle()
+      if (error) console.error("[public-buyers-signup] dedup lookup error", error)
+      return data
+    }
+
+    const existing = await findExistingBuyer()
 
     const isNewBuyer = !existing?.id
     if (isNewBuyer) {
@@ -127,26 +150,71 @@ export async function POST(request: NextRequest, event: NextFetchEvent) {
 
     let buyerId = ""
     let sendSms = true
-    if (existing?.id) {
+
+    // Merge-update an already-existing buyer row. IMPORTANT: never overwrite
+    // org_id — a cross-org global-unique match must stay owned by its original
+    // org rather than being reassigned to the current tenant.
+    async function updateExistingBuyer(row: {
+      id: string
+      tags?: string[] | null
+      locations?: string[] | null
+      property_type?: string[] | null
+      investor?: boolean | null
+      cash_buyer?: boolean | null
+      owner_financing?: boolean | null
+      first_time_buyer?: boolean | null
+    }) {
+      const { org_id: _omitOrgId, ...commonNoOrg } = common
       const updates: Record<string, any> = {
-        ...common,
-        tags: mergeUnique(existing.tags || [], common.tags || []) ?? [],
-        locations: mergeUnique(existing.locations || [], common.locations || []) ?? [],
-        property_type: mergeUnique(existing.property_type || [], common.property_type || []) ?? [],
-        investor: Boolean(existing.investor) || common.investor,
-        cash_buyer: Boolean(existing.cash_buyer) || common.cash_buyer,
-        owner_financing: Boolean(existing.owner_financing) || common.owner_financing,
-        first_time_buyer: Boolean(existing.first_time_buyer) || common.first_time_buyer,
+        ...commonNoOrg,
+        tags: mergeUnique(row.tags || [], common.tags || []) ?? [],
+        locations: mergeUnique(row.locations || [], common.locations || []) ?? [],
+        property_type: mergeUnique(row.property_type || [], common.property_type || []) ?? [],
+        investor: Boolean(row.investor) || common.investor,
+        cash_buyer: Boolean(row.cash_buyer) || common.cash_buyer,
+        owner_financing: Boolean(row.owner_financing) || common.owner_financing,
+        first_time_buyer: Boolean(row.first_time_buyer) || common.first_time_buyer,
       }
-      const { data: updated, error } = await supabaseAdmin.from("buyers").update(updates).eq("id", existing.id).select("id,can_receive_sms,is_unsubscribed").single()
+      const { data: updated, error } = await supabaseAdmin
+        .from("buyers")
+        .update(updates)
+        .eq("id", row.id)
+        .select("id,can_receive_sms,is_unsubscribed")
+        .single()
       if (error || !updated) throw error || new Error("Update failed")
       buyerId = updated.id
       sendSms = updated.can_receive_sms !== false && updated.is_unsubscribed !== true
+    }
+
+    if (existing?.id) {
+      await updateExistingBuyer(existing)
     } else {
-      const { data: inserted, error } = await supabaseAdmin.from("buyers").insert(common).select("id,can_receive_sms,is_unsubscribed").single()
-      if (error || !inserted) throw error || new Error("Insert failed")
-      buyerId = inserted.id
-      sendSms = inserted.can_receive_sms !== false && inserted.is_unsubscribed !== true
+      const { data: inserted, error } = await supabaseAdmin
+        .from("buyers")
+        .insert(common)
+        .select("id,can_receive_sms,is_unsubscribed")
+        .single()
+      if (error) {
+        // 23505 = unique_violation. A duplicate the proactive dedup did not catch
+        // (race, or matched on a column the OR did not cover) collided with a
+        // GLOBAL unique index. Recover by re-looking-up and updating instead of
+        // returning a 500.
+        if ((error as any)?.code === "23505") {
+          const dup = await findExistingBuyer()
+          if (dup?.id) {
+            await updateExistingBuyer(dup)
+          } else {
+            throw error
+          }
+        } else {
+          throw error
+        }
+      } else if (!inserted) {
+        throw new Error("Insert failed")
+      } else {
+        buyerId = inserted.id
+        sendSms = inserted.can_receive_sms !== false && inserted.is_unsubscribed !== true
+      }
     }
 
     await supabaseAdmin.from("buyer_consents").insert({
@@ -167,10 +235,19 @@ export async function POST(request: NextRequest, event: NextFetchEvent) {
     // welcome SMS on the legacy/static path (no resolved builder site). Tenant
     // welcome SMS will be enabled once sending is org-scoped (later phase).
     const welcomeMessage = site ? welcomeText(brandName) : WELCOME_TEXT
-    if (sendSms && !site) event.waitUntil(sendWelcomeSms(buyerId, phoneE164, welcomeMessage))
+    if (sendSms && !site) {
+      // Awaited (not deferred): App Router route handlers have no waitUntil. A
+      // Telnyx failure must never fail the signup, so it is fully guarded.
+      try {
+        await sendWelcomeSms(buyerId, phoneE164, welcomeMessage)
+      } catch (smsError) {
+        console.error("[public-buyers-signup] welcome sms failed", smsError)
+      }
+    }
 
-    // First-party analytics: record a 'lead' event. Fire-and-forget via
-    // waitUntil so it never delays the response, and never throws.
+    // First-party analytics: record a 'lead' event. Awaited (App Router route
+    // handlers have no waitUntil); the body swallows its own errors so it never
+    // throws and never fails the signup.
     if (orgId) {
       let leadPath: string | null = null
       try {
@@ -178,25 +255,23 @@ export async function POST(request: NextRequest, event: NextFetchEvent) {
       } catch {
         /* ignore malformed source_url */
       }
-      event.waitUntil(
-        (async () => {
-          try {
-            await supabaseAdmin.from("site_events").insert({
-              site_id: site?.id ?? null,
-              org_id: orgId,
-              type: "lead",
-              path: leadPath,
-              referrer: null,
-              utm_source: payload.utm?.utm_source ?? null,
-              utm_medium: payload.utm?.utm_medium ?? null,
-              utm_campaign: payload.utm?.utm_campaign ?? null,
-              visitor_id: null,
-            })
-          } catch {
-            /* never throw from analytics */
-          }
-        })(),
-      )
+      await (async () => {
+        try {
+          await supabaseAdmin.from("site_events").insert({
+            site_id: site?.id ?? null,
+            org_id: orgId,
+            type: "lead",
+            path: leadPath,
+            referrer: null,
+            utm_source: payload.utm?.utm_source ?? null,
+            utm_medium: payload.utm?.utm_medium ?? null,
+            utm_campaign: payload.utm?.utm_campaign ?? null,
+            visitor_id: null,
+          })
+        } catch {
+          /* never throw from analytics */
+        }
+      })()
     }
 
     return NextResponse.json({ ok: true, buyer_id: buyerId, is_new_buyer: isNewBuyer }, { headers: corsHeaders(origin) })
