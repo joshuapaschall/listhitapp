@@ -63,7 +63,7 @@ function seedContent(name: string, persona: SitePersona): WizardContent {
   const brand = name || "Your Company"
   return {
     brandName: brand,
-    phone: "(555) 555-5555",
+    phone: "",
     headline: p.headline,
     subhead: p.subhead,
     ctaLabel: p.ctaLabel,
@@ -157,11 +157,19 @@ export default function WebsiteWizard(props: WizardProps) {
         const res = await fetch("/api/onboarding/site-defaults")
         if (!res.ok) return
         const data = await res.json()
-        setDraft((d) => ({
-          ...d,
-          name: d.name || data.name || "",
-          business: { ...d.business, ...(data.business || {}) },
-        }))
+        setDraft((d) => {
+          const name = d.name || data.name || ""
+          return {
+            ...d,
+            name,
+            content: {
+              ...d.content,
+              brandName: name || d.content.brandName,
+              footerText: name ? `© ${name}. All rights reserved.` : d.content.footerText,
+            },
+            business: { ...d.business, ...(data.business || {}) },
+          }
+        })
       } catch {
         /* non-blocking: prefill is best-effort */
       }
