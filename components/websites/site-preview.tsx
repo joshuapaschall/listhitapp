@@ -37,9 +37,17 @@ export function SitePreview({ templateId, persona, theme, content, business, mar
   const [previewPath, setPreviewPath] = useState("/")
   const scrollRef = useRef<HTMLDivElement>(null)
 
+  const effectiveContent = useMemo(
+    () => ({
+      ...content,
+      phone: content.phone?.trim() ? content.phone : (business.phone || ""),
+    }),
+    [content, business],
+  )
+
   const composedHome = useMemo(
-    () => composePreview(templateId, persona, theme, content, navPages),
-    [templateId, persona, theme, content, navPages],
+    () => composePreview(templateId, persona, theme, effectiveContent, navPages),
+    [templateId, persona, theme, effectiveContent, navPages],
   )
 
   // Build the same form context the published site uses, so the preview shows
