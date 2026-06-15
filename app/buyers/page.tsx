@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { supabase } from "@/lib/supabase"
@@ -71,7 +71,7 @@ import { Can } from "@/components/auth/Can"
 import { usePermissions } from "@/hooks/use-permissions"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { PROPERTY_TYPES } from "@/lib/constant"
+import { PROPERTY_TYPE_GROUPS } from "@/lib/constant"
 import { saveAudienceSnapshot } from "@/lib/campaign-audience"
 import CampaignChannelPicker from "@/components/campaigns/campaign-channel-picker"
 
@@ -1233,10 +1233,15 @@ function BuyersPageContent() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="any">Any property type</SelectItem>
-                      {PROPERTY_TYPES.map((type: string) => (
-                        <SelectItem key={type} value={type}>
-                          {type}
-                        </SelectItem>
+                      {PROPERTY_TYPE_GROUPS.map((g) => (
+                        <SelectGroup key={g.label}>
+                          <SelectLabel>{g.label}</SelectLabel>
+                          {g.types.map((type: string) => (
+                            <SelectItem key={type} value={type}>
+                              {type}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
                       ))}
                     </SelectContent>
                   </Select>
