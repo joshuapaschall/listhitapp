@@ -91,4 +91,58 @@ describe("public buyers signup", () => {
     const externalCallsFinal = fetchMock.mock.calls.filter((c: any[]) => String(c[0]).includes("number_lookup") || String(c[0]).includes("debounce.io")).length
     expect(externalCallsFinal).toBe(externalCallsAfterInsert)
   })
+
+  // Step 1 carries both consent booleans; the base `payload` (no consent keys)
+  // stands in for a Step-2 profile re-submit.
+  const step1 = { ...payload, marketing_consent: true, nonmarketing_consent: true }
+  const step1NoSms = { ...payload, marketing_consent: false, nonmarketing_consent: true }
+
+  test("affirmative SMS marketing consent marks the lead textable", async () => {
+    await POST(mkReq(step1), { waitUntil: (p: Promise<any>) => p } as any)
+    expect(buyers[0].can_receive_sms).toBe(true)
+  })
+
+  test("unchecked SMS marketing consent leaves the lead not textable", async () => {
+    await POST(mkReq(step1NoSms), { waitUntil: (p: Promise<any>) => p } as any)
+    expect(buyers[0].can_receive_sms).toBe(false)
+  })
+
+  test("Step 2 re-submit writes no second consent row", async () => {
+    await POST(mkReq(step1), { waitUntil: (p: Promise<any>) => p } as any)
+    expect(consents.length).toBe(1)
+    // Step 2 omits the consent booleans entirely → no consent event recorded.
+    const res = await POST(mkReq(payload), { waitUntil: (p: Promise<any>) => p } as any)
+    expect((await res.json()).is_new_buyer).toBe(false)
+    expect(buyers.length).toBe(1)
+    expect(consents.length).toBe(1)
+  })
+
+  test("re-submit does not re-subscribe, demote, or re-attribute an existing buyer", async () => {
+    await POST(mkReq(step1), { waitUntil: (p: Promise<any>) => p } as any)
+    // The buyer later opts out and is advanced/re-sourced by other systems.
+    Object.assign(buyers[0], {
+      can_receive_sms: false,
+      can_receive_email: false,
+      is_unsubscribed: true,
+      status: "active",
+      source: "manual_import",
+    })
+    await POST(mkReq(step1), { waitUntil: (p: Promise<any>) => p } as any)
+    expect(buyers.length).toBe(1)
+    expect(buyers[0].can_receive_sms).toBe(false)
+    expect(buyers[0].can_receive_email).toBe(false)
+    expect(buyers[0].is_unsubscribed).toBe(true)
+    expect(buyers[0].status).toBe("active")
+    expect(buyers[0].source).toBe("manual_import")
+  })
+
+  test("re-submit without a price band preserves a previously-saved range", async () => {
+    await POST(mkReq({ ...step1, asking_price_min: 100000, asking_price_max: 200000 }), { waitUntil: (p: Promise<any>) => p } as any)
+    expect(buyers[0].asking_price_min).toBe(100000)
+    expect(buyers[0].asking_price_max).toBe(200000)
+    // Step 2 carries no price band → saved range must survive.
+    await POST(mkReq(payload), { waitUntil: (p: Promise<any>) => p } as any)
+    expect(buyers[0].asking_price_min).toBe(100000)
+    expect(buyers[0].asking_price_max).toBe(200000)
+  })
 })
