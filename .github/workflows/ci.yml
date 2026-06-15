@@ -18,7 +18,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # pnpm 11 requires Node >= 22.13 (it uses the node:sqlite builtin).
+          # 22 is within the engines range (>=18.17 <23) and matches local dev.
+          node-version: 22
           cache: pnpm
 
       - name: Install dependencies
