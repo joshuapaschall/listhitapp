@@ -78,7 +78,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ count, sample })
   } catch (err: any) {
     if (err instanceof SegmentContextError) {
-      return apiError(err, 400)
+      // This is deliberate, user-facing guidance (e.g. "can only be previewed
+      // inside a campaign"), not a leaky internal error — surface its message.
+      return apiError(err, 400, err.message)
     }
     log.error("preview failed", err)
     return NextResponse.json({ error: err?.message || "error" }, { status: 500 })

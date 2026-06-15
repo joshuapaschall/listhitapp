@@ -212,6 +212,8 @@ const createSupabaseClient = () => ({
             maybeSingle: async () => ({ data: null, error: null }),
           }),
         }),
+        // recordStickyFrom upserts the sticky from-number on the success path.
+        upsert: async () => ({ data: null, error: null }),
       }
     }
     if (table === "buyers") {

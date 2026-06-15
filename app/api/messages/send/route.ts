@@ -275,7 +275,13 @@ export async function POST(request: NextRequest) {
 
     return new Response(JSON.stringify({ sid: data.id }), { status: 200 })
   } catch (err: any) {
+    // Surface the failure reason: DB errors are already generic ("Database
+    // error"), and a provider send failure (e.g. a carrier rejection) is
+    // actionable for the sender. This route is auth'd + permission-gated.
     console.error("Failed to send message", err)
-    return apiError(err, 500)
+    return new Response(
+      JSON.stringify({ error: err?.message || "Failed to send message" }),
+      { status: 500 },
+    )
   }
 }
