@@ -133,7 +133,10 @@ export async function POST(request: NextRequest) {
       phone: normalizePhone(payload.phone),
       source: "website_signup",
       status: "lead",
-      can_receive_sms: true,
+      // The SMS marketing audience is gated on can_receive_sms (see
+      // lib/segments/eligibility.ts). Only mark a lead textable when they
+      // affirmatively gave SMS marketing consent on Step 1 — never default true.
+      can_receive_sms: payload.marketing_consent === true,
       can_receive_email: true,
       is_unsubscribed: false,
       asking_price_min: payload.asking_price_min ?? null,
@@ -164,7 +167,22 @@ export async function POST(request: NextRequest) {
       owner_financing?: boolean | null
       first_time_buyer?: boolean | null
     }) {
-      const { org_id: _omitOrgId, ...commonNoOrg } = common
+      // INSERT-only fields: never overwrite subscription state, lifecycle status,
+      // or original attribution on a re-submit. A returning (or maliciously
+      // re-entered) contact must not be silently re-subscribed, demoted to
+      // "lead", or have its source erased. Opt-out/suppression is owned by the
+      // STOP webhook (lib/sms/suppress.ts), not this public form.
+      const {
+        org_id: _omitOrgId,
+        source: _omitSource,
+        status: _omitStatus,
+        can_receive_sms: _omitSms,
+        can_receive_email: _omitEmail,
+        is_unsubscribed: _omitUnsub,
+        asking_price_min: _omitPriceMin,
+        asking_price_max: _omitPriceMax,
+        ...commonNoOrg
+      } = common
       const updates: Record<string, any> = {
         ...commonNoOrg,
         tags: mergeUnique(row.tags || [], common.tags || []) ?? [],
@@ -175,15 +193,19 @@ export async function POST(request: NextRequest) {
         owner_financing: Boolean(row.owner_financing) || common.owner_financing,
         first_time_buyer: Boolean(row.first_time_buyer) || common.first_time_buyer,
       }
+      // Only set the buyer's target price range when they actually picked a band
+      // on this submit; never null out a previously-saved range.
+      if (payload.asking_price_min != null) updates.asking_price_min = payload.asking_price_min
+      if (payload.asking_price_max != null) updates.asking_price_max = payload.asking_price_max
       const { data: updated, error } = await supabaseAdmin
         .from("buyers")
         .update(updates)
         .eq("id", row.id)
-        .select("id,can_receive_sms,is_unsubscribed")
+        .select("id,can_receive_sms,is_unsubscribed,sms_suppressed")
         .single()
       if (error || !updated) throw error || new Error("Update failed")
       buyerId = updated.id
-      sendSms = updated.can_receive_sms !== false && updated.is_unsubscribed !== true
+      sendSms = updated.can_receive_sms !== false && updated.is_unsubscribed !== true && updated.sms_suppressed !== true
     }
 
     if (existing?.id) {
@@ -192,7 +214,7 @@ export async function POST(request: NextRequest) {
       const { data: inserted, error } = await supabaseAdmin
         .from("buyers")
         .insert(common)
-        .select("id,can_receive_sms,is_unsubscribed")
+        .select("id,can_receive_sms,is_unsubscribed,sms_suppressed")
         .single()
       if (error) {
         // 23505 = unique_violation. A duplicate the proactive dedup did not catch
@@ -213,21 +235,29 @@ export async function POST(request: NextRequest) {
         throw new Error("Insert failed")
       } else {
         buyerId = inserted.id
-        sendSms = inserted.can_receive_sms !== false && inserted.is_unsubscribed !== true
+        sendSms = inserted.can_receive_sms !== false && inserted.is_unsubscribed !== true && inserted.sms_suppressed !== true
       }
     }
 
-    await supabaseAdmin.from("buyer_consents").insert({
-      buyer_id: buyerId,
-      consent_text: payload.consent_text,
-      marketing_consent: payload.marketing_consent ?? false,
-      nonmarketing_consent: payload.nonmarketing_consent ?? false,
-      source: "website_signup",
-      source_url: payload.source_url || null,
-      ip_address: ip,
-      user_agent: request.headers.get("user-agent") || null,
-      ...(orgId ? { org_id: orgId } : {}),
-    })
+    // Only record a consent event when this submit actually carries consent
+    // answers. Step 1 always sends both booleans; Step 2 omits them entirely.
+    // Without this guard, every Step-2 profile submit writes a second, false
+    // "no consent" row that supersedes the truthful Step-1 record as the latest.
+    const carriesConsent =
+      payload.marketing_consent !== undefined || payload.nonmarketing_consent !== undefined
+    if (carriesConsent) {
+      await supabaseAdmin.from("buyer_consents").insert({
+        buyer_id: buyerId,
+        consent_text: payload.consent_text,
+        marketing_consent: payload.marketing_consent ?? false,
+        nonmarketing_consent: payload.nonmarketing_consent ?? false,
+        source: "website_signup",
+        source_url: payload.source_url || null,
+        ip_address: ip,
+        user_agent: request.headers.get("user-agent") || null,
+        ...(orgId ? { org_id: orgId } : {}),
+      })
+    }
 
     // resolveFromNumber() is NOT org-scoped: for a brand-new lead it falls back
     // to the global DEFAULT_OUTBOUND_DID (the legacy/platform number). Texting a
