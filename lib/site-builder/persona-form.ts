@@ -38,10 +38,10 @@ export const PERSONA_FORM_CONFIG: Record<SitePersona, PersonaFormConfig> = {
   cash:       { showBuyerTypes: true,  buyerTypeKeys: ALL_BT, showPayments: true,  paymentKeys: ALL_PAY, propertyTypes: [], buyerTypeQuestion: "What kind of buyer are you?" },
   investor:   { showBuyerTypes: true,  buyerTypeKeys: ["fix_flip","buy_hold","developer"], showPayments: true, paymentKeys: ALL_PAY, propertyTypes: [], buyerTypeQuestion: "What's your strategy?" },
   rto:        { showBuyerTypes: false, buyerTypeKeys: [], showPayments: false, paymentKeys: [], propertyTypes: ["Single Family","Townhouse","Condo"], buyerTypeQuestion: "" },
-  owner:      { showBuyerTypes: false, buyerTypeKeys: [], showPayments: false, paymentKeys: [], propertyTypes: [], buyerTypeQuestion: "" },
+  owner:      { showBuyerTypes: true,  buyerTypeKeys: ["fix_flip","buy_hold","first_time"], showPayments: false, paymentKeys: [], propertyTypes: [], buyerTypeQuestion: "How will you use the property?" },
   creative:   { showBuyerTypes: true,  buyerTypeKeys: ["fix_flip","buy_hold"], showPayments: false, paymentKeys: [], propertyTypes: [], buyerTypeQuestion: "What's your strategy?" },
-  land:       { showBuyerTypes: false, buyerTypeKeys: [], showPayments: true,  paymentKeys: ["cash","hard_money"], propertyTypes: ["Land"], buyerTypeQuestion: "" },
-  commercial: { showBuyerTypes: true,  buyerTypeKeys: ["buy_hold","developer"], showPayments: true, paymentKeys: ["cash","hard_money"], propertyTypes: ["Commercial","Multi-Family"], buyerTypeQuestion: "What do you invest in?" },
+  land:       { showBuyerTypes: true,  buyerTypeKeys: ["developer","buy_hold"], showPayments: true,  paymentKeys: ["cash","hard_money","creative_finance"], propertyTypes: ["Land"], buyerTypeQuestion: "What kind of land buyer are you?" },
+  commercial: { showBuyerTypes: true,  buyerTypeKeys: ["buy_hold","developer"], showPayments: true, paymentKeys: ["cash","hard_money"], propertyTypes: ["Commercial","Office","Retail","Industrial","Mixed-Use","Multi-Family"], buyerTypeQuestion: "What do you invest in?" },
   agent:      { showBuyerTypes: true,  buyerTypeKeys: ALL_BT, showPayments: true,  paymentKeys: ALL_PAY, propertyTypes: [], buyerTypeQuestion: "What kind of buyer are you?" },
 }
 

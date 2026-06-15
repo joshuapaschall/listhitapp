@@ -15,7 +15,7 @@ export const PERSONA_BASE_TAGS: Record<SitePersona, string[]> = {
   creative: ["Creative Finance"],
   land: ["Investor"],
   commercial: ["Investor", "Commercial"],
-  agent: [],
+  agent: ["Agent"],
 }
 
 export function personaBaseTags(persona: SitePersona | undefined): string[] {
