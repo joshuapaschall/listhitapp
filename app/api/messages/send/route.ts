@@ -9,6 +9,12 @@ import { getTelnyxApiKey } from "@/lib/voice-env"
 import { resolveOutboundFrom, recordStickyFrom } from "@/lib/sender/sticky-sender"
 import { resolveSmsProvider } from "@/lib/providers/sms"
 
+// Errors whose message is safe to surface to the (authed, permission-gated)
+// operator — sanitized "Database error" strings and provider/carrier rejection
+// reasons. Anything else caught at the bottom is genericized so vendor names or
+// stack details never reach the client.
+class ClientSafeError extends Error {}
+
 export async function POST(request: NextRequest) {
   const { user, orgId, supabase } = await requireOrgContext()
   if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 })
@@ -154,7 +160,11 @@ export async function POST(request: NextRequest) {
     })
 
   try {
-    const data = await scheduleSMS(carrier, body, sendRequest)
+    const data = await scheduleSMS(carrier, body, sendRequest).catch((sendErr: any) => {
+      // Provider/carrier rejection (e.g. "Carrier violation") is actionable for
+      // the operator; re-throw as client-safe so the catch below surfaces it.
+      throw new ClientSafeError(sendErr?.message || "Message could not be sent")
+    })
 
     // Ensure the thread exists. The sticky from-number (preferred_from_number) is
     // written once, by recordStickyFrom below — the single source of truth.
@@ -166,7 +176,10 @@ export async function POST(request: NextRequest) {
           .eq("id", thread.id)
           .select("id, preferred_from_number")
           .single()
-        if (error || !data) throw error || new Error("Thread update failed")
+        if (error || !data) {
+          console.error("Thread update failed", error)
+          throw new ClientSafeError("Database error")
+        }
         thread = data
         return data
       }
@@ -212,7 +225,10 @@ export async function POST(request: NextRequest) {
               row = upd.data
             }
           }
-          if (!row) throw insertRes.error || new Error("Thread upsert failed")
+          if (!row) {
+            console.error("Anon thread upsert failed", insertRes.error)
+            throw new ClientSafeError("Database error")
+          }
         }
 
         thread = {
@@ -238,7 +254,7 @@ export async function POST(request: NextRequest) {
         .single()
       if (res.error || !res.data) {
         console.error("Thread upsert failed", res.error)
-        throw new Error("Database error")
+        throw new ClientSafeError("Database error")
       }
       thread = res.data
       return res.data
@@ -275,13 +291,12 @@ export async function POST(request: NextRequest) {
 
     return new Response(JSON.stringify({ sid: data.id }), { status: 200 })
   } catch (err: any) {
-    // Surface the failure reason: DB errors are already generic ("Database
-    // error"), and a provider send failure (e.g. a carrier rejection) is
-    // actionable for the sender. This route is auth'd + permission-gated.
+    // Only surface messages explicitly marked client-safe (sanitized DB errors,
+    // provider/carrier rejection reasons). Anything else is an unexpected
+    // internal error and is genericized so vendor names or stack details never
+    // reach the client. Full error is logged server-side.
     console.error("Failed to send message", err)
-    return new Response(
-      JSON.stringify({ error: err?.message || "Failed to send message" }),
-      { status: 500 },
-    )
+    const message = err instanceof ClientSafeError ? err.message : "Failed to send message"
+    return new Response(JSON.stringify({ error: message }), { status: 500 })
   }
 }

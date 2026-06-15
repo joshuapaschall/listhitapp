@@ -37,7 +37,7 @@ import SortableImageGrid, { type ImageItem } from "@/components/properties/sorta
 import { PropertyService } from "@/services/property-service";
 import { BuyerService } from "@/services/buyer-service";
 import type { Buyer } from "@/lib/supabase";
-import { PROPERTY_TYPES } from "@/lib/constant";
+import { PROPERTY_TYPE_GROUPS } from "@/lib/constant";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -47,7 +47,9 @@ import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -612,7 +614,14 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
                 <Label className="text-sm">Property type</Label>
                 <Select value={form.property_type} onValueChange={(v) => handleChange("property_type", v)}>
                   <SelectTrigger className="h-9"><SelectValue placeholder="Select property type" /></SelectTrigger>
-                  <SelectContent>{PROPERTY_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                  <SelectContent>
+                    {PROPERTY_TYPE_GROUPS.map((g) => (
+                      <SelectGroup key={g.label}>
+                        <SelectLabel>{g.label}</SelectLabel>
+                        {g.types.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                      </SelectGroup>
+                    ))}
+                  </SelectContent>
                 </Select>
               </div>
               <div className="grid grid-cols-3 gap-3">
