@@ -117,6 +117,9 @@ describe("telnyx voice webhook", () => {
     startVoicemailMock.mockClear()
     process.env.TELNYX_API_KEY = "test-key"
     process.env.FALLBACK_AGENT_SIP_USERNAME = "fallback_agent"
+    // The route verifies the Telnyx Ed25519 signature before processing; bypass
+    // it in tests (these requests carry no signature header).
+    process.env.SKIP_TELNYX_SIG = "1"
   })
 
   afterAll(() => {
@@ -124,6 +127,7 @@ describe("telnyx voice webhook", () => {
     global.fetch = originalFetch
     delete process.env.TELNYX_API_KEY
     delete process.env.FALLBACK_AGENT_SIP_USERNAME
+    delete process.env.SKIP_TELNYX_SIG
   })
 
   test("ignores non initiated events", async () => {

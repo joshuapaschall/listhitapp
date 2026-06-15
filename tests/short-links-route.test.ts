@@ -3,6 +3,11 @@ import { beforeEach, describe, expect, test, vi } from "vitest"
 
 const createMock = vi.fn()
 
+// Creating short links now requires an authenticated session via requireOrgContext.
+vi.mock("@/lib/auth/org-context", () => ({
+  requireOrgContext: vi.fn(async () => ({ user: { id: "u1" }, orgId: "org1", supabase: {} })),
+}))
+
 vi.mock("../services/shortlink-service", () => ({
   createShortLink: (...args: unknown[]) => createMock(...args),
 }))
@@ -13,6 +18,9 @@ beforeEach(async () => {
   vi.resetModules()
   createMock.mockReset()
   process.env.SHORT_LINK_DEFAULT_DOMAIN = "go.example.com"
+  vi.doMock("@/lib/auth/org-context", () => ({
+    requireOrgContext: vi.fn(async () => ({ user: { id: "u1" }, orgId: "org1", supabase: {} })),
+  }))
   vi.doMock("../services/shortlink-service", () => ({
     createShortLink: (...args: unknown[]) => createMock(...args),
   }))

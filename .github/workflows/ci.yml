@@ -11,13 +11,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # No `version` here on purpose: the action reads the pinned pnpm version
+      # from package.json's `packageManager` field. Specifying both errors with
+      # ERR_PNPM_BAD_PM_VERSION on a mismatch.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10.4.0
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # pnpm 11 requires Node >= 22.13 (it uses the node:sqlite builtin).
+          # 22 is within the engines range (>=18.17 <23) and matches local dev.
+          node-version: 22
           cache: pnpm
 
       - name: Install dependencies

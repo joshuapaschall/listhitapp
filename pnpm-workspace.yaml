@@ -1,0 +1,7 @@
+allowBuilds:
+  core-js-pure: false
+  cypress: true
+  esbuild: true
+  ffmpeg-static: true
+  msw: true
+  unrs-resolver: true

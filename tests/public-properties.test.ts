@@ -151,11 +151,26 @@ function createPropertyImagesQuery() {
   return q
 }
 
+// Sessionless site resolution (resolveSiteByHost) scopes public properties by
+// org: site_domains maps the request host → site_id, then sites yields the org.
+// The list route applies .eq("org_id", ...) and the detail route REQUIRES a
+// resolved site (404 otherwise), so resolve a canned site here. applyFilters
+// ignores org_id/show_on_site, so the list filtering assertions are unaffected.
+function createSiteResolutionQuery(table: string) {
+  const result =
+    table === "site_domains"
+      ? { data: { site_id: "s1" }, error: null }
+      : { data: { id: "s1", org_id: "org1", status: "published" }, error: null }
+  const q: any = { select: () => q, eq: () => q, maybeSingle: async () => result }
+  return q
+}
+
 vi.mock("@/lib/supabase/admin", () => ({
   supabaseAdmin: {
     from: (table: string) => {
       if (table === "properties") return { select: (columns: string, options?: any) => createPropertiesQuery(columns, options) }
       if (table === "property_images") return { select: () => createPropertyImagesQuery() }
+      if (table === "site_domains" || table === "sites") return createSiteResolutionQuery(table)
       throw new Error(`Unexpected table: ${table}`)
     },
   },

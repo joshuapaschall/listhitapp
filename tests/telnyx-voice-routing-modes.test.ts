@@ -102,6 +102,9 @@ describe("telnyx voice routing modes", () => {
     h.upsertMock.mockClear();
     h.maybeSingleMock.mockClear();
     process.env.TELNYX_API_KEY = "test-key";
+    // The route verifies the Telnyx Ed25519 signature before processing; bypass
+    // it in tests (these requests carry no signature header).
+    process.env.SKIP_TELNYX_SIG = "1";
   });
 
   test("forwarding_only transfers to forwarding number using DID as from", async () => {

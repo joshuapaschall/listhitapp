@@ -27,6 +27,13 @@ const supabaseAdmin = {
       }
     }
     if (table === "buyer_consents") return { insert: async (data: any) => { consents.push(data); return { data, error: null } } }
+    // resolveSiteByHost queries site_domains/sites to scope the lead to an org.
+    // georgiawholesalehomes.com is treated as a static/legacy origin, so no site
+    // need resolve — return no match and the route falls back to the default org.
+    if (table === "site_domains" || table === "sites") {
+      const q: any = { select: () => q, eq: () => q, maybeSingle: async () => ({ data: null, error: null }) }
+      return q
+    }
     throw new Error("Unexpected table " + table)
   },
 }
