@@ -10,6 +10,7 @@ const INK = "#0f1b29"
 const MUT = "#5a6675"
 const LINE = "#e8ebf1"
 const CHIP_BORDER = "#d9dee6"
+const MAX_LOCATIONS = 60 // matches the public signup server cap
 
 function classify(s: string): string {
   if (/,\s*USA\s*$/i.test(s)) return "State"
@@ -63,14 +64,17 @@ export function LocationPicker({
   }, [query])
 
   const add = (loc: string) => {
+    if (value.length >= MAX_LOCATIONS) return
     if (!value.includes(loc)) onChange([...value, loc])
     setQuery("")
     setResults([])
   }
   const remove = (loc: string) => onChange(value.filter((l) => l !== loc))
 
-  const helper =
-    value.length > 0
+  const atMax = value.length >= MAX_LOCATIONS
+  const helper = atMax
+    ? `You've added the maximum of ${MAX_LOCATIONS} areas. Remove one to add another.`
+    : value.length > 0
       ? `${value.length} added · keep adding as many as you'd like.`
       : "Start typing — a state, county, or city. Add as many as you want."
 
