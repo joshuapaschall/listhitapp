@@ -4,7 +4,6 @@ import { useSearchParams } from "next/navigation"
 import { themeToCssVars } from "@/lib/site-builder/theme"
 import { SiteFonts } from "@/components/sites/site-fonts"
 import type { SiteTheme } from "@/lib/site-builder/types"
-import { siteImage } from "@/lib/site-builder/image-url"
 
 const INK = "#0f1b29"
 const MUT = "#5a6675"
@@ -20,7 +19,7 @@ const STEPS = [
 function BrandLockup({ logoUrl, brandName }: { logoUrl?: string; brandName: string }) {
   if (logoUrl) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={siteImage(logoUrl, { width: 400, quality: 90 })} alt={brandName} style={{ height: 30, maxHeight: 30, width: "auto", maxWidth: 170, objectFit: "contain", display: "block" }} />
+    return <img src={logoUrl} alt={brandName} style={{ height: 30, maxHeight: 30, width: "auto", maxWidth: 170, objectFit: "contain", display: "block" }} />
   }
   return <span style={{ fontFamily: "var(--head)", fontWeight: 800, fontSize: 17, color: "var(--p)" }}>{brandName}</span>
 }

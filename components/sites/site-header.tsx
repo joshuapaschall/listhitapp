@@ -2,7 +2,6 @@
 
 import React, { useState } from "react"
 import { WRAP } from "@/lib/site-builder/blocks/primitives"
-import { siteImage } from "@/lib/site-builder/image-url"
 
 // THE single header for every published page (home/Puck pages via the Nav block,
 // and every reserved page directly). Brand + canonical links + phone + "Get deals"
@@ -57,7 +56,7 @@ export function SiteHeader({
           {logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={siteImage(logoUrl, { width: 400, quality: 90 })}
+              src={logoUrl}
               alt={brandName}
               style={{ height: 34, maxHeight: 34, width: "auto", maxWidth: 190, objectFit: "contain", display: "block" }}
             />
