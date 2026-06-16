@@ -316,7 +316,7 @@ export function BuyerProfilePage({
           <div style={{ width: "92%", height: "100%", background: "var(--a)" }} />
         </div>
 
-        <div style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--a)" }}>
+        <div style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--a-ink-light)" }}>
           Last step · 30 seconds
         </div>
         <h1 style={{ fontFamily: "var(--head)", fontSize: 26, fontWeight: 800, color: "var(--p)", margin: "8px 0 8px", letterSpacing: "-.01em", lineHeight: 1.14 }}>
@@ -329,7 +329,7 @@ export function BuyerProfilePage({
         <div style={{ display: "inline-flex", alignItems: "center", gap: 8, marginTop: 14, padding: "8px 13px", borderRadius: 999, background: "#fff", border: `1px solid ${LINE}`, fontSize: 12.5, color: MUT, flexWrap: "wrap" }}>
           <span style={{ color: "#1d9e75", display: "inline-flex" }}><IconCircleCheck /></span>
           <span>Sending to {maskPhone(lead.phone || "")} &amp; {maskEmail(lead.email || "")}</span>
-          <span role="button" onClick={editContact} style={{ cursor: "pointer", fontWeight: 600, color: "var(--a)", textDecoration: "underline" }}>Edit</span>
+          <span role="button" onClick={editContact} style={{ cursor: "pointer", fontWeight: 600, color: "var(--a-ink-light)", textDecoration: "underline" }}>Edit</span>
         </div>
 
         {showBuyer && (

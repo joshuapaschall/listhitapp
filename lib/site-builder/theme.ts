@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react"
 import type { SiteTheme } from "./types"
-import { readableTextOn } from "./contrast"
+import { readableTextOn, readableAccentText } from "./contrast"
 
 // Map a SiteTheme to the CSS custom properties consumed by the block library.
 // --p (primary), --a (accent), --head (heading font), --body (body font).
@@ -13,6 +13,7 @@ export function themeToCssVars(
     ["--a" as any]: theme.accent,
     ["--p-ink" as any]: readableTextOn(theme.primary),
     ["--a-ink" as any]: readableTextOn(theme.accent),
+    ["--a-ink-light" as any]: readableAccentText(theme.accent),
     ["--head" as any]: theme.headingFont,
     ["--body" as any]: theme.bodyFont || "'Hanken Grotesk', sans-serif",
   }

@@ -151,7 +151,7 @@ export function PropertyPage({
                     href={deal.photo_album_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    style={{ display: "inline-block", marginTop: 12, fontSize: 13.5, fontWeight: 700, color: "var(--a)", textDecoration: "none" }}
+                    style={{ display: "inline-block", marginTop: 12, fontSize: 13.5, fontWeight: 700, color: "var(--a-ink-light)", textDecoration: "none" }}
                   >
                     View all photos →
                   </a>
