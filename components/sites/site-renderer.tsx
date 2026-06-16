@@ -4,7 +4,6 @@ import { siteConfig } from "@/lib/site-builder/blocks/config"
 import { themeToCssVars } from "@/lib/site-builder/theme"
 import { SiteFonts } from "@/components/sites/site-fonts"
 import { SiteContextProvider, type SiteFormContext } from "@/lib/site-builder/site-context"
-import { SiteStyles } from "@/components/sites/site-styles"
 import { interpolateSiteData, cityFromMarkets } from "@/lib/site-builder/interpolate"
 // Client-safe mirror — importing resolve-site here would pull the server-only
 // Supabase admin client into the browser bundle (crashes the wizard preview).
@@ -25,7 +24,6 @@ export function SiteRenderer({ data, theme, form }: { data: any; theme: SiteThem
   )
   return (
     <div className={`lh-site${layout ? ` lh-lay-${layout}` : ""}`} style={themeToCssVars(theme)}>
-      <SiteStyles />
       <SiteFonts typeStyleId={typeStyleId} />
       {form ? <SiteContextProvider value={form}>{rendered}</SiteContextProvider> : rendered}
     </div>

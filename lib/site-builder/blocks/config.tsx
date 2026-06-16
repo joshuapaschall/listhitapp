@@ -7,6 +7,7 @@ import { DealsSection } from "@/components/sites/deals-section"
 import { SiteFooter } from "@/components/sites/site-footer"
 import { SiteHeader } from "@/components/sites/site-header"
 import { siteImage, siteSrcSet } from "@/lib/site-builder/image-url"
+import { SiteStyles } from "@/components/sites/site-styles"
 
 
 // ---------------------------------------------------------------------------
@@ -33,6 +34,7 @@ export const siteConfig: Config = {
     },
     render: ({ primary, accent, headingFont, bodyFont, children }: any) => (
       <div
+        className="lh-site"
         style={{
           ...themeToCssVars({
             primary: primary || "#0f2a43",
@@ -45,6 +47,7 @@ export const siteConfig: Config = {
           background: "#fff",
         }}
       >
+        <SiteStyles />
         {children}
       </div>
     ),
