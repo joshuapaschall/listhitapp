@@ -47,7 +47,7 @@ const PAGE_SORT_ORDER = new Map<string, number>([
   ["/blog", 60],
 ])
 
-const STEPS = ["Who it's for", "Template", "Your area", "Brand", "Message", "Texting", "Launch"]
+const STEPS = ["Who it's for", "Market", "Look", "Make it yours", "Business", "Launch"]
 
 const PERSONA_BLURBS: Record<SitePersona, string> = {
   cash: "Build a cash-buyer list for your wholesale deals.",
@@ -65,6 +65,13 @@ const TEMPLATE_BLURBS: Record<string, string> = {
   haven: "Calm centered hero with an inline form row.",
   vantage: "Split hero: form left, photo + stat right.",
   forge: "High-contrast color band hero, inline form.",
+}
+
+// Whether the selected template renders a hero photo — drives where (and whether)
+// the curated photo grid + custom photo upload appear. Color-led templates skip it.
+const templateHasHero = (id: SiteTemplateId) => {
+  const v = ALL_SITE_TEMPLATES.find((t) => t.id === id)?.heroVariant
+  return v === "photo" || v === "split"
 }
 
 function seedContent(name: string, persona: SitePersona): WizardContent {
@@ -246,7 +253,7 @@ export default function WebsiteWizard(props: WizardProps) {
     )
   }
 
-  // Edit mode: hydrate from the API and jump to the Brand step.
+  // Edit mode: hydrate from the API and jump to the Market step (skipping Who/persona).
   useEffect(() => {
     if (!isEdit) return
     let active = true
@@ -274,7 +281,7 @@ export default function WebsiteWizard(props: WizardProps) {
         })
         setSlug(site.slug || "")
         setStatus(site.status || "draft")
-        setStep(2)
+        setStep(1)
       } catch (e: any) {
         if (active) setError(e?.message || "Failed to load site")
       } finally {
@@ -421,39 +428,13 @@ export default function WebsiteWizard(props: WizardProps) {
     }
   }
 
-  async function togglePage(path: string, enabled: boolean) {
-    setPages((prev) => prev.map((p) => (p.path === path ? { ...p, enabled } : p)))
-    if (!siteId) return
-    try {
-      const res = await fetch(`/api/sites/${siteId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pageUpdates: [{ path, enabled }] }),
-      })
-      if (!res.ok) throw new Error("Failed to update page")
-    } catch (e: any) {
-      setPages((prev) => prev.map((p) => (p.path === path ? { ...p, enabled: !enabled } : p)))
-      setError(e?.message || "Failed to update page")
-    }
-  }
-
   async function handleContinue() {
     setError("")
-    if (step === 0) {
-      if (!draft.name.trim() || !draft.persona) return
-      setStep(1)
-      return
-    }
-    if (step === 1) {
-      const ok = await ensureCreated()
-      if (ok) setStep(2)
-      return
-    }
-    if (step === 2 || step === 3 || step === 4 || step === 5) {
-      const ok = await saveDraft()
-      if (ok) setStep(step + 1)
-      return
-    }
+    if (step === 0) { if (!draft.name.trim() || !draft.persona) return; setStep(1); return }   // Who
+    if (step === 1) { setStep(2); return }                                                       // Market
+    if (step === 2) { const ok = siteId ? await saveDraft() : await ensureCreated(); if (ok) setStep(3); return } // Look -> create (new) or save (edit)
+    if (step === 3) { const ok = await saveDraft(); if (ok) setStep(4); return }                  // Make it yours
+    if (step === 4) { const ok = await saveDraft(); if (ok) setStep(5); return }                  // Business
   }
 
   function handleBack() {
@@ -462,8 +443,8 @@ export default function WebsiteWizard(props: WizardProps) {
       router.push("/websites")
       return
     }
-    // Edit mode can't go back before the Brand step.
-    if (isEdit && step <= 2) {
+    // Edit mode can't go back before the Market step.
+    if (isEdit && step <= 1) {
       router.push("/websites")
       return
     }
@@ -505,10 +486,10 @@ export default function WebsiteWizard(props: WizardProps) {
     step === 0
       ? Boolean(draft.name.trim() && draft.persona)
       : step === 1
-        ? Boolean(draft.templateId)
+        ? draft.markets.scope === "nationwide" || draft.markets.markets.length > 0
         : step === 2
-          ? draft.markets.scope === "nationwide" || draft.markets.markets.length > 0
-          : step === 5
+          ? Boolean(draft.templateId)
+          : step === 4
             ? Boolean(
                 /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.business.email.trim()) &&
                   draft.business.phone.replace(/\D/g, "").length >= 10 &&
@@ -602,9 +583,9 @@ export default function WebsiteWizard(props: WizardProps) {
                 </p>
               </div>
               <div>
-                <h2 className="text-base font-semibold">Who is this website for?</h2>
+                <h2 className="text-base font-semibold">Who do you want to reach?</h2>
                 <p className="text-sm text-muted-foreground">Pick the kind of buyers you want to collect — we&apos;ll tailor the site for them.</p>
-                <div className="mt-3 grid grid-cols-1 gap-2">
+                <div className="mt-3 grid grid-cols-2 gap-2">
                   {(Object.keys(PERSONAS) as SitePersona[]).map((p) => (
                     <button
                       key={p}
@@ -626,65 +607,67 @@ export default function WebsiteWizard(props: WizardProps) {
                         })
                       }
                       className={cn(
-                        "rounded-lg border p-3 text-left transition-colors",
+                        "flex items-center justify-between gap-2 rounded-lg border p-3 text-left transition-colors",
                         draft.persona === p
                           ? "border-brand bg-brand/5"
                           : "border-border hover:bg-muted/60",
                       )}
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">{getPersona(p).label}</span>
-                        {draft.persona === p && <Check className="h-4 w-4 text-brand" />}
-                      </div>
-                      <p className="mt-0.5 text-xs text-muted-foreground">{PERSONA_BLURBS[p]}</p>
+                      <span className="text-sm font-medium">{getPersona(p).label}</span>
+                      {draft.persona === p && <Check className="h-4 w-4 shrink-0 text-brand" />}
                     </button>
                   ))}
                 </div>
+                <p className="mt-3 border-l-2 border-brand/40 pl-3 text-sm text-muted-foreground">
+                  {PERSONA_BLURBS[draft.persona]}
+                </p>
               </div>
             </div>
           )}
 
-          {step === 1 && (
-            <div className="space-y-4">
-              <div>
-                <h2 className="text-base font-semibold">Pick a look you like</h2>
-                <p className="text-sm text-muted-foreground">Just a starting point — colors, words, and photos are all yours to change next.</p>
-              </div>
-              <div className="grid grid-cols-1 gap-3">
-                {ALL_SITE_TEMPLATES.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setDraft((d) => ({ ...d, templateId: t.id }))}
-                    className={cn(
-                      "rounded-lg border p-3 text-left transition-colors",
-                      draft.templateId === t.id ? "border-brand bg-brand/5" : "border-border hover:bg-muted/60",
-                    )}
-                  >
-                    <div className="flex items-start gap-3">
-                      <HeroThumb variant={t.heroVariant} />
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-sm font-medium">{t.name}</span>
-                          {draft.templateId === t.id && <Check className="h-4 w-4 text-brand" />}
-                        </div>
-                        <p className="mt-0.5 text-xs text-muted-foreground">{TEMPLATE_BLURBS[t.id] || t.description}</p>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {step === 3 && (
+          {step === 2 && (
             <div className="space-y-5">
               <div>
-                <h2 className="text-base font-semibold">Make it look like yours</h2>
-                <p className="text-sm text-muted-foreground">Colors, fonts, and header style — every choice updates the preview on the right.</p>
+                <h2 className="text-base font-semibold">Pick a look you love</h2>
+                <p className="text-sm text-muted-foreground">A style, your colors, and a photo. Good defaults are already set — change as much or as little as you like.</p>
               </div>
+
+              {/* Style */}
+              <div className="space-y-2">
+                <Label>Style</Label>
+                {isEdit ? (
+                  <p className="text-xs text-muted-foreground">Switch templates from the Design tab.</p>
+                ) : (
+                  <div className="grid grid-cols-1 gap-3">
+                    {ALL_SITE_TEMPLATES.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setDraft((d) => ({ ...d, templateId: t.id }))}
+                        className={cn(
+                          "rounded-lg border p-3 text-left transition-colors",
+                          draft.templateId === t.id ? "border-brand bg-brand/5" : "border-border hover:bg-muted/60",
+                        )}
+                      >
+                        <div className="flex items-start gap-3">
+                          <HeroThumb variant={t.heroVariant} />
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-sm font-medium">{t.name}</span>
+                              {draft.templateId === t.id && <Check className="h-4 w-4 text-brand" />}
+                            </div>
+                            <p className="mt-0.5 text-xs text-muted-foreground">{TEMPLATE_BLURBS[t.id] || t.description}</p>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Color */}
               <div className="space-y-1.5">
-                <Label>Color palette</Label>
+                <Label>Color</Label>
                 <div className="grid grid-cols-4 gap-2">
                   {PALETTES.map((p) => {
                     const active = draft.theme.primary === p.primary && draft.theme.accent === p.accent
@@ -705,72 +688,53 @@ export default function WebsiteWizard(props: WizardProps) {
                     )
                   })}
                 </div>
-                <p className="text-xs text-muted-foreground">Pick a palette or set exact colors below.</p>
+                <details className="group">
+                  <summary className="cursor-pointer list-none text-xs text-muted-foreground hover:text-foreground">
+                    Set exact colors
+                  </summary>
+                  <div className="mt-2 space-y-3">
+                    <ColorRow label="Primary color" value={draft.theme.primary} onChange={(v) => setTheme({ primary: v })} />
+                    <ColorRow label="Accent color" value={draft.theme.accent} onChange={(v) => setTheme({ accent: v })} />
+                  </div>
+                </details>
               </div>
-              <ColorRow label="Primary color" value={draft.theme.primary} onChange={(v) => setTheme({ primary: v })} />
-              <ColorRow label="Accent color" value={draft.theme.accent} onChange={(v) => setTheme({ accent: v })} />
+
+              {/* Hero photo */}
               <div className="space-y-1.5">
-                <Label>Type style</Label>
-                <div className="space-y-2">
-                  {TYPE_STYLES.map((t) => {
-                    const active = draft.theme.typeStyleId === t.id
-                    return (
+                <Label>Hero photo</Label>
+                {templateHasHero(draft.templateId) ? (
+                  <div className="grid grid-cols-3 gap-2">
+                    {CURATED_HERO_IMAGES.map((img) => (
                       <button
-                        key={t.id}
+                        key={img.url}
                         type="button"
-                        onClick={() => {
-                          const fonts = resolveTypeFonts(t.id)
-                          setTheme({ typeStyleId: t.id, headingFont: fonts.headingFont, bodyFont: fonts.bodyFont })
-                        }}
+                        onClick={() => setContent({ heroImageUrl: img.url })}
                         className={cn(
-                          "flex w-full items-center justify-between rounded-lg border p-3 text-left transition",
-                          active ? "border-brand ring-1 ring-brand" : "border-border hover:border-foreground/30",
+                          "relative aspect-video overflow-hidden rounded-md border-2",
+                          draft.content.heroImageUrl === img.url ? "border-brand" : "border-transparent",
                         )}
+                        title={img.label}
                       >
-                        <span>
-                          <span className="block text-xs text-muted-foreground">{t.label}</span>
-                          <span className="block text-lg" style={{ fontFamily: t.headingFont }}>
-                            Get the deal
-                          </span>
-                        </span>
-                        {active && <Check className="h-4 w-4 text-brand" />}
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={img.url} alt={img.label} className="h-full w-full object-cover" />
                       </button>
-                    )
-                  })}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    {ALL_SITE_TEMPLATES.find((t) => t.id === draft.templateId)?.name} doesn&apos;t use a hero photo — it&apos;s built around your colors instead.
+                  </p>
+                )}
               </div>
-              <div className="space-y-1.5">
-                <Label>Header layout</Label>
-                <RadioGroup
-                  value={draft.theme.headerLayout}
-                  onValueChange={(v) => setTheme({ headerLayout: v as SiteTheme["headerLayout"] })}
-                  className="flex gap-4"
-                >
-                  {(["split", "center", "stack"] as const).map((opt) => (
-                    <label key={opt} className="flex items-center gap-2 text-sm capitalize">
-                      <RadioGroupItem value={opt} /> {opt}
-                    </label>
-                  ))}
-                </RadioGroup>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="space-y-5">
+              <div>
+                <h2 className="text-base font-semibold">Make it truly yours</h2>
+                <p className="text-sm text-muted-foreground">Your logo, your icon, your fonts. Everything here is optional — your site already looks great without touching it.</p>
               </div>
-              <div className="flex items-center justify-between rounded-lg border border-border p-3">
-                <div>
-                  <p className="text-sm font-medium">Show announcement banner</p>
-                  <p className="text-xs text-muted-foreground">A thin promo strip at the top.</p>
-                </div>
-                <Switch checked={draft.theme.banner} onCheckedChange={(v) => setTheme({ banner: v })} />
-              </div>
-              {draft.theme.banner && (
-                <div className="space-y-1.5">
-                  <Label htmlFor="ann-text">Announcement text</Label>
-                  <Input
-                    id="ann-text"
-                    value={draft.content.announcementText}
-                    onChange={(e) => setContent({ announcementText: e.target.value })}
-                  />
-                  <p className="text-xs text-muted-foreground">Keep it buyer-facing — these sites collect buyers, not sellers.</p>
-                </div>
-              )}
               <div className="space-y-1.5">
                 <Label>Logo</Label>
                 <input
@@ -890,102 +854,111 @@ export default function WebsiteWizard(props: WizardProps) {
                   The small icon in the browser tab. Use a square PNG or SVG (at least 64×64). PNG, JPG, WEBP or SVG.
                 </p>
               </div>
-            </div>
-          )}
-
-          {step === 4 && (
-            <div className="space-y-4">
-              <div>
-                <h2 className="text-base font-semibold">Your words</h2>
-                <p className="text-sm text-muted-foreground">Edit anything, or keep what we wrote.</p>
-              </div>
-              <Field label="Headline">
-                <Input value={draft.content.headline} onChange={(e) => setContent({ headline: e.target.value })} />
-              </Field>
-              <Field label="Subhead">
-                <Input value={draft.content.subhead} onChange={(e) => setContent({ subhead: e.target.value })} />
-              </Field>
-              <Field label="Button label">
-                <Input value={draft.content.ctaLabel} onChange={(e) => setContent({ ctaLabel: e.target.value })} />
-              </Field>
-              <Field label="Footer text">
-                <Input value={draft.content.footerText} onChange={(e) => setContent({ footerText: e.target.value })} />
-              </Field>
-              <div className="space-y-1.5">
-                <Label>Hero image</Label>
-                <div className="grid grid-cols-3 gap-2">
-                  {CURATED_HERO_IMAGES.map((img) => (
-                    <button
-                      key={img.url}
-                      type="button"
-                      onClick={() => setContent({ heroImageUrl: img.url })}
-                      className={cn(
-                        "relative aspect-video overflow-hidden rounded-md border-2",
-                        draft.content.heroImageUrl === img.url ? "border-brand" : "border-transparent",
-                      )}
-                      title={img.label}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={img.url} alt={img.label} className="h-full w-full object-cover" />
-                    </button>
-                  ))}
+              {templateHasHero(draft.templateId) && (
+                <div className="space-y-1.5">
+                  <Label>Hero photo</Label>
+                  <input
+                    ref={heroInputRef}
+                    type="file"
+                    accept={ASSET_ACCEPT}
+                    className="hidden"
+                    onChange={(e) => {
+                      handleAssetUpload(e.target.files?.[0], setHeroUploading, (url) => setContent({ heroImageUrl: url }), 1600)
+                      e.target.value = ""
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => heroInputRef.current?.click()}
+                    disabled={heroUploading}
+                  >
+                    {heroUploading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" /> Uploading…
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4" /> Upload your own photo
+                      </>
+                    )}
+                  </Button>
+                  <Input
+                    className="mt-2"
+                    placeholder="Or paste an image URL"
+                    value={draft.content.heroImageUrl}
+                    onChange={(e) => setContent({ heroImageUrl: e.target.value })}
+                  />
+                  {assetError && <p className="text-xs text-destructive">{assetError}</p>}
                 </div>
-                <input
-                  ref={heroInputRef}
-                  type="file"
-                  accept={ASSET_ACCEPT}
-                  className="hidden"
+              )}
+              <div className="space-y-1.5">
+                <Label htmlFor="font-style">Font style</Label>
+                <select
+                  id="font-style"
+                  value={draft.theme.typeStyleId ?? ""}
                   onChange={(e) => {
-                    handleAssetUpload(e.target.files?.[0], setHeroUploading, (url) => setContent({ heroImageUrl: url }), 1600)
-                    e.target.value = ""
+                    const id = e.target.value
+                    const fonts = resolveTypeFonts(id)
+                    setTheme({ typeStyleId: id, headingFont: fonts.headingFont, bodyFont: fonts.bodyFont })
                   }}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="mt-2 w-full"
-                  onClick={() => heroInputRef.current?.click()}
-                  disabled={heroUploading}
+                  className="flex h-9 w-full rounded-md border border-border bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {heroUploading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" /> Uploading…
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="h-4 w-4" /> Upload your own photo
-                    </>
-                  )}
-                </Button>
-                <Input
-                  className="mt-2"
-                  placeholder="Or paste an image URL"
-                  value={draft.content.heroImageUrl}
-                  onChange={(e) => setContent({ heroImageUrl: e.target.value })}
-                />
-                {assetError && <p className="text-xs text-destructive">{assetError}</p>}
-              </div>
-              {pages.length > 0 && (
-                <div className="space-y-2">
-                  <Label>Pages</Label>
-                  <p className="text-xs text-muted-foreground">Turn extra pages on or off — they show in your menu when on.</p>
-                  {pages.map((p) => (
-                    <div key={p.path} className="flex items-center justify-between rounded-lg border border-border p-3">
-                      <span className="text-sm font-medium">{p.nav_label}</span>
-                      <Switch checked={p.enabled} onCheckedChange={(v) => togglePage(p.path, v)} />
-                    </div>
+                  {TYPE_STYLES.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.label}
+                    </option>
                   ))}
+                </select>
+                <span
+                  className="block text-lg"
+                  style={{ fontFamily: TYPE_STYLES.find((t) => t.id === draft.theme.typeStyleId)?.headingFont || draft.theme.headingFont }}
+                >
+                  Get the deal
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Header layout</Label>
+                <RadioGroup
+                  value={draft.theme.headerLayout}
+                  onValueChange={(v) => setTheme({ headerLayout: v as SiteTheme["headerLayout"] })}
+                  className="flex gap-4"
+                >
+                  {(["split", "center", "stack"] as const).map((opt) => (
+                    <label key={opt} className="flex items-center gap-2 text-sm capitalize">
+                      <RadioGroupItem value={opt} /> {opt}
+                    </label>
+                  ))}
+                </RadioGroup>
+              </div>
+              <div className="flex items-center justify-between rounded-lg border border-border p-3">
+                <div>
+                  <p className="text-sm font-medium">Show announcement banner</p>
+                  <p className="text-xs text-muted-foreground">A thin promo strip at the top.</p>
+                </div>
+                <Switch checked={draft.theme.banner} onCheckedChange={(v) => setTheme({ banner: v })} />
+              </div>
+              {draft.theme.banner && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="ann-text">Announcement text</Label>
+                  <Input
+                    id="ann-text"
+                    value={draft.content.announcementText}
+                    onChange={(e) => setContent({ announcementText: e.target.value })}
+                  />
+                  <p className="text-xs text-muted-foreground">Keep it buyer-facing — these sites collect buyers, not sellers.</p>
                 </div>
               )}
             </div>
           )}
 
-          {step === 2 && (
+          {step === 1 && (
             <div className="space-y-5">
               <div>
-                <h2 className="text-base font-semibold">Where do you buy houses?</h2>
+                <h2 className="text-base font-semibold">What market are you in?</h2>
                 <p className="text-sm text-muted-foreground">
-                  This helps local buyers find you on Google. Not sure? Pick Anywhere — you can add areas anytime.
+                  Where your deals are — this helps local buyers find you on Google. Not sure? Pick Anywhere; you can add markets later.
                 </p>
               </div>
 
@@ -1085,18 +1058,17 @@ export default function WebsiteWizard(props: WizardProps) {
             </div>
           )}
 
-          {step === 5 && (
+          {step === 4 && (
             <div className="space-y-5">
               <div>
-                <h2 className="text-base font-semibold">Get set up to text your list</h2>
+                <h2 className="text-base font-semibold">Your business details</h2>
                 <p className="text-sm text-muted-foreground">
-                  We use this to automatically build your Contact page and your Terms of Use and Privacy Policy — what
-                  carriers check before approving you to send texts.
+                  We use these to set up texting and build your Contact, Terms, and Privacy pages automatically.
                 </p>
               </div>
 
               <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
-                We add the exact wording carriers require so your texts get delivered, not blocked — this is what gets you 10DLC approved.
+                Required to text your list. Carriers check these exact details before they let you send. We add the legal wording for you.
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1144,24 +1116,28 @@ export default function WebsiteWizard(props: WizardProps) {
                 </Field>
               </div>
 
-              <div className="space-y-2">
-                <Label>Social links (optional)</Label>
-                <Input
-                  placeholder="Facebook URL"
-                  value={draft.business.social.facebook || ""}
-                  onChange={(e) => setBusiness({ social: { ...draft.business.social, facebook: e.target.value } })}
-                />
-                <Input
-                  placeholder="Instagram URL"
-                  value={draft.business.social.instagram || ""}
-                  onChange={(e) => setBusiness({ social: { ...draft.business.social, instagram: e.target.value } })}
-                />
-                <Input
-                  placeholder="YouTube URL"
-                  value={draft.business.social.youtube || ""}
-                  onChange={(e) => setBusiness({ social: { ...draft.business.social, youtube: e.target.value } })}
-                />
-              </div>
+              <details className="group">
+                <summary className="cursor-pointer list-none text-sm font-medium text-foreground">
+                  Add social links — optional
+                </summary>
+                <div className="mt-2 space-y-2">
+                  <Input
+                    placeholder="Facebook URL"
+                    value={draft.business.social.facebook || ""}
+                    onChange={(e) => setBusiness({ social: { ...draft.business.social, facebook: e.target.value } })}
+                  />
+                  <Input
+                    placeholder="Instagram URL"
+                    value={draft.business.social.instagram || ""}
+                    onChange={(e) => setBusiness({ social: { ...draft.business.social, instagram: e.target.value } })}
+                  />
+                  <Input
+                    placeholder="YouTube URL"
+                    value={draft.business.social.youtube || ""}
+                    onChange={(e) => setBusiness({ social: { ...draft.business.social, youtube: e.target.value } })}
+                  />
+                </div>
+              </details>
 
               <div className="rounded-lg border border-border bg-muted/40 p-4">
                 <div className="flex items-center gap-2">
@@ -1186,53 +1162,54 @@ export default function WebsiteWizard(props: WizardProps) {
               </div>
 
               {/* Tracking & ads */}
-              <div className="space-y-3 border-t border-border pt-5">
-                <div>
-                  <h2 className="text-base font-semibold">Tracking &amp; ads</h2>
+              <details className="group border-t border-border pt-5">
+                <summary className="cursor-pointer list-none text-base font-semibold text-foreground">
+                  Ad tracking — optional
+                </summary>
+                <div className="mt-3 space-y-3">
                   <p className="text-sm text-muted-foreground">
-                    Paste the IDs from your ad accounts — we&apos;ll fire a conversion automatically when someone joins
-                    your buyers list. Leave blank if you&apos;re not running ads.
+                    Paste these only if you&apos;re running ads. You can add them later too.
                   </p>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Google Analytics 4 — Measurement ID</Label>
-                  <Input
-                    placeholder="G-XXXXXXX"
-                    value={draft.tracking.ga4_id || ""}
-                    onChange={(e) => setTracking({ ga4_id: e.target.value })}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label>Google Ads — Conversion ID</Label>
+                    <Label>Google Analytics 4 — Measurement ID</Label>
                     <Input
-                      placeholder="AW-XXXXXXXXX"
-                      value={draft.tracking.google_ads_id || ""}
-                      onChange={(e) => setTracking({ google_ads_id: e.target.value })}
+                      placeholder="G-XXXXXXX"
+                      value={draft.tracking.ga4_id || ""}
+                      onChange={(e) => setTracking({ ga4_id: e.target.value })}
                     />
                   </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label>Google Ads — Conversion ID</Label>
+                      <Input
+                        placeholder="AW-XXXXXXXXX"
+                        value={draft.tracking.google_ads_id || ""}
+                        onChange={(e) => setTracking({ google_ads_id: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Google Ads — Conversion label</Label>
+                      <Input
+                        placeholder="abcDEF123"
+                        value={draft.tracking.google_ads_label || ""}
+                        onChange={(e) => setTracking({ google_ads_label: e.target.value })}
+                      />
+                    </div>
+                  </div>
                   <div className="space-y-1.5">
-                    <Label>Google Ads — Conversion label</Label>
+                    <Label>Meta Pixel ID</Label>
                     <Input
-                      placeholder="abcDEF123"
-                      value={draft.tracking.google_ads_label || ""}
-                      onChange={(e) => setTracking({ google_ads_label: e.target.value })}
+                      placeholder="15–16 digit number"
+                      value={draft.tracking.meta_pixel_id || ""}
+                      onChange={(e) => setTracking({ meta_pixel_id: e.target.value })}
                     />
                   </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label>Meta Pixel ID</Label>
-                  <Input
-                    placeholder="15–16 digit number"
-                    value={draft.tracking.meta_pixel_id || ""}
-                    onChange={(e) => setTracking({ meta_pixel_id: e.target.value })}
-                  />
-                </div>
-              </div>
+              </details>
             </div>
           )}
 
-          {step === 6 && (
+          {step === 5 && (
             <div className="space-y-5">
               {!published ? (
                 <>
@@ -1327,11 +1304,11 @@ export default function WebsiteWizard(props: WizardProps) {
         </div>
 
         {/* Footer nav */}
-        {!(step === 6 && published) && (
+        {!(step === 5 && published) && (
           <div className="flex items-center justify-between border-t border-border px-5 py-3">
             <Button type="button" variant="ghost" onClick={handleBack} disabled={saving}>
               <ArrowLeft className="h-4 w-4" />
-              {step === 0 || (isEdit && step <= 2) ? "Exit" : "Back"}
+              {step === 0 || (isEdit && step <= 1) ? "Exit" : "Back"}
             </Button>
             <div className="flex items-center gap-2">
               <Button
@@ -1344,7 +1321,7 @@ export default function WebsiteWizard(props: WizardProps) {
                 <Eye className="h-4 w-4" />
                 Preview
               </Button>
-              {step < 6 && (
+              {step < 5 && (
                 <Button type="button" variant="brand" onClick={handleContinue} disabled={saving || !canContinue}>
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Continue <ArrowRight className="h-4 w-4" /></>}
                 </Button>
