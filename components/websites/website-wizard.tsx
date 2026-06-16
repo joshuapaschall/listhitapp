@@ -96,6 +96,43 @@ const ASSET_ACCEPT = "image/png,image/jpeg,image/webp,image/svg+xml"
 // Sign + upload a brand asset (logo / hero photo) to the public site-assets
 // bucket via the browser client, returning its public URL. Mirrors the
 // property-image upload flow — never touches the admin client.
+// Downscale an oversized raster image in the browser before upload, so a tenant
+// never ships a logo or photo far larger than it's ever displayed. SVGs (vector)
+// and images already within the target width pass through untouched. When we do
+// resize, output is WebP (smaller, preserves transparency). Any failure falls
+// back to the original file so uploads never break.
+async function downscaleImage(file: File, maxWidth: number): Promise<File> {
+  if (!file.type.startsWith("image/") || file.type === "image/svg+xml") return file
+  let bitmap: ImageBitmap
+  try {
+    bitmap = await createImageBitmap(file)
+  } catch {
+    return file
+  }
+  if (bitmap.width <= maxWidth) {
+    bitmap.close()
+    return file
+  }
+  const w = maxWidth
+  const h = Math.round((bitmap.height * maxWidth) / bitmap.width)
+  const canvas = document.createElement("canvas")
+  canvas.width = w
+  canvas.height = h
+  const ctx = canvas.getContext("2d")
+  if (!ctx) {
+    bitmap.close()
+    return file
+  }
+  ctx.drawImage(bitmap, 0, 0, w, h)
+  bitmap.close()
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob((b) => resolve(b), "image/webp", 0.9),
+  )
+  if (!blob) return file
+  const newName = file.name.replace(/\.[^.]+$/, "") + ".webp"
+  return new File([blob], newName, { type: "image/webp" })
+}
+
 async function uploadSiteAsset(file: File, siteId: string): Promise<string> {
   const signRes = await fetch(`/api/sites/${siteId}/assets/sign`, {
     method: "POST",
@@ -249,6 +286,7 @@ export default function WebsiteWizard(props: WizardProps) {
     file: File | undefined,
     setUploading: (v: boolean) => void,
     apply: (url: string) => void,
+    maxWidth: number,
   ) {
     if (!file) return
     if (!siteId) {
@@ -258,7 +296,8 @@ export default function WebsiteWizard(props: WizardProps) {
     setAssetError("")
     setUploading(true)
     try {
-      const url = await uploadSiteAsset(file, siteId)
+      const optimized = await downscaleImage(file, maxWidth)
+      const url = await uploadSiteAsset(optimized, siteId)
       apply(url)
     } catch (e: any) {
       setAssetError(e?.message || "Upload failed")
@@ -714,7 +753,7 @@ export default function WebsiteWizard(props: WizardProps) {
                   accept={ASSET_ACCEPT}
                   className="hidden"
                   onChange={(e) => {
-                    handleAssetUpload(e.target.files?.[0], setLogoUploading, (url) => setTheme({ logoUrl: url }))
+                    handleAssetUpload(e.target.files?.[0], setLogoUploading, (url) => setTheme({ logoUrl: url }), 800)
                     e.target.value = ""
                   }}
                 />
@@ -791,7 +830,7 @@ export default function WebsiteWizard(props: WizardProps) {
                   accept={ASSET_ACCEPT}
                   className="hidden"
                   onChange={(e) => {
-                    handleAssetUpload(e.target.files?.[0], setFaviconUploading, (url) => setTheme({ faviconUrl: url }))
+                    handleAssetUpload(e.target.files?.[0], setFaviconUploading, (url) => setTheme({ faviconUrl: url }), 512)
                     e.target.value = ""
                   }}
                 />
@@ -871,7 +910,7 @@ export default function WebsiteWizard(props: WizardProps) {
                   accept={ASSET_ACCEPT}
                   className="hidden"
                   onChange={(e) => {
-                    handleAssetUpload(e.target.files?.[0], setHeroUploading, (url) => setContent({ heroImageUrl: url }))
+                    handleAssetUpload(e.target.files?.[0], setHeroUploading, (url) => setContent({ heroImageUrl: url }), 1600)
                     e.target.value = ""
                   }}
                 />
