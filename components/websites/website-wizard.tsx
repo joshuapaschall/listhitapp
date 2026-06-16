@@ -110,7 +110,7 @@ async function uploadSiteAsset(file: File, siteId: string): Promise<string> {
   const supabase = supabaseBrowser()
   const { error: upErr } = await supabase.storage
     .from("site-assets")
-    .uploadToSignedUrl(entry.path, entry.token, file, { contentType: file.type })
+    .uploadToSignedUrl(entry.path, entry.token, file, { contentType: file.type, cacheControl: "31536000" })
   if (upErr) throw new Error(upErr.message)
   return supabase.storage.from("site-assets").getPublicUrl(entry.path).data.publicUrl
 }
