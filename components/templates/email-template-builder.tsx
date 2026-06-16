@@ -14,7 +14,7 @@ import { emptyEmailTemplate } from "@/lib/email-templates"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { TemplateService } from "@/services/template-service"
-import type { TemplateSlug } from "@/app/settings/templates/template-types"
+import type { TemplateSlug } from "@/app/(app)/settings/templates/template-types"
 
 const TemplaticalEmailEditor = dynamic(() => import("@/components/campaigns/email/templatical-email-editor"), {
   ssr: false,

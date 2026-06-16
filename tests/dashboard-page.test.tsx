@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import { render, screen } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import DashboardPage from "../app/(dashboard)/dashboard/page"
+import DashboardPage from "../app/(app)/(dashboard)/dashboard/page"
 
 // Polyfill ResizeObserver for recharts
 global.ResizeObserver = class {
