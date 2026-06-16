@@ -238,6 +238,18 @@ export const siteConfig: Config = {
             >
               {heroDesktop ? (
                 <>
+                  {/* Preload the desktop hero photo as a high-priority LCP image so the browser
+                      starts it immediately instead of waiting to parse the CSS background. Same
+                      URL as the background-image below → a single fetch. media-gated to desktop to
+                      match the @container rule; phones never paint the photo. fetchpriority is
+                      spread as a raw DOM attribute so it lands regardless of the React 18 minor. */}
+                  <link
+                    rel="preload"
+                    as="image"
+                    href={heroDesktop}
+                    media="(min-width:901px)"
+                    {...({ fetchpriority: "high" } as Record<string, string>)}
+                  />
                   <style
                     dangerouslySetInnerHTML={{
                       __html: `@container (min-width:901px){#lh-hero-photo-bg{background-image:url("${heroDesktop}")}}`,
