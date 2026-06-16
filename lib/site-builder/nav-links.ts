@@ -10,7 +10,7 @@ export interface NavPage {
 }
 
 // Canonical site nav, single source of truth:
-// Home → Deals → enabled sub-pages (in sort order) → Blog (if posts) → Contact.
+// Home → Deals → enabled sub-pages incl. Blog (in sort order) → Contact.
 // Phone + "Get deals" CTA are rendered separately by SiteHeader and are NOT in this list.
 export function buildSiteNavLinks(opts: {
   hasPosts: boolean
@@ -23,7 +23,6 @@ export function buildSiteNavLinks(opts: {
   for (const p of opts.enabledPages || []) {
     if (p?.nav_label && p?.path) links.push({ label: p.nav_label, href: p.path })
   }
-  if (opts.hasPosts) links.push({ label: "Blog", href: "/blog" })
   links.push({ label: "Contact", href: "/contact" })
 
   const seen = new Set<string>()
