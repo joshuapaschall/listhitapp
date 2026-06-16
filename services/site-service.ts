@@ -336,13 +336,31 @@ export class SiteService {
     updates: { path: string; enabled: boolean }[],
   ) {
     for (const u of updates) {
-      const { error } = await client
+      const { data, error } = await client
         .from("site_pages")
         .update({ enabled: u.enabled })
         .eq("site_id", siteId)
         .eq("org_id", orgId)
         .eq("path", u.path)
+        .select("path")
       if (error) throw new Error(error.message)
+      // Blog is a nav-only page that older sites were never seeded with. If the
+      // toggle hit no existing row, create it so the switch persists. puck_data is
+      // a harmless empty doc — /blog renders from its own route, not from this row.
+      if ((!data || data.length === 0) && u.path === "/blog") {
+        const { error: insErr } = await client.from("site_pages").insert({
+          site_id: siteId,
+          org_id: orgId,
+          path: "/blog",
+          title: "Blog",
+          meta_description: null,
+          puck_data: { content: [], root: {} },
+          nav_label: "Blog",
+          sort_order: 60,
+          enabled: u.enabled,
+        })
+        if (insErr) throw new Error(insErr.message)
+      }
     }
   }
 

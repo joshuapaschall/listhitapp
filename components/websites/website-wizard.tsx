@@ -31,12 +31,21 @@ type WizardProps = { mode: "new" } | { mode: "edit"; siteId: string }
 // immediately so the wizard preview shows the full nav/footer from step 1 —
 // before the site row (and its site_pages) exist. Reconciled with the DB once
 // the site is created / hydrated.
-const DEFAULT_NAV_PAGES = [...EXTRA_PAGES]
-  .sort((a, b) => a.sortOrder - b.sortOrder)
-  .map((p) => ({ path: p.path, nav_label: p.navLabel, enabled: p.enabledByDefault }))
+// Blog is a nav-only toggle: it renders from its own /blog route (a live feed of
+// posts), not a built Puck page, so it isn't in EXTRA_PAGES. Default off.
+const BLOG_NAV_PAGE = { path: "/blog", nav_label: "Blog", enabled: false }
+const DEFAULT_NAV_PAGES = [
+  ...[...EXTRA_PAGES]
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((p) => ({ path: p.path, nav_label: p.navLabel, enabled: p.enabledByDefault })),
+  BLOG_NAV_PAGE,
+]
 
 // path → canonical sort order, used to keep DB-returned pages in published order.
-const PAGE_SORT_ORDER = new Map(EXTRA_PAGES.map((p) => [p.path, p.sortOrder]))
+const PAGE_SORT_ORDER = new Map<string, number>([
+  ...EXTRA_PAGES.map((p) => [p.path, p.sortOrder] as [string, number]),
+  ["/blog", 60],
+])
 
 const STEPS = ["Who it's for", "Template", "Your area", "Brand", "Message", "Texting", "Launch"]
 
@@ -214,11 +223,28 @@ export default function WebsiteWizard(props: WizardProps) {
   }, [isEdit])
 
   // Keep only sub-pages that can appear in the nav (labeled, non-home).
-  const toToggleable = (rows: any[]) =>
-    (rows || [])
-      .filter((p) => p?.nav_label && p?.path !== "/")
-      .map((p) => ({ path: p.path, nav_label: p.nav_label, enabled: p.enabled !== false }))
-      .sort((a, b) => (PAGE_SORT_ORDER.get(a.path) ?? 999) - (PAGE_SORT_ORDER.get(b.path) ?? 999))
+  const toToggleable = (rows: any[]) => {
+    const db = (rows || []).filter((p) => p?.nav_label && p?.path !== "/")
+    const dbEnabled = new Map(db.map((p) => [p.path, p.enabled !== false]))
+    const catalogPaths = new Set(DEFAULT_NAV_PAGES.map((p) => p.path))
+    const merged = [
+      // Every catalog page always shows as a toggle; use the saved enabled state when
+      // we have one, otherwise the catalog default. This makes Blog appear even on
+      // sites created before Blog was toggle-able.
+      ...DEFAULT_NAV_PAGES.map((p) => ({
+        path: p.path,
+        nav_label: p.nav_label,
+        enabled: dbEnabled.has(p.path) ? (dbEnabled.get(p.path) as boolean) : p.enabled,
+      })),
+      // Preserve any saved toggle not in the catalog (defensive; normally none).
+      ...db
+        .filter((p) => !catalogPaths.has(p.path))
+        .map((p) => ({ path: p.path, nav_label: p.nav_label, enabled: p.enabled !== false })),
+    ]
+    return merged.sort(
+      (a, b) => (PAGE_SORT_ORDER.get(a.path) ?? 999) - (PAGE_SORT_ORDER.get(b.path) ?? 999),
+    )
+  }
 
   // Edit mode: hydrate from the API and jump to the Brand step.
   useEffect(() => {
