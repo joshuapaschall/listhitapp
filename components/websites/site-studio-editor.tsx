@@ -1,9 +1,12 @@
 "use client"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Puck, usePuck, type Data } from "@measured/puck"
 import "@measured/puck/puck.css"
 import { siteConfig } from "@/lib/site-builder/blocks/config"
+import { SiteContextProvider, type SiteFormContext } from "@/lib/site-builder/site-context"
+import { buildConsentTexts } from "@/lib/site-builder/compliance"
+import type { SiteBusiness, SiteMarkets, SitePersona } from "@/lib/site-builder/types"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, Loader2, Check, ExternalLink } from "lucide-react"
 
@@ -35,8 +38,14 @@ function StudioDataSync({
 
 export function SiteStudioEditor({
   siteId, slug, siteName, status, pages,
+  business, markets, persona, navLinks, city,
 }: {
   siteId: string; slug: string; siteName: string; status: string; pages: EditablePage[]
+  business: SiteBusiness
+  markets: SiteMarkets
+  persona: SitePersona
+  navLinks: { label: string; href: string }[]
+  city: string
 }) {
   const router = useRouter()
   const [activePath, setActivePath] = useState(pages[0]?.path || "/")
@@ -47,6 +56,37 @@ export function SiteStudioEditor({
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState("")
   const liveUrl = slug ? `https://${slug}.listhit.io` : ""
+
+  const brand = siteName || "our team"
+
+  const form = useMemo<SiteFormContext>(() => {
+    const consent = buildConsentTexts(brand)
+    return {
+      persona,
+      brandName: brand,
+      optinEnabled: true,
+      requireConsent: true,
+      disclosure: consent.marketing,
+      consentMarketing: consent.marketing,
+      consentNonMarketing: consent.nonMarketing,
+      legalPaths: { terms: "/terms", privacy: "/privacy" },
+      markets,
+      deals: [],
+      business,
+      navLinks: navLinks || [],
+    }
+  }, [brand, persona, markets, business, navLinks])
+
+  // Display-only interpolation of {Brand}/{City} — applies inside <Puck> only,
+  // never to <Render> or the saved data (Puck FieldTransforms semantics).
+  const fieldTransforms = useMemo(() => {
+    const interp = (v: any) =>
+      typeof v === "string" ? v.split("{Brand}").join(brand).split("{City}").join(city) : v
+    return {
+      text: ({ value }: any) => interp(value),
+      textarea: ({ value }: any) => interp(value),
+    }
+  }, [brand, city])
 
   async function publishChanges() {
     setSaving(true); setError(""); setSaved(false)
@@ -68,11 +108,13 @@ export function SiteStudioEditor({
   }
 
   return (
+    <SiteContextProvider value={form}>
     <Puck
       config={siteConfig as any}
       data={dataByPath.current[activePath]}
       onChange={(d: Data) => { dataByPath.current[activePath] = d }}
       permissions={{ insert: false }}
+      fieldTransforms={fieldTransforms as any}
     >
       <StudioDataSync activePath={activePath} dataByPath={dataByPath} />
       <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
@@ -124,5 +166,6 @@ export function SiteStudioEditor({
         </div>
       </div>
     </Puck>
+    </SiteContextProvider>
   )
 }
