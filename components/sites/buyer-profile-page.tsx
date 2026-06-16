@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { themeToCssVars } from "@/lib/site-builder/theme"
 import { SiteFonts } from "@/components/sites/site-fonts"
 import { LocationPicker } from "@/components/sites/location-picker"
+import { siteImage } from "@/lib/site-builder/image-url"
 import {
   getPersonaForm,
   propertyTypeChoices,
@@ -62,7 +63,7 @@ function IconLock({ size = 12 }: { size?: number }) {
 function BrandLockup({ logoUrl, brandName }: { logoUrl?: string; brandName: string }) {
   if (logoUrl) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={logoUrl} alt={brandName} style={{ height: 32, maxHeight: 32, width: "auto", maxWidth: 180, objectFit: "contain", display: "block" }} />
+    return <img src={siteImage(logoUrl, { width: 400, quality: 90 })} alt={brandName} style={{ height: 32, maxHeight: 32, width: "auto", maxWidth: 180, objectFit: "contain", display: "block" }} />
   }
   return <span style={{ fontFamily: "var(--head)", fontWeight: 800, fontSize: 18, color: "var(--p)" }}>{brandName}</span>
 }
