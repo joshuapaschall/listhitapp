@@ -157,29 +157,31 @@ export function BuyerProfilePage({
   const hidePropControl = propChoices.length === 1
 
   const [lead, setLead] = useState<Lead | null>(null)
-  const [ready, setReady] = useState(false)
+  const [status, setStatus] = useState<"loading" | "ready" | "missing">("loading")
   const [buyerTypes, setBuyerTypes] = useState<string[]>([])
   const [payments, setPayments] = useState<string[]>([])
   const [propertyTypes, setPropertyTypes] = useState<string[]>(() => (hidePropControl ? [propChoices[0]] : []))
   const [locations, setLocations] = useState<string[]>([])
-  const [priceIdx, setPriceIdx] = useState<number | null>(null)
+  const [priceIdxs, setPriceIdxs] = useState<number[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
 
   // Read the Step-1 contact from sessionStorage. If phone/email are missing
-  // (direct hit on this URL), send them back to Step 1 (home).
+  // (direct hit, new tab, or expired session), show a graceful recovery screen
+  // instead of silently bouncing. Consent lives at Step 1, so recovery sends
+  // them back there to restart rather than re-collecting contact here.
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem(LEAD_KEY)
       const parsed: Lead = raw ? JSON.parse(raw) : {}
       if (!parsed.phone || !parsed.email) {
-        router.replace("/")
+        setStatus("missing")
         return
       }
       setLead(parsed)
-      setReady(true)
+      setStatus("ready")
     } catch {
-      router.replace("/")
+      setStatus("missing")
     }
   }, [router])
 
@@ -205,7 +207,16 @@ export function BuyerProfilePage({
     setSubmitting(true)
     setError("")
     try {
-      const band = priceIdx != null ? PRICE_BANDS[priceIdx] : null
+      // Collapse the selected price bands into one overall [min, max] range. A
+      // band with no min/max means "no floor"/"no ceiling", which widens the
+      // range to open-ended on that side.
+      let asking_price_min: number | undefined
+      let asking_price_max: number | undefined
+      if (priceIdxs.length > 0) {
+        const bands = priceIdxs.map((i) => PRICE_BANDS[i])
+        asking_price_min = bands.some((b) => b.min == null) ? undefined : Math.min(...bands.map((b) => b.min as number))
+        asking_price_max = bands.some((b) => b.max == null) ? undefined : Math.max(...bands.map((b) => b.max as number))
+      }
       const res = await fetch("/api/public/buyers/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -219,8 +230,8 @@ export function BuyerProfilePage({
           property_types: propertyTypes,
           payment_methods: payments,
           locations,
-          asking_price_min: band?.min,
-          asking_price_max: band?.max,
+          asking_price_min,
+          asking_price_max,
           consent_text: consentText,
         }),
       })
@@ -233,7 +244,35 @@ export function BuyerProfilePage({
     }
   }
 
-  if (!ready || !lead) {
+  if (status === "missing") {
+    return (
+      <div style={{ ...themeToCssVars(theme), fontFamily: "var(--body)", color: INK, background: PAGE, minHeight: "100vh" }}>
+        <SiteFonts typeStyleId={theme.typeStyleId} />
+        <header style={{ background: "#fff", borderBottom: `1px solid ${LINE}` }}>
+          <div style={{ maxWidth: 460, margin: "0 auto", padding: "13px 20px", display: "flex", justifyContent: "center" }}>
+            <BrandLockup logoUrl={theme.logoUrl} brandName={brandName} />
+          </div>
+        </header>
+        <div style={{ maxWidth: 420, margin: "0 auto", padding: "60px 20px", textAlign: "center" }}>
+          <h1 style={{ fontFamily: "var(--head)", fontSize: 23, fontWeight: 800, color: "var(--p)", margin: 0, letterSpacing: "-.01em" }}>
+            Let&apos;s pick up where you left off
+          </h1>
+          <p style={{ fontSize: 14.5, color: MUT, margin: "10px 0 0", lineHeight: 1.55 }}>
+            We couldn&apos;t find your details — it only takes a few seconds to start. Your spot on the list is one quick step away.
+          </p>
+          <button
+            type="button"
+            onClick={() => router.push("/")}
+            style={{ marginTop: 22, padding: "13px 24px", borderRadius: 12, border: "none", background: "var(--a)", color: "var(--a-ink)", fontFamily: "var(--head)", fontWeight: 800, fontSize: 15, cursor: "pointer" }}
+          >
+            Start over — it&apos;s quick →
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (status !== "ready" || !lead) {
     return (
       <div style={{ ...themeToCssVars(theme), minHeight: "100vh", background: PAGE }}>
         <SiteFonts typeStyleId={theme.typeStyleId} />
@@ -320,15 +359,15 @@ export function BuyerProfilePage({
         )}
 
         <div style={card}>
-          <SectionTitle n={stepNo("price")} title="Your price range" helper="Ballpark is fine — change it anytime." />
+          <SectionTitle n={stepNo("price")} title="Your price range" helper="Pick any that fit — you can choose more than one." />
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {PRICE_BANDS.map((b, i) => {
-              const active = priceIdx === i
+              const active = priceIdxs.includes(i)
               return (
                 <button
                   key={b.label}
                   type="button"
-                  onClick={() => setPriceIdx(active ? null : i)}
+                  onClick={() => setPriceIdxs((prev) => (prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i]))}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
