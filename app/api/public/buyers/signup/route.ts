@@ -89,22 +89,23 @@ export async function POST(request: NextRequest) {
       "id,org_id,fname,lname,status,tags,locations,property_type,investor,cash_buyer,owner_financing,first_time_buyer,can_receive_sms,is_unsubscribed"
 
     // Dedup MUST be matched at the SAME scope as the unique indexes on buyers.
-    // buyers_email_norm_idx and buyers_phone_norm_idx are GLOBAL (cross-org)
-    // unique indexes, so this lookup is intentionally NOT org-scoped. A lead is
-    // a duplicate if it matches an existing row by phone_norm OR email_norm.
-    // NOTE: if those indexes are ever migrated to org-scoped partial unique
-    // indexes on (org_id, *), this lookup MUST add .eq("org_id", orgId).
+    // buyers_org_email_norm_idx / buyers_org_phone_norm_idx are PER-ORG partial
+    // unique indexes on (org_id, email_norm) / (org_id, phone_norm), so this
+    // lookup is org-scoped: a lead is a duplicate only if it matches an existing
+    // row in the SAME org by phone_norm OR email_norm. When orgId can't be
+    // resolved (no host match and no PUBLIC_SIGNUP_DEFAULT_ORG_ID) we fall back
+    // to a global match, mirroring the insert's reliance on the column default.
     const orParts = [`phone_norm.eq.${phoneNorm}`]
     if (emailNorm) orParts.push(`email_norm.eq.${emailNorm}`)
     const orFilter = orParts.join(",")
 
     async function findExistingBuyer() {
-      const { data, error } = await supabaseAdmin
+      let q = supabaseAdmin
         .from("buyers")
         .select(DEDUP_COLS)
         .or(orFilter)
-        .limit(1)
-        .maybeSingle()
+      if (orgId) q = q.eq("org_id", orgId)
+      const { data, error } = await q.limit(1).maybeSingle()
       if (error) console.error("[public-buyers-signup] dedup lookup error", error)
       return data
     }
@@ -219,7 +220,7 @@ export async function POST(request: NextRequest) {
       if (error) {
         // 23505 = unique_violation. A duplicate the proactive dedup did not catch
         // (race, or matched on a column the OR did not cover) collided with a
-        // GLOBAL unique index. Recover by re-looking-up and updating instead of
+        // per-org unique index. Recover by re-looking-up and updating instead of
         // returning a 500.
         if ((error as any)?.code === "23505") {
           const dup = await findExistingBuyer()
