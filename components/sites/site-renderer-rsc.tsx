@@ -3,7 +3,6 @@ import { siteConfig } from "@/lib/site-builder/blocks/config"
 import { themeToCssVars } from "@/lib/site-builder/theme"
 import { SiteFonts } from "@/components/sites/site-fonts"
 import { SiteContextProvider, type SiteFormContext } from "@/lib/site-builder/site-context"
-import { SiteStyles } from "@/components/sites/site-styles"
 import { interpolateSiteData, cityFromMarkets } from "@/lib/site-builder/interpolate"
 import { injectNavIdentity } from "@/lib/site-builder/resolve-site"
 import type { SiteTheme } from "@/lib/site-builder/types"
@@ -37,7 +36,6 @@ export function SiteRendererRSC({
   const layout = (data as any)?.root?.props?.layout
   return (
     <div className={`lh-site${layout ? ` lh-lay-${layout}` : ""}`} style={themeToCssVars(theme)}>
-      <SiteStyles />
       <SiteFonts typeStyleId={typeStyleId} />
       <SiteContextProvider value={form}>
         <main>

@@ -1,13 +1,37 @@
 "use client"
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Puck, type Data } from "@measured/puck"
+import { Puck, usePuck, type Data } from "@measured/puck"
 import "@measured/puck/puck.css"
 import { siteConfig } from "@/lib/site-builder/blocks/config"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, Loader2, Check, ExternalLink } from "lucide-react"
 
 type EditablePage = { path: string; label: string; data: Data }
+
+// Lives inside the <Puck> context and switches the edited document in place when
+// the active page tab changes. Puck mounts with the initial page's data, so the
+// first run is skipped; afterwards each tab change dispatches setData — avoiding
+// a full <Puck> remount (and the iframe teardown crash that came with it).
+function StudioDataSync({
+  activePath,
+  dataByPath,
+}: {
+  activePath: string
+  dataByPath: React.MutableRefObject<Record<string, Data>>
+}) {
+  const { dispatch } = usePuck()
+  const firstRun = useRef(true)
+  useEffect(() => {
+    if (firstRun.current) {
+      firstRun.current = false
+      return
+    }
+    const next = dataByPath.current[activePath]
+    if (next) dispatch({ type: "setData", data: next })
+  }, [activePath, dispatch, dataByPath])
+  return null
+}
 
 export function SiteStudioEditor({
   siteId, slug, siteName, status, pages,
@@ -45,12 +69,12 @@ export function SiteStudioEditor({
 
   return (
     <Puck
-      key={activePath}
       config={siteConfig as any}
       data={dataByPath.current[activePath]}
       onChange={(d: Data) => { dataByPath.current[activePath] = d }}
       permissions={{ insert: false }}
     >
+      <StudioDataSync activePath={activePath} dataByPath={dataByPath} />
       <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", borderBottom: "1px solid var(--border, #e5e7eb)", gap: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
