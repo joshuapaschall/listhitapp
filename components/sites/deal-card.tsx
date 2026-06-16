@@ -130,7 +130,7 @@ export function DealCard({ property, variant = "teaser", locked = false, href, s
               {placeholder.specs.join(" · ")}
             </div>
           ) : null}
-          <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 600, color: "var(--a)" }}>
+          <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 600, color: "var(--a-ink-light)" }}>
             🔒 Address &amp; full details after you join
           </div>
         </div>
@@ -243,7 +243,7 @@ export function DealCard({ property, variant = "teaser", locked = false, href, s
           <div style={{ marginTop: showAddress ? 2 : 6, fontSize: 14, color: "#42505f" }}>{cityState}</div>
         ) : null}
         {locked ? (
-          <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 600, color: "var(--a)" }}>
+          <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 600, color: "var(--a-ink-light)" }}>
             🔒 Address &amp; full details after you join
           </div>
         ) : specs ? (

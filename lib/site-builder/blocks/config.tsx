@@ -138,7 +138,7 @@ export const siteConfig: Config = {
               fontWeight: 700,
               letterSpacing: ".06em",
               textTransform: "uppercase",
-              color: "var(--a)",
+              color: "var(--a-ink-light)",
               marginBottom: 12,
             }}
           >
@@ -431,7 +431,7 @@ export const siteConfig: Config = {
               >
                 <div>
                   {eyebrow && (
-                    <div style={{ color: "var(--a)", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", fontSize: 13, marginBottom: 10 }}>
+                    <div style={{ color: "var(--a-ink-light)", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", fontSize: 13, marginBottom: 10 }}>
                       {eyebrow}
                     </div>
                   )}
@@ -801,7 +801,7 @@ export const siteConfig: Config = {
                         height: 32,
                         borderRadius: 8,
                         background: "color-mix(in srgb, var(--a) 18%, #fff)",
-                        color: "var(--a)",
+                        color: "var(--a-ink-light)",
                         fontWeight: 800,
                         flexShrink: 0,
                       }}
@@ -936,7 +936,7 @@ export const siteConfig: Config = {
             <div className="lh-grid-2" style={{ display: "grid", gridTemplateColumns: "minmax(0, 360px) minmax(0, 1fr)", gap: 40, alignItems: "start" }}>
               <div>
                 {eyebrow ? (
-                  <div style={{ fontFamily: "var(--body)", fontSize: 12.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--a)", marginBottom: 12 }}>
+                  <div style={{ fontFamily: "var(--body)", fontSize: 12.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--a-ink-light)", marginBottom: 12 }}>
                     {eyebrow}
                   </div>
                 ) : null}
@@ -1069,7 +1069,7 @@ export const siteConfig: Config = {
                     <div style={{ fontFamily: "var(--head)", fontWeight: 800, fontSize: 16.5, color: "var(--p)" }}>{it?.title}</div>
                     {it?.body ? <p style={{ color: "#5a6675", fontSize: 14, lineHeight: 1.6, marginTop: 7 }}>{it.body}</p> : null}
                     {it?.href ? (
-                      <a href={it.href} style={{ display: "inline-block", marginTop: 10, fontFamily: "var(--head)", fontWeight: 700, fontSize: 13.5, color: "var(--a)", textDecoration: "none" }}>
+                      <a href={it.href} style={{ display: "inline-block", marginTop: 10, fontFamily: "var(--head)", fontWeight: 700, fontSize: 13.5, color: "var(--a-ink-light)", textDecoration: "none" }}>
                         Learn more →
                       </a>
                     ) : null}

@@ -57,7 +57,7 @@ export function WelcomePage({ brandName, theme }: { brandName: string; theme: Si
           </svg>
         </div>
 
-        <div style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--a)", marginTop: 14 }}>
+        <div style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--a-ink-light)", marginTop: 14 }}>
           You&apos;re all set
         </div>
         <h1 style={{ fontFamily: "var(--head)", fontSize: 30, fontWeight: 800, color: "var(--p)", margin: "7px 0 0", letterSpacing: "-.01em" }}>
