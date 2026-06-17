@@ -77,7 +77,8 @@ export async function POST(_request: Request, context: RouteContext) {
       .eq("org_id", orgId)
 
     return NextResponse.json({ thumbnailUrl })
-  } catch {
+  } catch (err) {
+    console.error("[thumbnail] capture failed", { siteId: id }, err)
     // Sanitize: never leak the underlying error. Capture is fire-and-forget.
     if (browser) {
       try {
