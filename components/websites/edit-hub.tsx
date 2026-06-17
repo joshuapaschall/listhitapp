@@ -28,6 +28,7 @@ export function EditHub({
   currentTemplateId,
   templates,
   pages,
+  thumbnailUrl,
 }: {
   siteId: string
   siteName: string
@@ -39,6 +40,7 @@ export function EditHub({
   currentTemplateId: string
   templates: TemplateMeta[]
   pages: EditHubPage[]
+  thumbnailUrl?: string | null
 }) {
   const [active, setActive] = useState<SectionKey>("content")
   const [pageState, setPageState] = useState<EditHubPage[]>(pages)
@@ -97,14 +99,24 @@ export function EditHub({
               </span>
             </div>
 
-            <div className="overflow-hidden rounded-xl border border-border">
-              <div className="flex h-44 items-center justify-center px-4" style={{ background: primary }}>
-                <span className="text-center text-lg font-semibold text-white">{siteName}</span>
+            {thumbnailUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={thumbnailUrl}
+                alt=""
+                className="aspect-video w-full rounded-lg border border-border object-cover"
+                loading="lazy"
+              />
+            ) : (
+              <div className="overflow-hidden rounded-xl border border-border">
+                <div className="flex h-44 items-center justify-center px-4" style={{ background: primary }}>
+                  <span className="text-center text-lg font-semibold text-white">{siteName}</span>
+                </div>
+                <p className="bg-muted/30 px-4 py-2 text-center text-xs text-muted-foreground">
+                  A live preview of your saved site is coming soon.
+                </p>
               </div>
-              <p className="bg-muted/30 px-4 py-2 text-center text-xs text-muted-foreground">
-                A live preview of your saved site is coming soon.
-              </p>
-            </div>
+            )}
 
             <div className="space-y-2">
               <Button asChild variant="brand">

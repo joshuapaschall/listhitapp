@@ -23,6 +23,7 @@ interface SiteRow {
   name: string
   slug: string
   status: string
+  thumbnail_url?: string | null
 }
 
 export default function WebsitesPage() {
@@ -141,7 +142,23 @@ export default function WebsitesPage() {
                     </div>
                     <p className="font-mono text-xs text-muted-foreground">{domain}</p>
                   </CardHeader>
-                  <CardContent className="flex-1" />
+                  <CardContent className="flex-1">
+                    {site.thumbnail_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={site.thumbnail_url}
+                        alt=""
+                        className="aspect-video w-full rounded-md border border-border object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="flex aspect-video w-full items-center justify-center rounded-md bg-muted">
+                        <span className="text-xs text-muted-foreground">
+                          {published ? "Preview coming soon" : "Publish to see a preview"}
+                        </span>
+                      </div>
+                    )}
+                  </CardContent>
                   <CardFooter className="items-center justify-between gap-2 border-t bg-muted/20">
                     <div className="flex items-center gap-2">
                       <Button asChild variant="outline" size="sm">

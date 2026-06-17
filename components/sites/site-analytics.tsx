@@ -26,6 +26,14 @@ declare global {
 // render or hurts Core Web Vitals. Renders no visible UI.
 export function SiteAnalytics({ tracking }: { tracking?: SiteTracking | null }) {
   useEffect(() => {
+    // Don't fire the owner's pixels during screenshot capture — the thumbnail
+    // route loads the site with ?preview=screenshot and shouldn't pollute analytics.
+    if (
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("preview") === "screenshot"
+    ) {
+      return
+    }
     const t = tracking || {}
     const ga4 = t.ga4_id?.trim()
     const adsId = t.google_ads_id?.trim()

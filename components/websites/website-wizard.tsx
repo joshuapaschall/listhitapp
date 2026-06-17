@@ -474,6 +474,8 @@ export default function WebsiteWizard(props: WizardProps) {
       setStatus(site?.status || "published")
       if (site?.slug) setSlug(site.slug)
       setPublished(true)
+      // Capture the first thumbnail now that the site is live (fire-and-forget).
+      fetch(`/api/sites/${siteId}/thumbnail`, { method: "POST" }).catch(() => {})
     } catch (e: any) {
       setError(e?.message || "Failed to publish")
     } finally {
