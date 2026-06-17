@@ -1,11 +1,9 @@
-import Link from "next/link"
 import MainLayout from "@/components/layout/main-layout"
-import { Card } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { loadOwnedSite } from "@/lib/websites/load-owned-site"
 import { SiteHubNav } from "@/components/websites/site-hub-nav"
+import { EditHub } from "@/components/websites/edit-hub"
 import { ALL_SITE_TEMPLATES } from "@/lib/site-builder/templates"
-import { TemplateSwitcher } from "@/components/websites/template-switcher"
+import { DEFAULT_THEME } from "@/lib/site-builder/types"
 
 export const dynamic = "force-dynamic"
 
@@ -20,13 +18,14 @@ const PERSONA_LABELS: Record<string, string> = {
   agent: "Agents",
 }
 
-const SWATCH_KEYS: { key: string; label: string }[] = [
-  { key: "primary", label: "Primary" },
-  { key: "accent", label: "Accent" },
-]
+// Home plus the legal/compliance pages required for A2P/10DLC — never toggleable.
+const LOCKED_PATHS = new Set(["/", "/terms", "/privacy", "/contact"])
 
 export default async function WebsiteDesignPage({ params }: { params: { id: string } }) {
-  const { site } = await loadOwnedSite(params.id, "id,name,slug,status,persona,theme_json,template_id")
+  const { supabase, orgId, site } = await loadOwnedSite(
+    params.id,
+    "id,name,slug,status,persona,theme_json,template_id",
+  )
   const templatesMeta = ALL_SITE_TEMPLATES.map((t) => ({
     id: t.id,
     name: t.name,
@@ -36,71 +35,47 @@ export default async function WebsiteDesignPage({ params }: { params: { id: stri
     accent: (t.defaultTheme?.accent as string) || "#e8833a",
   }))
   const published = site.status === "published"
-  const domain = `${site.slug}.listhit.io`
   const theme = (site.theme_json || {}) as Record<string, any>
   const personaLabel = PERSONA_LABELS[site.persona] || site.persona || "—"
-  const swatches = SWATCH_KEYS.filter((s) => typeof theme[s.key] === "string" && theme[s.key])
+  const primary = (typeof theme.primary === "string" && theme.primary) || DEFAULT_THEME.primary
+  const accent = (typeof theme.accent === "string" && theme.accent) || DEFAULT_THEME.accent
+
+  // loadOwnedSite returns the org-scoped supabase client; fetch this site's pages
+  // with it (no extra service/route needed) and shape them like the studio does.
+  const { data: pageRows } = await supabase
+    .from("site_pages")
+    .select("path, nav_label, title, enabled, sort_order")
+    .eq("site_id", site.id)
+    .eq("org_id", orgId)
+  const sorted = [...(pageRows || [])].sort((a: any, b: any) => {
+    if (a.path === "/") return -1
+    if (b.path === "/") return 1
+    return (a.sort_order ?? 0) - (b.sort_order ?? 0)
+  })
+  const mappedPages = sorted.map((p: any) => ({
+    path: p.path,
+    label: p.path === "/" ? "Home" : p.nav_label || p.title || p.path,
+    enabled: p.enabled !== false,
+    locked: LOCKED_PATHS.has(p.path),
+  }))
 
   return (
     <MainLayout>
       <div className="space-y-6 p-4 md:p-6">
         <SiteHubNav active="design" siteId={site.id} siteName={site.name} slug={site.slug} published={published} />
 
-        <TemplateSwitcher siteId={site.id} currentTemplateId={site.template_id} templates={templatesMeta} />
-
-        <Card className="space-y-5 p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <h2 className="text-sm font-semibold">Theme</h2>
-            <Button asChild variant="brand">
-              <Link href={`/websites/${site.id}/edit`}>Open site editor</Link>
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-            <div>
-              <div className="text-xs font-medium text-muted-foreground">Audience</div>
-              <div className="mt-1 text-sm font-medium text-foreground">{personaLabel}</div>
-            </div>
-            <div>
-              <div className="text-xs font-medium text-muted-foreground">Brand colors</div>
-              <div className="mt-2 flex flex-wrap gap-3">
-                {swatches.length > 0 ? (
-                  swatches.map((s) => (
-                    <div key={s.key} className="flex items-center gap-2">
-                      <span
-                        className="h-6 w-6 rounded-md border border-border"
-                        style={{ background: theme[s.key] }}
-                      />
-                      <span className="text-xs text-muted-foreground">{s.label}</span>
-                    </div>
-                  ))
-                ) : (
-                  <span className="text-sm text-muted-foreground">—</span>
-                )}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs font-medium text-muted-foreground">Pages</div>
-              <div className="mt-1 text-sm text-foreground">Home · Properties · Blog · Legal</div>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-5">
-          <h2 className="mb-3 text-sm font-semibold">Live preview</h2>
-          {published ? (
-            <iframe
-              src={`https://${domain}`}
-              title="Site preview"
-              loading="lazy"
-              className="h-[360px] w-full rounded-xl border border-border"
-            />
-          ) : (
-            <div className="flex h-[360px] items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 text-sm text-muted-foreground">
-              Publish to preview
-            </div>
-          )}
-        </Card>
+        <EditHub
+          siteId={site.id}
+          siteName={site.name}
+          status={site.status}
+          slug={site.slug}
+          personaLabel={personaLabel}
+          primary={primary}
+          accent={accent}
+          currentTemplateId={site.template_id}
+          templates={templatesMeta}
+          pages={mappedPages}
+        />
       </div>
     </MainLayout>
   )

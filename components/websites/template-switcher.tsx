@@ -146,7 +146,7 @@ export function TemplateSwitcher({
         {templates.map((t) => {
           const isCur = t.id === current
           return (
-            <div key={t.id} className={`overflow-hidden rounded-lg border ${isCur ? "border-2 border-blue-500" : "border-border"}`}>
+            <div key={t.id} className={`overflow-hidden rounded-lg border ${isCur ? "border-2 border-brand" : "border-border"}`}>
               <Preview variant={t.heroVariant} primary={t.primary} accent={t.accent} />
               <div className="p-3">
                 <div className="mb-1 flex items-center justify-between gap-2">
@@ -155,7 +155,7 @@ export function TemplateSwitcher({
                     {t.name}
                   </span>
                   {isCur ? (
-                    <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-600">Current</span>
+                    <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand">Current</span>
                   ) : null}
                 </div>
                 <p className="min-h-[34px] text-xs leading-relaxed text-muted-foreground">{t.description}</p>

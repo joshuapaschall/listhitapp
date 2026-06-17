@@ -15,7 +15,7 @@ interface SiteHubNavProps {
 const TABS: { key: TabKey; label: string; href: (id: string) => string }[] = [
   { key: "overview", label: "Overview", href: (id) => `/websites/${id}` },
   { key: "posts", label: "Posts", href: (id) => `/websites/${id}/posts` },
-  { key: "design", label: "Design", href: (id) => `/websites/${id}/design` },
+  { key: "design", label: "Edit", href: (id) => `/websites/${id}/design` },
   { key: "analytics", label: "Analytics", href: (id) => `/websites/${id}/analytics` },
   { key: "settings", label: "Settings", href: (id) => `/websites/${id}/settings` },
 ]
