@@ -354,7 +354,7 @@ export default function WebsiteWizard(props: WizardProps) {
         blockType: "Nav",
         props: {
           brandName: draft.content.brandName,
-          phone: draft.content.phone?.trim() ? draft.content.phone : draft.business.phone,
+          phone: draft.business.phone?.trim() ? draft.business.phone : draft.content.phone,
           logoUrl: draft.theme.logoUrl || "",
           layout: draft.theme.headerLayout,
         },

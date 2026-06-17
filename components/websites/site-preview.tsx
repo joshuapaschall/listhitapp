@@ -40,7 +40,7 @@ export function SitePreview({ templateId, persona, theme, content, business, mar
   const effectiveContent = useMemo(
     () => ({
       ...content,
-      phone: content.phone?.trim() ? content.phone : (business.phone || ""),
+      phone: business.phone?.trim() ? business.phone : (content.phone || ""),
     }),
     [content, business],
   )
