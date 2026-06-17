@@ -124,6 +124,8 @@ export function SiteStudioEditor({
       if (!pub.ok) throw new Error((await pub.json().catch(() => ({})))?.error || "Failed to publish")
       dirtyRef.current = false; setDirty(false)
       setSaved(true); setTimeout(() => setSaved(false), 2500)
+      // Refresh the stored screenshot to reflect the saved content (fire-and-forget).
+      fetch(`/api/sites/${siteId}/thumbnail`, { method: "POST" }).catch(() => {})
     } catch (e: any) {
       setError(e?.message || "Failed to save changes")
     } finally { setSaving(false) }

@@ -49,6 +49,9 @@ const nextConfig = {
     return config
   },
   experimental: {
+    // Keep the native Chromium binary out of webpack's bundle — load from
+    // node_modules at runtime (only the thumbnail route imports these).
+    serverComponentsExternalPackages: ["@sparticuz/chromium", "puppeteer-core"],
     outputFileTracingIncludes: {
       // Ensure ffmpeg binary is bundled for any route that uses it
       "app/api/media/convert/route.ts": ["./node_modules/ffmpeg-static/ffmpeg"],

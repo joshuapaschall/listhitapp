@@ -24,7 +24,7 @@ const LOCKED_PATHS = new Set(["/", "/terms", "/privacy", "/contact"])
 export default async function WebsiteDesignPage({ params }: { params: { id: string } }) {
   const { supabase, orgId, site } = await loadOwnedSite(
     params.id,
-    "id,name,slug,status,persona,theme_json,template_id",
+    "id,name,slug,status,persona,theme_json,template_id,thumbnail_url",
   )
   const templatesMeta = ALL_SITE_TEMPLATES.map((t) => ({
     id: t.id,
@@ -75,6 +75,7 @@ export default async function WebsiteDesignPage({ params }: { params: { id: stri
           currentTemplateId={site.template_id}
           templates={templatesMeta}
           pages={mappedPages}
+          thumbnailUrl={site.thumbnail_url ?? null}
         />
       </div>
     </MainLayout>
