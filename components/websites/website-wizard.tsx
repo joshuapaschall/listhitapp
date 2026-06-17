@@ -1277,15 +1277,8 @@ export default function WebsiteWizard(props: WizardProps) {
                   </div>
 
                   {siteId && (
-                    <div className="space-y-2 text-left">
-                      <div>
-                        <h3 className="text-sm font-semibold">Use your own domain (optional)</h3>
-                        <p className="text-xs text-muted-foreground">
-                          Connect a domain like yourcompany.com. Add it, drop in the DNS record we show you, and we&apos;ll
-                          flip it to Connected automatically once it&apos;s pointing here.
-                        </p>
-                      </div>
-                      <CustomDomainCard siteId={siteId} slug={slug} />
+                    <div className="text-left">
+                      <CustomDomainCard siteId={siteId} slug={slug} embedded />
                     </div>
                   )}
 
