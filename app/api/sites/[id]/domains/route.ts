@@ -86,7 +86,22 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ ok: false, error: "Domain hosting isn't configured yet." }, { status: 503 })
     }
 
-    const result = await addProjectDomain(domain)
+    const result = await addProjectDomain(domain).catch((e: any) => {
+      // Vercel blocks a domain that's already attached to another project (or this one).
+      // Convert that one known, expected case to a sentinel so we can return a clear 409.
+      if (e?.code === "domain_already_in_use" || e?.status === 409) return null
+      throw e
+    })
+    if (!result) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "That domain is already connected somewhere else. If you own it, disconnect it from its current setup first, or connect a subdomain like deals.yourbrand.com instead.",
+        },
+        { status: 409 },
+      )
+    }
 
     const { data: inserted, error } = await supabase
       .from("site_domains")
