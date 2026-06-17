@@ -174,7 +174,8 @@ export function injectBrandName(puckData: any, brandName?: string): any {
 // the same logo, brand name, and phone — regardless of what was seeded.
 // - brandName: only replaces the legacy "Your Company"/empty placeholder.
 // - logoUrl:   always set from the site theme (propagates uploads AND removals).
-// - phone:     replaces empty / "(555) 555-5555" placeholder with the real number.
+// - phone:     always set from the canonical business phone (like the logo), so that
+//              updating the business phone propagates to every page's header.
 export function injectNavIdentity(
   puckData: any,
   identity: { brandName?: string; logoUrl?: string | null; phone?: string | null },
@@ -199,8 +200,7 @@ export function injectNavIdentity(
         props.logoUrl = identity.logoUrl || ""
       }
 
-      const curPhone = (props.phone || "").trim()
-      if (identity.phone && identity.phone.trim() && (!curPhone || curPhone === "(555) 555-5555")) {
+      if (identity.phone && identity.phone.trim()) {
         props.phone = identity.phone
       }
 
