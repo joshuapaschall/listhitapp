@@ -1,12 +1,12 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
 import {
-  Globe, Copy, Check, Clock, Trash2, ExternalLink, RefreshCw, Lock, Plus, Zap, Info,
+  Globe, Copy, Check, Trash2, ExternalLink, RefreshCw, Lock, Plus, Zap, Info, ShieldCheck,
 } from "lucide-react"
 
 type DnsRecord = { kind: "routing" | "ownership"; type: string; host: string; value: string }
@@ -25,7 +25,15 @@ function registrable(d: string): string {
   return p.length <= 2 ? d : p.slice(-2).join(".")
 }
 
-export function CustomDomainCard({ siteId, slug }: { siteId: string; slug: string }) {
+export function CustomDomainCard({
+  siteId,
+  slug,
+  embedded = false,
+}: {
+  siteId: string
+  slug: string
+  embedded?: boolean
+}) {
   const [domains, setDomains] = useState<DomainRow[]>([])
   const [configured, setConfigured] = useState(true)
   const [loading, setLoading] = useState(true)
@@ -34,6 +42,7 @@ export function CustomDomainCard({ siteId, slug }: { siteId: string; slug: strin
   const [busyId, setBusyId] = useState<string | null>(null)
   const [reg, setReg] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
+  const [addingAnother, setAddingAnother] = useState(false)
   const domainsRef = useRef<DomainRow[]>([])
   domainsRef.current = domains
 
@@ -104,6 +113,7 @@ export function CustomDomainCard({ siteId, slug }: { siteId: string; slug: strin
         setDomains((prev) => [json.domain, ...prev])
         setValue("")
         setReg(null)
+        setAddingAnother(false)
         toast.success("Domain added — add the DNS record below to finish.")
       } else {
         toast.error(json?.error || "Couldn't add that domain.")
@@ -148,40 +158,98 @@ export function CustomDomainCard({ siteId, slug }: { siteId: string; slug: strin
 
   const freeDomain = `${slug}.listhit.io`
 
-  const CopyChip = ({ label, text }: { label: string; text: string }) => (
-    <div>
-      <div className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="flex items-center justify-between gap-2 rounded-md border bg-muted px-3 py-2">
-        <span className="truncate font-mono text-sm">{text}</span>
-        <button
-          type="button"
-          onClick={() => copy(text)}
-          className="inline-flex shrink-0 items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          {copied === text ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-          {copied === text ? "Copied" : "Copy"}
-        </button>
+  function stepper(active: number) {
+    const steps = ["Add domain", "Point it to us", "Go live"]
+    return (
+      <div className="mb-1 flex items-center">
+        {steps.map((label, i) => {
+          const n = i + 1
+          const done = n < active
+          const isActive = n === active
+          return (
+            <div key={label} className={"flex items-center gap-2 " + (i < 2 ? "flex-1" : "flex-none")}>
+              <span
+                className={
+                  "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-bold transition-colors " +
+                  (done
+                    ? "border-emerald-600 bg-emerald-600 text-white"
+                    : isActive
+                      ? "border-brand bg-brand text-brand-fg ring-4 ring-brand/15"
+                      : "border-border bg-background text-muted-foreground")
+                }
+              >
+                {done ? <Check className="h-3.5 w-3.5" /> : n}
+              </span>
+              <span
+                className={
+                  "whitespace-nowrap text-xs font-semibold " +
+                  (isActive ? "text-brand" : done ? "text-foreground" : "text-muted-foreground")
+                }
+              >
+                {label}
+              </span>
+              {i < 2 ? <span className={"mx-2.5 h-0.5 flex-1 rounded " + (done ? "bg-emerald-600" : "bg-border")} /> : null}
+            </div>
+          )
+        })}
       </div>
+    )
+  }
+
+  function instructionRow(lead: ReactNode, text: string, key: string) {
+    const isCopied = copied === text
+    return (
+      <div key={key} className="flex items-center gap-3">
+        <div className="w-[120px] shrink-0 text-xs leading-tight text-muted-foreground">{lead}</div>
+        <div className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-lg border bg-background px-3 py-2">
+          <span className="truncate font-mono text-sm font-semibold">{text}</span>
+          <button
+            type="button"
+            onClick={() => copy(text)}
+            className={
+              "inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold " +
+              (isCopied ? "text-emerald-600" : "text-muted-foreground hover:text-brand")
+            }
+          >
+            {isCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+            {isCopied ? "Copied" : "Copy"}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  const addRow = (placeholder: string, label: string) => (
+    <div className="flex flex-wrap gap-2.5">
+      <Input
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") add()
+        }}
+        placeholder={placeholder}
+        className="min-w-[220px] flex-1"
+      />
+      <Button onClick={add} disabled={adding || !configured} className="bg-brand text-brand-fg hover:bg-brand-hover">
+        <Plus className="mr-1.5 h-4 w-4" />
+        {adding ? "Adding…" : label}
+      </Button>
     </div>
   )
 
-  const FreeRow = () => (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-b py-2.5">
-      <div>
-        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Free address</div>
-        <div className="mt-0.5 font-mono text-sm">{freeDomain}</div>
-      </div>
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-        <Check className="h-3.5 w-3.5" /> Live
-      </span>
-    </div>
-  )
-
-  return (
-    <Card className="p-5">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold">Custom domain</h2>
-      </div>
+  const content = (
+    <>
+      {!embedded ? (
+        <div className="mb-4">
+          <h2 className="flex items-center gap-2 text-base font-semibold">
+            <Globe className="h-[18px] w-[18px] text-brand" /> Custom domain
+          </h2>
+          <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            You&rsquo;re already live at <span className="font-mono text-foreground">{freeDomain}</span>
+          </div>
+        </div>
+      ) : null}
 
       {!configured ? (
         <p className="mb-3 rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
@@ -190,213 +258,217 @@ export function CustomDomainCard({ siteId, slug }: { siteId: string; slug: strin
         </p>
       ) : null}
 
-      <FreeRow />
-
       {loading ? (
         <p className="py-4 text-sm text-muted-foreground">Loading…</p>
       ) : domains.length === 0 ? (
-        <div className="mt-4">
-          <div className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Your domain</div>
-          <div className="flex flex-wrap gap-2.5">
-            <Input
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") add()
-              }}
-              placeholder="yourbrand.com  ·  or  homes.yourbrand.com"
-              className="min-w-[220px] flex-1"
-            />
-            <Button
-              onClick={add}
-              disabled={adding || !configured}
-              className="bg-brand text-brand-fg hover:bg-brand-hover"
-            >
-              <Plus className="mr-1.5 h-4 w-4" />
-              {adding ? "Adding…" : "Connect domain"}
-            </Button>
+        <div className="space-y-4">
+          {stepper(1)}
+          <div>
+            <h3 className="text-[17px] font-semibold tracking-tight">Use your own domain</h3>
+            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+              Put your site on a domain you own — like{" "}
+              <span className="font-mono text-foreground">yourbrand.com</span>. We&rsquo;ll walk you through it, one step
+              at a time.
+            </p>
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">
-            We&apos;ll show you exactly what to do next — it&apos;s one copy-and-paste step.
-          </p>
+          {addRow("yourbrand.com  ·  or  homes.yourbrand.com", "Connect")}
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+            About 2 minutes · SSL added automatically · nothing else on your domain changes
+          </div>
         </div>
       ) : (
-        <div className="mt-4 space-y-5">
+        <div className="space-y-5">
           {domains.map((d) => {
             const active = d.status === "active"
             const records = Array.isArray(d.dns_records) ? d.dns_records : []
-            return (
-              <div key={d.id} className="rounded-lg border p-4">
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 text-sm font-medium">
-                    <Globe className="h-4 w-4" />
-                    {d.domain}
+            if (active) {
+              return (
+                <div key={d.id} className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-5 text-center dark:border-emerald-900 dark:bg-emerald-950/20">
+                  <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950">
+                    <ShieldCheck className="h-7 w-7 text-emerald-600" />
                   </div>
-                  {active ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-                      <Check className="h-3.5 w-3.5" /> Connected
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-                      <Clock className="h-3.5 w-3.5" /> Waiting on DNS
-                    </span>
-                  )}
+                  <h3 className="text-lg font-bold tracking-tight">
+                    You&rsquo;re live on <span className="text-brand">{d.domain}</span>
+                  </h3>
+                  <p className="mt-1 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <Lock className="h-4 w-4 text-emerald-600" /> Secured with SSL automatically
+                  </p>
+                  <div className="mt-4 flex flex-wrap justify-center gap-2.5">
+                    <Button asChild className="bg-brand text-brand-fg hover:bg-brand-hover">
+                      <a href={`https://${d.domain}`} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="mr-1.5 h-4 w-4" /> Visit your site
+                      </a>
+                    </Button>
+                    <Button variant="outline" disabled={busyId === d.id} onClick={() => remove(d.id)}>
+                      <Trash2 className="mr-1.5 h-4 w-4" /> Remove
+                    </Button>
+                  </div>
+                </div>
+              )
+            }
+            return (
+              <div key={d.id} className="space-y-4 rounded-xl border p-4">
+                {stepper(2)}
+
+                <div className="flex items-start gap-2 rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
+                  <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
+                  One quick step and <span className="font-medium text-foreground">{d.domain}</span> is live. SSL is added
+                  automatically once it connects.
                 </div>
 
-                {active ? (
-                  <>
-                    <div className="mb-3 flex items-center gap-2 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-                      <Lock className="h-4 w-4" />
-                      Your site is live on this domain and secured with SSL.
-                    </div>
-                    <div className="flex flex-wrap gap-2.5">
-                      <Button asChild className="bg-brand text-brand-fg hover:bg-brand-hover">
-                        <a href={`https://${d.domain}`} target="_blank" rel="noopener noreferrer">
-                          <ExternalLink className="mr-1.5 h-4 w-4" /> Visit site
+                <div>
+                  <div className="mb-2 text-sm font-semibold">Where did you buy {registrable(d.domain)}?</div>
+                  {reg ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+                        <span>
+                          <span className="text-muted-foreground">Registrar:</span>{" "}
+                          <span className="font-medium">{REGISTRARS.find((r) => r.key === reg)?.label}</span>
+                        </span>
+                        <button type="button" onClick={() => setReg(null)} className="text-xs font-semibold text-brand">
+                          Change
+                        </button>
+                      </div>
+                      {REGISTRARS.find((r) => r.key === reg)?.url ? (
+                        <a
+                          href={REGISTRARS.find((r) => r.key === reg)?.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand hover:underline"
+                        >
+                          Open {REGISTRARS.find((r) => r.key === reg)?.label} DNS settings
+                          <ExternalLink className="h-3.5 w-3.5" />
                         </a>
-                      </Button>
-                      <Button variant="ghost" disabled={busyId === d.id} onClick={() => remove(d.id)}>
-                        <Trash2 className="mr-1.5 h-4 w-4" /> Remove domain
-                      </Button>
+                      ) : null}
                     </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="mb-4 flex items-start gap-2 rounded-md bg-sky-50 px-3 py-2 text-sm text-sky-700 dark:bg-sky-950 dark:text-sky-300">
-                      <Info className="mt-0.5 h-4 w-4 shrink-0" />
-                      One quick step and you&apos;re live. SSL is added automatically once it connects.
-                    </div>
-
-                    <div className="mb-2 text-sm font-medium">1&nbsp;&nbsp;Where did you buy this domain?</div>
-                    <div className="mb-4 flex flex-wrap gap-2">
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                       {REGISTRARS.map((r) => (
                         <button
                           key={r.key}
                           type="button"
                           onClick={() => setReg(r.key)}
-                          className={
-                            "rounded-md border px-3 py-2 text-sm transition-colors " +
-                            (reg === r.key ? "border-brand border-2 px-[11px] py-[7px]" : "hover:bg-muted")
-                          }
+                          className="rounded-lg border px-3 py-2.5 text-sm font-semibold text-muted-foreground transition-colors hover:border-brand/40 hover:bg-brand/5 hover:text-brand"
                         >
                           {r.label}
                         </button>
                       ))}
                     </div>
-                    {reg ? (
-                      <div className="mb-4 rounded-md bg-muted px-3 py-2.5 text-sm leading-7 text-muted-foreground">
-                        Sign in to {REGISTRARS.find((r) => r.key === reg)?.label}, open the DNS settings for{" "}
-                        <span className="font-medium text-foreground">{registrable(d.domain)}</span>, and add the
-                        record below.
-                        {REGISTRARS.find((r) => r.key === reg)?.url ? (
+                  )}
+                </div>
+
+                <div>
+                  <div className="mb-2 text-sm font-semibold">Add this record</div>
+                  <p className="mb-2.5 text-sm text-muted-foreground">
+                    In your DNS settings, add a new record with these exact values:
+                  </p>
+                  <div className="space-y-2.5 rounded-xl border border-brand/30 bg-brand/5 p-3.5">
+                    {records.map((rec, i) => (
+                      <div key={i} className="space-y-2.5">
+                        {instructionRow(
                           <>
-                            <br />
-                            <a
-                              href={REGISTRARS.find((r) => r.key === reg)?.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-sky-600 hover:underline dark:text-sky-400"
-                            >
-                              Open {REGISTRARS.find((r) => r.key === reg)?.label} DNS settings{" "}
-                              <ExternalLink className="inline h-3.5 w-3.5 align-[-2px]" />
-                            </a>
-                          </>
-                        ) : null}
+                            Set the <span className="font-semibold text-foreground">Type</span> to
+                            {rec.kind === "ownership" ? " (ownership)" : ""}
+                          </>,
+                          rec.type,
+                          `t-${i}`,
+                        )}
+                        {instructionRow(
+                          <>
+                            Set the <span className="font-semibold text-foreground">Name / Host</span> to
+                          </>,
+                          rec.host,
+                          `h-${i}`,
+                        )}
+                        {instructionRow(
+                          <>
+                            Paste into <span className="font-semibold text-foreground">Value</span>
+                          </>,
+                          rec.value,
+                          `v-${i}`,
+                        )}
                       </div>
-                    ) : null}
-
-                    <div className="mb-2 text-sm font-medium">2&nbsp;&nbsp;Add this record</div>
-                    <div className="space-y-2.5">
-                      {records.map((rec, i) => (
-                        <div key={i} className="space-y-2.5">
-                          <div>
-                            <div className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">
-                              Type{rec.kind === "ownership" ? " (ownership)" : ""}
-                            </div>
-                            <div className="inline-flex max-w-[150px] items-center rounded-md border bg-muted px-3 py-2 font-mono text-sm">
-                              {rec.type}
-                            </div>
-                          </div>
-                          <CopyChip label="Name / Host" text={rec.host} />
-                          <CopyChip label="Value / Points to" text={rec.value} />
-                        </div>
-                      ))}
-                      <div>
-                        <div className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">
-                          TTL (seconds) · recommended
-                        </div>
-                        <div className="inline-flex max-w-[170px] items-center justify-between gap-2 rounded-md border bg-muted px-3 py-2">
-                          <span className="font-mono text-sm">600</span>
-                          <button
-                            type="button"
-                            onClick={() => copy("600")}
-                            className="inline-flex shrink-0 items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-                          >
-                            {copied === "600" ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                            {copied === "600" ? "Copied" : "Copy"}
-                          </button>
-                        </div>
-                      </div>
+                    ))}
+                    <div className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
+                      <Zap className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand" />
+                      <span>
+                        <span className="font-semibold text-foreground">TTL:</span> 600 connects faster. Only see
+                        &ldquo;Automatic&rdquo;? Leave it — that&rsquo;s fine.
+                      </span>
                     </div>
-                    <p className="mt-2.5 text-xs leading-6 text-muted-foreground">
-                      <Zap className="mr-1 inline h-3.5 w-3.5 align-[-2px]" />A TTL of 600 (10 minutes) is recommended —
-                      it makes your domain connect faster. No TTL box, or only &ldquo;Automatic&rdquo;? Leave it,
-                      that&apos;s fine too.
+                  </div>
+
+                  <details className="mt-2.5">
+                    <summary className="cursor-pointer text-xs font-semibold text-muted-foreground hover:text-foreground">
+                      What is this, in plain English?
+                    </summary>
+                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                      A DNS record is a signpost that tells the internet where {d.domain} should point. You&rsquo;re
+                      pointing it at us so your site shows up there. Nothing else about your domain or email changes.
                     </p>
+                  </details>
+                </div>
 
-                    <details className="mt-2.5">
-                      <summary className="cursor-pointer text-sm text-sky-600 dark:text-sky-400">
-                        What is this, in plain English?
-                      </summary>
-                      <p className="mt-2 text-sm leading-7 text-muted-foreground">
-                        A DNS record is a signpost that tells the internet where {d.domain} should point. You pick the
-                        type, give it the name and value shown, and set TTL (how long before changes are noticed — lower
-                        connects sooner). Nothing else on your domain changes.
-                      </p>
-                    </details>
+                <div className="flex items-center gap-3 rounded-lg border bg-muted/40 px-3.5 py-3">
+                  <RefreshCw className="h-4 w-4 shrink-0 animate-spin text-brand" />
+                  <span className="text-xs leading-snug text-muted-foreground">
+                    We&rsquo;re checking automatically — this can take a few minutes after you save.{" "}
+                    <span className="font-semibold text-foreground">Keep this open.</span>
+                  </span>
+                </div>
 
-                    <div className="mt-4 flex flex-wrap items-center gap-2.5">
-                      <Button
-                        onClick={() => verify(d.id, true)}
-                        disabled={busyId === d.id}
-                        className="bg-brand text-brand-fg hover:bg-brand-hover"
-                      >
-                        <RefreshCw className={"mr-1.5 h-4 w-4 " + (busyId === d.id ? "animate-spin" : "")} />
-                        {busyId === d.id ? "Checking…" : "I've added it — check now"}
-                      </Button>
-                      <Button variant="ghost" disabled={busyId === d.id} onClick={() => remove(d.id)}>
-                        <Trash2 className="mr-1.5 h-4 w-4" /> Remove
-                      </Button>
-                      <span className="ml-auto text-xs text-muted-foreground">We&apos;ll keep checking automatically</span>
-                    </div>
-                  </>
-                )}
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <Button
+                    onClick={() => verify(d.id, true)}
+                    disabled={busyId === d.id}
+                    className="bg-brand text-brand-fg hover:bg-brand-hover"
+                  >
+                    <RefreshCw className={"mr-1.5 h-4 w-4 " + (busyId === d.id ? "animate-spin" : "")} />
+                    {busyId === d.id ? "Checking…" : "I've added it — check now"}
+                  </Button>
+                  <Button variant="ghost" disabled={busyId === d.id} onClick={() => remove(d.id)}>
+                    <Trash2 className="mr-1.5 h-4 w-4" /> Remove
+                  </Button>
+                </div>
               </div>
             )
           })}
 
           {domains.length > 0 ? (
-            <div>
-              <div className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Add another domain</div>
-              <div className="flex flex-wrap gap-2.5">
-                <Input
-                  value={value}
-                  onChange={(e) => setValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") add()
+            addingAnother ? (
+              <div className="space-y-2">
+                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Add another domain</div>
+                {addRow("anotherbrand.com", "Add")}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAddingAnother(false)
+                    setValue("")
                   }}
-                  placeholder="anotherbrand.com"
-                  className="min-w-[220px] flex-1"
-                />
-                <Button onClick={add} disabled={adding || !configured} variant="outline">
-                  <Plus className="mr-1.5 h-4 w-4" />
-                  {adding ? "Adding…" : "Add"}
-                </Button>
+                  className="text-xs font-semibold text-muted-foreground hover:text-foreground"
+                >
+                  Cancel
+                </button>
               </div>
-            </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setAddingAnother(true)}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-brand"
+              >
+                <Plus className="h-3.5 w-3.5" /> Add another domain
+              </button>
+            )
           ) : null}
         </div>
       )}
-    </Card>
+    </>
   )
+
+  if (embedded) {
+    return <div className="text-left">{content}</div>
+  }
+
+  return <Card className="p-5">{content}</Card>
 }
