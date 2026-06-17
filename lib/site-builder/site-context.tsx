@@ -4,6 +4,7 @@ import type { SitePersona, SiteMarkets, DealSummary, SiteBusiness } from "./type
 import { DEFAULT_BUSINESS } from "./types"
 
 export interface SiteFormContext {
+  siteId?: string   // set by the studio editor so custom fields (image upload) can sign uploads
   persona: SitePersona
   brandName: string
   optinEnabled: boolean
@@ -20,6 +21,7 @@ export interface SiteFormContext {
 }
 
 const DEFAULT_FORM_CONTEXT: SiteFormContext = {
+  siteId: "",
   persona: "cash",
   brandName: "our team",
   optinEnabled: true,

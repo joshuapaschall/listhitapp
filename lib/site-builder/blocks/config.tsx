@@ -8,6 +8,7 @@ import { SiteFooter } from "@/components/sites/site-footer"
 import { SiteHeader } from "@/components/sites/site-header"
 import { siteImage, siteSrcSet } from "@/lib/site-builder/image-url"
 import { SiteStyles } from "@/components/sites/site-styles"
+import { ImageUploadField } from "@/components/sites/image-upload-field"
 
 
 // ---------------------------------------------------------------------------
@@ -115,7 +116,11 @@ export const siteConfig: Config = {
         headline: { type: "textarea", label: "Headline", contentEditable: true },
         subhead: { type: "textarea", label: "Subheadline", contentEditable: true },
         stat: { type: "text", label: "Trust badge", contentEditable: true },
-        imageUrl: { type: "text", label: "Background image URL" },
+        imageUrl: {
+          type: "custom",
+          label: "Background image",
+          render: ({ value, onChange }: any) => <ImageUploadField value={value || ""} onChange={onChange} />,
+        },
         formTitle: { type: "text", label: "Form title" },
         formSubtitle: { type: "text", label: "Form subtitle" },
         ctaLabel: { type: "text", label: "Button text" },

@@ -62,6 +62,7 @@ export function SiteStudioEditor({
   const form = useMemo<SiteFormContext>(() => {
     const consent = buildConsentTexts(brand)
     return {
+      siteId,
       persona,
       brandName: brand,
       optinEnabled: true,
@@ -75,7 +76,7 @@ export function SiteStudioEditor({
       business,
       navLinks: navLinks || [],
     }
-  }, [brand, persona, markets, business, navLinks])
+  }, [siteId, brand, persona, markets, business, navLinks])
 
   // Display-only interpolation of {Brand}/{City} — applies inside <Puck> only,
   // never to <Render> or the saved data (Puck FieldTransforms semantics).
