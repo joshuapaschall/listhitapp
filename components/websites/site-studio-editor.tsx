@@ -8,6 +8,7 @@ import { SiteContextProvider, type SiteFormContext } from "@/lib/site-builder/si
 import { buildConsentTexts } from "@/lib/site-builder/compliance"
 import type { SiteBusiness, SiteMarkets, SitePersona } from "@/lib/site-builder/types"
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import { ArrowLeft, Loader2, Check, ExternalLink } from "lucide-react"
 
 type EditablePage = { path: string; label: string; data: Data }
@@ -48,6 +49,7 @@ export function SiteStudioEditor({
   city: string
 }) {
   const router = useRouter()
+  const published = status === "published"
   const [activePath, setActivePath] = useState(pages[0]?.path || "/")
   const dataByPath = useRef<Record<string, Data>>(
     Object.fromEntries(pages.map((p) => [p.path, p.data])),
@@ -55,6 +57,11 @@ export function SiteStudioEditor({
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState("")
+  // Dirty tracking: dirtyRef gates the onChange hot path so we only flip React
+  // state on the clean→dirty transition, not on every keystroke.
+  const [dirty, setDirty] = useState(false)
+  const dirtyRef = useRef(false)
+  const [showLeave, setShowLeave] = useState(false)
   const liveUrl = slug ? `https://${slug}.listhit.io` : ""
 
   const brand = siteName || "our team"
@@ -89,6 +96,19 @@ export function SiteStudioEditor({
     }
   }, [brand, city])
 
+  // Native "Leave site?" prompt on refresh/close while there are unsaved edits.
+  useEffect(() => {
+    if (!dirty) return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ""
+    }
+    window.addEventListener("beforeunload", handler)
+    return () => window.removeEventListener("beforeunload", handler)
+  }, [dirty])
+
+  // savePageData writes straight to site_pages.puck_data — what the public site
+  // renders. There's no draft buffer, so for a published site this IS live.
   async function publishChanges() {
     setSaving(true); setError(""); setSaved(false)
     try {
@@ -102,10 +122,16 @@ export function SiteStudioEditor({
       }
       const pub = await fetch(`/api/sites/${siteId}/publish`, { method: "POST" })
       if (!pub.ok) throw new Error((await pub.json().catch(() => ({})))?.error || "Failed to publish")
+      dirtyRef.current = false; setDirty(false)
       setSaved(true); setTimeout(() => setSaved(false), 2500)
     } catch (e: any) {
-      setError(e?.message || "Failed to publish changes")
+      setError(e?.message || "Failed to save changes")
     } finally { setSaving(false) }
+  }
+
+  function handleBack() {
+    if (dirty) { setShowLeave(true); return }
+    router.push(`/websites/${siteId}`)
   }
 
   return (
@@ -113,60 +139,109 @@ export function SiteStudioEditor({
     <Puck
       config={siteConfig as any}
       data={dataByPath.current[activePath]}
-      onChange={(d: Data) => { dataByPath.current[activePath] = d }}
+      onChange={(d: Data) => {
+        dataByPath.current[activePath] = d
+        if (!dirtyRef.current) { dirtyRef.current = true; setDirty(true) }
+      }}
       permissions={{ insert: false }}
       fieldTransforms={fieldTransforms as any}
     >
       <StudioDataSync activePath={activePath} dataByPath={dataByPath} />
-      <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", borderBottom: "1px solid var(--border, #e5e7eb)", gap: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-            <Button variant="ghost" size="sm" onClick={() => router.push(`/websites/${siteId}`)}>
+      <div className="flex h-screen flex-col">
+        <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <Button variant="ghost" size="sm" onClick={handleBack}>
               <ArrowLeft className="h-4 w-4" /> Back
             </Button>
-            <span style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{siteName}</span>
-            <span style={{ fontSize: 12, color: "#6b7280", textTransform: "capitalize" }}>{status}</span>
+            <span className="truncate font-semibold">{siteName}</span>
+            <span className="text-xs capitalize text-muted-foreground">{status}</span>
           </div>
           {pages.length > 1 && (
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div className="flex items-center gap-1.5">
               {pages.map((p) => (
                 <button
                   key={p.path}
                   type="button"
                   onClick={() => setActivePath(p.path)}
-                  style={{
-                    fontSize: 13,
-                    padding: "5px 12px",
-                    borderRadius: 8,
-                    border: "1px solid var(--border, #e5e7eb)",
-                    background: p.path === activePath ? "#111827" : "transparent",
-                    color: p.path === activePath ? "#fff" : "#374151",
-                    cursor: "pointer",
-                  }}
+                  className={cn(
+                    "rounded-lg border px-3 py-1.5 text-[13px] transition-colors",
+                    p.path === activePath
+                      ? "border-brand bg-brand text-white"
+                      : "border-border text-muted-foreground hover:bg-muted",
+                  )}
                 >
                   {p.label}
                 </button>
               ))}
             </div>
           )}
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div className="flex items-center gap-3">
+            {dirty ? (
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Unsaved changes
+              </span>
+            ) : saved ? (
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                <Check className="h-3.5 w-3.5" /> Saved
+              </span>
+            ) : null}
             {liveUrl && (
-              <a href={liveUrl} target="_blank" rel="noreferrer" style={{ fontSize: 13, display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <a
+                href={liveUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-[13px] text-muted-foreground hover:text-foreground"
+              >
                 View site <ExternalLink className="h-3.5 w-3.5" />
               </a>
             )}
+            {published && (
+              <span className="hidden text-xs text-muted-foreground md:inline">Changes go live immediately.</span>
+            )}
             <Button variant="brand" size="sm" onClick={publishChanges} disabled={saving}>
-              {saving ? (<><Loader2 className="h-4 w-4 animate-spin" /> Publishing…</>) : saved ? (<><Check className="h-4 w-4" /> Published</>) : "Publish changes"}
+              {saving ? (
+                <><Loader2 className="h-4 w-4 animate-spin" /> {published ? "Saving…" : "Publishing…"}</>
+              ) : saved ? (
+                <><Check className="h-4 w-4" /> {published ? "Saved" : "Published"}</>
+              ) : published ? (
+                "Save changes"
+              ) : (
+                "Publish site"
+              )}
             </Button>
           </div>
         </div>
-        {error && <div style={{ background: "#fef2f2", color: "#991b1b", fontSize: 13, padding: "8px 16px" }}>{error}</div>}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", flex: 1, minHeight: 0 }}>
-          <div style={{ minWidth: 0, overflow: "auto" }}><Puck.Preview /></div>
-          <div style={{ borderLeft: "1px solid var(--border, #e5e7eb)", overflow: "auto" }}><Puck.Fields /></div>
+        {error && <div className="bg-destructive/10 px-4 py-2 text-[13px] text-destructive">{error}</div>}
+        <div className="grid min-h-0 flex-1" style={{ gridTemplateColumns: "1fr 320px" }}>
+          <div className="min-w-0 overflow-auto"><Puck.Preview /></div>
+          <div className="overflow-auto border-l border-border"><Puck.Fields /></div>
         </div>
       </div>
     </Puck>
+
+    {showLeave && (
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="leave-title"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      >
+        <div className="w-full max-w-sm rounded-2xl border border-border bg-background p-5 shadow-lg">
+          <h2 id="leave-title" className="text-base font-semibold">Leave with unsaved changes?</h2>
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            You&apos;ve made edits that aren&apos;t saved yet. If you leave now, you&apos;ll lose them.
+          </p>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => setShowLeave(false)}>
+              Keep editing
+            </Button>
+            <Button type="button" variant="brand" size="sm" onClick={() => router.push(`/websites/${siteId}`)}>
+              Discard &amp; leave
+            </Button>
+          </div>
+        </div>
+      </div>
+    )}
     </SiteContextProvider>
   )
 }
