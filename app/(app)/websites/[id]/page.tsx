@@ -1,5 +1,4 @@
 import Link from "next/link"
-import { ExternalLink } from "lucide-react"
 import MainLayout from "@/components/layout/main-layout"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -22,7 +21,6 @@ function MetricTile({ label, value }: { label: string; value: string }) {
 export default async function WebsiteOverviewPage({ params }: { params: { id: string } }) {
   const { supabase, orgId, site } = await loadOwnedSite(params.id, "id,name,slug,status")
   const published = site.status === "published"
-  const domain = `${site.slug}.listhit.io`
 
   const to = new Date()
   const from = new Date(to.getTime() - 30 * DAY_MS)
@@ -68,30 +66,25 @@ export default async function WebsiteOverviewPage({ params }: { params: { id: st
         <SiteHubNav active="overview" siteId={site.id} siteName={site.name} slug={site.slug} published={published} />
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <MetricTile label="Visitors · 30d" value={fmt(visits)} />
-          <MetricTile label="Leads · 30d" value={fmt(signups)} />
+          <MetricTile label="Visitors · 30d" value={visits == null ? "No traffic yet" : fmt(visits)} />
+          <MetricTile label="Leads · 30d" value={signups == null ? "No leads yet" : fmt(signups)} />
           <MetricTile label="Live listings" value={fmt(liveListings)} />
         </div>
 
         <Card className="p-5">
-          <h2 className="mb-3 text-sm font-semibold">Quick links</h2>
-          <div className="flex flex-wrap items-center gap-2">
+          <h2 className="text-sm font-semibold">{published ? "Your site is live" : "Your site is in draft"}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {published
+              ? "Anyone with the link can join your buyers list. Next, share your link or add a property so there's a deal to show."
+              : "Finish setup and publish to put your site online."}
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             <Button asChild variant="brand">
-              <Link href={`/websites/${site.id}/edit`}>Edit settings</Link>
+              <Link href={`/websites/${site.id}/studio`}>Edit your site</Link>
             </Button>
             <Button asChild variant="outline">
-              <Link href={`/websites/${site.id}/studio`}>Edit page</Link>
+              <Link href={`/websites/${site.id}/edit`}>Edit details</Link>
             </Button>
-            <Button asChild variant="outline">
-              <Link href={`/websites/${site.id}/analytics`}>Analytics</Link>
-            </Button>
-            {published && (
-              <Button asChild variant="ghost">
-                <a href={`https://${domain}`} target="_blank" rel="noreferrer">
-                  View site <ExternalLink className="h-3.5 w-3.5" />
-                </a>
-              </Button>
-            )}
           </div>
         </Card>
       </div>
