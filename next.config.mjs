@@ -58,6 +58,11 @@ const nextConfig = {
       "app/api/webhooks/telnyx-incoming-sms/route.ts": [
         "./node_modules/ffmpeg-static/ffmpeg",
       ],
+      // Bundle the chromium binary AND its runtime-loaded shared-library/font
+      // pack (libnss3, etc.) — Vercel's tracer misses these otherwise.
+      "app/api/sites/[id]/thumbnail/route.ts": [
+        "./node_modules/@sparticuz/chromium/**",
+      ],
     },
   },
 }
