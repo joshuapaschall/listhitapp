@@ -20,9 +20,19 @@ function StatusIcon({ status }: { status: CheckStatus }) {
   return <X className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
 }
 
+// Calm, hollow marker for an untouched post — a checklist to complete, not a failing grade.
+function NeutralDot() {
+  return <span className="mt-0.5 h-4 w-4 shrink-0 rounded-full border border-muted-foreground/40" aria-hidden="true" />
+}
+
 export function SeoCoachPanel(props: SeoInput) {
   const result = useMemo(() => analyzePost(props), [props])
   const b = band(result.score)
+
+  // Until the writer adds a title or any body text, stay neutral instead of
+  // flashing a red "Poor" grade on a blank post.
+  const hasBody = Boolean(props.bodyHtml && props.bodyHtml.replace(/<[^>]*>/g, "").trim().length > 0)
+  const started = Boolean(props.title?.trim()) || hasBody
 
   return (
     <Card className="p-4">
@@ -31,13 +41,21 @@ export function SeoCoachPanel(props: SeoInput) {
       {/* Score block */}
       <div className="mt-3">
         <div className="flex items-end gap-1.5">
-          <span className={cn("text-3xl font-bold leading-none tabular-nums", b.text)}>{result.score}</span>
+          <span className={cn("text-3xl font-bold leading-none tabular-nums", started ? b.text : "text-muted-foreground")}>
+            {started ? result.score : "—"}
+          </span>
           <span className="pb-0.5 text-sm text-muted-foreground">/100</span>
-          <span className={cn("ml-auto text-xs font-semibold", b.text)}>{b.label}</span>
+          <span className={cn("ml-auto text-xs font-semibold", started ? b.text : "text-muted-foreground")}>
+            {started ? b.label : "Let's get this ranking"}
+          </span>
         </div>
         <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-          <div className={cn("h-full rounded-full transition-all", b.bar)} style={{ width: `${result.score}%` }} />
+          <div
+            className={cn("h-full rounded-full transition-all", started ? b.bar : "bg-transparent")}
+            style={{ width: started ? `${result.score}%` : "0%" }}
+          />
         </div>
+        {!started && <p className="mt-2 text-xs text-muted-foreground">As you write, these light up green.</p>}
       </div>
 
       {/* Checks grouped */}
@@ -51,10 +69,10 @@ export function SeoCoachPanel(props: SeoInput) {
               <ul className="mt-1.5 space-y-1.5">
                 {rows.map((c) => (
                   <li key={c.id} className="flex items-start gap-2">
-                    <StatusIcon status={c.status} />
+                    {started ? <StatusIcon status={c.status} /> : <NeutralDot />}
                     <div className="min-w-0">
                       <div className="text-sm text-foreground">{c.label}</div>
-                      {c.hint && c.status !== "pass" ? (
+                      {started && c.hint && c.status !== "pass" ? (
                         <div className="text-xs text-muted-foreground">{c.hint}</div>
                       ) : null}
                     </div>
