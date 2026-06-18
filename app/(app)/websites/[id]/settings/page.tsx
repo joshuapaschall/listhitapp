@@ -56,11 +56,11 @@ export default async function WebsiteSettingsPage({ params }: { params: { id: st
         <Card className="p-5">
           <h2 className="mb-2 text-sm font-semibold">Branding</h2>
           <p className="text-sm text-muted-foreground">
-            Your colors, logo, fonts, and template are edited in the site editor for now.
+            Your colors, logo, fonts, and template are edited in the studio.
           </p>
           <div className="mt-3">
             <Button asChild variant="outline">
-              <Link href={`/websites/${site.id}/edit`}>Edit branding</Link>
+              <Link href={`/websites/${site.id}/studio`}>Edit branding</Link>
             </Button>
           </div>
         </Card>
