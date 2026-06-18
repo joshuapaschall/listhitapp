@@ -83,7 +83,7 @@ export default async function WebsiteOverviewPage({ params }: { params: { id: st
               <Link href={`/websites/${site.id}/studio`}>Edit your site</Link>
             </Button>
             <Button asChild variant="outline">
-              <Link href={`/websites/${site.id}/edit`}>Edit details</Link>
+              <Link href={`/websites/${site.id}/settings`}>Edit details</Link>
             </Button>
           </div>
         </Card>
