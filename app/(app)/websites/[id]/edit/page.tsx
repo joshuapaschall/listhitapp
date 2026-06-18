@@ -1,8 +1,8 @@
-import WebsiteWizard from "@/components/websites/website-wizard"
+import { redirect } from "next/navigation"
 
 type RouteContext = { params: Promise<{ id: string }> }
 
 export default async function EditWebsitePage({ params }: RouteContext) {
   const { id } = await params
-  return <WebsiteWizard mode="edit" siteId={id} />
+  redirect(`/websites/${id}/studio`)
 }
