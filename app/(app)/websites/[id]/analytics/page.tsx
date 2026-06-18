@@ -153,7 +153,7 @@ export default async function WebsiteAnalyticsPage({
                 arrive.
               </p>
               <Button asChild variant="brand">
-                <Link href={`/websites/${site.id}/edit`}>Open website</Link>
+                <Link href={`/websites/${site.id}/studio`}>Edit site</Link>
               </Button>
             </div>
           </Card>
