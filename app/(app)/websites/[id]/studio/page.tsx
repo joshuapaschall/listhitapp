@@ -5,6 +5,7 @@ import { DEFAULT_THEME, DEFAULT_BUSINESS, DEFAULT_MARKETS } from "@/lib/site-bui
 import { mergeThemeIntoRoot, buildSiteNavLinks } from "@/lib/site-builder/resolve-site"
 import { cityFromMarkets } from "@/lib/site-builder/interpolate"
 import { fetchSitePublicUrl } from "@/lib/websites/site-public-url"
+import { ALL_SITE_TEMPLATES } from "@/lib/site-builder/templates"
 import { SiteStudioEditor } from "@/components/websites/site-studio-editor"
 
 export const dynamic = "force-dynamic"
@@ -22,6 +23,14 @@ export default async function StudioPage({ params }: { params: Promise<{ id: str
   const home = (pages || []).find((p: any) => p.path === "/")
   if (!home) notFound()
   const theme = { ...DEFAULT_THEME, ...(site.theme_json || {}) }
+  const templatesMeta = ALL_SITE_TEMPLATES.map((t) => ({
+    id: t.id,
+    name: t.name,
+    description: t.description,
+    heroVariant: t.heroVariant,
+    primary: (t.defaultTheme?.primary as string) || "#173b5e",
+    accent: (t.defaultTheme?.accent as string) || "#e8833a",
+  }))
   const sorted = [...(pages || [])].sort((a: any, b: any) => {
     if (a.path === "/") return -1
     if (b.path === "/") return 1
@@ -66,6 +75,9 @@ export default async function StudioPage({ params }: { params: Promise<{ id: str
       city={city}
       publicUrl={publicUrl}
       pageItems={pageItems}
+      theme={theme}
+      templateId={site.template_id}
+      templates={templatesMeta}
     />
   )
 }

@@ -108,6 +108,7 @@ export function mergeThemeIntoRoot(puckData: any, theme: SiteTheme): any {
     primary: theme.primary,
     accent: theme.accent,
     headingFont: theme.headingFont,
+    bodyFont: theme.bodyFont,   // ADD — so body-font choices actually apply
   }
   data.root = root
   return data

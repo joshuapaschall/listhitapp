@@ -21,12 +21,7 @@ import { ImageUploadField } from "@/components/sites/image-upload-field"
 
 export const siteConfig: Config = {
   root: {
-    fields: {
-      primary: { type: "text", label: "Primary color" },
-      accent: { type: "text", label: "Accent color" },
-      headingFont: { type: "text", label: "Heading font" },
-      bodyFont: { type: "text", label: "Body font" },
-    },
+    fields: {},
     defaultProps: {
       primary: "#173b5e",
       accent: "#e8833a",

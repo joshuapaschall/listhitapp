@@ -1,13 +1,18 @@
 "use client"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Puck, usePuck, type Data } from "@measured/puck"
+import { Puck, usePuck, Render, type Data } from "@measured/puck"
 import "@measured/puck/puck.css"
 import { siteConfig } from "@/lib/site-builder/blocks/config"
 import { SiteContextProvider, type SiteFormContext } from "@/lib/site-builder/site-context"
 import { buildConsentTexts } from "@/lib/site-builder/compliance"
-import type { SiteBusiness, SiteMarkets, SitePersona } from "@/lib/site-builder/types"
+import { mergeThemeIntoRoot } from "@/lib/site-builder/resolve-site"
+import { TYPE_STYLES, resolveTypeFonts } from "@/lib/site-builder/typography"
+import type { SiteBusiness, SiteMarkets, SitePersona, SiteTheme } from "@/lib/site-builder/types"
+import { TemplateSwitcher, type TemplateMeta } from "@/components/websites/template-switcher"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
@@ -42,6 +47,7 @@ function StudioDataSync({
 export function SiteStudioEditor({
   siteId, slug, siteName, status, pages,
   business, markets, persona, navLinks, city, publicUrl, pageItems,
+  theme, templateId, templates,
 }: {
   siteId: string; slug: string; siteName: string; status: string; pages: EditablePage[]
   business: SiteBusiness
@@ -51,11 +57,21 @@ export function SiteStudioEditor({
   city: string
   publicUrl?: string
   pageItems: { path: string; label: string; enabled: boolean; locked: boolean }[]
+  theme: SiteTheme
+  templateId: string
+  templates: TemplateMeta[]
 }) {
   const router = useRouter()
   const published = status === "published"
-  const [mode, setMode] = useState<"content" | "pages">("content")
+  const [mode, setMode] = useState<"content" | "pages" | "design">("content")
   const [pageState, setPageState] = useState(pageItems)
+  const [themeDraft, setThemeDraft] = useState<SiteTheme>(theme)
+  const [themeDirty, setThemeDirty] = useState(false)
+  const [savingTheme, setSavingTheme] = useState(false)
+  function patchTheme(p: Partial<SiteTheme>) {
+    setThemeDraft((t) => ({ ...t, ...p }))
+    setThemeDirty(true)
+  }
   const [activePath, setActivePath] = useState(pages[0]?.path || "/")
   const dataByPath = useRef<Record<string, Data>>(
     Object.fromEntries(pages.map((p) => [p.path, p.data])),
@@ -102,16 +118,17 @@ export function SiteStudioEditor({
     }
   }, [brand, city])
 
-  // Native "Leave site?" prompt on refresh/close while there are unsaved edits.
+  // Native "Leave site?" prompt on refresh/close while there are unsaved edits
+  // (content edits or unsaved brand changes).
   useEffect(() => {
-    if (!dirty) return
+    if (!dirty && !themeDirty) return
     const handler = (e: BeforeUnloadEvent) => {
       e.preventDefault()
       e.returnValue = ""
     }
     window.addEventListener("beforeunload", handler)
     return () => window.removeEventListener("beforeunload", handler)
-  }, [dirty])
+  }, [dirty, themeDirty])
 
   // savePageData writes straight to site_pages.puck_data — what the public site
   // renders. There's no draft buffer, so for a published site this IS live.
@@ -138,7 +155,7 @@ export function SiteStudioEditor({
   }
 
   function handleBack() {
-    if (dirty) { setShowLeave(true); return }
+    if (dirty || themeDirty) { setShowLeave(true); return }
     router.push(`/websites/${siteId}`)
   }
 
@@ -158,6 +175,32 @@ export function SiteStudioEditor({
       toast.error("Couldn't update that page.")
     }
   }
+
+  // Persist the brand to canonical theme_json (what the public site renders from).
+  async function saveTheme() {
+    setSavingTheme(true)
+    try {
+      const res = await fetch(`/api/sites/${siteId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          theme: {
+            primary: themeDraft.primary, accent: themeDraft.accent,
+            headingFont: themeDraft.headingFont, bodyFont: themeDraft.bodyFont,
+            typeStyleId: themeDraft.typeStyleId,
+          },
+        }),
+      })
+      if (!res.ok) throw new Error()
+      toast.success("Brand saved.")
+      setThemeDirty(false)
+    } catch { toast.error("Couldn't save brand.") }
+    finally { setSavingTheme(false) }
+  }
+
+  const homeData = pages.find((p) => p.path === "/")?.data ?? pages[0]?.data
+  const PRIMARY_PRESETS = ["#102a54", "#0f5132", "#7a1f2b", "#3d2b56", "#1a1a1a"]
+  const ACCENT_PRESETS = ["#3b82f6", "#f5a623", "#e8833a", "#16a34a"]
 
   return (
     <SiteContextProvider value={form}>
@@ -248,6 +291,12 @@ export function SiteStudioEditor({
             >Content</button>
             <button
               type="button"
+              onClick={() => setMode("design")}
+              className={cn("flex items-center gap-2 rounded-lg px-3 py-2 text-sm",
+                mode === "design" ? "bg-brand/10 text-brand" : "text-muted-foreground hover:bg-muted")}
+            >Design</button>
+            <button
+              type="button"
               onClick={() => setMode("pages")}
               className={cn("flex items-center gap-2 rounded-lg px-3 py-2 text-sm",
                 mode === "pages" ? "bg-brand/10 text-brand" : "text-muted-foreground hover:bg-muted")}
@@ -262,6 +311,87 @@ export function SiteStudioEditor({
             <div className="min-w-0 overflow-auto"><Puck.Preview /></div>
             <div className="overflow-auto border-l border-border"><Puck.Fields /></div>
           </div>
+
+          {/* Design mode — live preview uses <Render> (not Puck.Preview), safe to mount/unmount */}
+          {mode === "design" && (
+            <div className="grid min-h-0 flex-1" style={{ gridTemplateColumns: "360px 1fr" }}>
+              {/* Controls */}
+              <div className="space-y-6 overflow-auto border-r border-border p-5">
+                <TemplateSwitcher siteId={siteId} currentTemplateId={templateId} templates={templates} />
+
+                <div className="space-y-2">
+                  <Label>Primary color</Label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {PRIMARY_PRESETS.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        aria-label={`Primary ${c}`}
+                        onClick={() => patchTheme({ primary: c })}
+                        className={cn("h-8 w-8 rounded-md border-2", themeDraft.primary === c ? "border-foreground" : "border-transparent")}
+                        style={{ background: c }}
+                      />
+                    ))}
+                    <Input
+                      value={themeDraft.primary}
+                      onChange={(e) => patchTheme({ primary: e.target.value })}
+                      className="w-28 font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Accent color</Label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {ACCENT_PRESETS.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        aria-label={`Accent ${c}`}
+                        onClick={() => patchTheme({ accent: c })}
+                        className={cn("h-8 w-8 rounded-md border-2", themeDraft.accent === c ? "border-foreground" : "border-transparent")}
+                        style={{ background: c }}
+                      />
+                    ))}
+                    <Input
+                      value={themeDraft.accent}
+                      onChange={(e) => patchTheme({ accent: e.target.value })}
+                      className="w-28 font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="font-pairing">Font pairing</Label>
+                  <select
+                    id="font-pairing"
+                    value={themeDraft.typeStyleId ?? ""}
+                    onChange={(e) => {
+                      const id = e.target.value
+                      const f = resolveTypeFonts(id)
+                      patchTheme({ typeStyleId: id, headingFont: f.headingFont, bodyFont: f.bodyFont })
+                    }}
+                    className="flex h-9 w-full rounded-md border border-border bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                  >
+                    {TYPE_STYLES.map((t) => (
+                      <option key={t.id} value={t.id}>{t.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <Button type="button" variant="brand" onClick={saveTheme} disabled={!themeDirty || savingTheme}>
+                  {savingTheme ? "Saving…" : "Save brand"}
+                </Button>
+              </div>
+
+              {/* Live preview — restyles instantly from the draft theme */}
+              <div className="min-w-0 overflow-auto p-4">
+                <div className="overflow-auto rounded-lg border border-border">
+                  <Render config={siteConfig as any} data={mergeThemeIntoRoot(homeData, themeDraft)} />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Pages mode — a plain panel, safe to mount/unmount */}
           {mode === "pages" && (
