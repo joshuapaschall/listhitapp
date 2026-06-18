@@ -92,14 +92,12 @@ export async function GET(request: NextRequest) {
       .select("id", { count: "exact", head: true })
       .eq("status", "available")
       .not("slug", "is", null)
-      .is("deleted_at", null)
 
     let dataQuery = supabaseAdmin
       .from("properties")
       .select("id,slug,address,city,state,zip,latitude,longitude,price,down_payment,monthly_payment,earnest_money,bedrooms,bathrooms,sqft,description,property_type,condition,occupancy,tags,created_at,updated_at")
       .eq("status", "available")
       .not("slug", "is", null)
-      .is("deleted_at", null)
 
     if (orgId) {
       countQuery = countQuery.eq("org_id", orgId)

@@ -62,7 +62,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ slu
       .eq("status", "available")
       .eq("show_on_site", true)
       .not("slug", "is", null)
-      .is("deleted_at", null)
       .maybeSingle()
 
     if (error) throw error

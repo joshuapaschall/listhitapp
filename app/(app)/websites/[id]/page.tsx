@@ -54,7 +54,6 @@ export default async function WebsiteOverviewPage({ params }: { params: { id: st
       .eq("org_id", orgId)
       .eq("show_on_site", true)
       .eq("status", "available")
-      .is("deleted_at", null)
     if (!error) liveListings = count ?? null
   } catch {
     /* leave as null → em-dash */
