@@ -211,6 +211,7 @@ export function SiteStudioEditor({
             headingFont: themeDraft.headingFont, bodyFont: themeDraft.bodyFont,
             typeStyleId: themeDraft.typeStyleId,
             logoUrl: themeDraft.logoUrl, faviconUrl: themeDraft.faviconUrl,
+            headerLayout: themeDraft.headerLayout,
           },
         }),
       })
@@ -436,6 +437,24 @@ export function SiteStudioEditor({
                   )}
                 </div>
 
+                <div className="space-y-2">
+                  <Label>Header layout</Label>
+                  <div className="flex rounded-md border border-border p-0.5 text-sm">
+                    {([["split", "Split"], ["center", "Centered"]] as const).map(([val, label]) => {
+                      const active = (themeDraft.headerLayout === "center" ? "center" : "split") === val
+                      return (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => patchTheme({ headerLayout: val })}
+                          className={cn("flex-1 rounded px-3 py-1.5",
+                            active ? "bg-brand/10 text-brand" : "text-muted-foreground hover:bg-muted")}
+                        >{label}</button>
+                      )
+                    })}
+                  </div>
+                </div>
+
                 <Button type="button" variant="brand" onClick={saveTheme} disabled={!themeDirty || savingTheme}>
                   {savingTheme ? "Saving…" : "Save brand"}
                 </Button>
@@ -450,6 +469,7 @@ export function SiteStudioEditor({
                       brandName: siteName,
                       logoUrl: themeDraft.logoUrl,
                       phone: business?.phone,
+                      layout: themeDraft.headerLayout,
                     })}
                   />
                 </div>
