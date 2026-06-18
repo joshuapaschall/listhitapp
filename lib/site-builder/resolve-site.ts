@@ -179,7 +179,7 @@ export function injectBrandName(puckData: any, brandName?: string): any {
 //              updating the business phone propagates to every page's header.
 export function injectNavIdentity(
   puckData: any,
-  identity: { brandName?: string; logoUrl?: string | null; phone?: string | null },
+  identity: { brandName?: string; logoUrl?: string | null; phone?: string | null; layout?: string | null },
 ): any {
   const data = { ...(puckData || {}) }
   const content = Array.isArray(data.content) ? data.content.map((b: any) => ({ ...b })) : []
@@ -199,6 +199,10 @@ export function injectNavIdentity(
 
       if (identity.logoUrl !== undefined) {
         props.logoUrl = identity.logoUrl || ""
+      }
+
+      if (identity.layout !== undefined && identity.layout !== null) {
+        props.layout = identity.layout
       }
 
       if (identity.phone && identity.phone.trim()) {

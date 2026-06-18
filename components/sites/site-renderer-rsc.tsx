@@ -32,6 +32,7 @@ export function SiteRendererRSC({
     brandName: form?.brandName,
     logoUrl: (theme as any)?.logoUrl,
     phone: (form as any)?.business?.phone,
+    layout: (theme as any)?.headerLayout,
   })
   const layout = (data as any)?.root?.props?.layout
   return (
