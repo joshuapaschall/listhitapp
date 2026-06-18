@@ -9,11 +9,12 @@ export const dynamic = "force-dynamic"
 
 const DAY_MS = 86_400_000
 
-function MetricTile({ label, value }: { label: string; value: string }) {
+function MetricTile({ label, value, helper }: { label: string; value: string; helper?: string }) {
   return (
     <Card className="rounded-2xl border border-border bg-card p-4 shadow-sm">
       <div className="text-xs font-medium text-muted-foreground">{label}</div>
-      <div className="mt-2 text-[27px] font-[650] leading-none tracking-tight text-foreground tabular-nums">{value}</div>
+      <div className="mt-2 text-2xl font-semibold leading-none tracking-tight text-foreground tabular-nums">{value}</div>
+      {helper ? <div className="mt-2 text-[11px] text-muted-foreground">{helper}</div> : null}
     </Card>
   )
 }
@@ -65,9 +66,9 @@ export default async function WebsiteOverviewPage({ params }: { params: { id: st
         <SiteHubNav active="overview" siteId={site.id} siteName={site.name} slug={site.slug} published={published} publicUrl={publicUrl} />
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <MetricTile label="Visitors · 30d" value={visits == null ? "No traffic yet" : fmt(visits)} />
-          <MetricTile label="Leads · 30d" value={signups == null ? "No leads yet" : fmt(signups)} />
-          <MetricTile label="Live listings" value={fmt(liveListings)} />
+          <MetricTile label="Visitors · 30d" value={visits == null ? "—" : fmt(visits)} helper="site visits" />
+          <MetricTile label="Leads · 30d" value={signups == null ? "—" : fmt(signups)} helper="buyers captured" />
+          <MetricTile label="Live listings" value={fmt(liveListings)} helper="shown on your site" />
         </div>
 
         <Card className="p-5">

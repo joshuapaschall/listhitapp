@@ -4,14 +4,16 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Loader2, Trash2, Undo2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
 
 // Uses ONLY existing endpoints: POST /api/sites/[id]/publish ({unpublish:true})
 // and DELETE /api/sites/[id]. No new API routes.
-export function SiteDangerZone({ siteId, published }: { siteId: string; published: boolean }) {
+export function SiteDangerZone({ siteId, published, siteName }: { siteId: string; published: boolean; siteName: string }) {
   const router = useRouter()
   const [busy, setBusy] = useState<"unpublish" | "delete" | null>(null)
-  const [confirming, setConfirming] = useState(false)
+  const [confirmName, setConfirmName] = useState("")
+  const canDelete = confirmName.trim() === siteName.trim() && busy === null
 
   async function unpublish() {
     setBusy("unpublish")
@@ -41,7 +43,6 @@ export function SiteDangerZone({ siteId, published }: { siteId: string; publishe
     } catch {
       toast.error("Couldn't delete the website")
       setBusy(null)
-      setConfirming(false)
     }
   }
 
@@ -60,26 +61,24 @@ export function SiteDangerZone({ siteId, published }: { siteId: string; publishe
         </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+      <div className="space-y-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
         <div>
           <p className="text-sm font-medium text-destructive">Delete website</p>
           <p className="text-xs text-muted-foreground">Permanently removes this site and its pages. This can&apos;t be undone.</p>
         </div>
-        {confirming ? (
-          <div className="flex items-center gap-2">
-            <Button type="button" variant="ghost" size="sm" onClick={() => setConfirming(false)} disabled={busy !== null}>
-              Cancel
-            </Button>
-            <Button type="button" variant="destructive" size="sm" onClick={remove} disabled={busy !== null}>
-              {busy === "delete" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-              Confirm delete
-            </Button>
-          </div>
-        ) : (
-          <Button type="button" variant="destructive" size="sm" onClick={() => setConfirming(true)} disabled={busy !== null}>
-            <Trash2 className="h-4 w-4" /> Delete
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            value={confirmName}
+            onChange={(e) => setConfirmName(e.target.value)}
+            placeholder={`Type "${siteName}" to confirm`}
+            className="min-w-[220px] flex-1"
+            aria-label="Type the site name to confirm deletion"
+          />
+          <Button type="button" variant="destructive" size="sm" onClick={remove} disabled={!canDelete}>
+            {busy === "delete" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+            Delete
           </Button>
-        )}
+        </div>
       </div>
     </div>
   )

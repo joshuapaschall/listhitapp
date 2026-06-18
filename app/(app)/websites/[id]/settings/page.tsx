@@ -59,7 +59,7 @@ export default async function WebsiteSettingsPage({ params }: { params: { id: st
 
         <Card className="p-5">
           <h2 className="mb-3 text-sm font-semibold">Danger zone</h2>
-          <SiteDangerZone siteId={site.id} published={published} />
+          <SiteDangerZone siteId={site.id} published={published} siteName={site.name} />
         </Card>
       </div>
     </MainLayout>
