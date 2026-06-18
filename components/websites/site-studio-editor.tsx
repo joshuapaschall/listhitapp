@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
-import { ArrowLeft, Loader2, Check, ExternalLink } from "lucide-react"
+import { ArrowLeft, Loader2, Check, ExternalLink, Monitor, Smartphone } from "lucide-react"
 
 type EditablePage = { path: string; label: string; data: Data }
 
@@ -65,6 +65,7 @@ export function SiteStudioEditor({
   const router = useRouter()
   const published = status === "published"
   const [mode, setMode] = useState<"content" | "pages" | "design">("content")
+  const [device, setDevice] = useState<"desktop" | "mobile">("desktop")
   const [pageState, setPageState] = useState(pageItems)
   const [themeDraft, setThemeDraft] = useState<SiteTheme>(theme)
   const [themeDirty, setThemeDirty] = useState(false)
@@ -268,6 +269,18 @@ export function SiteStudioEditor({
             </div>
           )}
           <div className="flex items-center gap-3">
+            {mode !== "pages" && (
+              <div className="flex rounded-md border border-border p-0.5">
+                <button type="button" title="Desktop" onClick={() => setDevice("desktop")}
+                  className={cn("rounded px-2 py-1", device === "desktop" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground")}>
+                  <Monitor className="h-4 w-4" />
+                </button>
+                <button type="button" title="Mobile" onClick={() => setDevice("mobile")}
+                  className={cn("rounded px-2 py-1", device === "mobile" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground")}>
+                  <Smartphone className="h-4 w-4" />
+                </button>
+              </div>
+            )}
             {dirty ? (
               <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
                 <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Unsaved changes
@@ -332,7 +345,11 @@ export function SiteStudioEditor({
             className={cn("grid min-h-0 flex-1", mode !== "content" && "hidden")}
             style={{ gridTemplateColumns: "1fr 320px" }}
           >
-            <div className="min-w-0 overflow-auto"><Puck.Preview /></div>
+            <div className="min-w-0 overflow-auto">
+              <div className={cn("mx-auto h-full transition-[max-width]", device === "mobile" ? "max-w-[390px]" : "max-w-none")}>
+                <Puck.Preview />
+              </div>
+            </div>
             <div className="overflow-auto border-l border-border"><Puck.Fields /></div>
           </div>
 
@@ -462,7 +479,7 @@ export function SiteStudioEditor({
 
               {/* Live preview — restyles instantly from the draft theme */}
               <div className="min-w-0 overflow-auto p-4">
-                <div className="overflow-auto rounded-lg border border-border">
+                <div className={cn("mx-auto overflow-auto rounded-lg border border-border transition-[max-width]", device === "mobile" && "max-w-[390px]")}>
                   <Render
                     config={siteConfig as any}
                     data={injectNavIdentity(mergeThemeIntoRoot(homeData, themeDraft), {
