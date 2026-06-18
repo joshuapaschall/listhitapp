@@ -6,7 +6,8 @@ import "@measured/puck/puck.css"
 import { siteConfig } from "@/lib/site-builder/blocks/config"
 import { SiteContextProvider, type SiteFormContext } from "@/lib/site-builder/site-context"
 import { buildConsentTexts } from "@/lib/site-builder/compliance"
-import { mergeThemeIntoRoot } from "@/lib/site-builder/resolve-site"
+import { mergeThemeIntoRoot, injectNavIdentity } from "@/lib/site-builder/resolve-site"
+import { ASSET_ACCEPT, downscaleImage, uploadSiteAsset } from "@/lib/site-builder/upload-asset"
 import { TYPE_STYLES, resolveTypeFonts } from "@/lib/site-builder/typography"
 import type { SiteBusiness, SiteMarkets, SitePersona, SiteTheme } from "@/lib/site-builder/types"
 import { TemplateSwitcher, type TemplateMeta } from "@/components/websites/template-switcher"
@@ -71,6 +72,27 @@ export function SiteStudioEditor({
   function patchTheme(p: Partial<SiteTheme>) {
     setThemeDraft((t) => ({ ...t, ...p }))
     setThemeDirty(true)
+  }
+  const [logoUploading, setLogoUploading] = useState(false)
+  const [faviconUploading, setFaviconUploading] = useState(false)
+
+  async function uploadBrandAsset(
+    file: File | undefined,
+    maxWidth: number,
+    setBusy: (b: boolean) => void,
+    onDone: (url: string) => void,
+  ) {
+    if (!file) return
+    setBusy(true)
+    try {
+      const optimized = await downscaleImage(file, maxWidth)
+      const url = await uploadSiteAsset(optimized, siteId)
+      onDone(url)
+    } catch {
+      toast.error("Upload failed.")
+    } finally {
+      setBusy(false)
+    }
   }
   const [activePath, setActivePath] = useState(pages[0]?.path || "/")
   const dataByPath = useRef<Record<string, Data>>(
@@ -188,6 +210,7 @@ export function SiteStudioEditor({
             primary: themeDraft.primary, accent: themeDraft.accent,
             headingFont: themeDraft.headingFont, bodyFont: themeDraft.bodyFont,
             typeStyleId: themeDraft.typeStyleId,
+            logoUrl: themeDraft.logoUrl, faviconUrl: themeDraft.faviconUrl,
           },
         }),
       })
@@ -379,6 +402,40 @@ export function SiteStudioEditor({
                   </select>
                 </div>
 
+                <div className="space-y-2">
+                  <Label>Logo</Label>
+                  {themeDraft.logoUrl ? (
+                    <div className="flex items-center gap-3">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={themeDraft.logoUrl} alt="Logo" className="h-10 w-auto rounded border border-border bg-white p-1" />
+                      <Button type="button" variant="outline" size="sm" onClick={() => patchTheme({ logoUrl: "" })}>Remove</Button>
+                    </div>
+                  ) : (
+                    <label className="flex h-9 w-full cursor-pointer items-center gap-2 rounded-md border border-border px-3 text-sm text-muted-foreground hover:bg-muted">
+                      {logoUploading ? "Uploading…" : "Upload logo"}
+                      <input type="file" accept={ASSET_ACCEPT} className="hidden"
+                        onChange={(e) => uploadBrandAsset(e.target.files?.[0], 800, setLogoUploading, (url) => patchTheme({ logoUrl: url }))} />
+                    </label>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Favicon</Label>
+                  {themeDraft.faviconUrl ? (
+                    <div className="flex items-center gap-3">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={themeDraft.faviconUrl} alt="Favicon" className="h-8 w-8 rounded border border-border bg-white p-1" />
+                      <Button type="button" variant="outline" size="sm" onClick={() => patchTheme({ faviconUrl: "" })}>Remove</Button>
+                    </div>
+                  ) : (
+                    <label className="flex h-9 w-full cursor-pointer items-center gap-2 rounded-md border border-border px-3 text-sm text-muted-foreground hover:bg-muted">
+                      {faviconUploading ? "Uploading…" : "Upload favicon"}
+                      <input type="file" accept={ASSET_ACCEPT} className="hidden"
+                        onChange={(e) => uploadBrandAsset(e.target.files?.[0], 64, setFaviconUploading, (url) => patchTheme({ faviconUrl: url }))} />
+                    </label>
+                  )}
+                </div>
+
                 <Button type="button" variant="brand" onClick={saveTheme} disabled={!themeDirty || savingTheme}>
                   {savingTheme ? "Saving…" : "Save brand"}
                 </Button>
@@ -387,7 +444,14 @@ export function SiteStudioEditor({
               {/* Live preview — restyles instantly from the draft theme */}
               <div className="min-w-0 overflow-auto p-4">
                 <div className="overflow-auto rounded-lg border border-border">
-                  <Render config={siteConfig as any} data={mergeThemeIntoRoot(homeData, themeDraft)} />
+                  <Render
+                    config={siteConfig as any}
+                    data={injectNavIdentity(mergeThemeIntoRoot(homeData, themeDraft), {
+                      brandName: siteName,
+                      logoUrl: themeDraft.logoUrl,
+                      phone: business?.phone,
+                    })}
+                  />
                 </div>
               </div>
             </div>
