@@ -62,7 +62,6 @@ export async function getPublishedDeals(
     .eq("status", "available")
     .eq("show_on_site", true)
     .not("slug", "is", null)
-    .is("deleted_at", null)
   if (orgId) query = query.eq("org_id", orgId)
   if (filters?.minBeds) query = query.gte("bedrooms", filters.minBeds)
   if (filters?.minBaths) query = query.gte("bathrooms", filters.minBaths)
@@ -88,7 +87,6 @@ export async function getPublishedDealCount(orgId: string | null, filters?: Deal
     .eq("status", "available")
     .eq("show_on_site", true)
     .not("slug", "is", null)
-    .is("deleted_at", null)
   if (orgId) query = query.eq("org_id", orgId)
   if (filters?.minBeds) query = query.gte("bedrooms", filters.minBeds)
   if (filters?.minBaths) query = query.gte("bathrooms", filters.minBaths)
@@ -110,7 +108,6 @@ export async function getPublishedDealsForMarket(
     .eq("status", "available")
     .eq("show_on_site", true)
     .not("slug", "is", null)
-    .is("deleted_at", null)
   if (orgId) query = query.eq("org_id", orgId)
 
   // City pages narrow to city + state; county/state pages scope to the state.
@@ -139,7 +136,6 @@ export async function getPublishedDealBySlug(orgId: string | null, slug: string)
     .eq("slug", slug)
     .eq("status", "available")
     .eq("show_on_site", true)
-    .is("deleted_at", null)
   if (orgId) query = query.eq("org_id", orgId)
 
   const { data, error } = await query.maybeSingle()
@@ -163,7 +159,6 @@ export async function getDealByIdForOwner(orgId: string | null, propertyId: stri
       "id,slug,address,city,state,zip,price,bedrooms,bathrooms,sqft,property_type,description,deal_type,finance_subtype,status,year_built,lot_size,mls_number,construction_type,photo_album_url,video_link,show_on_site",
     )
     .eq("id", propertyId)
-    .is("deleted_at", null)
   if (orgId) query = query.eq("org_id", orgId)
 
   const { data, error } = await query.maybeSingle()
@@ -193,7 +188,6 @@ export async function getNearbyPublishedDeals(
       .eq("status", "available")
       .eq("show_on_site", true)
       .not("slug", "is", null)
-      .is("deleted_at", null)
       .neq("id", excludeId)
     if (orgId) q = q.eq("org_id", orgId)
     return q
