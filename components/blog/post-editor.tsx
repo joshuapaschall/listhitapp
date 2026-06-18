@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { ExternalLink, Loader2, Upload } from "lucide-react"
 import { toast } from "sonner"
@@ -68,15 +68,18 @@ export function PostEditor({
   siteId,
   siteSlug,
   post,
+  publicUrl,
 }: {
   mode: "new" | "edit"
   siteId: string
   siteSlug: string
   post?: PostEditorData
+  publicUrl?: string
 }) {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const slugEdited = useRef(mode === "edit")
+  const publicHost = (publicUrl || "").replace(/^https?:\/\//, "") || siteSlug
 
   const [savedId, setSavedId] = useState<string | null>(post?.id ?? null)
   const [savedSlug, setSavedSlug] = useState(post?.slug ?? "")
@@ -95,10 +98,23 @@ export function PostEditor({
   const [metaDescription, setMetaDescription] = useState(post?.metaDescription ?? "")
   const [authorName, setAuthorName] = useState(post?.authorName ?? "")
   const [wantLive, setWantLive] = useState((post?.status ?? "draft") === "published")
+  const [dirty, setDirty] = useState(false)
+
+  // Native "Leave site?" prompt while there are unsaved edits (mirrors the studio editor).
+  useEffect(() => {
+    if (!dirty) return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ""
+    }
+    window.addEventListener("beforeunload", handler)
+    return () => window.removeEventListener("beforeunload", handler)
+  }, [dirty])
 
   function onTitleChange(v: string) {
     setTitle(v)
     if (!slugEdited.current) setSlug(slugify(v))
+    setDirty(true)
   }
 
   const canPublish = title.trim().length > 0 && htmlHasText(bodyHtml) && featuredImageUrl.length > 0
@@ -178,6 +194,7 @@ export function PostEditor({
         })
         const data = await res.json().catch(() => ({}))
         if (!res.ok) throw new Error(data?.error || "Couldn't save post")
+        setDirty(false)
         toast.success(publish ? "Post published" : "Draft saved")
         router.replace(`/websites/${siteId}/posts/${data.id}`)
       } else {
@@ -190,6 +207,7 @@ export function PostEditor({
         if (!res.ok) throw new Error(data?.error || "Couldn't save post")
         setSavedSlug(data.slug ?? savedSlug)
         setSavedStatus(data.status ?? savedStatus)
+        setDirty(false)
         toast.success(publish ? "Post published" : "Post saved")
         router.refresh()
       }
@@ -200,7 +218,7 @@ export function PostEditor({
     }
   }
 
-  const publishedUrl = savedStatus === "published" && savedSlug ? `https://${siteSlug}.listhit.io/blog/${savedSlug}` : null
+  const publishedUrl = savedStatus === "published" && savedSlug && publicUrl ? `${publicUrl}/blog/${savedSlug}` : null
 
   return (
     <div className="mx-auto max-w-6xl space-y-5">
@@ -245,9 +263,10 @@ export function PostEditor({
               onChange={(e) => {
                 slugEdited.current = true
                 setSlug(slugify(e.target.value))
+                setDirty(true)
               }}
             />
-            <p className="font-mono text-xs text-muted-foreground">{siteSlug}.listhit.io/blog/{slug || "…"}</p>
+            <p className="font-mono text-xs text-muted-foreground">{publicHost}/blog/{slug || "…"}</p>
           </div>
         </Card>
 
@@ -255,7 +274,7 @@ export function PostEditor({
         <Card className="space-y-2 p-5">
           <Label>Content</Label>
           <div className="overflow-hidden rounded-lg border border-border">
-            <RichTextEditor value={bodyHtml} onChange={setBodyHtml} placeholder="Write your post…" minHeight={280} />
+            <RichTextEditor value={bodyHtml} onChange={(v) => { setBodyHtml(v); setDirty(true) }} placeholder="Write your post…" minHeight={280} />
           </div>
         </Card>
 
@@ -292,14 +311,14 @@ export function PostEditor({
           )}
           <div className="space-y-1.5">
             <Label htmlFor="post-alt" className="text-sm">Alt text</Label>
-            <Input id="post-alt" placeholder="Describe the image" value={featuredImageAlt} onChange={(e) => setFeaturedImageAlt(e.target.value)} />
+            <Input id="post-alt" placeholder="Describe the image" value={featuredImageAlt} onChange={(e) => { setFeaturedImageAlt(e.target.value); setDirty(true) }} />
           </div>
         </Card>
 
         {/* Excerpt */}
         <Card className="space-y-2 p-5">
           <Label htmlFor="post-excerpt">Excerpt</Label>
-          <Textarea id="post-excerpt" rows={3} placeholder="Short summary shown on the blog index." value={excerpt} onChange={(e) => setExcerpt(e.target.value)} />
+          <Textarea id="post-excerpt" rows={3} placeholder="Short summary shown on the blog index." value={excerpt} onChange={(e) => { setExcerpt(e.target.value); setDirty(true) }} />
         </Card>
 
         {/* Search appearance */}
@@ -307,25 +326,25 @@ export function PostEditor({
           <h2 className="text-sm font-semibold">Search appearance</h2>
           <div className="space-y-1.5">
             <Label htmlFor="post-keyword" className="text-sm">Focus keyword</Label>
-            <Input id="post-keyword" placeholder="e.g. sell my house fast atlanta" value={focusKeyword} onChange={(e) => setFocusKeyword(e.target.value)} />
+            <Input id="post-keyword" placeholder="e.g. sell my house fast atlanta" value={focusKeyword} onChange={(e) => { setFocusKeyword(e.target.value); setDirty(true) }} />
           </div>
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <Label htmlFor="post-metatitle" className="text-sm">Meta title</Label>
               <span className="text-xs text-muted-foreground tabular-nums">{metaTitle.length}/60</span>
             </div>
-            <Input id="post-metatitle" placeholder="Defaults to the post title" value={metaTitle} onChange={(e) => setMetaTitle(e.target.value)} />
+            <Input id="post-metatitle" placeholder="Defaults to the post title" value={metaTitle} onChange={(e) => { setMetaTitle(e.target.value); setDirty(true) }} />
           </div>
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <Label htmlFor="post-metadesc" className="text-sm">Meta description</Label>
               <span className="text-xs text-muted-foreground tabular-nums">{metaDescription.length}/155</span>
             </div>
-            <Textarea id="post-metadesc" rows={2} placeholder="Defaults to the excerpt" value={metaDescription} onChange={(e) => setMetaDescription(e.target.value)} />
+            <Textarea id="post-metadesc" rows={2} placeholder="Defaults to the excerpt" value={metaDescription} onChange={(e) => { setMetaDescription(e.target.value); setDirty(true) }} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="post-author" className="text-sm">Author name</Label>
-            <Input id="post-author" placeholder="Shown on the post" value={authorName} onChange={(e) => setAuthorName(e.target.value)} />
+            <Input id="post-author" placeholder="Shown on the post" value={authorName} onChange={(e) => { setAuthorName(e.target.value); setDirty(true) }} />
           </div>
         </Card>
         </div>

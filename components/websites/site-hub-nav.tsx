@@ -10,6 +10,7 @@ interface SiteHubNavProps {
   slug: string
   published: boolean
   active: TabKey
+  publicUrl?: string | null
 }
 
 const TABS: { key: TabKey; label: string; href: (id: string) => string }[] = [
@@ -20,8 +21,8 @@ const TABS: { key: TabKey; label: string; href: (id: string) => string }[] = [
   { key: "settings", label: "Settings", href: (id) => `/websites/${id}/settings` },
 ]
 
-export function SiteHubNav({ siteId, siteName, slug, published, active }: SiteHubNavProps) {
-  const domain = `${slug}.listhit.io`
+export function SiteHubNav({ siteId, siteName, slug, published, active, publicUrl }: SiteHubNavProps) {
+  const publicHost = publicUrl ? publicUrl.replace(/^https?:\/\//, "") : slug
   return (
     <div className="space-y-4">
       {/* Header row */}
@@ -36,12 +37,12 @@ export function SiteHubNav({ siteId, siteName, slug, published, active }: SiteHu
           </span>
           <div className="min-w-0">
             <h1 className="truncate text-xl font-bold tracking-tight">{siteName}</h1>
-            <p className="truncate font-mono text-xs text-muted-foreground">{domain}</p>
+            <p className="truncate font-mono text-xs text-muted-foreground">{publicHost}</p>
           </div>
         </div>
-        {published && (
+        {published && publicUrl && (
           <a
-            href={`https://${domain}`}
+            href={publicUrl}
             target="_blank"
             rel="noreferrer"
             className="ml-auto inline-flex items-center gap-1.5 text-sm font-medium text-brand hover:underline"

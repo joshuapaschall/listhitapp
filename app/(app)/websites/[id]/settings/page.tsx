@@ -21,20 +21,20 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 export default async function WebsiteSettingsPage({ params }: { params: { id: string } }) {
-  const { site } = await loadOwnedSite(params.id, "id,name,slug,status,deals_public")
+  const { site, publicUrl } = await loadOwnedSite(params.id, "id,name,slug,status,deals_public")
   const published = site.status === "published"
-  const domain = `${site.slug}.listhit.io`
+  const publicHost = publicUrl ? publicUrl.replace(/^https?:\/\//, "") : site.slug
 
   return (
     <MainLayout>
       <div className="space-y-6 p-4 md:p-6">
-        <SiteHubNav active="settings" siteId={site.id} siteName={site.name} slug={site.slug} published={published} />
+        <SiteHubNav active="settings" siteId={site.id} siteName={site.name} slug={site.slug} published={published} publicUrl={publicUrl} />
 
         <Card className="p-5">
           <h2 className="mb-3 text-sm font-semibold">Site basics</h2>
           <Field label="Name">{site.name}</Field>
           <Field label="Public URL">
-            <span className="font-mono text-xs">{domain}</span>
+            <span className="font-mono text-xs">{publicHost}</span>
           </Field>
           <Field label="Status">
             <Badge variant={published ? "default" : "secondary"}>{published ? "Published" : "Draft"}</Badge>

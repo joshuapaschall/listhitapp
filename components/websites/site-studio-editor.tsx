@@ -39,7 +39,7 @@ function StudioDataSync({
 
 export function SiteStudioEditor({
   siteId, slug, siteName, status, pages,
-  business, markets, persona, navLinks, city,
+  business, markets, persona, navLinks, city, publicUrl,
 }: {
   siteId: string; slug: string; siteName: string; status: string; pages: EditablePage[]
   business: SiteBusiness
@@ -47,6 +47,7 @@ export function SiteStudioEditor({
   persona: SitePersona
   navLinks: { label: string; href: string }[]
   city: string
+  publicUrl?: string
 }) {
   const router = useRouter()
   const published = status === "published"
@@ -62,7 +63,7 @@ export function SiteStudioEditor({
   const [dirty, setDirty] = useState(false)
   const dirtyRef = useRef(false)
   const [showLeave, setShowLeave] = useState(false)
-  const liveUrl = slug ? `https://${slug}.listhit.io` : ""
+  const liveUrl = publicUrl || ""
 
   const brand = siteName || "our team"
 

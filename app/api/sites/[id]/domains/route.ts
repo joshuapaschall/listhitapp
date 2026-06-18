@@ -39,6 +39,7 @@ export async function GET(_request: Request, context: RouteContext) {
       .select("*")
       .eq("org_id", orgId)
       .eq("site_id", siteId)
+      .eq("type", "custom")
       .order("created_at", { ascending: false })
     if (error) throw error
 

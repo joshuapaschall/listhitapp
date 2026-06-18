@@ -22,7 +22,7 @@ const PERSONA_LABELS: Record<string, string> = {
 const LOCKED_PATHS = new Set(["/", "/terms", "/privacy", "/contact"])
 
 export default async function WebsiteDesignPage({ params }: { params: { id: string } }) {
-  const { supabase, orgId, site } = await loadOwnedSite(
+  const { supabase, orgId, site, publicUrl } = await loadOwnedSite(
     params.id,
     "id,name,slug,status,persona,theme_json,template_id,thumbnail_url",
   )
@@ -62,7 +62,7 @@ export default async function WebsiteDesignPage({ params }: { params: { id: stri
   return (
     <MainLayout>
       <div className="space-y-6 p-4 md:p-6">
-        <SiteHubNav active="design" siteId={site.id} siteName={site.name} slug={site.slug} published={published} />
+        <SiteHubNav active="design" siteId={site.id} siteName={site.name} slug={site.slug} published={published} publicUrl={publicUrl} />
 
         <EditHub
           siteId={site.id}

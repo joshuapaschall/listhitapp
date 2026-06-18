@@ -4,6 +4,7 @@ import { SiteService } from "@/services/site-service"
 import { DEFAULT_THEME, DEFAULT_BUSINESS, DEFAULT_MARKETS } from "@/lib/site-builder/types"
 import { mergeThemeIntoRoot, buildSiteNavLinks } from "@/lib/site-builder/resolve-site"
 import { cityFromMarkets } from "@/lib/site-builder/interpolate"
+import { fetchSitePublicUrl } from "@/lib/websites/site-public-url"
 import { SiteStudioEditor } from "@/components/websites/site-studio-editor"
 
 export const dynamic = "force-dynamic"
@@ -35,6 +36,7 @@ export default async function StudioPage({ params }: { params: Promise<{ id: str
     .filter((p: any) => p.enabled !== false && p.nav_label && p.path !== "/")
     .map((p: any) => ({ path: p.path, nav_label: p.nav_label, sort_order: p.sort_order ?? 0 }))
   const navLinks = buildSiteNavLinks({ hasPosts: false, enabledPages })
+  const publicUrl = await fetchSitePublicUrl(supabase, orgId, site.id, site.slug || "")
   return (
     <SiteStudioEditor
       siteId={site.id}
@@ -47,6 +49,7 @@ export default async function StudioPage({ params }: { params: Promise<{ id: str
       persona={site.persona}
       navLinks={navLinks}
       city={city}
+      publicUrl={publicUrl}
     />
   )
 }

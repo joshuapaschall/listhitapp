@@ -1,11 +1,8 @@
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
-import { notFound, redirect } from "next/navigation"
 import Link from "next/link"
 import MainLayout from "@/components/layout/main-layout"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { resolveOrgIdForUser } from "@/lib/auth/org-context"
+import { loadOwnedSite } from "@/lib/websites/load-owned-site"
 import { cn } from "@/lib/utils"
 import { AnalyticsTrendChart, type TrendPoint } from "@/components/websites/analytics-trend-chart"
 import { SiteHubNav } from "@/components/websites/site-hub-nav"
@@ -62,24 +59,7 @@ export default async function WebsiteAnalyticsPage({
   params: { id: string }
   searchParams: { range?: string }
 }) {
-  const cookieStore = cookies()
-  const supabase = createServerComponentClient({ cookies: () => cookieStore })
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect("/login")
-
-  const orgId = await resolveOrgIdForUser(user.id)
-  if (!orgId) redirect("/login")
-
-  // Org-scoped load confirms ownership before showing any analytics.
-  const { data: site } = await supabase
-    .from("sites")
-    .select("id,name,slug,status")
-    .eq("id", params.id)
-    .eq("org_id", orgId)
-    .maybeSingle()
-  if (!site) notFound()
+  const { supabase, site, publicUrl } = await loadOwnedSite(params.id, "id,name,slug,status")
 
   const range = resolveRange(searchParams?.range)
   const rangeLabel = RANGES.find((r) => r.key === range)?.label || "Last 30 days"
@@ -137,6 +117,7 @@ export default async function WebsiteAnalyticsPage({
           siteName={site.name}
           slug={site.slug}
           published={site.status === "published"}
+          publicUrl={publicUrl}
         />
 
         {/* Range selector */}

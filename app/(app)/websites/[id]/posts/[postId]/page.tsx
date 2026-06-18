@@ -7,7 +7,7 @@ import { PostEditor, type PostEditorData } from "@/components/blog/post-editor"
 export const dynamic = "force-dynamic"
 
 export default async function EditPostPage({ params }: { params: { id: string; postId: string } }) {
-  const { supabase, orgId, site } = await loadOwnedSite(params.id, "id,name,slug,status")
+  const { supabase, orgId, site, publicUrl } = await loadOwnedSite(params.id, "id,name,slug,status")
 
   const { data: post } = await supabase
     .from("posts")
@@ -38,8 +38,8 @@ export default async function EditPostPage({ params }: { params: { id: string; p
   return (
     <MainLayout>
       <div className="space-y-5 p-4 md:p-6">
-        <SiteHubNav active="posts" siteId={site.id} siteName={site.name} slug={site.slug} published={site.status === "published"} />
-        <PostEditor mode="edit" siteId={site.id} siteSlug={site.slug} post={mapped} />
+        <SiteHubNav active="posts" siteId={site.id} siteName={site.name} slug={site.slug} published={site.status === "published"} publicUrl={publicUrl} />
+        <PostEditor mode="edit" siteId={site.id} siteSlug={site.slug} post={mapped} publicUrl={publicUrl ?? undefined} />
       </div>
     </MainLayout>
   )

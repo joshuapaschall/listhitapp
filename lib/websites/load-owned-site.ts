@@ -2,6 +2,7 @@ import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
 import { cookies } from "next/headers"
 import { notFound, redirect } from "next/navigation"
 import { resolveOrgIdForUser } from "@/lib/auth/org-context"
+import { fetchSitePublicUrl } from "@/lib/websites/site-public-url"
 
 // Shared org-scoped site loader for the dashboard site hub. Mirrors the auth
 // flow the analytics page already uses: authed user → org → org-scoped site row.
@@ -25,5 +26,10 @@ export async function loadOwnedSite(id: string, columns = "id,name,slug,status")
     .maybeSingle()
   if (!site) notFound()
 
-  return { supabase, orgId, user, site: site as any }
+  const row = site as any
+  const publicUrl = row.slug
+    ? await fetchSitePublicUrl(supabase, orgId, id, row.slug)
+    : null
+
+  return { supabase, orgId, user, site: row, publicUrl }
 }
