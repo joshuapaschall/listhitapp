@@ -8,7 +8,9 @@ import { SiteContextProvider, type SiteFormContext } from "@/lib/site-builder/si
 import { buildConsentTexts } from "@/lib/site-builder/compliance"
 import type { SiteBusiness, SiteMarkets, SitePersona } from "@/lib/site-builder/types"
 import { Button } from "@/components/ui/button"
+import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 import { ArrowLeft, Loader2, Check, ExternalLink } from "lucide-react"
 
 type EditablePage = { path: string; label: string; data: Data }
@@ -39,7 +41,7 @@ function StudioDataSync({
 
 export function SiteStudioEditor({
   siteId, slug, siteName, status, pages,
-  business, markets, persona, navLinks, city, publicUrl,
+  business, markets, persona, navLinks, city, publicUrl, pageItems,
 }: {
   siteId: string; slug: string; siteName: string; status: string; pages: EditablePage[]
   business: SiteBusiness
@@ -48,9 +50,12 @@ export function SiteStudioEditor({
   navLinks: { label: string; href: string }[]
   city: string
   publicUrl?: string
+  pageItems: { path: string; label: string; enabled: boolean; locked: boolean }[]
 }) {
   const router = useRouter()
   const published = status === "published"
+  const [mode, setMode] = useState<"content" | "pages">("content")
+  const [pageState, setPageState] = useState(pageItems)
   const [activePath, setActivePath] = useState(pages[0]?.path || "/")
   const dataByPath = useRef<Record<string, Data>>(
     Object.fromEntries(pages.map((p) => [p.path, p.data])),
@@ -137,6 +142,23 @@ export function SiteStudioEditor({
     router.push(`/websites/${siteId}`)
   }
 
+  // Optimistic page on/off, mirroring the Edit hub. Rolls back on failure.
+  async function togglePage(path: string, next: boolean) {
+    setPageState((prev) => prev.map((p) => (p.path === path ? { ...p, enabled: next } : p)))
+    try {
+      const res = await fetch(`/api/sites/${siteId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pageUpdates: [{ path, enabled: next }] }),
+      })
+      if (!res.ok) throw new Error()
+      toast.success(next ? "Page turned on." : "Page turned off.")
+    } catch {
+      setPageState((prev) => prev.map((p) => (p.path === path ? { ...p, enabled: !next } : p)))
+      toast.error("Couldn't update that page.")
+    }
+  }
+
   return (
     <SiteContextProvider value={form}>
     <Puck
@@ -215,9 +237,56 @@ export function SiteStudioEditor({
           </div>
         </div>
         {error && <div className="bg-destructive/10 px-4 py-2 text-[13px] text-destructive">{error}</div>}
-        <div className="grid min-h-0 flex-1" style={{ gridTemplateColumns: "1fr 320px" }}>
-          <div className="min-w-0 overflow-auto"><Puck.Preview /></div>
-          <div className="overflow-auto border-l border-border"><Puck.Fields /></div>
+        <div className="flex min-h-0 flex-1">
+          {/* Left rail — mode switch */}
+          <nav className="flex w-[140px] flex-none flex-col gap-1 border-r border-border p-2">
+            <button
+              type="button"
+              onClick={() => setMode("content")}
+              className={cn("flex items-center gap-2 rounded-lg px-3 py-2 text-sm",
+                mode === "content" ? "bg-brand/10 text-brand" : "text-muted-foreground hover:bg-muted")}
+            >Content</button>
+            <button
+              type="button"
+              onClick={() => setMode("pages")}
+              className={cn("flex items-center gap-2 rounded-lg px-3 py-2 text-sm",
+                mode === "pages" ? "bg-brand/10 text-brand" : "text-muted-foreground hover:bg-muted")}
+            >Pages</button>
+          </nav>
+
+          {/* Content mode — Puck stays MOUNTED; hidden via CSS when not active */}
+          <div
+            className={cn("grid min-h-0 flex-1", mode !== "content" && "hidden")}
+            style={{ gridTemplateColumns: "1fr 320px" }}
+          >
+            <div className="min-w-0 overflow-auto"><Puck.Preview /></div>
+            <div className="overflow-auto border-l border-border"><Puck.Fields /></div>
+          </div>
+
+          {/* Pages mode — a plain panel, safe to mount/unmount */}
+          {mode === "pages" && (
+            <div className="min-h-0 flex-1 overflow-auto p-6">
+              <div className="mx-auto max-w-xl">
+                <h2 className="text-sm font-semibold">Pages</h2>
+                <p className="mb-3 text-xs text-muted-foreground">Turn optional pages on or off. Legal pages stay on for compliance.</p>
+                <div className="rounded-xl border border-border">
+                  {pageState.map((p) => (
+                    <div key={p.path} className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 last:border-0">
+                      <div>
+                        <div className="text-sm font-medium">{p.label}</div>
+                        <div className="font-mono text-[11px] text-muted-foreground">{p.path}</div>
+                      </div>
+                      {p.locked ? (
+                        <span className="text-xs text-muted-foreground">Always on</span>
+                      ) : (
+                        <Switch checked={p.enabled} onCheckedChange={(v) => togglePage(p.path, v)} />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </Puck>

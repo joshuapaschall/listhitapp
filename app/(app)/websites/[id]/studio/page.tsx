@@ -9,6 +9,9 @@ import { SiteStudioEditor } from "@/components/websites/site-studio-editor"
 
 export const dynamic = "force-dynamic"
 
+// Home plus the legal/compliance pages required for A2P/10DLC — never toggleable.
+const LOCKED_PATHS = new Set(["/", "/terms", "/privacy", "/contact"])
+
 export default async function StudioPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const { orgId, supabase } = await requireOrgContext()
@@ -37,6 +40,18 @@ export default async function StudioPage({ params }: { params: Promise<{ id: str
     .map((p: any) => ({ path: p.path, nav_label: p.nav_label, sort_order: p.sort_order ?? 0 }))
   const navLinks = buildSiteNavLinks({ hasPosts: false, enabledPages })
   const publicUrl = await fetchSitePublicUrl(supabase, orgId, site.id, site.slug || "")
+  const pageItems = [...(pages || [])]
+    .sort((a: any, b: any) => {
+      if (a.path === "/") return -1
+      if (b.path === "/") return 1
+      return (a.sort_order ?? 0) - (b.sort_order ?? 0)
+    })
+    .map((p: any) => ({
+      path: p.path,
+      label: p.path === "/" ? "Home" : (p.nav_label || p.title || p.path),
+      enabled: p.enabled !== false,
+      locked: LOCKED_PATHS.has(p.path),
+    }))
   return (
     <SiteStudioEditor
       siteId={site.id}
@@ -50,6 +65,7 @@ export default async function StudioPage({ params }: { params: Promise<{ id: str
       navLinks={navLinks}
       city={city}
       publicUrl={publicUrl}
+      pageItems={pageItems}
     />
   )
 }
