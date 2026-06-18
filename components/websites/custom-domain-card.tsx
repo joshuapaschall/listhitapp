@@ -8,6 +8,7 @@ import { toast } from "sonner"
 import {
   Globe, Copy, Check, Trash2, ExternalLink, RefreshCw, Lock, Plus, Zap, Info, ShieldCheck,
 } from "lucide-react"
+import { subdomainHost } from "@/lib/websites/site-public-url"
 
 type DnsRecord = { kind: "routing" | "ownership"; type: string; host: string; value: string }
 type DomainRow = { id: string; domain: string; status: string; dns_records: DnsRecord[] }
@@ -156,7 +157,7 @@ export function CustomDomainCard({
     setTimeout(() => setCopied((c) => (c === text ? null : c)), 1200)
   }, [])
 
-  const freeDomain = `${slug}.listhit.io`
+  const freeDomain = subdomainHost(slug)
 
   function stepper(active: number) {
     const steps = ["Add domain", "Point it to us", "Go live"]

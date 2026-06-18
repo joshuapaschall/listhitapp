@@ -48,7 +48,7 @@ function seoChip(score: number | null) {
 }
 
 export default async function WebsitePostsPage({ params }: { params: { id: string } }) {
-  const { supabase, orgId, site } = await loadOwnedSite(params.id, "id,name,slug,status")
+  const { supabase, orgId, site, publicUrl } = await loadOwnedSite(params.id, "id,name,slug,status")
   const published = site.status === "published"
 
   const { data } = await supabase
@@ -63,7 +63,7 @@ export default async function WebsitePostsPage({ params }: { params: { id: strin
   return (
     <MainLayout>
       <div className="space-y-6 p-4 md:p-6">
-        <SiteHubNav active="posts" siteId={site.id} siteName={site.name} slug={site.slug} published={published} />
+        <SiteHubNav active="posts" siteId={site.id} siteName={site.name} slug={site.slug} published={published} publicUrl={publicUrl} />
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>

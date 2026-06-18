@@ -24,6 +24,7 @@ interface SiteRow {
   slug: string
   status: string
   thumbnail_url?: string | null
+  public_url?: string
 }
 
 export default function WebsitesPage() {
@@ -128,7 +129,7 @@ export default function WebsitesPage() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {sites.map((site) => {
               const published = site.status === "published"
-              const domain = `${site.slug}.listhit.io`
+              const publicHost = (site.public_url || "").replace(/^https?:\/\//, "") || site.slug
               return (
                 <Card key={site.id} className="flex h-full flex-col">
                   <CardHeader className="space-y-2">
@@ -140,7 +141,7 @@ export default function WebsitesPage() {
                       </h3>
                       <Badge variant={published ? "default" : "secondary"}>{published ? "Published" : "Draft"}</Badge>
                     </div>
-                    <p className="font-mono text-xs text-muted-foreground">{domain}</p>
+                    <p className="font-mono text-xs text-muted-foreground">{publicHost}</p>
                   </CardHeader>
                   <CardContent className="flex-1">
                     {site.thumbnail_url ? (
@@ -164,9 +165,9 @@ export default function WebsitesPage() {
                       <Button asChild variant="outline" size="sm">
                         <Link href={`/websites/${site.id}`}>Manage</Link>
                       </Button>
-                      {published && (
+                      {published && site.public_url && (
                         <Button asChild variant="ghost" size="sm">
-                          <a href={`https://${domain}`} target="_blank" rel="noreferrer">
+                          <a href={site.public_url} target="_blank" rel="noreferrer">
                             View <ExternalLink className="h-3.5 w-3.5" />
                           </a>
                         </Button>

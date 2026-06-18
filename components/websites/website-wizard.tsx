@@ -24,6 +24,7 @@ import { DEFAULT_THEME, DEFAULT_BUSINESS, DEFAULT_MARKETS, type SitePersona, typ
 import { useLocationSuggestions } from "@/components/buyers/use-location-suggestions"
 import { formatMarketLabel } from "@/lib/site-builder/location-pages"
 import { EXTRA_PAGES } from "@/lib/site-builder/extra-pages"
+import { subdomainHost } from "@/lib/websites/site-public-url"
 
 type WizardProps = { mode: "new" } | { mode: "edit"; siteId: string }
 
@@ -483,7 +484,7 @@ export default function WebsiteWizard(props: WizardProps) {
     }
   }
 
-  const liveUrl = slug ? `https://${slug}.listhit.io` : ""
+  const liveUrl = slug ? `https://${subdomainHost(slug)}` : ""
   const canContinue =
     step === 0
       ? Boolean(draft.name.trim() && draft.persona)
@@ -1222,7 +1223,7 @@ export default function WebsiteWizard(props: WizardProps) {
                   <div className="rounded-lg border border-border bg-muted/40 p-4">
                     <p className="text-xs text-muted-foreground">Publish address</p>
                     <p className="mt-1 font-mono text-sm font-medium">
-                      {slug ? `${slug}.listhit.io` : "—"}
+                      {slug ? subdomainHost(slug) : "—"}
                     </p>
                   </div>
                   <Button type="button" variant="brand" className="w-full" onClick={handlePublish} disabled={saving || !siteId}>

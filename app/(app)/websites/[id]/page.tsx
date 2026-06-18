@@ -19,7 +19,7 @@ function MetricTile({ label, value }: { label: string; value: string }) {
 }
 
 export default async function WebsiteOverviewPage({ params }: { params: { id: string } }) {
-  const { supabase, orgId, site } = await loadOwnedSite(params.id, "id,name,slug,status")
+  const { supabase, orgId, site, publicUrl } = await loadOwnedSite(params.id, "id,name,slug,status")
   const published = site.status === "published"
 
   const to = new Date()
@@ -62,7 +62,7 @@ export default async function WebsiteOverviewPage({ params }: { params: { id: st
   return (
     <MainLayout>
       <div className="space-y-6 p-4 md:p-6">
-        <SiteHubNav active="overview" siteId={site.id} siteName={site.name} slug={site.slug} published={published} />
+        <SiteHubNav active="overview" siteId={site.id} siteName={site.name} slug={site.slug} published={published} publicUrl={publicUrl} />
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <MetricTile label="Visitors · 30d" value={visits == null ? "No traffic yet" : fmt(visits)} />

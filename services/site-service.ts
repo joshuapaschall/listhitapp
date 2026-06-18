@@ -5,6 +5,7 @@ import { extractContent, applyContentToPuck } from "@/lib/site-builder/compose"
 import { EXTRA_PAGES } from "@/lib/site-builder/extra-pages"
 import { slugifySiteName, isReservedSlug } from "@/lib/site-builder/slug"
 import { addProjectDomain, removeProjectDomain, vercelConfigured } from "@/lib/vercel/domains"
+import { fetchPrimaryCustomDomains, publicUrlFor } from "@/lib/websites/site-public-url"
 
 // Backend data layer for the website builder.
 //
@@ -61,7 +62,10 @@ export class SiteService {
       .eq("org_id", orgId)
       .order("created_at", { ascending: false })
     if (error) throw new Error(error.message)
-    return data || []
+    const rows = data || []
+    const siteIds = rows.map((s: any) => s.id)
+    const domainMap = await fetchPrimaryCustomDomains(client, orgId, siteIds)
+    return rows.map((s: any) => ({ ...s, public_url: publicUrlFor(s.slug, domainMap[s.id]) }))
   }
 
   static async get(client: SupabaseClient, orgId: string, siteId: string) {
