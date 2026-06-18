@@ -156,6 +156,7 @@ export function PostEditor({
       if (error) throw new Error(error.message)
       const url = supabase.storage.from("property-images").getPublicUrl(entry.path).data.publicUrl
       setFeaturedImageUrl(url)
+      setDirty(true)
     } catch (e: any) {
       toast.error(e?.message || "Image upload failed")
     } finally {
@@ -299,7 +300,7 @@ export function PostEditor({
                 <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
                   {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Replace"}
                 </Button>
-                <Button type="button" variant="ghost" size="sm" onClick={() => setFeaturedImageUrl("")} disabled={uploading}>
+                <Button type="button" variant="ghost" size="sm" onClick={() => { setFeaturedImageUrl(""); setDirty(true) }} disabled={uploading}>
                   Remove
                 </Button>
               </div>
