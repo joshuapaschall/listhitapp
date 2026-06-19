@@ -1,7 +1,7 @@
 "use client"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Puck, usePuck, Render, type Data } from "@measured/puck"
+import { Puck, Render, type Data } from "@measured/puck"
 import "@measured/puck/puck.css"
 import { siteConfig } from "@/lib/site-builder/blocks/config"
 import { SiteContextProvider, type SiteFormContext } from "@/lib/site-builder/site-context"
@@ -21,30 +21,6 @@ import { toast } from "sonner"
 import { ArrowLeft, Loader2, Check, ExternalLink, Monitor, Smartphone } from "lucide-react"
 
 type EditablePage = { path: string; label: string; data: Data }
-
-// Lives inside the <Puck> context and switches the edited document in place when
-// the active page tab changes. Puck mounts with the initial page's data, so the
-// first run is skipped; afterwards each tab change dispatches setData — avoiding
-// a full <Puck> remount (and the iframe teardown crash that came with it).
-function StudioDataSync({
-  activePath,
-  dataByPath,
-}: {
-  activePath: string
-  dataByPath: React.MutableRefObject<Record<string, Data>>
-}) {
-  const { dispatch } = usePuck()
-  const firstRun = useRef(true)
-  useEffect(() => {
-    if (firstRun.current) {
-      firstRun.current = false
-      return
-    }
-    const next = dataByPath.current[activePath]
-    if (next) dispatch({ type: "setData", data: next })
-  }, [activePath, dispatch, dataByPath])
-  return null
-}
 
 export function SiteStudioEditor({
   siteId, slug, siteName, status, pages,
@@ -231,17 +207,20 @@ export function SiteStudioEditor({
   return (
     <SiteContextProvider value={form}>
     <Puck
+      key={activePath}                        // remount per page — clean, reliable document swap
       config={siteConfig as any}
       data={dataByPath.current[activePath]}
       iframe={{ enabled: false }}    // ADD — render preview inline; avoids the iframe-teardown removeChild crash
       onChange={(d: Data) => {
+        const prev = dataByPath.current[activePath]
         dataByPath.current[activePath] = d
-        if (!dirtyRef.current) { dirtyRef.current = true; setDirty(true) }
+        if (prev && JSON.stringify(prev) !== JSON.stringify(d) && !dirtyRef.current) {
+          dirtyRef.current = true; setDirty(true)
+        }
       }}
       permissions={{ insert: false }}
       fieldTransforms={fieldTransforms as any}
     >
-      <StudioDataSync activePath={activePath} dataByPath={dataByPath} />
       <div className="flex h-screen flex-col">
         <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5">
           <div className="flex min-w-0 items-center gap-2.5">
