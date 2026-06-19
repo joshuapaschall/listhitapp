@@ -7,6 +7,7 @@ import { siteConfig } from "@/lib/site-builder/blocks/config"
 import { SiteContextProvider, type SiteFormContext } from "@/lib/site-builder/site-context"
 import { buildConsentTexts } from "@/lib/site-builder/compliance"
 import { mergeThemeIntoRoot, injectNavIdentity } from "@/lib/site-builder/theme-merge"
+import { interpolateSiteData } from "@/lib/site-builder/interpolate"
 import { ASSET_ACCEPT, downscaleImage, uploadSiteAsset } from "@/lib/site-builder/upload-asset"
 import { TYPE_STYLES, resolveTypeFonts } from "@/lib/site-builder/typography"
 import type { SiteBusiness, SiteMarkets, SitePersona, SiteTheme } from "@/lib/site-builder/types"
@@ -232,6 +233,7 @@ export function SiteStudioEditor({
     <Puck
       config={siteConfig as any}
       data={dataByPath.current[activePath]}
+      iframe={{ enabled: false }}    // ADD — render preview inline; avoids the iframe-teardown removeChild crash
       onChange={(d: Data) => {
         dataByPath.current[activePath] = d
         if (!dirtyRef.current) { dirtyRef.current = true; setDirty(true) }
@@ -480,15 +482,22 @@ export function SiteStudioEditor({
               {/* Live preview — restyles instantly from the draft theme */}
               <div className="min-w-0 overflow-auto p-4">
                 <div className={cn("mx-auto overflow-auto rounded-lg border border-border transition-[max-width]", device === "mobile" && "max-w-[390px]")}>
-                  <Render
-                    config={siteConfig as any}
-                    data={injectNavIdentity(mergeThemeIntoRoot(homeData, themeDraft), {
-                      brandName: siteName,
-                      logoUrl: themeDraft.logoUrl,
-                      phone: business?.phone,
-                      layout: themeDraft.headerLayout,
-                    })}
-                  />
+                  {(() => {
+                    const previewData = injectNavIdentity(
+                      mergeThemeIntoRoot(interpolateSiteData(homeData, brand, city), themeDraft),
+                      {
+                        brandName: siteName,
+                        logoUrl: themeDraft.logoUrl,
+                        phone: business?.phone,
+                        layout: themeDraft.headerLayout,
+                      },
+                    )
+                    const previewKey = [
+                      themeDraft.primary, themeDraft.accent, themeDraft.typeStyleId,
+                      themeDraft.headingFont, themeDraft.bodyFont, themeDraft.logoUrl, themeDraft.headerLayout,
+                    ].join("|")
+                    return <Render key={previewKey} config={siteConfig as any} data={previewData} />
+                  })()}
                 </div>
               </div>
             </div>
