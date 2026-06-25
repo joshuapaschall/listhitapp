@@ -10,6 +10,7 @@ import { DealCard } from "@/components/sites/deal-card"
 import { PropertyGallery } from "@/components/sites/property-gallery"
 import { WRAP } from "@/lib/site-builder/blocks/primitives"
 import { chipStyle, termsLabelFrom } from "@/lib/site-builder/deal-chips"
+import { sanitizePostHtml } from "@/lib/blog/sanitize"
 import type { SiteTheme, SiteBusiness, DealDetail, DealSummary, SitePersona } from "@/lib/site-builder/types"
 
 // Friendly, buyer-facing terms label derived from deal_type/finance_subtype.
@@ -112,8 +113,19 @@ export function PropertyPage({
   const cityState = [deal.city, deal.state].filter(Boolean).join(", ")
   const terms = termsLabel(deal)
   const pageUrl = `https://${host}/properties/${deal.slug}`
-  const hasMap = deal.latitude != null && deal.longitude != null
+  const hasGeo = deal.latitude != null && deal.longitude != null
   const video = deal.video_link ? videoEmbed(deal.video_link) : null
+  // The "Public description" field is authored in rich text and stores HTML.
+  // Render it as sanitized HTML when it contains tags; otherwise as paragraphs.
+  const descIsHtml = /<\w+[^>]*>/.test(deal.description || "")
+  // Mapbox Static Images (server-renderable). Google's embed iframe is blocked
+  // from loading cross-origin, so we use the token the app already has.
+  // NOTE: Mapbox URL order is lng,lat.
+  const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
+  const mapImgUrl =
+    mapboxToken && hasGeo
+      ? `https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s+e11d48(${deal.longitude},${deal.latitude})/${deal.longitude},${deal.latitude},14/640x320@2x?access_token=${mapboxToken}`
+      : null
   const cityHref = cityLocationHref || "/properties"
   const specBits = [
     deal.bedrooms != null ? `${deal.bedrooms} bd` : null,
@@ -261,14 +273,22 @@ export function PropertyPage({
                 </div>
 
                 {/* Description */}
-                {descParas.length > 0 ? (
+                {deal.description?.trim() ? (
                   <div style={{ marginTop: 28 }}>
                     <h2 className="lh-h2" style={{ fontFamily: "var(--head)", fontSize: 22, fontWeight: 800, color: "var(--p)", margin: "0 0 12px" }}>
                       About this deal
                     </h2>
-                    {descParas.map((p, i) => (
-                      <p key={i} style={{ fontSize: 15.5, lineHeight: 1.7, color: "#3a4554", margin: "0 0 14px" }}>{p}</p>
-                    ))}
+                    {descIsHtml ? (
+                      <div
+                        className="lh-prose"
+                        style={{ fontFamily: "var(--body)" }}
+                        dangerouslySetInnerHTML={{ __html: sanitizePostHtml(deal.description || "") }}
+                      />
+                    ) : (
+                      descParas.map((p, i) => (
+                        <p key={i} style={{ fontSize: 15.5, lineHeight: 1.7, color: "#3a4554", margin: "0 0 14px" }}>{p}</p>
+                      ))
+                    )}
                   </div>
                 ) : null}
 
@@ -360,16 +380,17 @@ export function PropertyPage({
                 ) : null}
 
                 {/* Location */}
-                {hasMap ? (
+                {mapImgUrl ? (
                   <div style={{ marginTop: 32 }}>
                     <h2 className="lh-h2" style={{ fontFamily: "var(--head)", fontSize: 22, fontWeight: 800, color: "var(--p)", margin: "0 0 12px" }}>
                       Location
                     </h2>
-                    <iframe
-                      title="Property location map"
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={mapImgUrl}
+                      alt={`Map of ${deal.address || "property location"}`}
                       loading="lazy"
-                      style={{ width: "100%", aspectRatio: "5 / 2", border: 0, borderRadius: 14 }}
-                      src={`https://www.google.com/maps?q=${deal.latitude},${deal.longitude}&z=15&output=embed`}
+                      style={{ width: "100%", aspectRatio: "2 / 1", objectFit: "cover", borderRadius: 14, border: "1px solid color-mix(in srgb, var(--p) 12%, #fff)" }}
                     />
                     <a
                       href={`https://www.google.com/maps/search/?api=1&query=${deal.latitude},${deal.longitude}`}

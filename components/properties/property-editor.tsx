@@ -510,6 +510,14 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
       } else {
         const updated = (await PropertyService.updateProperty(savedId, payload)) as any;
         setPublicSlug(updated.slug ?? publicSlug);
+        if (stagedPhotos.length > 0) {
+          setUploading(true);
+          const { errors } = await PropertyService.uploadImages(savedId, stagedPhotos).catch(() => ({ errors: ["upload failed"] }));
+          if (errors.length) toast.warning(`Some photos failed: ${errors.join(", ")}`);
+          setStagedPhotos([]);
+          await refreshImages(savedId);
+          setUploading(false);
+        }
         await persistBuyers(savedId);
         setSavedShowOnSite(publish);
         setPreviewKey((k) => k + 1);
