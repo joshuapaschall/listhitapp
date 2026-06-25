@@ -120,6 +120,12 @@ export interface DealImage {
   is_featured: boolean
 }
 
+export interface PropertyComp {
+  address: string
+  sold_price: number | null
+  url: string | null
+}
+
 export interface DealDetail extends DealSummary {
   zip: string | null
   description: string | null
@@ -137,6 +143,7 @@ export interface DealDetail extends DealSummary {
   tags: string[] | null
   latitude: number | null
   longitude: number | null
+  comps: PropertyComp[]
   images: DealImage[]
 }
 
