@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireOrgContext } from "@/lib/auth/org-context"
 import { requirePermission } from "@/lib/permissions/server"
+import { supabaseAdmin } from "@/lib/supabase"
 
 const BUCKET = "property-images"
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB per file
@@ -70,7 +71,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const sanitized = file.name.replace(/[^a-zA-Z0-9._-]/g, "_")
     const storagePath = `${propertyId}/${timestamp}-${rand}-${sanitized}`
 
-    const { data, error: signErr } = await supabase.storage
+    const { data, error: signErr } = await supabaseAdmin.storage
       .from(BUCKET)
       .createSignedUploadUrl(storagePath)
 

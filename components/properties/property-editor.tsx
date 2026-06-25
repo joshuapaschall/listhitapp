@@ -368,7 +368,7 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
         await refreshImages(savedId);
       } catch (e) {
         console.error(e);
-        toast.error("Photo upload failed");
+        toast.error(e instanceof Error ? e.message : "Photo upload failed");
       } finally {
         setUploading(false);
       }
@@ -497,7 +497,7 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
         setPublicSlug(created.slug ?? null);
         if (stagedPhotos.length > 0) {
           setUploading(true);
-          const { errors } = await PropertyService.uploadImages(newId, stagedPhotos).catch(() => ({ errors: ["upload failed"] }));
+          const { errors } = await PropertyService.uploadImages(newId, stagedPhotos).catch((e) => ({ uploaded: [], errors: [e instanceof Error ? e.message : "upload failed"] }));
           if (errors.length) toast.warning(`Some photos failed: ${errors.join(", ")}`);
           setStagedPhotos([]);
           await refreshImages(newId);
@@ -514,7 +514,7 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
         setPublicSlug(updated.slug ?? publicSlug);
         if (stagedPhotos.length > 0) {
           setUploading(true);
-          const { errors } = await PropertyService.uploadImages(savedId, stagedPhotos).catch(() => ({ errors: ["upload failed"] }));
+          const { errors } = await PropertyService.uploadImages(savedId, stagedPhotos).catch((e) => ({ uploaded: [], errors: [e instanceof Error ? e.message : "upload failed"] }));
           if (errors.length) toast.warning(`Some photos failed: ${errors.join(", ")}`);
           setStagedPhotos([]);
           await refreshImages(savedId);
