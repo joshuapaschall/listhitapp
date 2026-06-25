@@ -15,6 +15,23 @@ function slugify(input: string): string {
     .slice(0, 80)
 }
 
+function normalizeTags(input: unknown): string[] {
+  if (!Array.isArray(input)) return []
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const raw of input) {
+    if (typeof raw !== "string") continue
+    const t = raw.trim().slice(0, 40)
+    if (!t) continue
+    const key = t.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(t)
+    if (out.length >= 5) break
+  }
+  return out
+}
+
 // Ensure the slug is unique among this site's non-deleted posts.
 async function uniqueSlug(
   supabase: any,
@@ -73,6 +90,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
         meta_description: body?.metaDescription || null,
         og_image_url: body?.ogImageUrl || null,
         author_name: body?.authorName || null,
+        category: (body?.category || "").trim() || null,
+        tags: normalizeTags(body?.tags),
         seo_score: typeof body?.seoScore === "number" ? body.seoScore : null,
         status,
         published_at: status === "published" ? now : null,

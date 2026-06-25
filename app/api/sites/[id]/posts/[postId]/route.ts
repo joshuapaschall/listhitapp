@@ -15,6 +15,23 @@ function slugify(input: string): string {
     .slice(0, 80)
 }
 
+function normalizeTags(input: unknown): string[] {
+  if (!Array.isArray(input)) return []
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const raw of input) {
+    if (typeof raw !== "string") continue
+    const t = raw.trim().slice(0, 40)
+    if (!t) continue
+    const key = t.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(t)
+    if (out.length >= 5) break
+  }
+  return out
+}
+
 async function uniqueSlug(
   supabase: any,
   siteId: string,
@@ -71,6 +88,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       metaDescription: "meta_description",
       ogImageUrl: "og_image_url",
       authorName: "author_name",
+      category: "category",
     }
     for (const [k, col] of Object.entries(map)) {
       if (body[k] !== undefined) {
@@ -78,6 +96,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
           col === "body_html" && body[k] ? sanitizePostHtml(body[k]) : body[k] || null
       }
     }
+    if (body.tags !== undefined) updates.tags = normalizeTags(body.tags)
     if (typeof body.seoScore === "number") updates.seo_score = body.seoScore
 
     if (body.slug !== undefined) {
