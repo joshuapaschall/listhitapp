@@ -1,6 +1,23 @@
 "use client"
 
-import { GripVertical, Star, X } from "lucide-react"
+import { Star, X } from "lucide-react"
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core"
+import {
+  SortableContext,
+  arrayMove,
+  rectSortingStrategy,
+  useSortable,
+  sortableKeyboardCoordinates,
+} from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -20,32 +37,33 @@ interface SortableImageGridProps {
   onSetFeatured: (id: string) => void
 }
 
-interface SortableImageCardProps {
+interface SortableTileProps {
   item: ImageItem
   onDelete: (id: string) => void
   onSetFeatured: (id: string) => void
-  onMoveLeft: (id: string) => void
-  onMoveRight: (id: string) => void
-  canMoveLeft: boolean
-  canMoveRight: boolean
 }
 
-function SortableImageCard({
-  item,
-  onDelete,
-  onSetFeatured,
-  onMoveLeft,
-  onMoveRight,
-  canMoveLeft,
-  canMoveRight,
-}: SortableImageCardProps) {
+function SortableTile({ item, onDelete, onSetFeatured }: SortableTileProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
   return (
     <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
       className={cn(
-        "group relative overflow-hidden rounded-lg border bg-card",
+        "group relative cursor-grab touch-none overflow-hidden rounded-lg border bg-card active:cursor-grabbing",
         item.isNew && "border-dashed border-blue-400",
+        isDragging && "z-10 opacity-70 shadow-lg ring-2 ring-blue-500",
       )}
     >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={item.url}
         alt={item.label || "Property photo"}
@@ -56,7 +74,7 @@ function SortableImageCard({
       {item.isFeatured && (
         <span className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm">
           <Star className="h-2.5 w-2.5 fill-current" />
-          Featured
+          Cover
         </span>
       )}
 
@@ -66,12 +84,15 @@ function SortableImageCard({
         </span>
       )}
 
+      {/* Delete — onPointerDown stops the drag sensor from swallowing the click */}
       <Button
         type="button"
         variant="destructive"
         size="icon"
         className="absolute right-1.5 top-1.5 h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100"
+        onPointerDown={(e) => e.stopPropagation()}
         onClick={() => onDelete(item.id)}
+        aria-label="Delete photo"
       >
         <X className="h-3 w-3" />
       </Button>
@@ -81,70 +102,45 @@ function SortableImageCard({
           type="button"
           variant="secondary"
           size="icon"
-          className="absolute left-1.5 top-1.5 h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100"
+          className="absolute bottom-1.5 right-1.5 h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100"
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={() => onSetFeatured(item.id)}
-          title="Set as featured image"
+          title="Set as cover image"
+          aria-label="Set as cover image"
         >
           <Star className="h-3 w-3" />
         </Button>
       )}
-
-      <div className="absolute bottom-1 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full bg-black/50 px-2 py-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-5 w-5 text-white hover:bg-white/20"
-          disabled={!canMoveLeft}
-          onClick={() => onMoveLeft(item.id)}
-          aria-label="Move image left"
-        >
-          <GripVertical className="h-3.5 w-3.5 rotate-90" />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-5 w-5 text-white hover:bg-white/20"
-          disabled={!canMoveRight}
-          onClick={() => onMoveRight(item.id)}
-          aria-label="Move image right"
-        >
-          <GripVertical className="h-3.5 w-3.5 -rotate-90" />
-        </Button>
-      </div>
     </div>
   )
 }
 
 export default function SortableImageGrid({ items, onReorder, onDelete, onSetFeatured }: SortableImageGridProps) {
-  const moveItem = (id: string, direction: -1 | 1) => {
-    const index = items.findIndex((item) => item.id === id)
-    const nextIndex = index + direction
-    if (index < 0 || nextIndex < 0 || nextIndex >= items.length) return
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
 
-    const nextItems = [...items]
-    const [moved] = nextItems.splice(index, 1)
-    nextItems.splice(nextIndex, 0, moved)
-    onReorder(nextItems)
+  const handleDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e
+    if (!over || active.id === over.id) return
+    const oldIndex = items.findIndex((i) => i.id === active.id)
+    const newIndex = items.findIndex((i) => i.id === over.id)
+    if (oldIndex < 0 || newIndex < 0) return
+    onReorder(arrayMove(items, oldIndex, newIndex))
   }
 
   if (items.length === 0) return null
 
   return (
-    <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
-      {items.map((item, index) => (
-        <SortableImageCard
-          key={item.id}
-          item={item}
-          onDelete={onDelete}
-          onSetFeatured={onSetFeatured}
-          onMoveLeft={() => moveItem(item.id, -1)}
-          onMoveRight={() => moveItem(item.id, 1)}
-          canMoveLeft={index > 0}
-          canMoveRight={index < items.length - 1}
-        />
-      ))}
-    </div>
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <SortableContext items={items.map((i) => i.id)} strategy={rectSortingStrategy}>
+        <div className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-4">
+          {items.map((item) => (
+            <SortableTile key={item.id} item={item} onDelete={onDelete} onSetFeatured={onSetFeatured} />
+          ))}
+        </div>
+      </SortableContext>
+    </DndContext>
   )
 }

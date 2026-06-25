@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireOrgContext } from "@/lib/auth/org-context"
 import { requirePermission } from "@/lib/permissions/server"
+import { supabaseAdmin } from "@/lib/supabase"
 
 const BUCKET = "property-images"
 const MAX_FILE_SIZE = 10 * 1024 * 1024
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "No paths provided" }, { status: 400 })
   }
 
-  const { data: existingImages } = await supabase
+  const { data: existingImages } = await supabaseAdmin
     .from("property_images")
     .select("id, sort_order")
     .eq("property_id", propertyId)
@@ -65,12 +66,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
       continue
     }
 
-    const { data: urlData } = supabase.storage
+    const { data: urlData } = supabaseAdmin.storage
       .from(BUCKET)
       .getPublicUrl(storagePath)
     const shouldFeature = existingCount === 0 && uploaded.length === 0
 
-    const { data: imgRecord, error: dbErr } = await supabase
+    const { data: imgRecord, error: dbErr } = await supabaseAdmin
       .from("property_images")
       .insert({
         property_id: propertyId,
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     if (dbErr) {
       // Clean up the orphaned storage object if DB insert fails
-      await supabase.storage.from(BUCKET).remove([storagePath])
+      await supabaseAdmin.storage.from(BUCKET).remove([storagePath])
       errors.push(`${storagePath}: DB insert failed - ${dbErr.message}`)
       continue
     }
@@ -117,9 +118,9 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   const url = new URL(img.image_url)
   const pathParts = url.pathname.split(`/object/public/${BUCKET}/`)
   const storagePath = pathParts[1]
-  if (storagePath) await supabase.storage.from(BUCKET).remove([storagePath])
+  if (storagePath) await supabaseAdmin.storage.from(BUCKET).remove([storagePath])
 
-  await supabase.from("property_images").delete().eq("id", imageId)
+  await supabaseAdmin.from("property_images").delete().eq("id", imageId)
   return NextResponse.json({ success: true })
 }
 
@@ -132,18 +133,28 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   if (denied) return denied
 
   const { id: propertyId } = await context.params
+
+  // Ownership gate on the session client (RLS scopes to the caller's org); the
+  // privileged writes below then run on admin so they're not blocked by RLS.
+  const { data: property, error: propErr } = await supabase
+    .from("properties")
+    .select("id")
+    .eq("id", propertyId)
+    .maybeSingle()
+  if (propErr || !property) return NextResponse.json({ error: "Property not found" }, { status: 404 })
+
   const body = (await request.json()) as { reorder?: Array<{ id: string; sort_order: number }>; setFeatured?: string }
 
   if (body.reorder && Array.isArray(body.reorder)) {
     for (const item of body.reorder) {
-      await supabase.from("property_images").update({ sort_order: item.sort_order }).eq("id", item.id).eq("property_id", propertyId)
+      await supabaseAdmin.from("property_images").update({ sort_order: item.sort_order }).eq("id", item.id).eq("property_id", propertyId)
     }
     return NextResponse.json({ success: true })
   }
 
   if (body.setFeatured) {
-    await supabase.from("property_images").update({ is_featured: false }).eq("property_id", propertyId)
-    await supabase.from("property_images").update({ is_featured: true }).eq("id", body.setFeatured).eq("property_id", propertyId)
+    await supabaseAdmin.from("property_images").update({ is_featured: false }).eq("property_id", propertyId)
+    await supabaseAdmin.from("property_images").update({ is_featured: true }).eq("id", body.setFeatured).eq("property_id", propertyId)
     return NextResponse.json({ success: true })
   }
 
