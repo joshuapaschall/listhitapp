@@ -4,9 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  Banknote,
   Check,
   ChevronDown,
+  Circle,
+  CircleCheck,
   Copy,
   DollarSign,
   ExternalLink,
@@ -15,11 +16,10 @@ import {
   Image as ImageIcon,
   KeyRound,
   Loader2,
+  Lock,
   MapPin,
   Minus,
-  Monitor,
   Plus,
-  RefreshCw,
   Search,
   SlidersHorizontal,
   Tag as TagIcon,
@@ -56,6 +56,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { chipStyle } from "@/lib/site-builder/deal-chips";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 const STATUSES = ["available", "under_contract", "sold"];
@@ -556,7 +558,7 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
 
   return (
     <MainLayout>
-      <div className="mx-auto max-w-5xl space-y-5 p-4">
+      <div className="mx-auto max-w-6xl space-y-5 p-4">
         {/* Sticky header */}
         <div className="sticky top-0 z-20 -mx-4 border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -567,21 +569,7 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
               ) : null}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {/* Draft / Live toggle */}
-              <div className="flex items-center gap-1 rounded-lg bg-muted p-1">
-                <SegButton active={!showOnSite} onClick={() => setShowOnSite(false)}>Draft</SegButton>
-                <SegButton active={showOnSite} disabled={!canPublish && !showOnSite} onClick={() => canPublish && setShowOnSite(true)}>Live</SegButton>
-              </div>
-              {showPublicControls ? (
-                <Button type="button" variant="outline" size="sm" onClick={copyLink}>
-                  {copied ? <><Check className="h-4 w-4" /> Copied</> : <><Copy className="h-4 w-4" /> Copy link</>}
-                </Button>
-              ) : null}
-              {openTarget ? (
-                <Button asChild variant="ghost" size="sm">
-                  <a href={openTarget} target="_blank" rel="noreferrer">Open in new tab <ExternalLink className="h-3.5 w-3.5" /></a>
-                </Button>
-              ) : null}
+              <Button type="button" variant="ghost" size="sm" onClick={() => router.push("/properties")}>Cancel</Button>
               <Button type="button" variant="brand" onClick={handleSave} disabled={saving}>
                 {saving ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</> : showOnSite && canPublish ? "Save & publish" : "Save"}
               </Button>
@@ -603,11 +591,15 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
           </div>
         </div>
 
-        {/* Section: Property details */}
+        {/* Two-pane: editing column + sticky rail */}
+        <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6">
+          <div className="space-y-5">
+
+        {/* Zone 1 — Address & basics */}
         <Card id="section-property" className="scroll-mt-32 border-border">
-          <CardContent className="grid gap-6 p-5 md:grid-cols-2">
+          <CardContent className="space-y-5 p-5">
             <div className="space-y-5">
-              <SectionLabel icon={Home}>Property details</SectionLabel>
+              <SectionLabel icon={Home}>Address &amp; basics</SectionLabel>
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Address <span className="text-brand">*</span></Label>
                 <div className="rounded-lg border border-border bg-background px-3 py-2">
@@ -688,22 +680,15 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
                 ) : null}
               </div>
             </div>
-            <div className="space-y-3">
-              <SectionLabel icon={MapPin}>Map preview</SectionLabel>
-              {MAPBOX_TOKEN ? (
-                <MapPreview latitude={coords.lat} longitude={coords.lng} className="h-[300px] overflow-hidden rounded-xl shadow-sm" />
-              ) : (
-                <div className="flex h-[300px] items-center justify-center rounded-xl border border-border bg-muted/40 text-muted-foreground"><MapPin className="mr-2 h-5 w-5" /> Enter an address to see the map</div>
-              )}
-            </div>
           </CardContent>
         </Card>
 
-        {/* Section: The deal (internal) */}
-        <Card id="section-deal" className="scroll-mt-32 border-border">
+        {/* Zone 2 — Your deal · private */}
+        <Card id="section-deal" className="scroll-mt-32 border-border bg-muted/40">
           <CardContent className="grid gap-6 p-5 md:grid-cols-2">
             <div className="space-y-5">
-              <SectionLabel icon={Banknote} badge={{ text: "Internal · never shown on your site", tone: "internal" }}>The deal</SectionLabel>
+              <SectionLabel icon={Lock}>Your deal · private</SectionLabel>
+              <p className="-mt-3 text-xs text-muted-foreground">Numbers and notes — never shown to buyers.</p>
               <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
                 <SegButton active={!isCreative} onClick={() => handleChange("deal_type", "cash")}>Cash deal</SegButton>
                 <SegButton active={isCreative} onClick={() => handleChange("deal_type", "creative")}>Creative finance</SegButton>
@@ -789,10 +774,10 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
           </CardContent>
         </Card>
 
-        {/* Section: Listing (public) */}
+        {/* Zone 3 — Public listing */}
         <Card id="section-listing" className="scroll-mt-32 border-border">
           <CardContent className="space-y-6 p-5">
-            <SectionLabel icon={Globe} badge={{ text: "Shown on your website", tone: "public" }}>Listing</SectionLabel>
+            <SectionLabel icon={Globe} badge={{ text: "Shown on your website", tone: "public" }}>Public listing</SectionLabel>
 
             {/* Rich-text description (Tiptap) */}
             <div className="space-y-2">
@@ -883,44 +868,143 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
           </CardContent>
         </Card>
 
-        {/* Section: Live preview — the actual property page via the draft route */}
-        <Card id="section-preview" className="scroll-mt-32 border-border">
-          <CardContent className="space-y-3 p-5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <SectionLabel icon={Monitor}>Live preview</SectionLabel>
-              {savedId ? (
-                <Button type="button" variant="outline" size="sm" onClick={() => setPreviewKey((k) => k + 1)}>
-                  <RefreshCw className="h-3.5 w-3.5" /> Refresh
-                </Button>
-              ) : null}
+            {/* Bottom save / cancel */}
+            <div className="flex items-center justify-end gap-2 pb-4">
+              <Button type="button" variant="ghost" onClick={() => router.push("/properties")}>Cancel</Button>
+              <Button type="button" variant="brand" onClick={handleSave} disabled={saving}>
+                {saving ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</> : showOnSite && canPublish ? "Save & publish" : "Save"}
+              </Button>
             </div>
-            {savedId ? (
-              <>
-                <div className="overflow-hidden rounded-xl border border-border bg-muted/20">
-                  <iframe
-                    key={previewKey}
-                    src={`/properties/${savedId}/preview?v=${previewKey}`}
-                    title="Property preview"
-                    className="h-[720px] w-full"
+          </div>
+
+          {/* Sticky rail */}
+          <aside id="section-preview" className="mt-5 space-y-4 self-start lg:mt-0 lg:sticky lg:top-20">
+            {/* 1. Website visibility */}
+            <Card className="border-border">
+              <CardContent className="space-y-3 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Globe className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-semibold">Show on website</span>
+                  </div>
+                  <Switch
+                    checked={showOnSite}
+                    disabled={!canPublish && !showOnSite}
+                    onCheckedChange={(v) => (v ? canPublish && setShowOnSite(true) : setShowOnSite(false))}
+                    aria-label="Show on website"
                   />
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  The preview reflects your last saved version — Save, then Refresh to see new changes.
-                </p>
-              </>
-            ) : (
-              <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-border text-sm text-muted-foreground">
-                Save a draft to see the live preview.
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                {showOnSite && !canPublish ? (
+                  <p className="text-xs text-muted-foreground">Add {missing.join(", ")} to go live.</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    {showOnSite ? "Listed on your website." : "Saved to your system for SMS & email blasts. Not shown on your site."}
+                  </p>
+                )}
+                {openTarget || showPublicControls ? (
+                  <div className="flex flex-wrap items-center gap-3 pt-1">
+                    {openTarget ? (
+                      <a href={openTarget} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-foreground hover:underline">
+                        {showPublicControls ? "View live" : "Open full preview"} <ExternalLink className="h-3 w-3" />
+                      </a>
+                    ) : null}
+                    {showPublicControls ? (
+                      <button type="button" onClick={copyLink} className="inline-flex items-center gap-1 text-xs font-medium text-foreground hover:underline">
+                        {copied ? <><Check className="h-3 w-3" /> Copied</> : <><Copy className="h-3 w-3" /> Copy link</>}
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
 
-        <div className="flex items-center justify-end gap-2 pb-10">
-          <Button type="button" variant="ghost" onClick={() => router.push("/properties")}>Cancel</Button>
-          <Button type="button" variant="brand" onClick={handleSave} disabled={saving}>
-            {saving ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</> : showOnSite && canPublish ? "Save & publish" : "Save"}
-          </Button>
+            {/* 2. Ready to publish */}
+            <Card className="border-border">
+              <CardContent className="space-y-2.5 p-4">
+                <p className="text-sm font-semibold">Ready to publish</p>
+                <ul className="space-y-2 text-sm">
+                  <li className="flex items-center gap-2">
+                    {hasAddress ? <CircleCheck className="h-4 w-4 text-emerald-600" /> : <Circle className="h-4 w-4 text-muted-foreground/40" />}
+                    <span className={cn(hasAddress ? "text-foreground" : "text-muted-foreground")}>Address</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    {hasPrice ? <CircleCheck className="h-4 w-4 text-emerald-600" /> : <Circle className="h-4 w-4 text-muted-foreground/40" />}
+                    <span className={cn(hasPrice ? "text-foreground" : "text-muted-foreground")}>{isCreative ? "List price" : "Asking price"}</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    {hasCover ? <CircleCheck className="h-4 w-4 text-emerald-600" /> : <Circle className="h-4 w-4 text-muted-foreground/40" />}
+                    <span className={cn(hasCover ? "text-foreground" : "text-muted-foreground")}>Cover photo</span>
+                  </li>
+                </ul>
+              </CardContent>
+            </Card>
+
+            {/* 3. Live preview — renders from current form state, instantly */}
+            <Card key={previewKey} className="overflow-hidden border-border">
+              <CardContent className="space-y-3 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Live preview</p>
+                <div className="overflow-hidden rounded-lg border border-border">
+                  <div className="aspect-video bg-muted">
+                    {imageItems[0]?.url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={imageItems[0].url} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-xs text-muted-foreground">No photo yet</div>
+                    )}
+                  </div>
+                  <div className="space-y-2 p-3">
+                    <div className="flex flex-wrap gap-1.5">
+                      {form.status === "available" ? (
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-400">Available</span>
+                      ) : null}
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-foreground">
+                        {form.deal_type === "cash" ? "All cash" : (FINANCE_SUBTYPES.find((s) => s.value === form.finance_subtype)?.label || "Owner finance")}
+                      </span>
+                      {(() => {
+                        const c = chipStyle(form.condition);
+                        return form.condition && c ? (
+                          <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize" style={{ background: c.bg, color: c.fg }}>{form.condition}</span>
+                        ) : null;
+                      })()}
+                    </div>
+                    <p className="truncate text-sm font-semibold text-foreground">{form.address || "New property"}</p>
+                    {form.city || form.state ? (
+                      <p className="text-xs text-muted-foreground">{form.city}{form.state ? `, ${form.state}` : ""}</p>
+                    ) : null}
+                    <p className="text-lg font-bold text-foreground">{numericPrice ? `$${numericPrice.toLocaleString()}` : "—"}</p>
+                    {form.bedrooms || form.bathrooms || form.sqft ? (
+                      <p className="text-xs text-muted-foreground">
+                        {[form.bedrooms && `${form.bedrooms} bd`, form.bathrooms && `${form.bathrooms} ba`, form.sqft && `${form.sqft} sqft`].filter(Boolean).join(" · ")}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* 4. Map */}
+            <Card className="border-border">
+              <CardContent className="space-y-2 p-4">
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Map</span>
+                </div>
+                {MAPBOX_TOKEN ? (
+                  <MapPreview latitude={coords.lat} longitude={coords.lng} className="h-[200px] overflow-hidden rounded-lg" />
+                ) : (
+                  <div className="flex h-[200px] items-center justify-center rounded-lg border border-border bg-muted/40 text-xs text-muted-foreground"><MapPin className="mr-2 h-4 w-4" /> Enter an address to see the map</div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* 5. Matched buyers count */}
+            <Card className="border-border">
+              <CardContent className="flex items-center gap-2 p-4">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium text-foreground">Matched buyers ({matchedBuyers.length})</span>
+              </CardContent>
+            </Card>
+          </aside>
         </div>
       </div>
     </MainLayout>
