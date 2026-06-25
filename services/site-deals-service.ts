@@ -8,7 +8,8 @@ import type { ParsedMarket } from "@/lib/site-builder/location-pages"
 // and admin.ts throws in the browser (assertServer + service-role key).
 // Org-scoped so each tenant site only ever shows its own deals.
 
-const DEAL_SUMMARY_COLUMNS = "id,slug,address,city,state,price,bedrooms,bathrooms,sqft,property_type"
+const DEAL_SUMMARY_COLUMNS =
+  "id,slug,address,city,state,price,bedrooms,bathrooms,sqft,property_type,deal_type,finance_subtype,condition,occupancy"
 
 export type DealFilters = {
   minBeds?: number
@@ -48,6 +49,32 @@ function primaryUrl(imgs: PropertyImageRow[] | undefined): string | null {
   if (!imgs || imgs.length === 0) return null
   const primary = imgs.find((i) => i.is_featured) || imgs[0]
   return primary?.image_url || null
+}
+
+// Raw detail row: lat/long come from a Postgres `numeric` column, so supabase-js
+// may hand them back as strings; tags is a text[]. Everything else mirrors
+// DealDetail minus the fields we hydrate (images/primary_image_url).
+type DealDetailRow = Omit<DealDetail, "primary_image_url" | "images" | "latitude" | "longitude"> & {
+  latitude: number | string | null
+  longitude: number | string | null
+}
+
+// Build a DealDetail from a raw row + hydrate its images. Shared by the live
+// loader and the owner-preview loader so they stay in lockstep.
+async function mapDealDetailRow(row: DealDetailRow): Promise<DealDetail> {
+  const imagesByProperty = await fetchImagesByProperty([row.id])
+  const imgs = imagesByProperty.get(row.id) || []
+  const images: DealImage[] = imgs.map((i) => ({ image_url: i.image_url, is_featured: i.is_featured }))
+  return {
+    ...row,
+    condition: row.condition ?? null,
+    occupancy: row.occupancy ?? null,
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    latitude: row.latitude != null ? Number(row.latitude) : null,
+    longitude: row.longitude != null ? Number(row.longitude) : null,
+    primary_image_url: primaryUrl(imgs),
+    images,
+  }
 }
 
 export async function getPublishedDeals(
@@ -131,7 +158,7 @@ export async function getPublishedDealBySlug(orgId: string | null, slug: string)
   let query = supabaseAdmin
     .from("properties")
     .select(
-      "id,slug,address,city,state,zip,price,bedrooms,bathrooms,sqft,property_type,description,deal_type,finance_subtype,status,year_built,lot_size,mls_number,construction_type,photo_album_url,video_link",
+      "id,slug,address,city,state,zip,price,bedrooms,bathrooms,sqft,property_type,description,deal_type,finance_subtype,status,year_built,lot_size,mls_number,construction_type,photo_album_url,video_link,condition,occupancy,tags,latitude,longitude",
     )
     .eq("slug", slug)
     .eq("status", "available")
@@ -142,11 +169,7 @@ export async function getPublishedDealBySlug(orgId: string | null, slug: string)
   if (error) throw new Error(error.message)
   if (!data) return null
 
-  const row = data as Omit<DealDetail, "primary_image_url" | "images">
-  const imagesByProperty = await fetchImagesByProperty([row.id])
-  const imgs = imagesByProperty.get(row.id) || []
-  const images: DealImage[] = imgs.map((i) => ({ image_url: i.image_url, is_featured: i.is_featured }))
-  return { ...row, primary_image_url: primaryUrl(imgs), images }
+  return mapDealDetailRow(data as DealDetailRow)
 }
 
 // Owner draft preview: same shape as getPublishedDealBySlug but keyed by id and
@@ -156,7 +179,7 @@ export async function getDealByIdForOwner(orgId: string | null, propertyId: stri
   let query = supabaseAdmin
     .from("properties")
     .select(
-      "id,slug,address,city,state,zip,price,bedrooms,bathrooms,sqft,property_type,description,deal_type,finance_subtype,status,year_built,lot_size,mls_number,construction_type,photo_album_url,video_link,show_on_site",
+      "id,slug,address,city,state,zip,price,bedrooms,bathrooms,sqft,property_type,description,deal_type,finance_subtype,status,year_built,lot_size,mls_number,construction_type,photo_album_url,video_link,show_on_site,condition,occupancy,tags,latitude,longitude",
     )
     .eq("id", propertyId)
   if (orgId) query = query.eq("org_id", orgId)
@@ -165,11 +188,7 @@ export async function getDealByIdForOwner(orgId: string | null, propertyId: stri
   if (error) throw new Error(error.message)
   if (!data) return null
 
-  const row = data as Omit<DealDetail, "primary_image_url" | "images">
-  const imagesByProperty = await fetchImagesByProperty([row.id])
-  const imgs = imagesByProperty.get(row.id) || []
-  const images: DealImage[] = imgs.map((i) => ({ image_url: i.image_url, is_featured: i.is_featured }))
-  return { ...row, primary_image_url: primaryUrl(imgs), images }
+  return mapDealDetailRow(data as DealDetailRow)
 }
 
 export async function getNearbyPublishedDeals(

@@ -26,6 +26,9 @@ export function PropertyJsonLd({ deal, host, brandName }: { deal: DealDetail; ho
   if (deal.zip) address.postalCode = deal.zip
   if (Object.keys(address).length > 1) residence.address = address
   if (imageUrls.length > 0) residence.image = imageUrls
+  if (deal.latitude != null && deal.longitude != null) {
+    residence.geo = { "@type": "GeoCoordinates", latitude: deal.latitude, longitude: deal.longitude }
+  }
   if (deal.price != null) {
     residence.offers = {
       "@type": "Offer",
@@ -50,9 +53,25 @@ export function PropertyJsonLd({ deal, host, brandName }: { deal: DealDetail; ho
     })
   }
 
+  const graphNodes: Array<Record<string, unknown>> = [
+    residence,
+    { "@type": "BreadcrumbList", itemListElement: breadcrumbItems },
+  ]
+
+  if (deal.video_link) {
+    const video: Record<string, unknown> = {
+      "@type": "VideoObject",
+      name: `${deal.address || "Property"} — video tour`,
+      description: deal.description || `Video tour of ${deal.address || "this property"}`,
+      contentUrl: deal.video_link,
+    }
+    if (imageUrls.length) video.thumbnailUrl = [imageUrls[0]]
+    graphNodes.push(video)
+  }
+
   const graph = {
     "@context": "https://schema.org",
-    "@graph": [residence, { "@type": "BreadcrumbList", itemListElement: breadcrumbItems }],
+    "@graph": graphNodes,
   }
 
   return (

@@ -1,6 +1,7 @@
 import React from "react"
 import type { DealSummary } from "@/lib/site-builder/types"
 import { siteImage, siteSrcSet } from "@/lib/site-builder/image-url"
+import { chipStyle, termsLabelFrom } from "@/lib/site-builder/deal-chips"
 
 export interface DealCardProps {
   property: DealSummary
@@ -248,6 +249,47 @@ export function DealCard({ property, variant = "teaser", locked = false, href, s
           </div>
         ) : specs ? (
           <div style={{ marginTop: 8, fontSize: 13, color: "#5a6675" }}>{specs}</div>
+        ) : null}
+        {!locked && variant === "full" ? (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                padding: "3px 9px",
+                borderRadius: 999,
+                fontSize: 11.5,
+                fontWeight: 700,
+                background: "color-mix(in srgb, var(--p) 8%, #fff)",
+                color: "var(--p)",
+                border: "1px solid color-mix(in srgb, var(--p) 16%, #fff)",
+              }}
+            >
+              {termsLabelFrom(property.deal_type, property.finance_subtype)}
+            </span>
+            {property.condition
+              ? (() => {
+                  const c = chipStyle(property.condition) || { bg: "#EEF1F5", fg: "#42505f" }
+                  return (
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        padding: "3px 9px",
+                        borderRadius: 999,
+                        fontSize: 11.5,
+                        fontWeight: 700,
+                        textTransform: "capitalize",
+                        background: c.bg,
+                        color: c.fg,
+                      }}
+                    >
+                      {property.condition}
+                    </span>
+                  )
+                })()
+              : null}
+          </div>
         ) : null}
       </div>
     </div>
