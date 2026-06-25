@@ -9,20 +9,50 @@ import { SiteFooter } from "@/components/sites/site-footer"
 import { DealCard } from "@/components/sites/deal-card"
 import { PropertyGallery } from "@/components/sites/property-gallery"
 import { WRAP } from "@/lib/site-builder/blocks/primitives"
+import { chipStyle, termsLabelFrom } from "@/lib/site-builder/deal-chips"
 import type { SiteTheme, SiteBusiness, DealDetail, DealSummary, SitePersona } from "@/lib/site-builder/types"
-
-const FINANCE_SUBTYPE_LABEL: Record<string, string> = {
-  owner_finance: "Owner finance",
-  subject_to: "Subject-to",
-  land_contract: "Land contract",
-}
 
 // Friendly, buyer-facing terms label derived from deal_type/finance_subtype.
 function termsLabel(deal: DealDetail): string {
-  if (deal.deal_type === "creative") {
-    return (deal.finance_subtype && FINANCE_SUBTYPE_LABEL[deal.finance_subtype]) || "Creative finance"
-  }
-  return "All cash"
+  return termsLabelFrom(deal.deal_type, deal.finance_subtype)
+}
+
+// Parse a raw video URL into the embed strategy we can render.
+function videoEmbed(
+  raw: string,
+): { kind: "iframe"; src: string } | { kind: "file"; src: string } | { kind: "link"; src: string } {
+  const url = raw.trim()
+  // YouTube
+  const yt = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{6,})/)
+  if (yt) return { kind: "iframe", src: `https://www.youtube.com/embed/${yt[1]}` }
+  // Vimeo
+  const vimeo = url.match(/vimeo\.com\/(?:video\/)?(\d+)/)
+  if (vimeo) return { kind: "iframe", src: `https://player.vimeo.com/video/${vimeo[1]}` }
+  // Direct file
+  if (/\.(mp4|webm|mov)(\?.*)?$/i.test(url)) return { kind: "file", src: url }
+  return { kind: "link", src: url }
+}
+
+// Render a condition/occupancy value as a semantic colored pill.
+function ChipValue({ value }: { value: string }) {
+  const c = chipStyle(value) || { bg: "#EEF1F5", fg: "#42505f" }
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        padding: "3px 10px",
+        borderRadius: 999,
+        fontSize: 13,
+        fontWeight: 700,
+        textTransform: "capitalize",
+        background: c.bg,
+        color: c.fg,
+      }}
+    >
+      {value}
+    </span>
+  )
 }
 
 const PERSONA_CTA: Record<SitePersona, string> = {
@@ -57,7 +87,7 @@ function Fact({ label, value }: { label: string; value: React.ReactNode }) {
 // owner's brand via theme tokens. Client islands (gallery, LeadForm, footer)
 // hydrate inside SiteContextProvider.
 export function PropertyPage({
-  host: _host,
+  host,
   site: _site,
   theme,
   business,
@@ -81,6 +111,9 @@ export function PropertyPage({
   const price = usd(deal.price)
   const cityState = [deal.city, deal.state].filter(Boolean).join(", ")
   const terms = termsLabel(deal)
+  const pageUrl = `https://${host}/properties/${deal.slug}`
+  const hasMap = deal.latitude != null && deal.longitude != null
+  const video = deal.video_link ? videoEmbed(deal.video_link) : null
   const cityHref = cityLocationHref || "/properties"
   const specBits = [
     deal.bedrooms != null ? `${deal.bedrooms} bd` : null,
@@ -160,6 +193,26 @@ export function PropertyPage({
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 20 }}>
                   {badge("Available", "primary")}
                   {badge(terms, "accent")}
+                  {deal.tags?.length
+                    ? deal.tags.map((tag) => (
+                        <span
+                          key={tag}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            padding: "5px 12px",
+                            borderRadius: 999,
+                            fontSize: 12.5,
+                            fontWeight: 700,
+                            background: "color-mix(in srgb, var(--p) 8%, #fff)",
+                            color: "var(--p)",
+                            border: "1px solid color-mix(in srgb, var(--p) 16%, #fff)",
+                          }}
+                        >
+                          {tag}
+                        </span>
+                      ))
+                    : null}
                 </div>
 
                 <h1 style={{ fontFamily: "var(--head)", fontSize: "clamp(26px, 4vw, 38px)", fontWeight: 800, color: "#0f1b29", lineHeight: 1.1, letterSpacing: "-.01em", margin: "12px 0 0" }}>
@@ -195,6 +248,8 @@ export function PropertyPage({
                   {deal.bedrooms != null ? <Fact label="Beds" value={deal.bedrooms} /> : null}
                   {deal.bathrooms != null ? <Fact label="Baths" value={deal.bathrooms} /> : null}
                   {deal.sqft != null ? <Fact label="Sqft" value={deal.sqft.toLocaleString("en-US")} /> : null}
+                  {deal.condition ? <Fact label="Condition" value={<ChipValue value={deal.condition} />} /> : null}
+                  {deal.occupancy ? <Fact label="Occupancy" value={<ChipValue value={deal.occupancy} />} /> : null}
                   {deal.property_type ? <Fact label="Property type" value={deal.property_type} /> : null}
                   <Fact label="Terms" value={terms} />
                   {cityState ? <Fact label="Location" value={cityState} /> : null}
@@ -216,6 +271,95 @@ export function PropertyPage({
                     ))}
                   </div>
                 ) : null}
+
+                {/* Video tour */}
+                {video ? (
+                  <div style={{ marginTop: 32 }}>
+                    <h2 className="lh-h2" style={{ fontFamily: "var(--head)", fontSize: 22, fontWeight: 800, color: "var(--p)", margin: "0 0 12px" }}>
+                      Video tour
+                    </h2>
+                    {video.kind === "iframe" ? (
+                      <div style={{ position: "relative", aspectRatio: "16 / 9", borderRadius: 14, overflow: "hidden", background: "#0f1b29" }}>
+                        <iframe
+                          src={video.src}
+                          title="Property video tour"
+                          loading="lazy"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0 }}
+                        />
+                      </div>
+                    ) : video.kind === "file" ? (
+                      <video controls preload="metadata" style={{ width: "100%", borderRadius: 14, display: "block", background: "#0f1b29" }}>
+                        <source src={video.src} />
+                      </video>
+                    ) : (
+                      <a
+                        href={video.src}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "12px 18px",
+                          borderRadius: 10,
+                          background: "var(--a)",
+                          color: "#fff",
+                          fontWeight: 700,
+                          fontSize: 14.5,
+                          textDecoration: "none",
+                        }}
+                      >
+                        Watch video tour ↗
+                      </a>
+                    )}
+                  </div>
+                ) : null}
+
+                {/* Location */}
+                {hasMap ? (
+                  <div style={{ marginTop: 32 }}>
+                    <h2 className="lh-h2" style={{ fontFamily: "var(--head)", fontSize: 22, fontWeight: 800, color: "var(--p)", margin: "0 0 12px" }}>
+                      Location
+                    </h2>
+                    <iframe
+                      title="Property location map"
+                      loading="lazy"
+                      style={{ width: "100%", aspectRatio: "5 / 2", border: 0, borderRadius: 14 }}
+                      src={`https://www.google.com/maps?q=${deal.latitude},${deal.longitude}&z=15&output=embed`}
+                    />
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${deal.latitude},${deal.longitude}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ display: "inline-block", marginTop: 10, fontSize: 13.5, fontWeight: 700, color: "var(--a-ink-light)", textDecoration: "none" }}
+                    >
+                      View on Google Maps ↗
+                    </a>
+                  </div>
+                ) : null}
+
+                {/* Share */}
+                <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 16, marginTop: 32 }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: ".04em", textTransform: "uppercase", color: "#8794a3" }}>Share</span>
+                  <a
+                    href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(pageUrl)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ fontSize: 13.5, fontWeight: 600, color: "#5a6675", textDecoration: "none" }}
+                  >
+                    Share on Facebook
+                  </a>
+                  <a
+                    href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(pageUrl)}&text=${encodeURIComponent(deal.address || "Check out this property")}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ fontSize: 13.5, fontWeight: 600, color: "#5a6675", textDecoration: "none" }}
+                  >
+                    Share on X
+                  </a>
+                </div>
               </div>
 
               {/* Sticky sidebar (desktop) / stacked (mobile) */}

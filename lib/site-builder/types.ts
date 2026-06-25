@@ -109,6 +109,10 @@ export interface DealSummary {
   sqft: number | null
   property_type: string | null
   primary_image_url: string | null
+  deal_type: string | null
+  finance_subtype: string | null
+  condition: string | null
+  occupancy: string | null
 }
 
 export interface DealImage {
@@ -128,6 +132,11 @@ export interface DealDetail extends DealSummary {
   construction_type: string | null
   photo_album_url: string | null
   video_link: string | null
+  condition: string | null
+  occupancy: string | null
+  tags: string[] | null
+  latitude: number | null
+  longitude: number | null
   images: DealImage[]
 }
 
