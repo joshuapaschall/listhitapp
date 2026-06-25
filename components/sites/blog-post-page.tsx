@@ -72,6 +72,12 @@ export function BlogPostPage({
               <span style={{ color: "#0f1b29" }}>{post.title}</span>
             </nav>
 
+            {post.category ? (
+              <div style={{ fontFamily: "var(--body)", fontSize: 12.5, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--p)", marginBottom: 10 }}>
+                {post.category}
+              </div>
+            ) : null}
+
             <h1 style={{ fontFamily: "var(--head)", fontSize: "clamp(28px, 4.5vw, 44px)", fontWeight: 800, color: "#0f1b29", lineHeight: 1.1, letterSpacing: "-.02em", margin: 0 }}>
               {post.title}
             </h1>
@@ -105,6 +111,29 @@ export function BlogPostPage({
               style={{ marginTop: 28, fontSize: 16.5, lineHeight: 1.75, color: "#2c3744" }}
               dangerouslySetInnerHTML={{ __html: sanitizePostHtml(post.bodyHtml || "") }}
             />
+
+            {/* Tags */}
+            {post.tags && post.tags.length ? (
+              <div style={{ marginTop: 28, display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {post.tags.map((tag) => (
+                  <span
+                    key={tag}
+                    style={{
+                      fontFamily: "var(--body)",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: "var(--p)",
+                      background: "color-mix(in srgb, var(--p) 8%, #fff)",
+                      border: "1px solid color-mix(in srgb, var(--p) 16%, #fff)",
+                      borderRadius: 999,
+                      padding: "5px 12px",
+                    }}
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            ) : null}
 
             {/* Lead-form CTA */}
             <div style={{ marginTop: 44, background: "#fff", border: "1px solid #eef1f5", borderRadius: 16, padding: 24, boxShadow: "0 20px 50px rgba(5,12,24,.08)" }}>

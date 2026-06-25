@@ -92,6 +92,11 @@ export function BlogIndexPage({
                         ) : null}
                       </div>
                       <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 8 }}>
+                        {p.category ? (
+                          <span style={{ alignSelf: "flex-start", fontFamily: "var(--body)", fontSize: 11, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--p)", background: "color-mix(in srgb, var(--p) 8%, #fff)", borderRadius: 999, padding: "3px 9px" }}>
+                            {p.category}
+                          </span>
+                        ) : null}
                         <div style={{ fontFamily: "var(--head)", fontSize: 18, fontWeight: 700, color: "#0f1b29", lineHeight: 1.25 }}>
                           {p.title}
                         </div>

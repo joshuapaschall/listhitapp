@@ -19,6 +19,18 @@ export default async function EditPostPage({ params }: { params: { id: string; p
     .maybeSingle()
   if (!post) notFound()
 
+  const { data: catRows } = await supabase
+    .from("posts")
+    .select("category")
+    .eq("site_id", params.id)
+    .eq("org_id", orgId)
+    .is("deleted_at", null)
+    .not("category", "is", null)
+    .limit(1000)
+  const existingCategories = Array.from(
+    new Set((catRows || []).map((r: any) => (r.category || "").trim()).filter(Boolean)),
+  ).sort()
+
   const mapped: PostEditorData = {
     id: post.id,
     title: post.title ?? "",
@@ -32,6 +44,8 @@ export default async function EditPostPage({ params }: { params: { id: string; p
     metaDescription: post.meta_description ?? null,
     ogImageUrl: post.og_image_url ?? null,
     authorName: post.author_name ?? null,
+    category: post.category ?? null,
+    tags: Array.isArray(post.tags) ? post.tags : [],
     status: post.status ?? "draft",
   }
 
@@ -39,7 +53,7 @@ export default async function EditPostPage({ params }: { params: { id: string; p
     <MainLayout>
       <div className="space-y-5 p-4 md:p-6">
         <SiteHubNav active="posts" siteId={site.id} siteName={site.name} slug={site.slug} published={site.status === "published"} publicUrl={publicUrl} />
-        <PostEditor mode="edit" siteId={site.id} siteSlug={site.slug} post={mapped} publicUrl={publicUrl ?? undefined} />
+        <PostEditor mode="edit" siteId={site.id} siteSlug={site.slug} post={mapped} publicUrl={publicUrl ?? undefined} existingCategories={existingCategories} />
       </div>
     </MainLayout>
   )

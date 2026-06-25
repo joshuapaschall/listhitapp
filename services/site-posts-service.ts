@@ -6,9 +6,9 @@ import type { PostSummary, PostDetail } from "@/lib/site-builder/types"
 // pulled into a client bundle (admin.ts throws in the browser). Every query is
 // scoped to BOTH site_id AND org_id so a tenant site only shows its own posts.
 
-const SUMMARY_COLUMNS = "id,slug,title,excerpt,featured_image_url,featured_image_alt,published_at"
+const SUMMARY_COLUMNS = "id,slug,title,excerpt,featured_image_url,featured_image_alt,published_at,category,tags"
 const DETAIL_COLUMNS =
-  "id,slug,title,excerpt,featured_image_url,featured_image_alt,published_at,body_html,meta_title,meta_description,og_image_url,focus_keyword,author_name,seo_score"
+  "id,slug,title,excerpt,featured_image_url,featured_image_alt,published_at,category,tags,body_html,meta_title,meta_description,og_image_url,focus_keyword,author_name,seo_score"
 
 interface PostSummaryRow {
   id: string
@@ -18,6 +18,8 @@ interface PostSummaryRow {
   featured_image_url: string | null
   featured_image_alt: string | null
   published_at: string | null
+  category: string | null
+  tags: string[] | null
 }
 
 interface PostDetailRow extends PostSummaryRow {
@@ -39,6 +41,8 @@ function toSummary(r: PostSummaryRow): PostSummary {
     featuredImageUrl: r.featured_image_url,
     featuredImageAlt: r.featured_image_alt,
     publishedAt: r.published_at,
+    category: r.category ?? null,
+    tags: Array.isArray(r.tags) ? r.tags : [],
   }
 }
 

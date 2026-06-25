@@ -15,6 +15,7 @@ interface PostRow {
   title: string
   slug: string
   status: string
+  category: string | null
   seo_score: number | null
   featured_image_url: string | null
   updated_at: string | null
@@ -53,7 +54,7 @@ export default async function WebsitePostsPage({ params }: { params: { id: strin
 
   const { data } = await supabase
     .from("posts")
-    .select("id,title,slug,status,seo_score,featured_image_url,updated_at,published_at")
+    .select("id,title,slug,status,category,seo_score,featured_image_url,updated_at,published_at")
     .eq("site_id", params.id)
     .eq("org_id", orgId)
     .is("deleted_at", null)
@@ -109,7 +110,10 @@ export default async function WebsitePostsPage({ params }: { params: { id: strin
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium text-foreground">{p.title || "Untitled"}</div>
-                  <div className="truncate font-mono text-xs text-muted-foreground">/blog/{p.slug}</div>
+                  <div className="truncate font-mono text-xs text-muted-foreground">
+                    /blog/{p.slug}
+                    {p.category ? <span className="font-sans"> · {p.category}</span> : null}
+                  </div>
                 </div>
                 <Badge variant={p.status === "published" ? "default" : "secondary"} className="shrink-0">
                   {p.status === "published" ? "Live" : "Draft"}

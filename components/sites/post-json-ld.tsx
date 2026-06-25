@@ -20,6 +20,8 @@ export function PostJsonLd({ post, host, brandName }: { post: PostDetail; host: 
   if (post.publishedAt) data.datePublished = post.publishedAt
   const description = post.metaDescription || post.excerpt
   if (description) data.description = description
+  if (post.category) data.articleSection = post.category
+  if (post.tags && post.tags.length) data.keywords = post.tags.join(", ")
 
   return (
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }} />

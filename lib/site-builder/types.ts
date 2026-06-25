@@ -139,6 +139,8 @@ export interface PostSummary {
   featuredImageUrl: string | null
   featuredImageAlt: string | null
   publishedAt: string | null
+  category: string | null
+  tags: string[]
 }
 
 export interface PostDetail extends PostSummary {
