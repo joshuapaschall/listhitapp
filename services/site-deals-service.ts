@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase/admin"
 import type { DealSummary, DealDetail, DealImage } from "@/lib/site-builder/types"
 import type { ParsedMarket } from "@/lib/site-builder/location-pages"
+import { normalizeComps } from "@/lib/properties/comps"
 
 // Server-only: public site reads are sessionless, so they MUST use supabaseAdmin
 // (anon returns 0 rows under RLS). This lives in its own module — NOT in
@@ -54,9 +55,10 @@ function primaryUrl(imgs: PropertyImageRow[] | undefined): string | null {
 // Raw detail row: lat/long come from a Postgres `numeric` column, so supabase-js
 // may hand them back as strings; tags is a text[]. Everything else mirrors
 // DealDetail minus the fields we hydrate (images/primary_image_url).
-type DealDetailRow = Omit<DealDetail, "primary_image_url" | "images" | "latitude" | "longitude"> & {
+type DealDetailRow = Omit<DealDetail, "primary_image_url" | "images" | "latitude" | "longitude" | "comps"> & {
   latitude: number | string | null
   longitude: number | string | null
+  comps?: unknown
 }
 
 // Build a DealDetail from a raw row + hydrate its images. Shared by the live
@@ -72,6 +74,7 @@ async function mapDealDetailRow(row: DealDetailRow): Promise<DealDetail> {
     tags: Array.isArray(row.tags) ? row.tags : [],
     latitude: row.latitude != null ? Number(row.latitude) : null,
     longitude: row.longitude != null ? Number(row.longitude) : null,
+    comps: normalizeComps(row.comps),
     primary_image_url: primaryUrl(imgs),
     images,
   }
@@ -158,7 +161,7 @@ export async function getPublishedDealBySlug(orgId: string | null, slug: string)
   let query = supabaseAdmin
     .from("properties")
     .select(
-      "id,slug,address,city,state,zip,price,bedrooms,bathrooms,sqft,property_type,description,deal_type,finance_subtype,status,year_built,lot_size,mls_number,construction_type,photo_album_url,video_link,condition,occupancy,tags,latitude,longitude",
+      "id,slug,address,city,state,zip,price,bedrooms,bathrooms,sqft,property_type,description,deal_type,finance_subtype,status,year_built,lot_size,mls_number,construction_type,photo_album_url,video_link,condition,occupancy,tags,latitude,longitude,comps",
     )
     .eq("slug", slug)
     .eq("status", "available")
@@ -179,7 +182,7 @@ export async function getDealByIdForOwner(orgId: string | null, propertyId: stri
   let query = supabaseAdmin
     .from("properties")
     .select(
-      "id,slug,address,city,state,zip,price,bedrooms,bathrooms,sqft,property_type,description,deal_type,finance_subtype,status,year_built,lot_size,mls_number,construction_type,photo_album_url,video_link,show_on_site,condition,occupancy,tags,latitude,longitude",
+      "id,slug,address,city,state,zip,price,bedrooms,bathrooms,sqft,property_type,description,deal_type,finance_subtype,status,year_built,lot_size,mls_number,construction_type,photo_album_url,video_link,show_on_site,condition,occupancy,tags,latitude,longitude,comps",
     )
     .eq("id", propertyId)
   if (orgId) query = query.eq("org_id", orgId)

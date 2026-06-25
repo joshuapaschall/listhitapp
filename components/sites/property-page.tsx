@@ -272,6 +272,48 @@ export function PropertyPage({
                   </div>
                 ) : null}
 
+                {/* Comparable sales */}
+                {deal.comps?.length ? (
+                  <div style={{ marginTop: 32 }}>
+                    <h2 className="lh-h2" style={{ fontFamily: "var(--head)", fontSize: 22, fontWeight: 800, color: "var(--p)", margin: "0 0 12px" }}>
+                      Comparable sales
+                    </h2>
+                    <div style={{ border: "1px solid #eef1f5", borderRadius: 14, background: "#fff", overflow: "hidden" }}>
+                      {deal.comps.map((comp, i) => (
+                        <div
+                          key={i}
+                          style={{
+                            display: "flex",
+                            alignItems: "baseline",
+                            justifyContent: "space-between",
+                            gap: 16,
+                            padding: "13px 16px",
+                            borderTop: i === 0 ? "none" : "1px solid color-mix(in srgb, var(--p) 12%, #fff)",
+                          }}
+                        >
+                          {comp.url ? (
+                            <a
+                              href={comp.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ fontSize: 15, fontWeight: 600, color: "var(--p)", textDecoration: "none" }}
+                            >
+                              {comp.address} ↗
+                            </a>
+                          ) : (
+                            <span style={{ fontSize: 15, color: "#2c3744" }}>{comp.address}</span>
+                          )}
+                          {comp.sold_price != null ? (
+                            <span style={{ fontSize: 14.5, fontWeight: 500, color: "#3a4554", whiteSpace: "nowrap" }}>
+                              Sold {usd(comp.sold_price)}
+                            </span>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
                 {/* Video tour */}
                 {video ? (
                   <div style={{ marginTop: 32 }}>

@@ -25,6 +25,7 @@ import {
   Tag as TagIcon,
   Upload,
   Users,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -37,6 +38,7 @@ import SortableImageGrid, { type ImageItem } from "@/components/properties/sorta
 import { PropertyService } from "@/services/property-service";
 import { BuyerService } from "@/services/buyer-service";
 import type { Buyer } from "@/lib/supabase";
+import type { PropertyComp } from "@/lib/site-builder/types";
 import { PROPERTY_TYPE_GROUPS } from "@/lib/constant";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -193,10 +195,20 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
     photo_album_url: "",
     video_link: "",
     website_url: "",
+    comps: [] as PropertyComp[],
   });
 
   const handleChange = <K extends keyof typeof form>(field: K, value: (typeof form)[K]) =>
     setForm((prev) => ({ ...prev, [field]: value }));
+
+  // Comparable sales — an array of objects, so it gets its own handlers rather
+  // than going through handleChange.
+  const addComp = () =>
+    setForm((f) => ({ ...f, comps: [...f.comps, { address: "", sold_price: null, url: null }] }));
+  const removeComp = (i: number) =>
+    setForm((f) => ({ ...f, comps: f.comps.filter((_, idx) => idx !== i) }));
+  const updateComp = (i: number, patch: Partial<PropertyComp>) =>
+    setForm((f) => ({ ...f, comps: f.comps.map((c, idx) => (idx === i ? { ...c, ...patch } : c)) }));
 
   const numericPrice = form.price ? Number(form.price.replace(/[^\d]/g, "")) : undefined;
   const numericBuyPrice = form.buy_price ? Number(form.buy_price.replace(/[^\d]/g, "")) : undefined;
@@ -258,6 +270,7 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
         photo_album_url: anyP.photo_album_url ?? "",
         video_link: p.video_link ?? "",
         website_url: p.website_url ?? "",
+        comps: Array.isArray(anyP.comps) ? anyP.comps : [],
       });
       setCoords({ lat: p.latitude ?? null, lng: p.longitude ?? null });
       setShowOnSite(anyP.show_on_site !== false);
@@ -445,6 +458,7 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
       occupancy: form.occupancy || null,
       priority: form.priority || null,
       tags: form.tags.length > 0 ? form.tags : null,
+      comps: form.comps.filter((c) => c.address.trim()),
       // Public listing copy vs private internal notes — kept strictly separate.
       description: description || null,
       internal_notes: form.internal_notes || null,
@@ -803,6 +817,60 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-1.5"><Label className="text-sm">Photo album link — Google Drive / Dropbox</Label><Input className="h-9" placeholder="https://drive.google.com/…" value={form.photo_album_url} onChange={(e) => handleChange("photo_album_url", e.target.value)} /></div>
               <div className="space-y-1.5"><Label className="text-sm">Video link (YouTube)</Label><Input className="h-9" placeholder="https://youtube.com/…" value={form.video_link} onChange={(e) => handleChange("video_link", e.target.value)} /></div>
+            </div>
+
+            {/* Comparable sales */}
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label className="text-sm">Comparable sales</Label>
+                <p className="text-xs text-muted-foreground">
+                  Recently sold homes nearby that justify your price. Address and sold price show on the listing; the link is optional.
+                </p>
+              </div>
+              {form.comps.length > 0 ? (
+                <div className="space-y-2">
+                  {form.comps.map((comp, i) => (
+                    <div key={i} className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <Input
+                        className="h-9 sm:flex-[2]"
+                        placeholder="Address"
+                        value={comp.address}
+                        onChange={(e) => updateComp(i, { address: e.target.value })}
+                      />
+                      <Input
+                        className="h-9 sm:flex-1"
+                        inputMode="numeric"
+                        placeholder="Sold price"
+                        value={comp.sold_price ?? ""}
+                        onChange={(e) =>
+                          updateComp(i, {
+                            sold_price: e.target.value ? Number(e.target.value.replace(/[^0-9.]/g, "")) : null,
+                          })
+                        }
+                      />
+                      <Input
+                        className="h-9 sm:flex-1"
+                        placeholder="Link (optional)"
+                        value={comp.url ?? ""}
+                        onChange={(e) => updateComp(i, { url: e.target.value || null })}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 shrink-0 text-muted-foreground"
+                        aria-label="Remove comp"
+                        onClick={() => removeComp(i)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              <Button type="button" variant="outline" size="sm" onClick={addComp}>
+                <Plus className="h-3.5 w-3.5" /> Add comp
+              </Button>
             </div>
           </CardContent>
         </Card>
