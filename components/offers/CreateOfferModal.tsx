@@ -19,7 +19,10 @@ import type { Buyer, Property } from "@/lib/supabase"
 import { OfferService } from "@/services/offer-service"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { Banknote, Building2 } from "lucide-react"
+import { Banknote, Building2, Home } from "lucide-react"
+
+const spreadFmt = (n: number) =>
+  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n)
 
 function formatCurrencyInput(value: string): string {
   const cleaned = value.replace(/[^\d.]/g, "")
@@ -110,6 +113,14 @@ export default function CreateOfferModal({
 
   const isCash = offerType === "cash"
 
+  // Live projected spread — presentational only, recomputed every render.
+  const offerNum = Number(offerPrice.replace(/[^\d.]/g, "")) || 0
+  const buyNum = property?.buy_price ?? null
+  const projectedSpread = buyNum != null ? offerNum - buyNum : null
+  const buyerName = buyer ? (buyer.full_name || `${buyer.fname || ""} ${buyer.lname || ""}`.trim() || "Buyer") : ""
+  const buyerInitials = buyer ? (`${buyer.fname?.[0] || ""}${buyer.lname?.[0] || ""}`.toUpperCase() || "?") : "?"
+  const propImg = (property as any)?.property_images?.[0]?.image_url as string | undefined
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="flex max-h-[85vh] max-w-xl flex-col gap-0 p-0" onOpenAutoFocus={(e) => e.preventDefault()}>
@@ -132,11 +143,40 @@ export default function CreateOfferModal({
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Buyer &amp; property</p>
             <div>
               <label className="mb-1.5 block text-sm font-medium">Buyer <span className="text-destructive">*</span></label>
-              <BuyerSelector value={buyer} onChange={setBuyer} />
+              {buyer ? (
+                <div className="flex items-center gap-3 rounded-lg border border-border bg-card p-2.5">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand/10 text-xs font-semibold text-brand">{buyerInitials}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium text-foreground">{buyerName}</div>
+                    {buyer.phone ? <div className="truncate text-xs text-muted-foreground">{buyer.phone}</div> : null}
+                  </div>
+                  <Button type="button" variant="ghost" size="sm" className="shrink-0" onClick={() => setBuyer(null)}>Change</Button>
+                </div>
+              ) : (
+                <BuyerSelector value={buyer} onChange={setBuyer} />
+              )}
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium">Property <span className="text-destructive">*</span></label>
-              <PropertySelector value={property} onChange={setProperty} />
+              {property ? (
+                <div className="flex items-center gap-3 rounded-lg border border-border bg-card p-2.5">
+                  <div className="flex h-12 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted">
+                    {propImg ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={propImg} alt={property.address || "Property"} className="h-full w-full object-cover" />
+                    ) : (
+                      <Home className="h-5 w-5 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium text-foreground">{property.address || "Property"}</div>
+                    <div className="truncate text-xs text-muted-foreground">Ask ${property.price?.toLocaleString() ?? "—"}</div>
+                  </div>
+                  <Button type="button" variant="ghost" size="sm" className="shrink-0" onClick={() => setProperty(null)}>Change</Button>
+                </div>
+              ) : (
+                <PropertySelector value={property} onChange={setProperty} />
+              )}
             </div>
           </div>
 
@@ -189,6 +229,25 @@ export default function CreateOfferModal({
                 />
               </div>
             </div>
+
+            {/* Live projected spread */}
+            {property ? (
+              buyNum == null ? (
+                <div className="rounded-lg border border-dashed border-border px-4 py-3 text-xs text-muted-foreground">
+                  Add a buy price on this property to see your spread.
+                </div>
+              ) : offerNum > 0 && projectedSpread != null ? (
+                <div className="rounded-lg border border-emerald-200/60 bg-emerald-50 px-4 py-3 dark:border-emerald-900/50 dark:bg-emerald-950/30">
+                  <div className="text-xs text-muted-foreground">Projected spread</div>
+                  <div className={cn("text-xl font-semibold", projectedSpread >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400")}>
+                    {projectedSpread >= 0 ? "+" : "−"}{spreadFmt(Math.abs(projectedSpread))}
+                  </div>
+                  <div className="mt-0.5 text-xs text-muted-foreground">
+                    Offer {spreadFmt(offerNum)} − your buy {spreadFmt(buyNum)} · updates as you type
+                  </div>
+                </div>
+              ) : null
+            ) : null}
 
             {/* Money fields — 2-col grid. Down/Monthly payment only for financing. */}
             <div className="grid grid-cols-2 gap-3">
