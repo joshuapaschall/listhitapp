@@ -64,27 +64,30 @@ function KanbanColumn({ id, label, color, offers, onOfferClick, canManage }: {
 }) {
   const { setNodeRef, isOver } = useDroppable({ id, disabled: !canManage })
   const columnTotal = offers.reduce((sum, offer) => sum + (offer.offer_price || 0), 0)
+  // Terminal columns stay full-width and always visible, just visually quieter.
+  const deemphasized = id === "rejected" || id === "withdrawn"
 
   return (
     <div className="flex w-[210px] min-w-[170px] flex-col">
-      <div className="border-b border-border px-2 pb-2">
-        <div className="flex items-center gap-2">
-          <div className={cn("h-2.5 w-2.5 rounded-full", color)} />
-          <span className="text-sm font-semibold text-foreground">{label}</span>
-          <span className="ml-auto text-xs text-muted-foreground">{offers.length}</span>
-        </div>
-        <p className="mt-0.5 pl-[18px] text-xs text-muted-foreground">{columnCurrency.format(columnTotal)}</p>
+      <div className="flex items-center gap-2 rounded-lg px-2.5 py-2">
+        <div className={cn("h-2.5 w-2.5 rounded-full", color, deemphasized && "opacity-60")} />
+        <span className={cn("text-sm font-semibold", deemphasized ? "text-muted-foreground" : "text-foreground")}>{label}</span>
+        <span className="ml-auto rounded-full bg-muted px-1.5 text-xs font-medium text-muted-foreground">{offers.length}</span>
       </div>
+      <p className="px-2.5 pb-2 text-xs tabular-nums text-muted-foreground">{columnCurrency.format(columnTotal)}</p>
       <div
         ref={setNodeRef}
         className={cn(
-          "mt-2 flex flex-1 flex-col gap-2 overflow-y-auto rounded-lg bg-muted/30 p-2 min-h-[360px]",
-          isOver && "ring-2 ring-brand/30",
+          "flex flex-1 flex-col gap-2 overflow-y-auto rounded-lg border border-transparent bg-muted/30 p-2 min-h-[360px]",
+          isOver && "border-brand/40 bg-brand/5 ring-2 ring-brand/30",
         )}
       >
         {offers.length === 0 ? (
-          <div className="m-1 flex flex-1 items-center justify-center rounded-lg border border-dashed border-border py-8 text-center text-xs text-muted-foreground">
-            No offers yet
+          <div className={cn(
+            "m-1 flex flex-1 items-center justify-center rounded-lg border border-dashed py-8 text-center text-xs transition-colors",
+            isOver ? "border-brand/50 text-brand" : "border-border text-muted-foreground/70",
+          )}>
+            Drop an offer here
           </div>
         ) : (
           offers.map((offer) => <OfferCard key={offer.id} offer={offer} onClick={onOfferClick} draggable={canManage} />)
