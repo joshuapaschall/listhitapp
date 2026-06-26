@@ -133,33 +133,33 @@ export default function ShowingsPage() {
         </div>
 
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <div className="rounded-md bg-muted/50 p-4">
+          <div className="rounded-lg border border-border p-4">
             <div className="flex items-center gap-1.5 text-muted-foreground">
               <Calendar className="h-3.5 w-3.5" />
               <p className="text-xs">Upcoming</p>
             </div>
-            <p className="mt-1.5 text-[22px] font-medium text-blue-600 dark:text-blue-400">{upcoming}</p>
+            <p className="mt-2 text-2xl font-medium text-blue-600 dark:text-blue-400">{upcoming}</p>
           </div>
-          <div className="rounded-md bg-muted/50 p-4">
+          <div className="rounded-lg border border-border p-4">
             <div className="flex items-center gap-1.5 text-muted-foreground">
               <CheckCircle2 className="h-3.5 w-3.5" />
               <p className="text-xs">Completed</p>
             </div>
-            <p className="mt-1.5 text-[22px] font-medium text-emerald-600 dark:text-emerald-400">{completed}</p>
+            <p className="mt-2 text-2xl font-medium text-emerald-600 dark:text-emerald-400">{completed}</p>
           </div>
-          <div className="rounded-md bg-muted/50 p-4">
+          <div className="rounded-lg border border-border p-4">
             <div className="flex items-center gap-1.5 text-muted-foreground">
               <XCircle className="h-3.5 w-3.5" />
               <p className="text-xs">Cancelled</p>
             </div>
-            <p className="mt-1.5 text-[22px] font-medium text-foreground">{cancelled}</p>
+            <p className="mt-2 text-2xl font-medium text-red-600 dark:text-red-400">{cancelled}</p>
           </div>
-          <div className="rounded-md bg-muted/50 p-4">
+          <div className="rounded-lg border border-border p-4">
             <div className="flex items-center gap-1.5 text-muted-foreground">
               <RefreshCw className="h-3.5 w-3.5" />
               <p className="text-xs">Rescheduled</p>
             </div>
-            <p className="mt-1.5 text-[22px] font-medium text-amber-600 dark:text-amber-400">{rescheduled}</p>
+            <p className="mt-2 text-2xl font-medium text-amber-600 dark:text-amber-400">{rescheduled}</p>
           </div>
         </div>
 
