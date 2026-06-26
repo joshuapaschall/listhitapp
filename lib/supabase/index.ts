@@ -173,6 +173,7 @@ export interface Property {
   occupancy?: string | null
   priority?: string | null
   tags?: string[] | null
+  show_on_site?: boolean | null
   video_link?: string | null
   short_url_key?: string | null
   short_url?: string | null
