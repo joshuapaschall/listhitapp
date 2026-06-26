@@ -97,7 +97,7 @@ export default function ShowingsCalendarView({
         </div>
 
         {/* Day cells */}
-        <div className="grid grid-cols-7 border-l border-t border-border">
+        <div className="grid grid-cols-7 overflow-hidden rounded-lg border-l border-t border-border">
           {days.map((day) => {
             const inMonth = isSameMonth(day, month)
             const dayShowings = showingsForDay(day)
@@ -109,16 +109,22 @@ export default function ShowingsCalendarView({
                 type="button"
                 onClick={() => setSelectedDay(day)}
                 className={cn(
-                  "min-h-[88px] border-b border-r border-border p-1 text-left align-top transition-colors hover:bg-muted/40",
-                  selected && "ring-1 ring-inset ring-brand",
-                  !inMonth && "bg-muted/20",
+                  "relative min-h-[92px] border-b border-r border-border p-1.5 text-left align-top transition-colors hover:bg-muted/50",
+                  selected && "z-10 bg-brand/5 ring-2 ring-inset ring-brand",
+                  !inMonth && "bg-muted/20 text-muted-foreground",
                 )}
               >
                 <div className="flex justify-end">
                   <span
                     className={cn(
                       "flex h-6 w-6 items-center justify-center rounded-full text-xs",
-                      today ? "bg-brand font-semibold text-white" : inMonth ? "text-foreground" : "text-muted-foreground",
+                      today
+                        ? "bg-brand font-semibold text-white"
+                        : selected
+                          ? "font-semibold text-brand"
+                          : inMonth
+                            ? "text-foreground"
+                            : "text-muted-foreground",
                     )}
                   >
                     {format(day, "d")}
@@ -147,9 +153,19 @@ export default function ShowingsCalendarView({
 
       {/* Selected-day detail */}
       <div className="space-y-3">
-        <p className="text-sm font-semibold text-foreground">{format(selectedDay, "EEEE, MMMM d")}</p>
+        <div className="flex items-center justify-between">
+          <p className="text-base font-semibold text-foreground">{format(selectedDay, "EEEE, MMMM d")}</p>
+          {selectedDayShowings.length > 0 ? (
+            <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+              {selectedDayShowings.length} {selectedDayShowings.length === 1 ? "showing" : "showings"}
+            </span>
+          ) : null}
+        </div>
         {selectedDayShowings.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border py-8 text-center text-sm text-muted-foreground">No showings on this day</div>
+          <div className="flex flex-col items-center gap-1 rounded-lg border border-dashed border-border py-10 text-center">
+            <p className="text-sm font-medium text-foreground">No showings on this day</p>
+            <p className="text-xs text-muted-foreground">Pick another day or schedule a new showing.</p>
+          </div>
         ) : (
           selectedDayShowings.map((showing) => (
             <ShowingCard
