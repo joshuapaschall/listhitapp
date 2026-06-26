@@ -11,6 +11,25 @@ export type OrgTwilioA2pStatus =
   | "verified"
   | "failed"
 
+// Intermediate Twilio resource SIDs + flags persisted across the multi-step
+// Secondary Customer Profile provisioning so a partial run resumes cleanly
+// (each step is skipped when its key is already present).
+export interface ProvisioningState {
+  secondary_profile_sid?: string // BU... (also mirrored to OrgTwilio.secondary_profile_sid)
+  business_info_enduser_sid?: string // IT...
+  business_info_attached?: boolean
+  authorized_rep_enduser_sid?: string // IT...
+  authorized_rep_attached?: boolean
+  address_sid?: string // AD...
+  supporting_document_sid?: string // RD...
+  supporting_document_attached?: boolean
+  primary_profile_assigned?: boolean
+  last_evaluation_status?: "compliant" | "noncompliant"
+  last_evaluation_at?: string
+  submitted?: boolean
+  submitted_at?: string
+}
+
 // Mirrors the org_twilio table.
 export interface OrgTwilio {
   id: string
@@ -24,6 +43,9 @@ export interface OrgTwilio {
   phone_number: string | null
   phone_number_sid: string | null
   a2p_status: OrgTwilioA2pStatus
+  customer_profile_status: string | null
+  provisioning_state: ProvisioningState
+  provisioning_error: string | null
   created_at: string
   updated_at: string
 }
