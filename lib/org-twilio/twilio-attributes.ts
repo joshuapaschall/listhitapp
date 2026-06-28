@@ -36,6 +36,15 @@ export function normalizeEin(ein: string): string {
   return `${digits.slice(0, 2)}-${digits.slice(2)}`
 }
 
+// Basic, permissive email shape check. Rejects empty, whitespace, missing @/domain,
+// and stray non-ASCII wrapper characters like the guillemets «» that crept in from
+// placeholder data. Not a full RFC validator — just enough to fail fast before Twilio.
+export function isValidEmail(value: string): boolean {
+  const s = (value || "").trim()
+  if (!s || s.length > 254) return false
+  return /^[^\s@«»"]+@[^\s@«»"]+\.[^\s@«»"]+$/.test(s)
+}
+
 // Normalize a US phone to E.164. Keeps an already-"+"-prefixed value as-is.
 export function toE164(phone: string): string {
   const trimmed = (phone || "").trim()
@@ -111,7 +120,9 @@ export function validateProvisioningInputs(inputs: ProvisioningInputs): Validati
   }
   need(inputs.contactFirstName, "contact_first_name")
   need(inputs.contactLastName, "contact_last_name")
-  need(inputs.contactEmail, "contact_email")
+  if (typeof inputs.contactEmail !== "string" || !isValidEmail(inputs.contactEmail)) {
+    missing.push("contact_email")
+  }
   need(inputs.orgPhone, "phone")
   need(inputs.addressLine1, "address_line1")
   need(inputs.city, "city")
@@ -120,4 +131,38 @@ export function validateProvisioningInputs(inputs: ProvisioningInputs): Validati
   need(inputs.websiteUrl, "website_url")
 
   return missing.length ? { ok: false, missing } : { ok: true }
+}
+
+// Twilio's CustomerProfile evaluation `results` is an array of requirement objects, often with a
+// nested sub-array of field checks. Failing leaves carry `passed: false` and a human-readable
+// `failure_reason` (e.g., "Email of Authorized Representative #1 is invalid."); siblings have
+// `failure_reason: null`. Recursively collect the real reasons, de-duplicated, preferring
+// failure_reason and falling back to friendly_name / object_field.
+export function summarizeEvaluationFailures(results: unknown): string {
+  const reasons: string[] = []
+  const seen = new Set<string>()
+  const visit = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      node.forEach(visit)
+      return
+    }
+    if (node && typeof node === "object") {
+      const o = node as Record<string, unknown>
+      if (o.passed === false) {
+        const fr = typeof o.failure_reason === "string" ? o.failure_reason.trim() : ""
+        const fn = typeof o.friendly_name === "string" ? o.friendly_name.trim() : ""
+        const of = typeof o.object_field === "string" ? o.object_field.trim() : ""
+        const reason = fr || fn || of
+        if (reason && !seen.has(reason)) {
+          seen.add(reason)
+          reasons.push(reason)
+        }
+      }
+      Object.values(o).forEach(visit)
+    }
+  }
+  visit(results)
+  return reasons.length
+    ? `Customer Profile evaluation noncompliant: ${reasons.join("; ")}`
+    : "Customer Profile evaluation noncompliant"
 }

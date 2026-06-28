@@ -5,6 +5,8 @@ import {
   buildAuthorizedRepAttributes,
   buildAddressParams,
   validateProvisioningInputs,
+  isValidEmail,
+  summarizeEvaluationFailures,
   DEFAULT_BUSINESS_TYPE,
   SECONDARY_CUSTOMER_PROFILE_POLICY_SID,
   type ProvisioningInputs,
@@ -173,5 +175,66 @@ describe("validateProvisioningInputs", () => {
 describe("constants", () => {
   test("policy SID matches the Twilio docs value", () => {
     expect(SECONDARY_CUSTOMER_PROFILE_POLICY_SID).toBe("RNdfbf3fae0e1107f8aded0e7cead80bf5")
+  })
+})
+
+describe("isValidEmail", () => {
+  test("accepts a normal address", () => {
+    expect(isValidEmail("josh@listhit.io")).toBe(true)
+  })
+
+  test("rejects guillemet-wrapped placeholder data", () => {
+    expect(isValidEmail("«josh@listhit.io»")).toBe(false)
+  })
+
+  test("rejects internal whitespace", () => {
+    expect(isValidEmail("josh @listhit.io")).toBe(false)
+  })
+
+  test("rejects a missing @/domain", () => {
+    expect(isValidEmail("joshlisthit.io")).toBe(false)
+  })
+
+  test("rejects empty", () => {
+    expect(isValidEmail("")).toBe(false)
+  })
+})
+
+describe("validateProvisioningInputs — email", () => {
+  test("a fully-valid input set is ok", () => {
+    expect(validateProvisioningInputs(baseInputs)).toEqual({ ok: true })
+  })
+
+  test("a malformed email fails with contact_email in missing", () => {
+    const result = validateProvisioningInputs({ ...baseInputs, contactEmail: "«josh@listhit.io»" })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.missing).toContain("contact_email")
+  })
+})
+
+describe("summarizeEvaluationFailures", () => {
+  test("surfaces nested failure_reason, prefixed", () => {
+    const results = [
+      { passed: true, friendly_name: "Business Information", failure_reason: null },
+      {
+        passed: false,
+        friendly_name: "Authorized Representative #1",
+        results: [
+          { object_field: "email", passed: false, failure_reason: "Email of Authorized Representative #1 is invalid." },
+          { object_field: "first_name", passed: true, failure_reason: null },
+        ],
+      },
+    ]
+    const summary = summarizeEvaluationFailures(results)
+    expect(summary.startsWith("Customer Profile evaluation noncompliant:")).toBe(true)
+    expect(summary).toContain("Email of Authorized Representative #1 is invalid.")
+  })
+
+  test("returns the bare message when nothing failed", () => {
+    const results = [
+      { passed: true, friendly_name: "Business Information", failure_reason: null },
+      { passed: true, friendly_name: "Authorized Representative #1", failure_reason: null },
+    ]
+    expect(summarizeEvaluationFailures(results)).toBe("Customer Profile evaluation noncompliant")
   })
 })
