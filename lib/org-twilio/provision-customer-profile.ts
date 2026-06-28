@@ -10,6 +10,7 @@ import {
   buildAuthorizedRepAttributes,
   buildAddressParams,
   validateProvisioningInputs,
+  summarizeEvaluationFailures,
   type ProvisioningInputs,
 } from "@/lib/org-twilio/twilio-attributes"
 
@@ -113,7 +114,7 @@ export async function provisionCustomerProfile(orgId: string): Promise<Provision
     }
     const secondaryProfileSid = state.secondary_profile_sid
 
-    // 1.2 — Business-information EndUser
+    // 1.2 — Business-information EndUser (create or update in place)
     if (!state.business_info_enduser_sid) {
       const eu = await client.trusthub.v1.endUsers.create({
         friendlyName: `${legalName} — Business Information`,
@@ -122,6 +123,8 @@ export async function provisionCustomerProfile(orgId: string): Promise<Provision
       })
       state.business_info_enduser_sid = eu.sid
       await mergeProvisioningState(orgId, { business_info_enduser_sid: eu.sid })
+    } else {
+      await client.trusthub.v1.endUsers(state.business_info_enduser_sid).update({ attributes: buildBusinessInformationAttributes(inputs) })
     }
 
     // 1.3 — Attach business-info EndUser
@@ -133,7 +136,7 @@ export async function provisionCustomerProfile(orgId: string): Promise<Provision
       await mergeProvisioningState(orgId, { business_info_attached: true })
     }
 
-    // 1.4 — Authorized-rep EndUser
+    // 1.4 — Authorized-rep EndUser (create or update in place)
     if (!state.authorized_rep_enduser_sid) {
       const rep = await client.trusthub.v1.endUsers.create({
         friendlyName: `${legalName} — Authorized Rep 1`,
@@ -142,6 +145,8 @@ export async function provisionCustomerProfile(orgId: string): Promise<Provision
       })
       state.authorized_rep_enduser_sid = rep.sid
       await mergeProvisioningState(orgId, { authorized_rep_enduser_sid: rep.sid })
+    } else {
+      await client.trusthub.v1.endUsers(state.authorized_rep_enduser_sid).update({ attributes: buildAuthorizedRepAttributes(inputs) })
     }
 
     // 1.5 — Attach authorized-rep EndUser
@@ -153,7 +158,7 @@ export async function provisionCustomerProfile(orgId: string): Promise<Provision
       await mergeProvisioningState(orgId, { authorized_rep_attached: true })
     }
 
-    // 1.6 — Address (on the account, not trusthub)
+    // 1.6 — Address (create or update in place; on the account, not trusthub)
     if (!state.address_sid) {
       const addr = await client.addresses.create({
         friendlyName: `${legalName} — Mailing Address`,
@@ -161,6 +166,8 @@ export async function provisionCustomerProfile(orgId: string): Promise<Provision
       })
       state.address_sid = addr.sid
       await mergeProvisioningState(orgId, { address_sid: addr.sid })
+    } else {
+      await client.addresses(state.address_sid).update({ ...buildAddressParams(inputs) })
     }
 
     // 1.7 — SupportingDocument (address proof)
@@ -203,13 +210,7 @@ export async function provisionCustomerProfile(orgId: string): Promise<Provision
     })
 
     if (evalStatus !== "compliant") {
-      const results = (evaluation.results as unknown as any[]) || []
-      const failed = results
-        .filter((r) => r && r.passed === false)
-        .map((r) => r.friendlyName || r.requirementFriendlyName || "requirement")
-      const summary = failed.length
-        ? `Customer Profile evaluation noncompliant: ${failed.join(", ")}`
-        : "Customer Profile evaluation noncompliant"
+      const summary = summarizeEvaluationFailures(evaluation.results)
       await upsertOrgTwilio(orgId, { a2p_status: "failed", provisioning_error: summary })
       return { ok: false, evaluation: "noncompliant", error: summary }
     }
