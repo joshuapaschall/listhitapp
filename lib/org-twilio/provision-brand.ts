@@ -163,12 +163,11 @@ export async function provisionBrand(orgId: string): Promise<BrandResult> {
       return { ok: false, evaluation: "noncompliant", error: summary }
     }
 
-    // 2.6 — Submit the TrustProduct (move to review)
-    if (!state.trust_product_submitted) {
-      await client.trusthub.v1.trustProducts(tpSid).update({ status: "pending-review" })
-      state.trust_product_submitted = true
-      await mergeProvisioningState(orgId, { trust_product_submitted: true })
-    }
+    // 2.6 — Submit the TrustProduct (move to review). ALWAYS re-submit, same reason as
+    // the customer profile: the us_a2p EndUser update-in-place (2.2) reverts an
+    // already-submitted TrustProduct to `draft`, so a resume must re-submit.
+    await client.trusthub.v1.trustProducts(tpSid).update({ status: "pending-review" })
+    await mergeProvisioningState(orgId, { trust_product_submitted: true })
 
     // Step 3 — BrandRegistration
     if (!row.brand_sid && !state.brand_registration_sid) {

@@ -219,18 +219,19 @@ export async function provisionCustomerProfile(orgId: string): Promise<Provision
       return { ok: false, evaluation: "noncompliant", error: summary }
     }
 
-    // 1.11 — Submit (move CP to review). Keep a2p_status = provisioning (T3 advances).
-    if (!state.submitted) {
-      const submitted = await client.trusthub.v1
-        .customerProfiles(secondaryProfileSid)
-        .update({ status: "pending-review" })
-      state.submitted = true
-      await mergeProvisioningState(
-        orgId,
-        { submitted: true, submitted_at: new Date().toISOString() },
-        { customer_profile_status: submitted.status },
-      )
-    }
+    // 1.11 — Submit (move CP to review). ALWAYS re-submit: the create-or-update steps
+    // above (1.2/1.4/1.6) revert an already-submitted profile to `draft` on Twilio's
+    // side, so a resume that syncs corrected data MUST re-submit or the profile is
+    // stranded in draft — which blocks the Brand step. Re-submitting a profile already
+    // in review is a harmless no-op. Keep a2p_status = provisioning (T3 advances it).
+    const submitted = await client.trusthub.v1
+      .customerProfiles(secondaryProfileSid)
+      .update({ status: "pending-review" })
+    await mergeProvisioningState(
+      orgId,
+      { submitted: true, submitted_at: new Date().toISOString() },
+      { customer_profile_status: submitted.status },
+    )
 
     return {
       ok: true,
