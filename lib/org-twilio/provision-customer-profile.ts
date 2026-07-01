@@ -71,6 +71,10 @@ export async function provisionCustomerProfile(orgId: string): Promise<Provision
     contactFirstName: str(bv.contact_first_name),
     contactLastName: str(bv.contact_last_name),
     contactEmail: str(bv.contact_email),
+    repEmail:
+      process.env.LISTHIT_TWILIO_REP_EMAIL ||
+      process.env.LISTHIT_TWILIO_NOTIFY_EMAIL ||
+      "compliance@listhit.io",
     orgPhone: str(org?.phone),
     addressLine1: str(org?.address_line1),
     addressLine2: str(org?.address_line2) || null,

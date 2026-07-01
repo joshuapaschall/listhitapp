@@ -5,6 +5,12 @@
 // Twilio docs constant: the Secondary Customer Profile policy SID (ISV model).
 export const SECONDARY_CUSTOMER_PROFILE_POLICY_SID = "RNdfbf3fae0e1107f8aded0e7cead80bf5"
 
+// Twilio docs constant: the A2P TrustProduct policy SID (create AND evaluate).
+export const TRUST_PRODUCT_POLICY_SID = "RNb0d4771c2c98518d916a3d4cd70a8f8b"
+
+// Standard A2P 10DLC brand type.
+export const BRAND_TYPE_STANDARD = "STANDARD"
+
 // business_type is not collected in the app yet; default when null.
 export const DEFAULT_BUSINESS_TYPE = "Limited Liability Corporation"
 
@@ -17,6 +23,9 @@ export interface ProvisioningInputs {
   contactFirstName: string
   contactLastName: string
   contactEmail: string
+  // ListHit-owned compliance address the orchestrators resolve from env and pass
+  // in. Routes carrier/TCR correspondence to ListHit, never the tenant.
+  repEmail: string
   orgPhone: string
   addressLine1: string
   addressLine2?: string | null
@@ -75,10 +84,26 @@ export function buildAuthorizedRepAttributes(inputs: ProvisioningInputs): Record
   return {
     first_name: inputs.contactFirstName,
     last_name: inputs.contactLastName,
-    email: inputs.contactEmail,
+    email: inputs.repEmail,
     phone_number: toE164(inputs.orgPhone),
     job_position: "Other",
     business_title: "Owner",
+  }
+}
+
+// Maps the Twilio legal-structure business_type to the us_a2p company_type enum.
+// We never emit "public" (would require stock ticker/exchange we don't collect).
+export function mapCompanyType(businessType: string | null | undefined): string {
+  const t = (businessType || "").toLowerCase()
+  if (t.includes("non-profit") || t.includes("nonprofit") || t.includes("non profit")) return "non_profit"
+  if (t.includes("government")) return "government"
+  return "private"
+}
+
+export function buildA2pMessagingProfileAttributes(inputs: ProvisioningInputs): Record<string, unknown> {
+  return {
+    company_type: mapCompanyType(inputs.businessType),
+    brand_contact_email: inputs.repEmail,
   }
 }
 
