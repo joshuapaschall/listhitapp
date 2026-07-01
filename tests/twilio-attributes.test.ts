@@ -9,6 +9,8 @@ import {
   summarizeEvaluationFailures,
   DEFAULT_BUSINESS_TYPE,
   SECONDARY_CUSTOMER_PROFILE_POLICY_SID,
+  mapCompanyType,
+  buildA2pMessagingProfileAttributes,
   type ProvisioningInputs,
 } from "@/lib/org-twilio/twilio-attributes"
 
@@ -19,6 +21,7 @@ const baseInputs: ProvisioningInputs = {
   contactFirstName: "Jane",
   contactLastName: "Doe",
   contactEmail: "jane@acme.com",
+  repEmail: "compliance@listhit.io",
   orgPhone: "5125550123",
   addressLine1: "123 Main St",
   addressLine2: "Suite 200",
@@ -98,11 +101,53 @@ describe("buildAuthorizedRepAttributes", () => {
     expect(attrs).toMatchObject({
       first_name: "Jane",
       last_name: "Doe",
-      email: "jane@acme.com",
+      email: "compliance@listhit.io",
       phone_number: "+15125550123",
       job_position: "Other",
       business_title: "Owner",
     })
+  })
+
+  test("email uses repEmail, not contactEmail", () => {
+    const attrs = buildAuthorizedRepAttributes({
+      ...baseInputs,
+      contactEmail: "tenant@acme.com",
+      repEmail: "compliance@listhit.io",
+    })
+    expect(attrs.email).toBe("compliance@listhit.io")
+    expect(attrs.email).not.toBe("tenant@acme.com")
+  })
+})
+
+describe("mapCompanyType", () => {
+  test("maps an LLC to private", () => {
+    expect(mapCompanyType("Limited Liability Corporation")).toBe("private")
+  })
+
+  test("maps a non-profit to non_profit", () => {
+    expect(mapCompanyType("Non-profit Corporation")).toBe("non_profit")
+  })
+
+  test("maps government to government", () => {
+    expect(mapCompanyType("Government")).toBe("government")
+  })
+
+  test("defaults null to private", () => {
+    expect(mapCompanyType(null)).toBe("private")
+  })
+})
+
+describe("buildA2pMessagingProfileAttributes", () => {
+  test("returns private company_type and the rep email as brand_contact_email", () => {
+    const attrs = buildA2pMessagingProfileAttributes(baseInputs)
+    expect(attrs.company_type).toBe("private")
+    expect(attrs.brand_contact_email).toBe(baseInputs.repEmail)
+  })
+
+  test("never emits stock ticker/exchange keys", () => {
+    const attrs = buildA2pMessagingProfileAttributes(baseInputs)
+    expect("stock_ticker" in attrs).toBe(false)
+    expect("stock_exchange" in attrs).toBe(false)
   })
 })
 
@@ -138,6 +183,7 @@ describe("validateProvisioningInputs", () => {
       contactFirstName: "",
       contactLastName: "",
       contactEmail: "",
+      repEmail: "",
       orgPhone: "",
       addressLine1: "",
       addressLine2: null,

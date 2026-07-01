@@ -28,6 +28,15 @@ export interface ProvisioningState {
   last_evaluation_at?: string
   submitted?: boolean
   submitted_at?: string
+  // --- T3a brand flow ---
+  trust_product_sid?: string
+  a2p_profile_enduser_sid?: string
+  a2p_profile_attached?: boolean
+  customer_profile_attached_to_trust_product?: boolean
+  trust_product_evaluation_status?: "compliant" | "noncompliant"
+  trust_product_submitted?: boolean
+  brand_registration_sid?: string
+  brand_status?: string
 }
 
 // Mirrors the org_twilio table.
@@ -37,7 +46,9 @@ export interface OrgTwilio {
   sms_provider: OrgSmsProvider
   subaccount_sid: string | null
   secondary_profile_sid: string | null
+  trust_product_sid: string | null
   brand_sid: string | null
+  brand_status: string | null
   campaign_sid: string | null
   messaging_service_sid: string | null
   phone_number: string | null
