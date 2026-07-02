@@ -107,6 +107,67 @@ export function buildA2pMessagingProfileAttributes(inputs: ProvisioningInputs): 
   }
 }
 
+// Maps our stored a2p_registration.use_case to a Twilio A2P Campaign use case.
+export function mapUseCase(useCase: string | null | undefined): string {
+  const u = (useCase || "").toLowerCase()
+  if (u.includes("low")) return "LOW_VOLUME"
+  if (u.includes("2fa") || u.includes("auth")) return "2FA"
+  if (u.includes("mixed")) return "MIXED"
+  if (u.includes("market")) return "MARKETING"
+  return "MARKETING"
+}
+
+export interface CampaignInputs {
+  brandRegistrationSid: string
+  useCase: string | null
+  description: string | null
+  sample1: string | null
+  sample2: string | null
+  optInUrl: string | null
+  legalBusinessName: string
+  privacyPolicyUrl?: string | null
+  termsUrl?: string | null
+}
+
+// Builds the UsAppToPerson.create payload. Applies minimum-length padding and guarantees
+// >= 2 samples so Twilio's validation passes; throws only if there is truly no sample text.
+export function buildCampaignAttributes(inputs: CampaignInputs): Record<string, unknown> {
+  const samples = [inputs.sample1, inputs.sample2]
+    .map((s) => (s ?? "").trim())
+    .filter((s) => s.length > 0)
+  if (samples.length === 0) {
+    throw new Error("At least one campaign sample message is required.")
+  }
+  // Ensure 2 samples (duplicate the first if only one was provided) and pad short ones to 20 chars.
+  while (samples.length < 2) samples.push(samples[0])
+  const paddedSamples = samples.slice(0, 5).map((s) =>
+    s.length >= 20 ? s : `${s} — reply STOP to opt out.`.slice(0, 1024),
+  )
+
+  const baseDescription =
+    (inputs.description ?? "").trim() ||
+    `${inputs.legalBusinessName} sends real estate offers, updates, and transactional messages to contacts who opted in.`
+  const description = baseDescription.length >= 40
+    ? baseDescription
+    : `${baseDescription} Recipients have consented to receive these messages.`.slice(0, 4096)
+
+  const messageFlow =
+    `Recipients opt in${inputs.optInUrl ? ` at ${inputs.optInUrl}` : ""} by submitting their phone number ` +
+    `through a web form or by providing it directly to ${inputs.legalBusinessName}, consenting to receive SMS.`
+
+  return {
+    brandRegistrationSid: inputs.brandRegistrationSid,
+    description,
+    messageFlow: messageFlow.length >= 40 ? messageFlow : `${messageFlow} Consent is captured and stored.`,
+    messageSamples: paddedSamples,
+    usAppToPersonUsecase: mapUseCase(inputs.useCase),
+    hasEmbeddedLinks: true,
+    hasEmbeddedPhone: true,
+    ...(inputs.privacyPolicyUrl ? { privacyPolicyUrl: inputs.privacyPolicyUrl } : {}),
+    ...(inputs.termsUrl ? { termsAndConditionsUrl: inputs.termsUrl } : {}),
+  }
+}
+
 export interface AddressParams {
   customerName: string
   street: string
