@@ -27,6 +27,18 @@ const h = vi.hoisted(() => {
 
 vi.mock("@/lib/supabase", () => ({ supabaseAdmin: h.client, supabase: h.client }))
 
+// Twilio client used only for the delivered cost/segment backfill. Default rejects
+// (simulating "not priced yet") so existing delivered cases stay deterministic;
+// backfill tests override per-call.
+const tw = vi.hoisted(() => ({
+  fetchMsgMock: vi.fn(async () => {
+    throw new Error("not priced yet")
+  }),
+}))
+vi.mock("@/lib/providers/twilio/client", () => ({
+  getTwilioClient: () => ({ messages: () => ({ fetch: tw.fetchMsgMock }) }),
+}))
+
 import { processTwilioStatusEvent } from "@/lib/twilio-status-processor"
 
 describe("processTwilioStatusEvent", () => {
@@ -83,5 +95,36 @@ describe("processTwilioStatusEvent", () => {
   test("missing params → 400", async () => {
     const res = await processTwilioStatusEvent({ messageSid: "", messageStatus: "delivered" })
     expect(res.status).toBe(400)
+  })
+
+  test("delivered backfills actual_segments/actual_cost_usd from the message resource", async () => {
+    tw.fetchMsgMock.mockResolvedValueOnce({ numSegments: "2", price: "-0.01500", priceUnit: "USD" })
+    const res = await processTwilioStatusEvent({ messageSid: "SM1", messageStatus: "delivered" })
+    expect(res.status).toBe(204)
+    expect(tw.fetchMsgMock).toHaveBeenCalled()
+    expect(h.state.updates.actual_segments).toBe(2)
+    expect(h.state.updates.actual_cost_usd).toBeCloseTo(0.015)
+  })
+
+  test("delivered with a fetch error still writes the status update (204)", async () => {
+    tw.fetchMsgMock.mockRejectedValueOnce(new Error("boom"))
+    const res = await processTwilioStatusEvent({ messageSid: "SM1", messageStatus: "delivered" })
+    expect(res.status).toBe(204)
+    expect(h.state.updates.status).toBe("delivered")
+    expect(h.state.updates.actual_cost_usd).toBeUndefined()
+    expect(h.state.updates.actual_segments).toBeUndefined()
+  })
+
+  test("does not backfill when actual_cost_usd already present", async () => {
+    h.state.row = { id: "r1", buyer_id: "b1", delivered_at: null, rejected_at: null, actual_cost_usd: 0.02 }
+    tw.fetchMsgMock.mockClear()
+    await processTwilioStatusEvent({ messageSid: "SM1", messageStatus: "delivered" })
+    expect(tw.fetchMsgMock).not.toHaveBeenCalled()
+  })
+
+  test("non-delivered status does not fetch the message resource", async () => {
+    tw.fetchMsgMock.mockClear()
+    await processTwilioStatusEvent({ messageSid: "SM1", messageStatus: "sent" })
+    expect(tw.fetchMsgMock).not.toHaveBeenCalled()
   })
 })

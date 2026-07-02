@@ -12,6 +12,9 @@ export interface TwilioSmsProviderOptions {
 // `err.providerCode` checks keep working across providers.
 export class TwilioSmsProvider implements SmsProvider {
   readonly name = "twilio"
+  // The Messaging Service queues and paces sends server-side at the campaign's
+  // approved throughput, so the app-side carrier lookup + Bottleneck are skipped.
+  readonly managesPacing = true
   private readonly messagingServiceSid: string
 
   constructor(opts: TwilioSmsProviderOptions) {

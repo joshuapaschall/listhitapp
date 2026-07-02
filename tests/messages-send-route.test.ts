@@ -262,6 +262,19 @@ vi.mock("@/lib/permissions/server", () => ({
   requirePermission: async () => null,
 }))
 
+// Delegating provider mock: default runs the real resolver (org-1 has no
+// org_twilio row → TelnyxSmsProvider, managesPacing:false) so existing cases are
+// unchanged. A test can set h.providerOverride for the managesPacing:true case.
+const h = vi.hoisted(() => ({ providerOverride: null as any }))
+vi.mock("@/lib/providers/sms", async (importOriginal) => {
+  const actual = await importOriginal<any>()
+  return {
+    ...actual,
+    resolveSmsProvider: async (orgId?: string | null) =>
+      h.providerOverride ?? actual.resolveSmsProvider(orgId),
+  }
+})
+
 // Imported after the mocks/supabaseClient so the @/lib/supabase factory (and any
 // transitive load via mms.server) resolves with supabaseClient already defined.
 const mms = await import("@/utils/mms.server")
@@ -520,5 +533,39 @@ describe("messages send route", () => {
     await POST(req)
     expect(typeof messages[0].from_number).toBe("string")
     expect(messages[0].from_number).toBe("+1888")
+  })
+
+  test("managesPacing provider sends directly, skipping lookupCarrier + scheduleSMS", async () => {
+    const sendMock = vi.fn(async () => ({ id: "SMP", from: "+1999" }))
+    h.providerOverride = { name: "twilio", managesPacing: true, sendMessage: sendMock }
+    smsRateLimiterMock.scheduleSMS.mockClear()
+    smsRateLimiterMock.lookupCarrier.mockClear()
+    try {
+      const req = new NextRequest("http://test", {
+        method: "POST",
+        body: JSON.stringify({ buyerId: "b1", to: "+1222", body: "hi" }),
+      })
+      const res = await POST(req)
+      expect(res.status).toBe(200)
+      expect(sendMock).toHaveBeenCalledTimes(1)
+      expect(smsRateLimiterMock.scheduleSMS).not.toHaveBeenCalled()
+      expect(smsRateLimiterMock.lookupCarrier).not.toHaveBeenCalled()
+    } finally {
+      h.providerOverride = null
+    }
+  })
+
+  test("default (non-pacing) provider still uses lookupCarrier + scheduleSMS", async () => {
+    h.providerOverride = null
+    smsRateLimiterMock.scheduleSMS.mockClear()
+    smsRateLimiterMock.lookupCarrier.mockClear()
+    const req = new NextRequest("http://test", {
+      method: "POST",
+      body: JSON.stringify({ buyerId: "b1", to: "+1222", body: "hi" }),
+    })
+    const res = await POST(req)
+    expect(res.status).toBe(200)
+    expect(smsRateLimiterMock.lookupCarrier).toHaveBeenCalled()
+    expect(smsRateLimiterMock.scheduleSMS).toHaveBeenCalled()
   })
 })

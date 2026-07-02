@@ -36,7 +36,7 @@ export async function processTwilioStatusEvent(params: {
 
   const { data: existing } = await supabaseAdmin
     .from("campaign_recipients")
-    .select("id,buyer_id,delivered_at,rejected_at")
+    .select("id,buyer_id,delivered_at,rejected_at,actual_cost_usd")
     .eq("provider_id", messageSid)
     .maybeSingle()
 
@@ -61,6 +61,28 @@ export async function processTwilioStatusEvent(params: {
   }
   if (isHardFailureStatus(status) && !existing.rejected_at) {
     updates.rejected_at = now
+  }
+
+  // Twilio's status callback carries no cost/segment data (unlike Telnyx's
+  // message.finalized), so on delivered we fetch the message resource and
+  // backfill actual_segments/actual_cost_usd. Non-fatal — the status update is
+  // still written on any fetch error. recipient_carrier is intentionally left
+  // null: the Twilio message resource doesn't carry it.
+  if (status === "delivered" && !existing.actual_cost_usd) {
+    try {
+      const { getTwilioClient } = await import("@/lib/providers/twilio/client")
+      const msg = await getTwilioClient().messages(messageSid).fetch()
+      const segments = Number(msg.numSegments)
+      if (Number.isFinite(segments) && segments > 0) updates.actual_segments = segments
+      const price = msg.price != null ? Math.abs(Number(msg.price)) : NaN
+      // priceUnit is ISO-4217 and Twilio may return it lower- or upper-case
+      // ("usd"/"USD") — compare case-insensitively so real USD sends aren't dropped.
+      if (Number.isFinite(price) && (!msg.priceUnit || String(msg.priceUnit).toUpperCase() === "USD")) {
+        updates.actual_cost_usd = price
+      }
+    } catch (err) {
+      log("cost/segment backfill fetch failed", { messageSid, err })
+    }
   }
 
   const { error } = await supabaseAdmin
