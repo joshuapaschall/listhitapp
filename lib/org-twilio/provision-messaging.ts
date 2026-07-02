@@ -5,6 +5,7 @@ import { getTwilioClient } from "@/lib/providers/twilio/client"
 import { getOrgTwilio, upsertOrgTwilio, mergeProvisioningState } from "@/lib/org-twilio/service"
 import type { ProvisioningState } from "@/lib/org-twilio/types"
 import { buildCampaignAttributes, type CampaignInputs } from "@/lib/org-twilio/twilio-attributes"
+import { formatPhoneE164 } from "@/lib/dedup-utils"
 import type { UsAppToPersonListInstanceCreateOptions } from "twilio/lib/rest/messaging/v1/service/usAppToPerson"
 
 export type MessagingResult = {
@@ -105,6 +106,15 @@ export async function provisionMessaging(orgId: string): Promise<MessagingResult
         { phone_number: bought.phoneNumber, phone_number_sid: bought.sid },
         { phone_number: bought.phoneNumber, phone_number_sid: bought.sid },
       )
+
+      // Seed inbound_numbers so (a) anon inbound threads resolve to this org via
+      // the inbound DID and (b) sticky-sender recognizes it as an allowed from.
+      // Non-fatal: the purchase already succeeded and is persisted.
+      const e164 = formatPhoneE164(bought.phoneNumber) || bought.phoneNumber
+      const { error: seedErr } = await supabaseAdmin
+        .from("inbound_numbers")
+        .upsert({ e164, org_id: orgId, enabled: true }, { onConflict: "e164" })
+      if (seedErr) console.error("[provisionMessaging] inbound_numbers seed failed", { orgId, e164, error: seedErr })
     }
 
     // Step 5 — A2P Campaign. ONLY after BrandRegistration is APPROVED.
