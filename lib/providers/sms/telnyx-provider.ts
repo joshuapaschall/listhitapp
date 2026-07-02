@@ -7,6 +7,8 @@ import type { SendSmsInput, SendSmsResult, SmsProvider, SmsProviderError } from 
 // so the campaign queue's `err.telnyxCode === "40300"` check keeps working.
 export class TelnyxSmsProvider implements SmsProvider {
   readonly name = "telnyx"
+  // Telnyx has no server-side pacing — the app owns carrier lookup + Bottleneck.
+  readonly managesPacing = false
 
   async sendMessage(input: SendSmsInput): Promise<SendSmsResult> {
     const url = `${TELNYX_API_URL}/messages`

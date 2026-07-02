@@ -9,10 +9,25 @@ const uploadMock = vi.fn().mockResolvedValue({ data: { path: "p" }, error: null 
 // @ts-ignore
 global.fetch = fetchMock
 
+import { scheduleSMS, lookupCarrier } from "../lib/sms-rate-limiter"
+
 vi.mock("../lib/sms-rate-limiter", () => {
   return {
     scheduleSMS: vi.fn((_carrier: string, _body: string, fn: () => Promise<any>) => fn()),
     lookupCarrier: vi.fn(async () => "verizon"),
+  }
+})
+
+// Delegating mock: by default the real resolver runs (no orgId → TelnyxSmsProvider,
+// managesPacing:false) so every existing case is unchanged. A test can set
+// h.providerOverride to inject a managesPacing:true provider for the new cases.
+const h = vi.hoisted(() => ({ providerOverride: null as any }))
+vi.mock("../lib/providers/sms", async (importOriginal) => {
+  const actual = await importOriginal<any>()
+  return {
+    ...actual,
+    resolveSmsProvider: async (orgId?: string | null) =>
+      h.providerOverride ?? actual.resolveSmsProvider(orgId),
   }
 })
 
@@ -198,5 +213,29 @@ describe("sendCampaignSMS sticky sender", () => {
     await sendCampaignSMS({ buyerId: "b9", to: ["+1222"], body: "hi" })
     expect(typeof messages[0].from_number).toBe("string")
     expect(messages[0].from_number).toBe("+1777")
+  })
+
+  test("managesPacing provider sends directly, skipping lookupCarrier + scheduleSMS", async () => {
+    const sendMock = vi.fn(async () => ({ id: "SMX", from: "+1999" }))
+    h.providerOverride = { name: "twilio", managesPacing: true, sendMessage: sendMock }
+    vi.mocked(scheduleSMS).mockClear()
+    vi.mocked(lookupCarrier).mockClear()
+    try {
+      await sendCampaignSMS({ buyerId: "bp", to: ["+1222"], body: "hi", orgId: "org-x" })
+      expect(sendMock).toHaveBeenCalledTimes(1)
+      expect(scheduleSMS).not.toHaveBeenCalled()
+      expect(lookupCarrier).not.toHaveBeenCalled()
+    } finally {
+      h.providerOverride = null
+    }
+  })
+
+  test("non-pacing provider still wraps with lookupCarrier + scheduleSMS", async () => {
+    h.providerOverride = null
+    vi.mocked(scheduleSMS).mockClear()
+    vi.mocked(lookupCarrier).mockClear()
+    await sendCampaignSMS({ buyerId: "bn", to: ["+1222"], body: "hi" })
+    expect(lookupCarrier).toHaveBeenCalled()
+    expect(scheduleSMS).toHaveBeenCalled()
   })
 })

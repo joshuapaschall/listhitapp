@@ -310,45 +310,89 @@ export async function handleInboundSms(event: InboundSmsEvent): Promise<NextResp
         to,
       })
     } else {
-      // NOTE (T5b known limitation): the HELP auto-reply still sends via Telnyx
-      // internals regardless of the inbound provider. The surrounding try/catch
-      // (present in the original Telnyx route) guarantees a Twilio-org inbound can
-      // never 500 on this branch — it logs and continues. Provider-aware HELP
-      // auto-reply lands in T5c.
+      // Provider-aware HELP auto-reply. Both arms stay inside one try/catch
+      // (log-and-continue) so an inbound can never 500 on the HELP branch.
       try {
-        const response = await fetch(`${TELNYX_API_URL}/messages`, {
-          method: "POST",
-          headers: telnyxHeaders(),
-          body: JSON.stringify({
-            from: fromNumber,
-            to: toNumber,
-            text: replyText,
-            messaging_profile_id: process.env.TELNYX_MESSAGING_PROFILE_ID,
-          }),
-        })
-
-        if (!response.ok) {
-          const errorText = await response.text()
-          throw new Error(`Telnyx HELP auto-reply failed: ${response.status} ${errorText}`)
-        }
-
-        const json = await response.json()
-        const providerId = json?.data?.id as string | undefined
-
-        if (helpReplyThread) {
-          const { error: helpMsgErr } = await supabaseAdmin.from("messages").insert({
-            thread_id: helpReplyThread.id,
-            buyer_id: helpReplyThread.buyerId,
-            direction: "outbound",
-            from_number: fromNumber,
-            to_number: toNumber,
-            body: replyText,
-            provider_id: providerId,
-            is_bulk: false,
+        if (event.provider === "telnyx") {
+          // Telnyx arm — byte-identical to the original owner-rail path: raw
+          // Telnyx fetch using the owner's messaging profile.
+          const response = await fetch(`${TELNYX_API_URL}/messages`, {
+            method: "POST",
+            headers: telnyxHeaders(),
+            body: JSON.stringify({
+              from: fromNumber,
+              to: toNumber,
+              text: replyText,
+              messaging_profile_id: process.env.TELNYX_MESSAGING_PROFILE_ID,
+            }),
           })
 
-          if (helpMsgErr) {
-            console.error("❌ Failed to record HELP auto-reply", helpMsgErr)
+          if (!response.ok) {
+            const errorText = await response.text()
+            throw new Error(`Telnyx HELP auto-reply failed: ${response.status} ${errorText}`)
+          }
+
+          const json = await response.json()
+          const providerId = json?.data?.id as string | undefined
+
+          if (helpReplyThread) {
+            const { error: helpMsgErr } = await supabaseAdmin.from("messages").insert({
+              thread_id: helpReplyThread.id,
+              buyer_id: helpReplyThread.buyerId,
+              direction: "outbound",
+              from_number: fromNumber,
+              to_number: toNumber,
+              body: replyText,
+              provider_id: providerId,
+              is_bulk: false,
+            })
+
+            if (helpMsgErr) {
+              console.error("❌ Failed to record HELP auto-reply", helpMsgErr)
+            }
+          }
+        } else {
+          // Twilio arm — resolve the org from the inbound DID (the number the
+          // buyer texted, seeded into inbound_numbers by T5b) and send through the
+          // provider abstraction (its Messaging Service is the sender).
+          const { data: didRow } = await supabaseAdmin
+            .from("inbound_numbers")
+            .select("org_id")
+            .eq("e164", fromNumber)
+            .eq("enabled", true)
+            .maybeSingle()
+          const helpOrgId = didRow?.org_id ?? null
+          if (!helpOrgId) {
+            console.warn("⚠️ HELP auto-reply skipped: no org resolved for inbound DID", {
+              fromNumber,
+            })
+          } else {
+            // Dynamic import mirrors the file's lazy-import style (suppress) and
+            // avoids any module-cycle risk with the provider layer.
+            const { resolveSmsProvider } = await import("@/lib/providers/sms")
+            const provider = await resolveSmsProvider(helpOrgId)
+            const result = await provider.sendMessage({
+              from: fromNumber,
+              to: toNumber,
+              text: replyText,
+            })
+
+            if (helpReplyThread) {
+              const { error: helpMsgErr } = await supabaseAdmin.from("messages").insert({
+                thread_id: helpReplyThread.id,
+                buyer_id: helpReplyThread.buyerId,
+                direction: "outbound",
+                from_number: fromNumber,
+                to_number: toNumber,
+                body: replyText,
+                provider_id: result.id,
+                is_bulk: false,
+              })
+
+              if (helpMsgErr) {
+                console.error("❌ Failed to record HELP auto-reply", helpMsgErr)
+              }
+            }
           }
         }
       } catch (err) {

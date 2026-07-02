@@ -19,6 +19,11 @@ export interface SendSmsResult {
 
 export interface SmsProvider {
   readonly name: string
+  // True when the provider does its own queuing/pacing server-side (Twilio
+  // Messaging Services). When true, the app-side carrier lookup + Bottleneck
+  // rate-limiter wrap MUST be skipped: the lookup is a billable Telnyx API call
+  // and the carrier shaping would double-throttle a rail that paces itself.
+  readonly managesPacing: boolean
   sendMessage(input: SendSmsInput): Promise<SendSmsResult>
 }
 

@@ -64,7 +64,6 @@ export async function sendCampaignSMS({ buyerId, to, body, mediaUrls, dryRun, ca
   for (const num of to) {
     const formatted = formatPhoneE164(num)
     if (!formatted) throw new Error(`Invalid phone number: ${num}`)
-    const carrier = (await lookupCarrier(formatted)) || "unknown"
     // Deterministic caller ID, resolved per recipient so a sticky recorded for an
     // earlier recipient in this batch is reused (sticky → DEFAULT_OUTBOUND_DID).
     const fromNumber = await resolveOutboundFrom({
@@ -86,7 +85,12 @@ export async function sendCampaignSMS({ buyerId, to, body, mediaUrls, dryRun, ca
     }
 
     try {
-      const data = await scheduleSMS(carrier, body, sendRequest)
+      // Telnyx: carrier-aware Bottleneck pacing (lookupCarrier is a billable
+      // Telnyx API call — only make it when it will actually be used for pacing).
+      // Twilio: the Messaging Service queues and paces server-side; send directly.
+      const data = provider.managesPacing
+        ? await sendRequest()
+        : await scheduleSMS((await lookupCarrier(formatted)) || "unknown", body, sendRequest)
       results.push({ to: formatted, sid: data.id, from: data.from })
 
       if (!isTest) {

@@ -146,7 +146,6 @@ export async function POST(request: NextRequest) {
 
   const isMms = !!(finalMediaUrls && finalMediaUrls.length)
 
-  const carrier = (await lookupCarrier(formatted)) || "unknown"
   const provider = await resolveSmsProvider(orgId)
   const sendRequest = () =>
     provider.sendMessage({
@@ -159,12 +158,22 @@ export async function POST(request: NextRequest) {
       useProfileWebhooks: true,
     })
 
-  try {
-    const data = await scheduleSMS(carrier, body, sendRequest).catch((sendErr: any) => {
-      // Provider/carrier rejection (e.g. "Carrier violation") is actionable for
-      // the operator; re-throw as client-safe so the catch below surfaces it.
+  // Provider/carrier rejection (e.g. "Carrier violation") is actionable for the
+  // operator; re-throw as client-safe so the catch below surfaces it.
+  const wrapClientSafe = (p: Promise<any>) =>
+    p.catch((sendErr: any) => {
       throw new ClientSafeError(sendErr?.message || "Message could not be sent")
     })
+
+  try {
+    // Telnyx: carrier-aware Bottleneck pacing (lookupCarrier is a billable Telnyx
+    // API call — only when it will actually be used). Twilio: the Messaging
+    // Service paces server-side; send directly.
+    const data = provider.managesPacing
+      ? await wrapClientSafe(sendRequest())
+      : await wrapClientSafe(
+          scheduleSMS((await lookupCarrier(formatted)) || "unknown", body, sendRequest),
+        )
 
     // Ensure the thread exists. The sticky from-number (preferred_from_number) is
     // written once, by recordStickyFrom below — the single source of truth.
