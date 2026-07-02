@@ -27,9 +27,12 @@ interface SmsOptions {
   mediaUrls?: string[]
   dryRun?: boolean
   isTest?: boolean
+  // Org context for provider routing. Omit when there is genuinely no org in
+  // scope — resolveSmsProvider(undefined) falls back to Telnyx (safe default).
+  orgId?: string
 }
 
-export async function sendCampaignSMS({ buyerId, to, body, mediaUrls, dryRun, campaignId, isTest }: SmsOptions): Promise<SmsSendResult[]> {
+export async function sendCampaignSMS({ buyerId, to, body, mediaUrls, dryRun, campaignId, isTest, orgId }: SmsOptions): Promise<SmsSendResult[]> {
   if (!telnyxApiKey || !messagingProfileId) {
     throw new Error("Telnyx environment variables are not properly configured")
   }
@@ -42,7 +45,7 @@ export async function sendCampaignSMS({ buyerId, to, body, mediaUrls, dryRun, ca
     return to.map((num) => ({ to: formatPhoneE164(num) || num, sid: "dry-run", from: "" }))
   }
 
-  const provider = await resolveSmsProvider()
+  const provider = await resolveSmsProvider(orgId)
 
   const results: SmsSendResult[] = []
 

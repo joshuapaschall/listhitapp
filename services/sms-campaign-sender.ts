@@ -196,12 +196,15 @@ async function sendSingleCampaignSms({
   body,
   mediaUrls,
   campaignId,
+  orgId,
 }: {
   buyerId: string
   toNumber: string
   body: string
   mediaUrls?: string[]
   campaignId?: string
+  // Org context for provider routing; derived from the org-scoped campaign row.
+  orgId?: string
 }): Promise<TelnyxSendResult> {
   if (!telnyxApiKey || !messagingProfileId) {
     throw new Error("Telnyx environment variables are not properly configured")
@@ -230,7 +233,7 @@ async function sendSingleCampaignSms({
     }
   }
 
-  const provider = await resolveSmsProvider()
+  const provider = await resolveSmsProvider(orgId)
   const data = await provider.sendMessage({
     from: fromNumber,
     to: formatted,
@@ -380,11 +383,14 @@ export async function processSmsQueue(limit = 5, opts: { leaseSeconds?: number; 
   const { data: campaignRows } = campaignIds.length
     ? await supabase
         .from("campaigns")
-        .select("id,user_id")
+        .select("id,user_id,org_id")
         .in("id", campaignIds)
     : { data: [] }
   const campaignUserIdMap = new Map(
     campaignRows?.map((row) => [row.id, row.user_id as string | null]) ?? [],
+  )
+  const campaignOrgIdMap = new Map(
+    campaignRows?.map((row) => [row.id, (row as any).org_id as string | null]) ?? [],
   )
   const campaignMergeContextEntries = await Promise.all(
     Array.from(campaignUserIdMap.entries()).map(async ([campaignId, userId]) => [
@@ -442,7 +448,8 @@ export async function processSmsQueue(limit = 5, opts: { leaseSeconds?: number; 
       if (buyerError) throw buyerError
       if (!buyer) throw new Error("Buyer not found for SMS job")
 
-      const senderContext = campaignMergeContextMap.get(job.campaign_id || payload.campaignId || "")
+      const campaignKey = job.campaign_id || payload.campaignId || ""
+      const senderContext = campaignMergeContextMap.get(campaignKey)
       const body = renderTemplate(payload.body, buyer, senderContext)
       const result = await sendSingleCampaignSms({
         buyerId: job.buyer_id,
@@ -450,6 +457,7 @@ export async function processSmsQueue(limit = 5, opts: { leaseSeconds?: number; 
         body,
         mediaUrls: payload.mediaUrls,
         campaignId: payload.campaignId || job.campaign_id,
+        orgId: campaignOrgIdMap.get(campaignKey) ?? undefined,
       })
       const sentAt = new Date().toISOString()
       sent += 1
