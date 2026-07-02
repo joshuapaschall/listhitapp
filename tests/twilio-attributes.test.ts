@@ -11,7 +11,10 @@ import {
   SECONDARY_CUSTOMER_PROFILE_POLICY_SID,
   mapCompanyType,
   buildA2pMessagingProfileAttributes,
+  mapUseCase,
+  buildCampaignAttributes,
   type ProvisioningInputs,
+  type CampaignInputs,
 } from "@/lib/org-twilio/twilio-attributes"
 
 const baseInputs: ProvisioningInputs = {
@@ -255,6 +258,99 @@ describe("validateProvisioningInputs — email", () => {
     const result = validateProvisioningInputs({ ...baseInputs, contactEmail: "«josh@listhit.io»" })
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.missing).toContain("contact_email")
+  })
+})
+
+describe("mapUseCase", () => {
+  test("maps low-volume phrasing to LOW_VOLUME", () => {
+    expect(mapUseCase("Low Volume Mixed")).toBe("LOW_VOLUME")
+  })
+
+  test("maps 2fa / auth to 2FA", () => {
+    expect(mapUseCase("2fa")).toBe("2FA")
+    expect(mapUseCase("authentication")).toBe("2FA")
+  })
+
+  test("maps mixed to MIXED", () => {
+    expect(mapUseCase("mixed")).toBe("MIXED")
+  })
+
+  test("maps marketing to MARKETING", () => {
+    expect(mapUseCase("marketing")).toBe("MARKETING")
+  })
+
+  test("defaults null/unknown to MARKETING", () => {
+    expect(mapUseCase(null)).toBe("MARKETING")
+    expect(mapUseCase("something else")).toBe("MARKETING")
+  })
+})
+
+describe("buildCampaignAttributes", () => {
+  const campaignBase: CampaignInputs = {
+    brandRegistrationSid: "BN123",
+    useCase: "marketing",
+    description:
+      "This campaign sends off-market real estate deals and list updates to buyers who opted in via our web form.",
+    sample1:
+      "Acme: New off-market deal in Austin — 3bd/2ba, asking $450k. Reply YES for details. Reply STOP to opt out.",
+    sample2:
+      "Acme: Here's the info on 123 Main St you asked about: link. Reply with questions. Reply STOP to opt out.",
+    optInUrl: "https://acme.com",
+    legalBusinessName: "Acme Holdings LLC",
+  }
+
+  test("produces a valid payload with 2 samples and the mapped use case", () => {
+    const attrs = buildCampaignAttributes(campaignBase)
+    expect(attrs.brandRegistrationSid).toBe("BN123")
+    expect(attrs.usAppToPersonUsecase).toBe("MARKETING")
+    expect(Array.isArray(attrs.messageSamples)).toBe(true)
+    expect((attrs.messageSamples as string[]).length).toBe(2)
+    expect(attrs.hasEmbeddedLinks).toBe(true)
+    expect(attrs.hasEmbeddedPhone).toBe(true)
+  })
+
+  test("description and messageFlow meet the 40-char minimum", () => {
+    const attrs = buildCampaignAttributes(campaignBase)
+    expect((attrs.description as string).length).toBeGreaterThanOrEqual(40)
+    expect((attrs.messageFlow as string).length).toBeGreaterThanOrEqual(40)
+  })
+
+  test("duplicates the single sample when only one provided", () => {
+    const attrs = buildCampaignAttributes({ ...campaignBase, sample2: null })
+    const samples = attrs.messageSamples as string[]
+    expect(samples.length).toBe(2)
+    expect(samples[0]).toBe(samples[1])
+  })
+
+  test("pads short samples to at least 20 chars", () => {
+    const attrs = buildCampaignAttributes({ ...campaignBase, sample1: "Hi", sample2: "Yo" })
+    const samples = attrs.messageSamples as string[]
+    for (const s of samples) expect(s.length).toBeGreaterThanOrEqual(20)
+  })
+
+  test("synthesizes a >=40 char description when none provided", () => {
+    const attrs = buildCampaignAttributes({ ...campaignBase, description: null })
+    expect((attrs.description as string).length).toBeGreaterThanOrEqual(40)
+  })
+
+  test("includes privacy/terms only when provided", () => {
+    const without = buildCampaignAttributes(campaignBase)
+    expect("privacyPolicyUrl" in without).toBe(false)
+    expect("termsAndConditionsUrl" in without).toBe(false)
+
+    const withUrls = buildCampaignAttributes({
+      ...campaignBase,
+      privacyPolicyUrl: "https://acme.com/privacy",
+      termsUrl: "https://acme.com/terms",
+    })
+    expect(withUrls.privacyPolicyUrl).toBe("https://acme.com/privacy")
+    expect(withUrls.termsAndConditionsUrl).toBe("https://acme.com/terms")
+  })
+
+  test("throws when there is no sample text", () => {
+    expect(() =>
+      buildCampaignAttributes({ ...campaignBase, sample1: null, sample2: "  " }),
+    ).toThrow(/sample message/i)
   })
 })
 

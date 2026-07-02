@@ -3,6 +3,8 @@
 
 export type OrgSmsProvider = "telnyx" | "twilio"
 
+export type OrgVoiceProvider = "telnyx" | "twilio"
+
 export type OrgTwilioA2pStatus =
   | "not_started"
   | "provisioning"
@@ -37,6 +39,12 @@ export interface ProvisioningState {
   trust_product_submitted?: boolean
   brand_registration_sid?: string
   brand_status?: string
+  // --- T4 messaging flow ---
+  messaging_service_sid?: string
+  phone_number_sid?: string
+  phone_number?: string
+  campaign_sid?: string
+  campaign_status?: string
 }
 
 // Mirrors the org_twilio table.
@@ -44,12 +52,14 @@ export interface OrgTwilio {
   id: string
   org_id: string
   sms_provider: OrgSmsProvider
+  voice_provider: OrgVoiceProvider
   subaccount_sid: string | null
   secondary_profile_sid: string | null
   trust_product_sid: string | null
   brand_sid: string | null
   brand_status: string | null
   campaign_sid: string | null
+  campaign_status: string | null
   messaging_service_sid: string | null
   phone_number: string | null
   phone_number_sid: string | null
