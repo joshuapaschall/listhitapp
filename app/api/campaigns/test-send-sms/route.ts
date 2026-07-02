@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     senderContext,
   )
   const dryRun = forceDryRun ?? (process.env.LISTHIT_DRY_RUN === "1")
-  const results = await sendCampaignSMS({ buyerId: undefined, to: [formattedPhone], body: rendered, mediaUrls, dryRun, campaignId: undefined, isTest: true })
+  const results = await sendCampaignSMS({ buyerId: undefined, to: [formattedPhone], body: rendered, mediaUrls, dryRun, campaignId: undefined, isTest: true, orgId })
   if (dryRun) {
     return NextResponse.json({
       ok: true,

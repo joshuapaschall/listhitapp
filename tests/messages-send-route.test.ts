@@ -228,6 +228,16 @@ const createSupabaseClient = () => ({
         }),
       }
     }
+    // resolveSmsProvider(orgId) reads org_twilio; org-1 has no row → Telnyx (safe default).
+    if (table === "org_twilio") {
+      return {
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({ data: null, error: null }),
+          }),
+        }),
+      }
+    }
     throw new Error(`Unexpected table ${table}`)
   },
 })
