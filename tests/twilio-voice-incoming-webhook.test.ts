@@ -5,6 +5,7 @@ import { buildVoiceIdentity } from "@/lib/providers/voice/identity";
 const h = vi.hoisted(() => ({
   validateMock: vi.fn(() => true),
   getOrgTwilioMock: vi.fn(),
+  greetingMock: vi.fn(async () => null as string | null),
   state: {
     didOrg: null as string | null,
     members: [] as { id: string }[],
@@ -19,6 +20,7 @@ vi.mock("twilio", async (importOriginal) => {
   return { ...actual, default: { ...d, validateRequest: h.validateMock } };
 });
 vi.mock("@/lib/org-twilio/service", () => ({ getOrgTwilio: h.getOrgTwilioMock }));
+vi.mock("@/lib/voice/routing", () => ({ getVoicemailGreetingUrl: h.greetingMock }));
 vi.mock("@/lib/supabase", () => {
   const client = {
     from: (table: string) => {
@@ -87,6 +89,7 @@ describe("twilio voice incoming webhook", () => {
     h.state.members = [{ id: U1 }, { id: U2 }];
     h.state.online = [{ user_id: U1 }];
     h.state.inserted = [];
+    h.greetingMock.mockReset().mockResolvedValue(null);
     process.env.NEXT_PUBLIC_BASE_URL = "https://app.listhit.io";
     process.env.LISTHIT_TWILIO_AUTH_TOKEN = "AUTH";
     process.env.TELNYX_PINNED_ORG_IDS = "";
@@ -132,15 +135,58 @@ describe("twilio voice incoming webhook", () => {
     expect(xml).toContain(`<Client>${buildVoiceIdentity(ORG, U2)}</Client>`);
   });
 
-  test("no online browsers → <Say> + <Hangup/>, no <Client>, no insert", async () => {
+  // V3a: nobody online now goes to voicemail (record) instead of a dead-end hangup,
+  // and inserts the call-log row so the recording lands in the log.
+  test("no online browsers → voicemail (<Record>) + insert, no <Client>", async () => {
     h.state.online = [];
     const res = await POST(req(inbound));
     expect(res.status).toBe(200);
     const xml = await res.text();
-    expect(xml).toContain("<Say>");
-    expect(xml).toContain("<Hangup/>");
+    expect(xml).toContain("<Record");
+    expect(xml).toContain("/api/webhooks/twilio-voicemail-recording");
+    expect(xml).toContain("<Say>"); // null greeting → spoken fallback
     expect(xml).not.toContain("<Client>");
-    expect(h.state.inserted.length).toBe(0);
+    expect(xml).not.toContain("<Dial");
+    expect(h.state.inserted.length).toBe(1);
+    expect(h.state.inserted[0]).toEqual(
+      expect.objectContaining({ call_sid: "CA-in-1", direction: "inbound", provider: "twilio" }),
+    );
+  });
+
+  test("no online browsers + greeting configured → <Play> greeting + <Record>", async () => {
+    h.state.online = [];
+    h.greetingMock.mockResolvedValue("https://cdn.listhit.io/greetings/org.mp3");
+    const res = await POST(req(inbound));
+    const xml = await res.text();
+    expect(xml).toContain("<Play>https://cdn.listhit.io/greetings/org.mp3</Play>");
+    expect(xml).toContain("<Record");
+    expect(xml).not.toContain("<Say>");
+  });
+
+  test("online case rings only (no <Record> in the ring response — voicemail is the action callback)", async () => {
+    const res = await POST(req(inbound));
+    const xml = await res.text();
+    expect(xml).toContain("<Dial");
+    expect(xml).toContain("action=");
+    expect(xml).not.toContain("<Record");
+  });
+
+  test("action callback: DialCallStatus no-answer → voicemail <Record>", async () => {
+    const res = await POST(req({ ...inbound, DialCallStatus: "no-answer" }));
+    expect(res.status).toBe(200);
+    const xml = await res.text();
+    expect(xml).toContain("<Record");
+    expect(xml).toContain("/api/webhooks/twilio-voicemail-recording");
+    expect(xml).not.toContain("<Dial");
+  });
+
+  test("action callback: DialCallStatus completed → hangup, no <Record>", async () => {
+    const res = await POST(req({ ...inbound, DialCallStatus: "completed" }));
+    expect(res.status).toBe(200);
+    const xml = await res.text();
+    expect(xml).toContain("<Hangup/>");
+    expect(xml).not.toContain("<Record");
+    expect(xml).not.toContain("<Dial");
   });
 
   test("unknown DID → unavailable + hangup, no insert", async () => {

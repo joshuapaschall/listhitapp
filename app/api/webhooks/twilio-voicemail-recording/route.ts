@@ -1,0 +1,117 @@
+import { NextRequest, NextResponse } from "next/server"
+import twilio from "twilio"
+
+import { assertServer } from "@/utils/assert-server"
+import { supabaseAdmin } from "@/lib/supabase"
+import { voicemailStoragePath } from "@/lib/voice/twilio-voicemail"
+
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+
+assertServer()
+
+const VOICEMAIL_BUCKET = "voicemails"
+
+function baseUrl(): string {
+  return (process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/$/, "")
+}
+
+// Public URL Twilio signs against — must match the <Record recordingStatusCallback>.
+function callbackUrl(): string {
+  return `${baseUrl()}/api/webhooks/twilio-voicemail-recording`
+}
+
+// Twilio media URLs require Basic auth (accountSid:authToken). Retry a few times —
+// the media can lag the callback slightly.
+async function downloadRecording(mp3Url: string): Promise<ArrayBuffer | null> {
+  const accountSid = process.env.LISTHIT_TWILIO_ACCOUNT_SID
+  const authToken = process.env.LISTHIT_TWILIO_AUTH_TOKEN
+  if (!accountSid || !authToken) return null
+  const auth = Buffer.from(`${accountSid}:${authToken}`).toString("base64")
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await fetch(mp3Url, { headers: { Authorization: `Basic ${auth}` }, cache: "no-store" })
+      if (res.ok) return await res.arrayBuffer()
+      console.warn("[twilio-voicemail-recording] download non-ok", { attempt, status: res.status })
+    } catch (err) {
+      console.warn("[twilio-voicemail-recording] download error", { attempt, err })
+    }
+  }
+  return null
+}
+
+export async function GET() {
+  return NextResponse.json({ ok: true })
+}
+
+export async function POST(request: NextRequest) {
+  const rawBody = await request.text()
+  const params = Object.fromEntries(new URLSearchParams(rawBody).entries())
+
+  const authToken = process.env.LISTHIT_TWILIO_AUTH_TOKEN
+  if (!authToken) {
+    console.error("[twilio-voicemail-recording] LISTHIT_TWILIO_AUTH_TOKEN is not set; rejecting webhook")
+    return new NextResponse("Forbidden", { status: 403 })
+  }
+  const signature = request.headers.get("x-twilio-signature") || ""
+  if (!twilio.validateRequest(authToken, signature, callbackUrl(), params)) {
+    return new NextResponse("Invalid signature", { status: 403 })
+  }
+
+  const recordingSid = params.RecordingSid
+  const recordingUrl = params.RecordingUrl
+  const recordingDuration = Number(params.RecordingDuration)
+  const recordingStatus = params.RecordingStatus
+  const callSid = params.CallSid
+
+  if (!callSid) {
+    return new NextResponse("Missing CallSid", { status: 400 })
+  }
+
+  // Discard empty/failed voicemails (mirror the Telnyx handler): mark missed.
+  if (recordingStatus !== "completed" || !Number.isFinite(recordingDuration) || recordingDuration <= 0) {
+    await supabaseAdmin
+      .from("calls")
+      .update({ status: "missed", recording_state: "ready" })
+      .eq("call_sid", callSid)
+    return new NextResponse(null, { status: 204 })
+  }
+
+  // Download the mp3. Storage hiccups must NOT 5xx (Twilio would retry+redownload) —
+  // mark the state and 204.
+  const bytes = recordingUrl ? await downloadRecording(`${recordingUrl}.mp3`) : null
+  if (!bytes) {
+    await supabaseAdmin.from("calls").update({ recording_state: "failed" }).eq("call_sid", callSid)
+    return new NextResponse(null, { status: 204 })
+  }
+
+  const path = voicemailStoragePath(recordingSid || callSid)
+  const { error: uploadErr } = await supabaseAdmin.storage
+    .from(VOICEMAIL_BUCKET)
+    .upload(path, Buffer.from(bytes), { contentType: "audio/mpeg", upsert: true })
+  if (uploadErr) {
+    console.error("[twilio-voicemail-recording] upload failed", { callSid, path, error: uploadErr })
+    await supabaseAdmin.from("calls").update({ recording_state: "failed" }).eq("call_sid", callSid)
+    return new NextResponse(null, { status: 204 })
+  }
+
+  // Write the storage path into recording_url (the stream route reads THIS and picks
+  // the voicemails bucket when status === "voicemail") + the parallel voicemail cols.
+  const { error: updateErr } = await supabaseAdmin
+    .from("calls")
+    .update({
+      voicemail: true,
+      status: "voicemail",
+      recording_url: path,
+      voicemail_storage_path: path,
+      voicemail_duration_seconds: Number.isFinite(recordingDuration) ? recordingDuration : null,
+      recording_state: "ready",
+    })
+    .eq("call_sid", callSid)
+  if (updateErr) {
+    console.error("[twilio-voicemail-recording] calls update failed", { callSid, error: updateErr })
+    return new NextResponse("Error", { status: 500 })
+  }
+
+  return new NextResponse(null, { status: 204 })
+}
