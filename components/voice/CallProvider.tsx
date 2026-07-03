@@ -6,8 +6,14 @@ import { IncomingRingtone } from "@/components/voice/IncomingRingtone";
 import { Call, TelnyxRTC } from "@telnyx/webrtc";
 import { usePermissions } from "@/hooks/use-permissions";
 import { supabaseBrowser } from "@/lib/supabase-browser";
+// Type-only import so the Twilio SDK is never bundled/evaluated on the server —
+// the engine module (and @twilio/voice-sdk) is dynamically imported client-side
+// only when an org is routed to Twilio voice.
+import type { TwilioVoiceEngine } from "@/components/voice/engines/twilio-voice-engine";
 
 type CallStatus = "idle" | "connecting" | "on-call" | "error";
+
+type VoiceProvider = "telnyx" | "twilio";
 
 export interface CallContextValue {
   device: TelnyxRTC | null;
@@ -58,6 +64,11 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const [customerLegId, setCustomerLegId] = useState<string | null>(null);
   const [dialerOpen, setDialerOpen] = useState(false);
   const [currentContact, setCurrentContact] = useState<{ name?: string; number?: string } | null>(null);
+  // Which voice engine this org uses. null while /api/voice/provider is loading —
+  // neither engine spins up until it resolves, so nothing dials the wrong rail.
+  const [voiceProvider, setVoiceProvider] = useState<VoiceProvider | null>(null);
+  const [twilioReady, setTwilioReady] = useState(false);
+  const twilioEngineRef = useRef<TwilioVoiceEngine | null>(null);
   const { can, loading: permissionsLoading } = usePermissions();
   const canMakeReceiveCalls = can("calls.make_receive");
   const activeCallRef = useRef<Call | null>(null);
@@ -104,10 +115,32 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     }).catch(() => {});
   }, []);
 
+  // Resolve the org's voice engine once on mount. Defaults to telnyx on any error
+  // (fail-safe — matches the server pin philosophy).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/voice/provider", { cache: "no-store" });
+        const json = await res.json().catch(() => ({} as any));
+        if (!cancelled) setVoiceProvider(json?.provider === "twilio" ? "twilio" : "telnyx");
+      } catch {
+        if (!cancelled) setVoiceProvider("telnyx");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     let created: TelnyxRTC | null = null;
     let mounted = true;
 
+    // Telnyx engine only — a Twilio-routed org (or the loading state) never spins
+    // up TelnyxRTC. This enable-condition is the ONLY change to the Telnyx path;
+    // its body below is byte-for-byte unchanged.
+    if (voiceProvider !== "telnyx") return undefined;
     if (permissionsLoading) return undefined;
     if (!canMakeReceiveCalls) {
       setStatus("idle");
@@ -283,7 +316,49 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       try { created?.disconnect(); } catch {}
       setDevice(null);
     };
-  }, [canMakeReceiveCalls, permissionsLoading, reportPresence]);
+  }, [voiceProvider, canMakeReceiveCalls, permissionsLoading, reportPresence]);
+
+  // Twilio engine (direct-dial browser calling). Parallel to the Telnyx effect;
+  // only one runs per org. The engine module is dynamically imported so the Twilio
+  // SDK never loads on the server or for Telnyx orgs.
+  useEffect(() => {
+    if (voiceProvider !== "twilio") return undefined;
+    if (permissionsLoading) return undefined;
+    if (!canMakeReceiveCalls) {
+      setStatus("idle");
+      return undefined;
+    }
+
+    let disposed = false;
+    let engine: TwilioVoiceEngine | null = null;
+    (async () => {
+      const { TwilioVoiceEngine } = await import("@/components/voice/engines/twilio-voice-engine");
+      if (disposed) return;
+      engine = new TwilioVoiceEngine({
+        onStatus: (s) => { if (!disposed) setStatus(s); },
+        onReady: (ready) => {
+          if (disposed) return;
+          setTwilioReady(ready);
+          if (!ready) setActiveCall(null);
+        },
+        onActiveCall: (call) => { if (!disposed) setActiveCall(call as any); },
+        onMuted: (m) => { if (!disposed) setIsMuted(m); },
+      });
+      twilioEngineRef.current = engine;
+      await engine.init();
+    })();
+
+    return () => {
+      disposed = true;
+      twilioEngineRef.current = null;
+      setTwilioReady(false);
+      setStatus("connecting");
+      setActiveCall(null);
+      setIsMuted(false);
+      setIsOnHold(false);
+      engine?.destroy();
+    };
+  }, [voiceProvider, canMakeReceiveCalls, permissionsLoading]);
 
   const dialInternal = useCallback(async (
     destination: string,
@@ -345,21 +420,46 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   }, [device]);
 
   const connectCall = useCallback(async (number: string, callerIdNumber?: string) => {
+    if (voiceProvider === "twilio") {
+      setCurrentContact({ number });
+      await twilioEngineRef.current?.makeCall(number);
+      return;
+    }
     await dialInternal(number, { from: callerIdNumber });
-  }, [dialInternal]);
+  }, [dialInternal, voiceProvider]);
 
   const makeCall = useCallback(async (destination: string, buyerId?: string, fromNumber?: string) => {
+    if (voiceProvider === "twilio") {
+      // Caller ID is server-enforced by the TwiML webhook — fromNumber is ignored.
+      setCurrentContact({ number: destination });
+      await twilioEngineRef.current?.makeCall(destination);
+      return { ok: true, buyerId: buyerId || null };
+    }
     await dialInternal(destination, { buyerId, from: fromNumber });
     return { ok: true, buyerId: buyerId || null };
-  }, [dialInternal]);
+  }, [dialInternal, voiceProvider]);
 
   const answerCall = useCallback(() => {
+    if (voiceProvider === "twilio") {
+      console.warn("[twilio-voice] answerCall not yet supported on Twilio voice");
+      return;
+    }
     const call = incomingCall || activeCallRef.current;
     (call as any)?.answer?.();
     if (call) setActiveCall(call);
-  }, [incomingCall]);
+  }, [incomingCall, voiceProvider]);
 
   const disconnectCall = useCallback(() => {
+    if (voiceProvider === "twilio") {
+      try { twilioEngineRef.current?.disconnect(); } catch {}
+      setActiveCall(null);
+      setIncomingCall(null);
+      setIsMuted(false);
+      setIsOnHold(false);
+      setStatus("idle");
+      setCurrentContact(null);
+      return;
+    }
     const call = activeCallRef.current || incomingCallRef.current;
     // Declining a ringing inbound leg hangs up the browser B-leg; the telnyx-voice webhook
     // detects the unanswered transfer (call_rejected) and routes the caller to voicemail on
@@ -389,9 +489,14 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     setIncomingCall(null);
     setStatus("idle");
     setCurrentContact(null);
-  }, []);
+  }, [voiceProvider]);
 
   const toggleMute = useCallback(() => {
+    if (voiceProvider === "twilio") {
+      const next = !isMuted;
+      twilioEngineRef.current?.setMuted(next); // engine reports muted → setIsMuted(next)
+      return;
+    }
     const call = activeCallRef.current as any;
     if (!call) return;
     // Drive the toggle from OUR tracked state, not the SDK's isAudioMuted
@@ -400,8 +505,11 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       if (prev) { call.unmuteAudio?.(); } else { call.muteAudio?.(); }
       return !prev;
     });
-  }, []);
-  const unmute = useCallback(() => { (activeCallRef.current as any)?.unmuteAudio?.(); setIsMuted(false); }, []);
+  }, [voiceProvider, isMuted]);
+  const unmute = useCallback(() => {
+    if (voiceProvider === "twilio") { twilioEngineRef.current?.setMuted(false); setIsMuted(false); return; }
+    (activeCallRef.current as any)?.unmuteAudio?.(); setIsMuted(false);
+  }, [voiceProvider]);
 
   const callControlId = () => (activeCallRef.current as any)?.telnyxIDs?.telnyxCallControlId;
   // Far party's PSTN leg — prospect (outbound) or caller (inbound). Hold/transfer
@@ -409,33 +517,44 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const farLegId = () => prospectCallControlIdRef.current || callControlId();
 
   const toggleHold = useCallback(async () => {
+    if (voiceProvider === "twilio") {
+      // Interim mute-as-hold (real hold with hold music is V3).
+      const next = !isOnHold;
+      twilioEngineRef.current?.setHold(next);
+      setIsOnHold(next);
+      return;
+    }
     const id = farLegId();
     if (!id) throw new Error("No call control id");
     const action = isOnHold ? "unhold" : "hold";
     const res = await fetch(`/api/calls/${id}/hold`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
     if (res.ok) setIsOnHold(!isOnHold);
-  }, [isOnHold]);
+  }, [isOnHold, voiceProvider]);
 
   const unhold = useCallback(async () => {
+    if (voiceProvider === "twilio") { twilioEngineRef.current?.setHold(false); setIsOnHold(false); return; }
     const id = farLegId();
     if (!id) return;
     await fetch(`/api/calls/${id}/hold`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "unhold" }) });
     setIsOnHold(false);
-  }, []);
+  }, [voiceProvider]);
 
   const startRecording = useCallback(async () => {
+    if (voiceProvider === "twilio") { console.warn("[twilio-voice] startRecording not yet supported on Twilio voice"); return; }
     const id = callControlId();
     if (!id) return;
     await fetch(`/api/calls/${id}/record_start`, { method: "POST" });
-  }, []);
+  }, [voiceProvider]);
 
   const stopRecording = useCallback(async () => {
+    if (voiceProvider === "twilio") { console.warn("[twilio-voice] stopRecording not yet supported on Twilio voice"); return; }
     const id = callControlId();
     if (!id) return;
     await fetch(`/api/calls/${id}/record_stop`, { method: "POST" });
-  }, []);
+  }, [voiceProvider]);
 
   const transfer = useCallback(async (number: string) => {
+    if (voiceProvider === "twilio") { console.warn("[twilio-voice] transfer not yet supported on Twilio voice"); return; }
     const id = farLegId();
     if (!id) throw new Error("No call control id");
     const res = await fetch(`/api/calls/${id}/transfer`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to: number }) });
@@ -443,11 +562,15 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       const d = await res.json().catch(() => ({}));
       throw new Error(d?.error || "Transfer failed");
     }
-  }, []);
+  }, [voiceProvider]);
 
-  const sendDTMF = useCallback((digits: string) => { (activeCallRef.current as any)?.dtmf?.(digits); }, []);
+  const sendDTMF = useCallback((digits: string) => {
+    if (voiceProvider === "twilio") { twilioEngineRef.current?.sendDigits(digits); return; }
+    (activeCallRef.current as any)?.dtmf?.(digits);
+  }, [voiceProvider]);
 
   const joinConference = useCallback(async (conferenceId?: string) => {
+    if (voiceProvider === "twilio") { console.warn("[twilio-voice] joinConference not yet supported on Twilio voice"); return; }
     const id = callControlId();
     if (!id) throw new Error("No call control id");
     conferenceIdRef.current = conferenceId || conferenceIdRef.current;
@@ -458,6 +581,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
   const leaveConference = useCallback(async () => {
+    if (voiceProvider === "twilio") { console.warn("[twilio-voice] leaveConference not yet supported on Twilio voice"); return; }
     const id = callControlId();
     if (!id) throw new Error("No call control id");
     await fetch("/api/calls/conference", {
@@ -465,8 +589,9 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ callControlId: id, command: "leave" })
     });
-  }, []);
+  }, [voiceProvider]);
   const addToConference = useCallback(async (phoneNumber: string) => {
+    if (voiceProvider === "twilio") { console.warn("[twilio-voice] addToConference not yet supported on Twilio voice"); return; }
     const id = callControlId();
     if (!id) throw new Error("No call control id");
     if (!device) throw new Error("Phone not ready");
@@ -489,13 +614,19 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         conferenceId: conferenceIdRef.current || undefined
       })
     });
-  }, [device]);
+  }, [device, voiceProvider]);
 
   const openDialer = useCallback(() => {
     setDialerOpen(true);
   }, []);
 
-  const value: CallContextValue = { device, status, activeCall, incomingCall, isMuted, isOnHold, customerLegId, currentContact, setCurrentContact, connectCall, makeCall, answerCall, disconnectCall, toggleMute, unmute, toggleHold, unhold, startRecording, stopRecording, transfer, sendDTMF, joinConference, leaveConference, addToConference, dialerOpen, setDialerOpen, openDialer };
+  // On the Twilio path, expose the engine (cast) as a non-null `device` sentinel
+  // once registered, so the consumers' `!device` readiness gate works unchanged.
+  const exposedDevice = voiceProvider === "twilio"
+    ? (twilioReady ? (twilioEngineRef.current as any) : null)
+    : device;
+
+  const value: CallContextValue = { device: exposedDevice, status, activeCall, incomingCall, isMuted, isOnHold, customerLegId, currentContact, setCurrentContact, connectCall, makeCall, answerCall, disconnectCall, toggleMute, unmute, toggleHold, unhold, startRecording, stopRecording, transfer, sendDTMF, joinConference, leaveConference, addToConference, dialerOpen, setDialerOpen, openDialer };
   return <CallContext.Provider value={value}>{children}<CallWidget /><IncomingRingtone /></CallContext.Provider>;
 }
 
