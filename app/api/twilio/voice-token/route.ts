@@ -12,8 +12,8 @@ export const dynamic = "force-dynamic"
 const TOKEN_TTL_SECONDS = 3600
 
 // Mints a Twilio Voice Access Token (JWT) for the browser dialer. Any org member
-// may dial. The token names our TwiML App via the VoiceGrant; incoming is off
-// (V1a is outbound-only).
+// may dial. The token names our TwiML App via the VoiceGrant; incoming is allowed
+// (V2) so the inbound webhook can ring this browser at its <Client> identity.
 export async function POST() {
   const { user, orgId } = await requireOrgContext()
   if (!user) return apiError("Unauthorized", 401)
@@ -50,7 +50,7 @@ export async function POST() {
       identity,
       ttl: TOKEN_TTL_SECONDS,
     })
-    token.addGrant(new VoiceGrant({ outgoingApplicationSid: twimlAppSid, incomingAllow: false }))
+    token.addGrant(new VoiceGrant({ outgoingApplicationSid: twimlAppSid, incomingAllow: true }))
 
     return NextResponse.json({ token: token.toJwt(), identity, ttl: TOKEN_TTL_SECONDS })
   } catch (err) {

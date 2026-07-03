@@ -15,6 +15,7 @@ export interface TwilioVoiceEngineCallbacks {
   onReady: (ready: boolean) => void;
   onActiveCall: (call: Call | null) => void;
   onMuted: (muted: boolean) => void;
+  onIncomingCall: (call: Call | null) => void;
 }
 
 const LOG = "[twilio-voice]";
@@ -22,6 +23,7 @@ const LOG = "[twilio-voice]";
 export class TwilioVoiceEngine {
   private device: Device | null = null;
   private call: Call | null = null;
+  private incoming: Call | null = null;
   private destroyed = false;
 
   constructor(private readonly cb: TwilioVoiceEngineCallbacks) {}
@@ -65,6 +67,43 @@ export class TwilioVoiceEngine {
         } catch (err) {
           console.warn(LOG, "token refresh failed", err);
         }
+      });
+
+      // Inbound (V2): the voice webhook dials this browser at its <Client> identity.
+      device.on("incoming", (call: Call) => {
+        if (this.destroyed) return;
+        this.incoming = call;
+
+        // Caller hung up / another browser answered before we did, or the call ends.
+        const clear = () => {
+          if (this.incoming === call) {
+            this.incoming = null;
+            this.cb.onIncomingCall(null);
+          }
+          if (this.call === call) {
+            this.call = null;
+            this.cb.onActiveCall(null);
+            this.cb.onMuted(false);
+            this.cb.onStatus("idle");
+          }
+        };
+        call.on("cancel", clear);
+        call.on("disconnect", clear);
+        call.on("reject", clear);
+        call.on("accept", () => {
+          if (this.destroyed) return;
+          this.call = call;
+          this.incoming = null;
+          this.cb.onIncomingCall(null);
+          this.cb.onActiveCall(call);
+          this.cb.onStatus("on-call");
+        });
+        call.on("error", (err: any) => {
+          console.warn(LOG, "incoming call error", err?.message || err);
+          if (!this.destroyed) this.cb.onStatus("error");
+        });
+
+        this.cb.onIncomingCall(call);
       });
 
       await device.register();
@@ -115,6 +154,27 @@ export class TwilioVoiceEngine {
     }
   }
 
+  // Answer a ringing inbound call. The "accept" wiring set in init() promotes it to
+  // the active call and moves status to on-call.
+  acceptIncoming(): void {
+    try {
+      this.incoming?.accept();
+    } catch (err) {
+      console.warn(LOG, "acceptIncoming failed", err);
+    }
+  }
+
+  rejectIncoming(): void {
+    const call = this.incoming;
+    this.incoming = null;
+    try {
+      call?.reject();
+    } catch (err) {
+      console.warn(LOG, "rejectIncoming failed", err);
+    }
+    this.cb.onIncomingCall(null);
+  }
+
   disconnect(): void {
     try {
       this.call?.disconnect();
@@ -153,11 +213,15 @@ export class TwilioVoiceEngine {
   async destroy(): Promise<void> {
     this.destroyed = true;
     try {
+      this.incoming?.reject();
+    } catch {}
+    try {
       this.call?.disconnect();
     } catch {}
     try {
       this.device?.destroy();
     } catch {}
+    this.incoming = null;
     this.call = null;
     this.device = null;
   }

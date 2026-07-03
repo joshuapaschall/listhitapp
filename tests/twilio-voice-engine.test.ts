@@ -13,6 +13,8 @@ const h = vi.hoisted(() => {
     mute: vi.fn(),
     isMuted: vi.fn(() => false),
     sendDigits: vi.fn(),
+    accept: vi.fn(),
+    reject: vi.fn(),
     parameters: { To: "+12223334444" },
   };
 
@@ -45,6 +47,7 @@ function makeCallbacks() {
     onReady: vi.fn(),
     onActiveCall: vi.fn(),
     onMuted: vi.fn(),
+    onIncomingCall: vi.fn(),
   };
 }
 
@@ -58,6 +61,8 @@ describe("TwilioVoiceEngine", () => {
     h.call.disconnect.mockClear();
     h.call.mute.mockClear();
     h.call.sendDigits.mockClear();
+    h.call.accept.mockClear();
+    h.call.reject.mockClear();
     Object.keys(h.deviceListeners).forEach((k) => delete h.deviceListeners[k]);
     Object.keys(h.callListeners).forEach((k) => delete h.callListeners[k]);
     fetchMock.mockReset();
@@ -169,5 +174,50 @@ describe("TwilioVoiceEngine", () => {
     await engine.init();
     await engine.destroy();
     expect(h.device.destroy).toHaveBeenCalled();
+  });
+
+  test("device 'incoming' surfaces the call via onIncomingCall", async () => {
+    const cb = makeCallbacks();
+    const engine = new TwilioVoiceEngine(cb);
+    await engine.init();
+    h.deviceListeners["incoming"]?.(h.call);
+    expect(cb.onIncomingCall).toHaveBeenCalledWith(h.call);
+  });
+
+  test("acceptIncoming accepts and transitions to active on 'accept'", async () => {
+    const cb = makeCallbacks();
+    const engine = new TwilioVoiceEngine(cb);
+    await engine.init();
+    h.deviceListeners["incoming"]?.(h.call);
+
+    engine.acceptIncoming();
+    expect(h.call.accept).toHaveBeenCalled();
+
+    h.callListeners["accept"]?.();
+    expect(cb.onActiveCall).toHaveBeenCalledWith(h.call);
+    expect(cb.onStatus).toHaveBeenCalledWith("on-call");
+    expect(cb.onIncomingCall).toHaveBeenLastCalledWith(null);
+  });
+
+  test("rejectIncoming rejects and clears", async () => {
+    const cb = makeCallbacks();
+    const engine = new TwilioVoiceEngine(cb);
+    await engine.init();
+    h.deviceListeners["incoming"]?.(h.call);
+
+    engine.rejectIncoming();
+    expect(h.call.reject).toHaveBeenCalled();
+    expect(cb.onIncomingCall).toHaveBeenLastCalledWith(null);
+  });
+
+  test("a 'cancel' on the incoming call clears it (caller hung up / another browser answered)", async () => {
+    const cb = makeCallbacks();
+    const engine = new TwilioVoiceEngine(cb);
+    await engine.init();
+    h.deviceListeners["incoming"]?.(h.call);
+    cb.onIncomingCall.mockClear();
+
+    h.callListeners["cancel"]?.();
+    expect(cb.onIncomingCall).toHaveBeenCalledWith(null);
   });
 });
