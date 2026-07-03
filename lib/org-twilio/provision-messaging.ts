@@ -115,6 +115,20 @@ export async function provisionMessaging(orgId: string): Promise<MessagingResult
         .from("inbound_numbers")
         .upsert({ e164, org_id: orgId, enabled: true }, { onConflict: "e164" })
       if (seedErr) console.error("[provisionMessaging] inbound_numbers seed failed", { orgId, e164, error: seedErr })
+
+      // Point the number's Voice URL at the inbound-voice webhook so PSTN calls
+      // ring the org's browsers (V2). Non-fatal: number/SMS still work without it.
+      const base = (process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/$/, "")
+      if (base) {
+        try {
+          await client.incomingPhoneNumbers(bought.sid).update({
+            voiceUrl: `${base}/api/webhooks/twilio-voice-incoming`,
+            voiceMethod: "POST",
+          })
+        } catch (err) {
+          console.error("[provisionMessaging] voiceUrl set failed (non-fatal)", { sid: bought.sid, error: errorMessage(err) })
+        }
+      }
     }
 
     // Step 5 — A2P Campaign. ONLY after BrandRegistration is APPROVED.

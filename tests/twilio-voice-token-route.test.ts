@@ -81,6 +81,7 @@ describe("twilio voice-token route", () => {
     const payload = JSON.parse(Buffer.from(body.token.split(".")[1], "base64").toString("utf8"))
     expect(payload.grants.identity).toBe(expectedIdentity)
     expect(payload.grants.voice.outgoing.application_sid).toBe(APP_SID)
-    expect(payload.grants.voice.incoming?.allow).toBeFalsy()
+    // V2: incoming is now allowed so the inbound webhook can ring this browser.
+    expect(payload.grants.voice.incoming?.allow).toBe(true)
   })
 })

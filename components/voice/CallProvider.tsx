@@ -343,6 +343,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         },
         onActiveCall: (call) => { if (!disposed) setActiveCall(call as any); },
         onMuted: (m) => { if (!disposed) setIsMuted(m); },
+        onIncomingCall: (call) => { if (!disposed) setIncomingCall(call as any); },
       });
       twilioEngineRef.current = engine;
       await engine.init();
@@ -441,7 +442,9 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
   const answerCall = useCallback(() => {
     if (voiceProvider === "twilio") {
-      console.warn("[twilio-voice] answerCall not yet supported on Twilio voice");
+      // Accept the ringing inbound call; the engine's accept wiring drives
+      // activeCall + status("on-call") and clears incomingCall.
+      twilioEngineRef.current?.acceptIncoming();
       return;
     }
     const call = incomingCall || activeCallRef.current;
@@ -451,7 +454,15 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
   const disconnectCall = useCallback(() => {
     if (voiceProvider === "twilio") {
-      try { twilioEngineRef.current?.disconnect(); } catch {}
+      // Declining a still-ringing inbound leg rejects it; otherwise hang up the
+      // active call. Either way, clear local call state.
+      try {
+        if (incomingCallRef.current && !activeCallRef.current) {
+          twilioEngineRef.current?.rejectIncoming();
+        } else {
+          twilioEngineRef.current?.disconnect();
+        }
+      } catch {}
       setActiveCall(null);
       setIncomingCall(null);
       setIsMuted(false);
