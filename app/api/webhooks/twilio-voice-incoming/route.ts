@@ -7,6 +7,8 @@ import { formatPhoneE164 } from "@/lib/dedup-utils"
 import { getOrgTwilio } from "@/lib/org-twilio/service"
 import { resolveVoiceProviderName, parseTelnyxPinnedOrgIds } from "@/lib/providers/voice/routing"
 import { buildVoiceIdentity } from "@/lib/providers/voice/identity"
+import { getVoicemailGreetingUrl } from "@/lib/voice/routing"
+import { appendVoicemailTwiml } from "@/lib/voice/twilio-voicemail"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -28,12 +30,45 @@ function xml(body: string, status = 200): NextResponse {
   return new NextResponse(body, { status, headers: { "Content-Type": "text/xml" } })
 }
 
-// A spoken message + hangup for every unroutable path (voicemail is V3).
+// A spoken message + hangup for every unroutable path (bad DID / not on twilio).
 function sayHangup(message: string): NextResponse {
   const vr = new twilio.twiml.VoiceResponse()
   vr.say(message)
   vr.hangup()
   return xml(vr.toString())
+}
+
+// Voicemail TwiML: per-DID greeting (<Play>) or a <Say> fallback, then <Record>
+// whose completion POSTs to the recording webhook.
+async function voicemailResponse(to: string): Promise<NextResponse> {
+  const greetingUrl = await getVoicemailGreetingUrl(to)
+  const vr = new twilio.twiml.VoiceResponse()
+  appendVoicemailTwiml(vr, {
+    greetingUrl,
+    recordingStatusCallback: `${baseUrl()}/api/webhooks/twilio-voicemail-recording`,
+  })
+  return xml(vr.toString())
+}
+
+// Insert the inbound call-log row keyed on the inbound CallSid so the recording
+// webhook (and status updates) can find it. Non-fatal.
+async function insertInboundRow(
+  params: Record<string, string>,
+  orgId: string,
+  from: string,
+  to: string,
+): Promise<void> {
+  const { error } = await supabaseAdmin.from("calls").insert({
+    call_sid: params.CallSid,
+    org_id: orgId,
+    direction: "inbound",
+    from_number: from,
+    to_number: to,
+    status: "ringing",
+    provider: "twilio",
+    webrtc: true,
+  })
+  if (error) console.error("[twilio-voice-incoming] call-log insert failed (non-fatal)", { orgId, error })
 }
 
 export async function GET() {
@@ -59,6 +94,20 @@ export async function POST(request: NextRequest) {
   if (!to) {
     console.warn("[twilio-voice-incoming] invalid To — refusing", { to: params.To })
     return sayHangup("This number is not available. Goodbye.")
+  }
+
+  // Post-<Dial> action callback: Twilio re-hits THIS same URL after the ring, with
+  // DialCallStatus telling us whether a browser answered. Answered → hang up the
+  // (already-ended) call; no-answer → voicemail on the surviving caller leg. This
+  // keeps answered calls from ever reaching the record verb.
+  if (params.DialCallStatus) {
+    if (params.DialCallStatus === "completed" || params.DialCallStatus === "answered") {
+      const vr = new twilio.twiml.VoiceResponse()
+      vr.hangup()
+      return xml(vr.toString())
+    }
+    console.log("[twilio-voice-incoming] no browser answered — voicemail", { dialStatus: params.DialCallStatus })
+    return voicemailResponse(to)
   }
 
   // Resolve the org from the inbound DID.
@@ -99,34 +148,25 @@ export async function POST(request: NextRequest) {
   const onlineUserIds = Array.from(new Set((online ?? []).map((p) => p.user_id)))
 
   if (!onlineUserIds.length) {
-    console.warn("[twilio-voice-incoming] no online browsers for org — voicemail is V3", { orgId })
-    return sayHangup("The person you're trying to reach is unavailable. Goodbye.")
+    // Nobody online → straight to voicemail. Insert the row first so the recording
+    // webhook can find it by call_sid and surface it in the call log.
+    console.warn("[twilio-voice-incoming] no online browsers — voicemail", { orgId })
+    await insertInboundRow(params, orgId, from, to)
+    return voicemailResponse(to)
   }
 
-  // Insert the inbound call-log row (non-fatal). The <Dial> parent leg IS this
-  // inbound CallSid, so the V1a status webhook updates this row unchanged.
-  const { error: insertErr } = await supabaseAdmin.from("calls").insert({
-    call_sid: params.CallSid,
-    org_id: orgId,
-    direction: "inbound",
-    from_number: from,
-    to_number: to,
-    status: "ringing",
-    provider: "twilio",
-    webrtc: true,
-  })
-  if (insertErr) {
-    console.error("[twilio-voice-incoming] call-log insert failed (non-fatal)", { orgId, error: insertErr })
-  }
+  await insertInboundRow(params, orgId, from, to)
 
   // Ring every online browser as a named client; first to answer wins. Caller ID
-  // is the real caller so the browser shows who's calling.
+  // is the real caller so the browser shows who's calling. `action` points back at
+  // THIS route: after the ring we branch on DialCallStatus (answered → hangup;
+  // no-answer → voicemail).
   const vr = new twilio.twiml.VoiceResponse()
   const dial = vr.dial({
     callerId: from,
     timeout: RING_TIMEOUT_SECONDS,
     answerOnBridge: true,
-    action: `${baseUrl()}/api/webhooks/twilio-voice-status`,
+    action: callbackUrl(),
     method: "POST",
   })
   for (const uid of onlineUserIds) {
