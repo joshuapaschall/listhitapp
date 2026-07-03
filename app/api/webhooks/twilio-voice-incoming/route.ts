@@ -168,6 +168,14 @@ export async function POST(request: NextRequest) {
     answerOnBridge: true,
     action: callbackUrl(),
     method: "POST",
+    // Auto-record the bridged conversation once a browser answers (dual channel).
+    // record-from-answer-dual never fires on no-answer, so it never collides with
+    // the voicemail <Record>. Recording completion is a separate callback from the
+    // `action` (DialCallStatus) branch above.
+    record: "record-from-answer-dual",
+    recordingStatusCallback: `${baseUrl()}/api/webhooks/twilio-recording`,
+    recordingStatusCallbackMethod: "POST",
+    recordingStatusCallbackEvent: ["completed"],
   })
   for (const uid of onlineUserIds) {
     dial.client({}, buildVoiceIdentity(orgId, uid))

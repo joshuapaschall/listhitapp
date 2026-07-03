@@ -74,7 +74,10 @@ describe("twilio voice TwiML webhook", () => {
     expect(res.status).toBe(200)
     expect(res.headers.get("content-type")).toBe("text/xml")
     const xml = await res.text()
-    expect(xml).toContain('<Dial callerId="+18885551234">')
+    // <Dial> now carries recording attrs too, so assert the tag + callerId separately
+    // (the exact "<Dial callerId=…>" closing bracket no longer follows callerId).
+    expect(xml).toContain("<Dial")
+    expect(xml).toContain('callerId="+18885551234"')
     expect(xml).toContain("+12223334444")
     expect(xml).toContain("https://app.listhit.io/api/webhooks/twilio-voice-status")
 
@@ -90,6 +93,13 @@ describe("twilio voice TwiML webhook", () => {
         provider: "twilio",
       }),
     )
+  })
+
+  test("outbound <Dial> auto-records the conversation (dual channel)", async () => {
+    const res = await POST(req({ From: `client:${IDENTITY}`, To: "+12223334444", CallSid: "CA1" }))
+    const xml = await res.text()
+    expect(xml).toContain('record="record-from-answer-dual"')
+    expect(xml).toContain("/api/webhooks/twilio-recording")
   })
 
   test("pinned org → hangup TwiML, no <Dial>, no insert", async () => {
