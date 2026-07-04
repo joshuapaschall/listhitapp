@@ -7,7 +7,7 @@ import { formatPhoneE164 } from "@/lib/dedup-utils"
 import { getOrgTwilio } from "@/lib/org-twilio/service"
 import { resolveVoiceProviderName, parseTelnyxPinnedOrgIds } from "@/lib/providers/voice/routing"
 import { buildVoiceIdentity } from "@/lib/providers/voice/identity"
-import { getVoicemailGreetingUrl } from "@/lib/voice/routing"
+import { getRoutingConfig, getVoicemailGreetingUrl } from "@/lib/voice/routing"
 import { appendVoicemailTwiml } from "@/lib/voice/twilio-voicemail"
 
 export const runtime = "nodejs"
@@ -147,38 +147,66 @@ export async function POST(request: NextRequest) {
     : { data: [] as { user_id: string }[] }
   const onlineUserIds = Array.from(new Set((online ?? []).map((p) => p.user_id)))
 
-  if (!onlineUserIds.length) {
-    // Nobody online → straight to voicemail. Insert the row first so the recording
-    // webhook can find it by call_sid and surface it in the call log.
-    console.warn("[twilio-voice-incoming] no online browsers — voicemail", { orgId })
+  // Per-DID routing mode (browser_only / forwarding_only / browser_first_then_forward).
+  const routing = await getRoutingConfig(to)
+  const needsForward =
+    routing.routingMode === "forwarding_only" || routing.routingMode === "browser_first_then_forward"
+  // Never dead-end on a misconfigured forward (mirror the Telnyx effective-mode guard):
+  // a forward mode with no number downgrades to browser_only.
+  const effectiveMode =
+    needsForward && !routing.forwardingNumber ? "browser_only" : routing.routingMode
+  const ringTimeout =
+    routing.browserRingTimeoutSeconds > 0 ? routing.browserRingTimeoutSeconds : RING_TIMEOUT_SECONDS
+
+  // Which legs the <Dial> rings (Twilio rings <Client> + <Number> in parallel;
+  // first to answer wins). forwarding_only → number only; browser_only → clients
+  // only; browser_first_then_forward → both.
+  const ringClients = effectiveMode !== "forwarding_only"
+  const ringForward =
+    (effectiveMode === "forwarding_only" || effectiveMode === "browser_first_then_forward") &&
+    Boolean(routing.forwardingNumber)
+
+  console.log("[twilio-voice-incoming] routing", {
+    orgId,
+    did: to,
+    requestedMode: routing.routingMode,
+    effectiveMode,
+    onlineCount: onlineUserIds.length,
+    hasForward: Boolean(routing.forwardingNumber),
+  })
+
+  // No reachable leg → voicemail. Only browser modes with zero online AND no forward
+  // in play get here; forwarding_only always has a forward (else it was downgraded),
+  // and browser_first_then_forward with a forward still rings the number.
+  const willRingAnyLeg = (ringClients && onlineUserIds.length > 0) || ringForward
+  if (!willRingAnyLeg) {
+    console.warn("[twilio-voice-incoming] no reachable legs — voicemail", { orgId, effectiveMode })
     await insertInboundRow(params, orgId, from, to)
     return voicemailResponse(to)
   }
 
   await insertInboundRow(params, orgId, from, to)
 
-  // Ring every online browser as a named client; first to answer wins. Caller ID
-  // is the real caller so the browser shows who's calling. `action` points back at
-  // THIS route: after the ring we branch on DialCallStatus (answered → hangup;
-  // no-answer → voicemail).
+  // Caller ID is the real caller so the browser/forward target shows who's calling.
+  // `action` points back at THIS route: after the ring we branch on DialCallStatus
+  // (answered → hangup; no-answer → voicemail). Recording attrs unchanged from V3b.
   const vr = new twilio.twiml.VoiceResponse()
   const dial = vr.dial({
     callerId: from,
-    timeout: RING_TIMEOUT_SECONDS,
+    timeout: ringTimeout,
     answerOnBridge: true,
     action: callbackUrl(),
     method: "POST",
-    // Auto-record the bridged conversation once a browser answers (dual channel).
-    // record-from-answer-dual never fires on no-answer, so it never collides with
-    // the voicemail <Record>. Recording completion is a separate callback from the
-    // `action` (DialCallStatus) branch above.
     record: "record-from-answer-dual",
     recordingStatusCallback: `${baseUrl()}/api/webhooks/twilio-recording`,
     recordingStatusCallbackMethod: "POST",
     recordingStatusCallbackEvent: ["completed"],
   })
-  for (const uid of onlineUserIds) {
-    dial.client({}, buildVoiceIdentity(orgId, uid))
+  if (ringClients) {
+    for (const uid of onlineUserIds) dial.client({}, buildVoiceIdentity(orgId, uid))
+  }
+  if (ringForward && routing.forwardingNumber) {
+    dial.number({}, routing.forwardingNumber)
   }
   return xml(vr.toString())
 }

@@ -6,6 +6,12 @@ const h = vi.hoisted(() => ({
   validateMock: vi.fn(() => true),
   getOrgTwilioMock: vi.fn(),
   greetingMock: vi.fn(async () => null as string | null),
+  routingMock: vi.fn(async () => ({
+    routingMode: "browser_only" as string,
+    forwardingNumber: null as string | null,
+    browserRingTimeoutSeconds: 20,
+    voicemailGreetingUrl: null as string | null,
+  })),
   state: {
     didOrg: null as string | null,
     members: [] as { id: string }[],
@@ -20,7 +26,10 @@ vi.mock("twilio", async (importOriginal) => {
   return { ...actual, default: { ...d, validateRequest: h.validateMock } };
 });
 vi.mock("@/lib/org-twilio/service", () => ({ getOrgTwilio: h.getOrgTwilioMock }));
-vi.mock("@/lib/voice/routing", () => ({ getVoicemailGreetingUrl: h.greetingMock }));
+vi.mock("@/lib/voice/routing", () => ({
+  getVoicemailGreetingUrl: h.greetingMock,
+  getRoutingConfig: h.routingMock,
+}));
 vi.mock("@/lib/supabase", () => {
   const client = {
     from: (table: string) => {
@@ -90,6 +99,12 @@ describe("twilio voice incoming webhook", () => {
     h.state.online = [{ user_id: U1 }];
     h.state.inserted = [];
     h.greetingMock.mockReset().mockResolvedValue(null);
+    h.routingMock.mockReset().mockResolvedValue({
+      routingMode: "browser_only",
+      forwardingNumber: null,
+      browserRingTimeoutSeconds: 20,
+      voicemailGreetingUrl: null,
+    });
     process.env.NEXT_PUBLIC_BASE_URL = "https://app.listhit.io";
     process.env.LISTHIT_TWILIO_AUTH_TOKEN = "AUTH";
     process.env.TELNYX_PINNED_ORG_IDS = "";
@@ -230,5 +245,94 @@ describe("twilio voice incoming webhook", () => {
     const xml = await res.text();
     expect(xml).toContain("<Hangup/>");
     expect(xml).not.toContain("<Dial");
+  });
+
+  // --- V3c routing modes ---
+  const FWD = "+13335557777";
+
+  test("forwarding_only → <Dial> with <Number> forward, no <Client>", async () => {
+    h.routingMock.mockResolvedValue({
+      routingMode: "forwarding_only",
+      forwardingNumber: FWD,
+      browserRingTimeoutSeconds: 20,
+      voicemailGreetingUrl: null,
+    });
+    const res = await POST(req(inbound));
+    expect(res.status).toBe(200);
+    const xml = await res.text();
+    expect(xml).toContain(`<Number>${FWD}</Number>`);
+    expect(xml).not.toContain("<Client>");
+    expect(xml).toContain('callerId="+12223334444"');
+    expect(xml).toContain("action=");
+    expect(xml).toContain("record-from-answer-dual");
+    expect(h.state.inserted.length).toBe(1);
+  });
+
+  test("browser_first_then_forward → <Dial> with <Client> AND <Number> (parallel)", async () => {
+    h.routingMock.mockResolvedValue({
+      routingMode: "browser_first_then_forward",
+      forwardingNumber: FWD,
+      browserRingTimeoutSeconds: 20,
+      voicemailGreetingUrl: null,
+    });
+    const res = await POST(req(inbound));
+    const xml = await res.text();
+    expect(xml).toContain(`<Client>${buildVoiceIdentity(ORG, U1)}</Client>`);
+    expect(xml).toContain(`<Number>${FWD}</Number>`);
+  });
+
+  test("forwarding_only with no forward number → downgrades to browser_only (<Client> only)", async () => {
+    h.routingMock.mockResolvedValue({
+      routingMode: "forwarding_only",
+      forwardingNumber: null,
+      browserRingTimeoutSeconds: 20,
+      voicemailGreetingUrl: null,
+    });
+    const res = await POST(req(inbound));
+    const xml = await res.text();
+    expect(xml).toContain(`<Client>${buildVoiceIdentity(ORG, U1)}</Client>`);
+    expect(xml).not.toContain("<Number>");
+  });
+
+  test("forward mode with no forward number AND no online → voicemail, no <Dial>", async () => {
+    h.state.online = [];
+    h.routingMock.mockResolvedValue({
+      routingMode: "browser_first_then_forward",
+      forwardingNumber: null,
+      browserRingTimeoutSeconds: 20,
+      voicemailGreetingUrl: null,
+    });
+    const res = await POST(req(inbound));
+    const xml = await res.text();
+    expect(xml).toContain("<Record");
+    expect(xml).not.toContain("<Dial");
+    expect(h.state.inserted.length).toBe(1);
+  });
+
+  test("browser_first_then_forward with forward but ZERO online → <Number> only, not voicemail", async () => {
+    h.state.online = [];
+    h.routingMock.mockResolvedValue({
+      routingMode: "browser_first_then_forward",
+      forwardingNumber: FWD,
+      browserRingTimeoutSeconds: 20,
+      voicemailGreetingUrl: null,
+    });
+    const res = await POST(req(inbound));
+    const xml = await res.text();
+    expect(xml).toContain(`<Number>${FWD}</Number>`);
+    expect(xml).not.toContain("<Client>");
+    expect(xml).not.toContain("<Record");
+  });
+
+  test("uses the configured browserRingTimeoutSeconds on <Dial>", async () => {
+    h.routingMock.mockResolvedValue({
+      routingMode: "browser_only",
+      forwardingNumber: null,
+      browserRingTimeoutSeconds: 45,
+      voicemailGreetingUrl: null,
+    });
+    const res = await POST(req(inbound));
+    const xml = await res.text();
+    expect(xml).toContain('timeout="45"');
   });
 });
