@@ -12,6 +12,7 @@ const h = vi.hoisted(() => ({
     browserRingTimeoutSeconds: 20,
     voicemailGreetingUrl: null as string | null,
   })),
+  createMock: vi.fn(async () => ({ sid: "CA-agent-leg" })),
   state: {
     didOrg: null as string | null,
     members: [] as { id: string }[],
@@ -29,6 +30,9 @@ vi.mock("@/lib/org-twilio/service", () => ({ getOrgTwilio: h.getOrgTwilioMock })
 vi.mock("@/lib/voice/routing", () => ({
   getVoicemailGreetingUrl: h.greetingMock,
   getRoutingConfig: h.routingMock,
+}));
+vi.mock("@/lib/providers/twilio/client", () => ({
+  getTwilioClient: () => ({ calls: { create: h.createMock } }),
 }));
 vi.mock("@/lib/supabase", () => {
   const client = {
@@ -76,6 +80,8 @@ const { POST } = await import("../app/api/webhooks/twilio-voice-incoming/route")
 const ORG = "11111111-1111-1111-1111-111111111111";
 const U1 = "22222222-2222-2222-2222-222222222222";
 const U2 = "33333333-3333-3333-3333-333333333333";
+const FWD = "+13335557777";
+const ROOM = "lh_in_CA-in-1";
 
 function req(fields: Record<string, string>) {
   return new NextRequest("http://test/api/webhooks/twilio-voice-incoming", {
@@ -90,7 +96,12 @@ function req(fields: Record<string, string>) {
 
 const inbound = { From: "+12223334444", To: "+18885551234", CallSid: "CA-in-1" };
 
-describe("twilio voice incoming webhook", () => {
+// Targets passed to calls.create across all agent legs.
+function dialedTargets(): string[] {
+  return h.createMock.mock.calls.map((c: any[]) => c[0].to);
+}
+
+describe("twilio voice incoming webhook (conference model)", () => {
   beforeEach(() => {
     h.validateMock.mockReset().mockReturnValue(true);
     h.getOrgTwilioMock.mockReset().mockResolvedValue({ voice_provider: "twilio", phone_number: "+18885551234" });
@@ -99,6 +110,7 @@ describe("twilio voice incoming webhook", () => {
     h.state.online = [{ user_id: U1 }];
     h.state.inserted = [];
     h.greetingMock.mockReset().mockResolvedValue(null);
+    h.createMock.mockReset().mockResolvedValue({ sid: "CA-agent-leg" });
     h.routingMock.mockReset().mockResolvedValue({
       routingMode: "browser_only",
       forwardingNumber: null,
@@ -110,62 +122,86 @@ describe("twilio voice incoming webhook", () => {
     process.env.TELNYX_PINNED_ORG_IDS = "";
   });
 
-  test("bad signature → 403, no insert", async () => {
+  test("bad signature → 403, no insert, no dial-in", async () => {
     h.validateMock.mockReturnValue(false);
     const res = await POST(req(inbound));
     expect(res.status).toBe(403);
     expect(h.state.inserted.length).toBe(0);
+    expect(h.createMock).not.toHaveBeenCalled();
   });
 
-  test("valid + online browser → <Dial><Client> ringing the online identity, inbound calls insert", async () => {
+  test("no DialCallStatus action branch (conference model uses the agent-leg counter)", async () => {
+    // A request carrying DialCallStatus is treated as a NEW inbound call, not an
+    // action re-hit — it still rings the conference.
+    const res = await POST(req({ ...inbound, DialCallStatus: "no-answer" }));
+    const xml = await res.text();
+    expect(xml).toContain("<Conference");
+    expect(h.createMock).toHaveBeenCalled();
+  });
+
+  test("valid + online browser → caller <Conference>; agent dialed into the same room via calls.create", async () => {
     const res = await POST(req(inbound));
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("text/xml");
     const xml = await res.text();
-    expect(xml).toContain('<Dial');
-    expect(xml).toContain('callerId="+12223334444"');
-    expect(xml).toContain(`<Client>${buildVoiceIdentity(ORG, U1)}</Client>`);
-    // U2 is offline → not rung.
-    expect(xml).not.toContain(buildVoiceIdentity(ORG, U2));
 
-    expect(h.state.inserted.length).toBe(1);
+    // Caller waits in the room, recorded from start, ref'd callbacks.
+    expect(xml).toContain("<Conference");
+    expect(xml).toContain('startConferenceOnEnter="false"');
+    expect(xml).toContain(`>${ROOM}</Conference>`);
+    expect(xml).toContain('record="record-from-start"');
+    expect(xml).toContain("/api/webhooks/twilio-recording?ref=CA-in-1");
+    expect(xml).toContain("/api/webhooks/twilio-conference-events?ref=CA-in-1");
+    // Caller TwiML no longer carries the agent legs directly.
+    expect(xml).not.toContain("<Client>");
+    expect(xml).not.toContain("<Number>");
+
+    // Agent dialed in via calls.create with a role=agent ref'd status callback + timeout.
+    expect(h.createMock).toHaveBeenCalledTimes(1);
+    const arg = h.createMock.mock.calls[0][0];
+    expect(arg.to).toBe(`client:${buildVoiceIdentity(ORG, U1)}`);
+    expect(arg.from).toBe("+12223334444");
+    expect(arg.timeout).toBe(20);
+    expect(arg.statusCallback).toBe(
+      "https://app.listhit.io/api/webhooks/twilio-voice-status?ref=CA-in-1&role=agent",
+    );
+    expect(arg.twiml).toContain(ROOM);
+
+    // Row inserted with the agent-leg counter.
     expect(h.state.inserted[0]).toEqual(
       expect.objectContaining({
         call_sid: "CA-in-1",
-        org_id: ORG,
         direction: "inbound",
-        from_number: "+12223334444",
-        to_number: "+18885551234",
         status: "ringing",
         provider: "twilio",
+        conference_name: ROOM,
+        agent_legs_remaining: 1,
+        agent_answered: false,
       }),
     );
   });
 
-  test("rings every online browser (one <Client> each)", async () => {
+  test("rings every online browser (one agent leg each, counter = 2)", async () => {
     h.state.online = [{ user_id: U1 }, { user_id: U2 }];
-    const res = await POST(req(inbound));
-    const xml = await res.text();
-    expect(xml).toContain(`<Client>${buildVoiceIdentity(ORG, U1)}</Client>`);
-    expect(xml).toContain(`<Client>${buildVoiceIdentity(ORG, U2)}</Client>`);
+    await POST(req(inbound));
+    expect(dialedTargets()).toEqual(
+      expect.arrayContaining([`client:${buildVoiceIdentity(ORG, U1)}`, `client:${buildVoiceIdentity(ORG, U2)}`]),
+    );
+    expect(h.createMock).toHaveBeenCalledTimes(2);
+    expect(h.state.inserted[0].agent_legs_remaining).toBe(2);
   });
 
-  // V3a: nobody online now goes to voicemail (record) instead of a dead-end hangup,
-  // and inserts the call-log row so the recording lands in the log.
-  test("no online browsers → voicemail (<Record>) + insert, no <Client>", async () => {
+  test("no online browsers → voicemail (<Record>) + insert, no conference, no dial-in", async () => {
     h.state.online = [];
     const res = await POST(req(inbound));
     expect(res.status).toBe(200);
     const xml = await res.text();
     expect(xml).toContain("<Record");
     expect(xml).toContain("/api/webhooks/twilio-voicemail-recording");
-    expect(xml).toContain("<Say>"); // null greeting → spoken fallback
-    expect(xml).not.toContain("<Client>");
-    expect(xml).not.toContain("<Dial");
+    expect(xml).toContain("<Say>");
+    expect(xml).not.toContain("<Conference");
+    expect(h.createMock).not.toHaveBeenCalled();
     expect(h.state.inserted.length).toBe(1);
-    expect(h.state.inserted[0]).toEqual(
-      expect.objectContaining({ call_sid: "CA-in-1", direction: "inbound", provider: "twilio" }),
-    );
   });
 
   test("no online browsers + greeting configured → <Play> greeting + <Record>", async () => {
@@ -178,55 +214,15 @@ describe("twilio voice incoming webhook", () => {
     expect(xml).not.toContain("<Say>");
   });
 
-  test("online case rings only (no <Record> in the ring response — voicemail is the action callback)", async () => {
-    const res = await POST(req(inbound));
-    const xml = await res.text();
-    expect(xml).toContain("<Dial");
-    expect(xml).toContain("action=");
-    expect(xml).not.toContain("<Record");
-  });
-
-  test("ring <Dial> auto-records the answered conversation", async () => {
-    const res = await POST(req(inbound));
-    const xml = await res.text();
-    expect(xml).toContain('record="record-from-answer-dual"');
-    expect(xml).toContain("/api/webhooks/twilio-recording");
-  });
-
-  test("voicemail path does NOT record-from-answer (separate flow → voicemail webhook)", async () => {
-    const res = await POST(req({ ...inbound, DialCallStatus: "no-answer" }));
-    const xml = await res.text();
-    expect(xml).toContain("<Record");
-    expect(xml).toContain("/api/webhooks/twilio-voicemail-recording");
-    expect(xml).not.toContain("record-from-answer-dual");
-  });
-
-  test("action callback: DialCallStatus no-answer → voicemail <Record>", async () => {
-    const res = await POST(req({ ...inbound, DialCallStatus: "no-answer" }));
-    expect(res.status).toBe(200);
-    const xml = await res.text();
-    expect(xml).toContain("<Record");
-    expect(xml).toContain("/api/webhooks/twilio-voicemail-recording");
-    expect(xml).not.toContain("<Dial");
-  });
-
-  test("action callback: DialCallStatus completed → hangup, no <Record>", async () => {
-    const res = await POST(req({ ...inbound, DialCallStatus: "completed" }));
-    expect(res.status).toBe(200);
-    const xml = await res.text();
-    expect(xml).toContain("<Hangup/>");
-    expect(xml).not.toContain("<Record");
-    expect(xml).not.toContain("<Dial");
-  });
-
-  test("unknown DID → unavailable + hangup, no insert", async () => {
+  test("unknown DID → unavailable + hangup, no insert, no dial-in", async () => {
     h.state.didOrg = null;
     const res = await POST(req(inbound));
     expect(res.status).toBe(200);
     const xml = await res.text();
     expect(xml).toContain("<Hangup/>");
-    expect(xml).not.toContain("<Dial");
+    expect(xml).not.toContain("<Conference");
     expect(h.state.inserted.length).toBe(0);
+    expect(h.createMock).not.toHaveBeenCalled();
   });
 
   test("org routed to telnyx → refused + hangup, no insert", async () => {
@@ -235,7 +231,7 @@ describe("twilio voice incoming webhook", () => {
     expect(res.status).toBe(200);
     const xml = await res.text();
     expect(xml).toContain("<Hangup/>");
-    expect(xml).not.toContain("<Dial");
+    expect(xml).not.toContain("<Conference");
     expect(h.state.inserted.length).toBe(0);
   });
 
@@ -244,13 +240,11 @@ describe("twilio voice incoming webhook", () => {
     expect(res.status).toBe(200);
     const xml = await res.text();
     expect(xml).toContain("<Hangup/>");
-    expect(xml).not.toContain("<Dial");
+    expect(xml).not.toContain("<Conference");
   });
 
-  // --- V3c routing modes ---
-  const FWD = "+13335557777";
-
-  test("forwarding_only → <Dial> with <Number> forward, no <Client>", async () => {
+  // --- routing modes (V3c parity, conference model) ---
+  test("forwarding_only → agent leg dials the forward number only, no client", async () => {
     h.routingMock.mockResolvedValue({
       routingMode: "forwarding_only",
       forwardingNumber: FWD,
@@ -260,41 +254,37 @@ describe("twilio voice incoming webhook", () => {
     const res = await POST(req(inbound));
     expect(res.status).toBe(200);
     const xml = await res.text();
-    expect(xml).toContain(`<Number>${FWD}</Number>`);
-    expect(xml).not.toContain("<Client>");
-    expect(xml).toContain('callerId="+12223334444"');
-    expect(xml).toContain("action=");
-    expect(xml).toContain("record-from-answer-dual");
-    expect(h.state.inserted.length).toBe(1);
+    expect(xml).toContain("<Conference");
+    expect(dialedTargets()).toEqual([FWD]);
+    expect(h.state.inserted[0].agent_legs_remaining).toBe(1);
   });
 
-  test("browser_first_then_forward → <Dial> with <Client> AND <Number> (parallel)", async () => {
+  test("browser_first_then_forward → agent legs for client AND forward (counter = 2)", async () => {
     h.routingMock.mockResolvedValue({
       routingMode: "browser_first_then_forward",
       forwardingNumber: FWD,
       browserRingTimeoutSeconds: 20,
       voicemailGreetingUrl: null,
     });
-    const res = await POST(req(inbound));
-    const xml = await res.text();
-    expect(xml).toContain(`<Client>${buildVoiceIdentity(ORG, U1)}</Client>`);
-    expect(xml).toContain(`<Number>${FWD}</Number>`);
+    await POST(req(inbound));
+    expect(dialedTargets()).toEqual(
+      expect.arrayContaining([`client:${buildVoiceIdentity(ORG, U1)}`, FWD]),
+    );
+    expect(h.state.inserted[0].agent_legs_remaining).toBe(2);
   });
 
-  test("forwarding_only with no forward number → downgrades to browser_only (<Client> only)", async () => {
+  test("forwarding_only with no forward number → downgrades to browser_only (client only)", async () => {
     h.routingMock.mockResolvedValue({
       routingMode: "forwarding_only",
       forwardingNumber: null,
       browserRingTimeoutSeconds: 20,
       voicemailGreetingUrl: null,
     });
-    const res = await POST(req(inbound));
-    const xml = await res.text();
-    expect(xml).toContain(`<Client>${buildVoiceIdentity(ORG, U1)}</Client>`);
-    expect(xml).not.toContain("<Number>");
+    await POST(req(inbound));
+    expect(dialedTargets()).toEqual([`client:${buildVoiceIdentity(ORG, U1)}`]);
   });
 
-  test("forward mode with no forward number AND no online → voicemail, no <Dial>", async () => {
+  test("forward mode with no forward number AND no online → voicemail, no conference", async () => {
     h.state.online = [];
     h.routingMock.mockResolvedValue({
       routingMode: "browser_first_then_forward",
@@ -305,11 +295,12 @@ describe("twilio voice incoming webhook", () => {
     const res = await POST(req(inbound));
     const xml = await res.text();
     expect(xml).toContain("<Record");
-    expect(xml).not.toContain("<Dial");
+    expect(xml).not.toContain("<Conference");
+    expect(h.createMock).not.toHaveBeenCalled();
     expect(h.state.inserted.length).toBe(1);
   });
 
-  test("browser_first_then_forward with forward but ZERO online → <Number> only, not voicemail", async () => {
+  test("browser_first_then_forward with forward but ZERO online → forward leg only, not voicemail", async () => {
     h.state.online = [];
     h.routingMock.mockResolvedValue({
       routingMode: "browser_first_then_forward",
@@ -319,20 +310,19 @@ describe("twilio voice incoming webhook", () => {
     });
     const res = await POST(req(inbound));
     const xml = await res.text();
-    expect(xml).toContain(`<Number>${FWD}</Number>`);
-    expect(xml).not.toContain("<Client>");
+    expect(xml).toContain("<Conference");
+    expect(dialedTargets()).toEqual([FWD]);
     expect(xml).not.toContain("<Record");
   });
 
-  test("uses the configured browserRingTimeoutSeconds on <Dial>", async () => {
+  test("uses the configured browserRingTimeoutSeconds as the agent-leg ring timeout", async () => {
     h.routingMock.mockResolvedValue({
       routingMode: "browser_only",
       forwardingNumber: null,
       browserRingTimeoutSeconds: 45,
       voicemailGreetingUrl: null,
     });
-    const res = await POST(req(inbound));
-    const xml = await res.text();
-    expect(xml).toContain('timeout="45"');
+    await POST(req(inbound));
+    expect(h.createMock.mock.calls[0][0].timeout).toBe(45);
   });
 });

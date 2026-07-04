@@ -9,6 +9,8 @@ import { resolveVoiceProviderName, parseTelnyxPinnedOrgIds } from "@/lib/provide
 import { buildVoiceIdentity } from "@/lib/providers/voice/identity"
 import { getRoutingConfig, getVoicemailGreetingUrl } from "@/lib/voice/routing"
 import { appendVoicemailTwiml } from "@/lib/voice/twilio-voicemail"
+import { getTwilioClient } from "@/lib/providers/twilio/client"
+import { inboundConferenceRoomName, refCallbackUrl } from "@/lib/voice/twilio-conference"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -57,6 +59,7 @@ async function insertInboundRow(
   orgId: string,
   from: string,
   to: string,
+  extra: Record<string, any> = {},
 ): Promise<void> {
   const { error } = await supabaseAdmin.from("calls").insert({
     call_sid: params.CallSid,
@@ -67,6 +70,7 @@ async function insertInboundRow(
     status: "ringing",
     provider: "twilio",
     webrtc: true,
+    ...extra,
   })
   if (error) console.error("[twilio-voice-incoming] call-log insert failed (non-fatal)", { orgId, error })
 }
@@ -94,20 +98,6 @@ export async function POST(request: NextRequest) {
   if (!to) {
     console.warn("[twilio-voice-incoming] invalid To — refusing", { to: params.To })
     return sayHangup("This number is not available. Goodbye.")
-  }
-
-  // Post-<Dial> action callback: Twilio re-hits THIS same URL after the ring, with
-  // DialCallStatus telling us whether a browser answered. Answered → hang up the
-  // (already-ended) call; no-answer → voicemail on the surviving caller leg. This
-  // keeps answered calls from ever reaching the record verb.
-  if (params.DialCallStatus) {
-    if (params.DialCallStatus === "completed" || params.DialCallStatus === "answered") {
-      const vr = new twilio.twiml.VoiceResponse()
-      vr.hangup()
-      return xml(vr.toString())
-    }
-    console.log("[twilio-voice-incoming] no browser answered — voicemail", { dialStatus: params.DialCallStatus })
-    return voicemailResponse(to)
   }
 
   // Resolve the org from the inbound DID.
@@ -185,28 +175,66 @@ export async function POST(request: NextRequest) {
     return voicemailResponse(to)
   }
 
-  await insertInboundRow(params, orgId, from, to)
+  // Reachable-leg path → conference. The caller joins a room and WAITS; each agent
+  // (browser client and/or forward number) is dialed INTO the same room. No-answer
+  // is detected by an aggregated agent-leg counter in the status webhook (there is
+  // no single DialCallStatus signal in the conference model).
+  const callerCallSid = params.CallSid
+  const room = inboundConferenceRoomName(callerCallSid)
 
-  // Caller ID is the real caller so the browser/forward target shows who's calling.
-  // `action` points back at THIS route: after the ring we branch on DialCallStatus
-  // (answered → hangup; no-answer → voicemail). Recording attrs unchanged from V3b.
-  const vr = new twilio.twiml.VoiceResponse()
-  const dial = vr.dial({
-    callerId: from,
-    timeout: ringTimeout,
-    answerOnBridge: true,
-    action: callbackUrl(),
-    method: "POST",
-    record: "record-from-answer-dual",
-    recordingStatusCallback: `${baseUrl()}/api/webhooks/twilio-recording`,
-    recordingStatusCallbackMethod: "POST",
-    recordingStatusCallbackEvent: ["completed"],
-  })
+  const agentTargets: string[] = []
   if (ringClients) {
-    for (const uid of onlineUserIds) dial.client({}, buildVoiceIdentity(orgId, uid))
+    for (const uid of onlineUserIds) agentTargets.push(`client:${buildVoiceIdentity(orgId, uid)}`)
   }
   if (ringForward && routing.forwardingNumber) {
-    dial.number({}, routing.forwardingNumber)
+    agentTargets.push(routing.forwardingNumber)
   }
+
+  await insertInboundRow(params, orgId, from, to, {
+    conference_name: room,
+    agent_legs_remaining: agentTargets.length,
+    agent_answered: false,
+  })
+
+  // Dial each agent INTO the room (fire all; non-fatal per leg). Each agent-leg
+  // status callback carries ?ref=<callerCallSid>&role=agent so the status webhook
+  // runs the no-answer counter and redirects the waiting caller to voicemail when
+  // the last agent leg ends unanswered.
+  const agentStatusCallback =
+    refCallbackUrl(baseUrl(), "/api/webhooks/twilio-voice-status", callerCallSid) + "&role=agent"
+  const agentTwiml = `<Response><Dial><Conference startConferenceOnEnter="true" endConferenceOnExit="false">${room}</Conference></Dial></Response>`
+  for (const target of agentTargets) {
+    try {
+      await getTwilioClient().calls.create({
+        to: target,
+        from,
+        timeout: ringTimeout,
+        twiml: agentTwiml,
+        statusCallback: agentStatusCallback,
+        statusCallbackEvent: ["initiated", "ringing", "answered", "completed"],
+        statusCallbackMethod: "POST",
+      })
+    } catch (err) {
+      console.error("[twilio-voice-incoming] agent dial-in failed", { room, target, error: String(err) })
+    }
+  }
+
+  // Return the caller into the room, waiting for an agent. record-from-start records
+  // the whole conference; endConferenceOnExit=true ends the room if the caller hangs
+  // up. All callbacks carry ?ref=<callerCallSid>.
+  const vr = new twilio.twiml.VoiceResponse()
+  const dial = vr.dial({})
+  dial.conference(
+    {
+      startConferenceOnEnter: false,
+      endConferenceOnExit: true,
+      record: "record-from-start",
+      recordingStatusCallback: refCallbackUrl(baseUrl(), "/api/webhooks/twilio-recording", callerCallSid),
+      recordingStatusCallbackEvent: ["completed"],
+      statusCallback: refCallbackUrl(baseUrl(), "/api/webhooks/twilio-conference-events", callerCallSid),
+      statusCallbackEvent: ["start", "end", "join", "leave"],
+    },
+    room,
+  )
   return xml(vr.toString())
 }
