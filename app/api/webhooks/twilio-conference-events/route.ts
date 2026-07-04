@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
 
   const { data: existing } = await supabaseAdmin
     .from("calls")
-    .select("id, ended_at")
+    .select("id, ended_at, status, direction, answered_at, duration_seconds")
     .eq("call_sid", ref)
     .maybeSingle()
   if (!existing) {
@@ -59,13 +59,35 @@ export async function POST(request: NextRequest) {
       await supabaseAdmin.from("calls").update({ conference_sid: conferenceSid }).eq("id", existing.id)
     }
   } else if (event === "conference-end" || event === "end") {
-    // Only fill ended_at if the status webhook hasn't already written a terminal
-    // timestamp (do NOT overwrite disposition/duration it already set).
-    if (!existing.ended_at) {
-      await supabaseAdmin.from("calls").update({ ended_at: new Date().toISOString() }).eq("id", existing.id)
+    const TERMINAL = new Set(["completed", "voicemail", "missed", "failed", "canceled", "busy", "no-answer"])
+    const currentStatus = (existing.status ?? "").toLowerCase()
+    const updates: Record<string, any> = {}
+
+    // Only fill ended_at when the status webhook hasn't already set a terminal
+    // timestamp (never overwrite disposition/duration it already wrote).
+    if (!existing.ended_at) updates.ended_at = new Date().toISOString()
+
+    // Inbound answered calls get their terminal disposition + duration from the
+    // conference lifecycle (the agent legs are not the call itself). Never clobber a
+    // status the status/voicemail webhooks already made terminal (e.g. voicemail/missed).
+    const answered = Boolean(existing.answered_at) || currentStatus === "in-progress"
+    if (existing.direction === "inbound" && answered && !TERMINAL.has(currentStatus)) {
+      const confDuration = Number(params.Duration)
+      const computed = existing.answered_at
+        ? Math.max(0, Math.round((Date.now() - Date.parse(existing.answered_at)) / 1000))
+        : 0
+      updates.status = "completed"
+      if (existing.duration_seconds == null) {
+        updates.duration_seconds =
+          Number.isFinite(confDuration) && confDuration > 0 ? confDuration : computed
+      }
+    }
+
+    if (Object.keys(updates).length) {
+      await supabaseAdmin.from("calls").update(updates).eq("id", existing.id)
     }
   }
-  // join / leave — participant choreography is C2; log only.
+  // join / leave — participant choreography is later; log only.
 
   return new NextResponse(null, { status: 204 })
 }
