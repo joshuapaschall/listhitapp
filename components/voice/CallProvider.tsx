@@ -529,10 +529,20 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
   const toggleHold = useCallback(async () => {
     if (voiceProvider === "twilio") {
-      // Interim mute-as-hold (real hold with hold music is V3).
+      // Real hold: the server places the far party on hold in the conference (they
+      // hear hold music). Optimistic UI with revert-on-failure.
       const next = !isOnHold;
-      twilioEngineRef.current?.setHold(next);
       setIsOnHold(next);
+      try {
+        const res = await fetch("/api/twilio/voice-hold", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ hold: next }),
+        });
+        if (!res.ok) setIsOnHold(!next);
+      } catch {
+        setIsOnHold(!next);
+      }
       return;
     }
     const id = farLegId();
@@ -543,7 +553,17 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   }, [isOnHold, voiceProvider]);
 
   const unhold = useCallback(async () => {
-    if (voiceProvider === "twilio") { twilioEngineRef.current?.setHold(false); setIsOnHold(false); return; }
+    if (voiceProvider === "twilio") {
+      setIsOnHold(false);
+      try {
+        await fetch("/api/twilio/voice-hold", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ hold: false }),
+        });
+      } catch {}
+      return;
+    }
     const id = farLegId();
     if (!id) return;
     await fetch(`/api/calls/${id}/hold`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "unhold" }) });
