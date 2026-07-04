@@ -565,7 +565,19 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   }, [voiceProvider]);
 
   const transfer = useCallback(async (number: string) => {
-    if (voiceProvider === "twilio") { console.warn("[twilio-voice] transfer not yet supported on Twilio voice"); return; }
+    if (voiceProvider === "twilio") {
+      // Cold transfer: the server resolves the live call + far party and redirects it.
+      const res = await fetch("/api/twilio/voice-transfer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: number }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d?.error || "Transfer failed");
+      }
+      return;
+    }
     const id = farLegId();
     if (!id) throw new Error("No call control id");
     const res = await fetch(`/api/calls/${id}/transfer`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to: number }) });

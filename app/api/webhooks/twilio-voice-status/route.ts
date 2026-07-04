@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
 
   const { data: existing } = await supabaseAdmin
     .from("calls")
-    .select("id, answered_at")
+    .select("id, answered_at, far_leg_sid")
     .eq("call_sid", matchSid)
     .maybeSingle()
 
@@ -79,6 +79,13 @@ export async function POST(request: NextRequest) {
     default:
       // initiated / ringing / queued — status only.
       break
+  }
+
+  // Far-leg capture (V3d): a callback carrying ParentCallSid is the child (far
+  // party) leg of an outbound <Dial>. Record its CallSid once so a cold transfer
+  // can redirect the far party. Guarded — never overwrite a captured SID.
+  if (parentCallSid && !existing.far_leg_sid) {
+    updates.far_leg_sid = callSid
   }
 
   const { error } = await supabaseAdmin.from("calls").update(updates).eq("id", existing.id)
