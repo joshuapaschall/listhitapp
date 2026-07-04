@@ -37,8 +37,11 @@ vi.mock("@/lib/supabase", () => ({ supabase: h.client, supabaseAdmin: h.client }
 
 const { POST } = await import("../app/api/webhooks/twilio-voice-status/route")
 
-function req(fields: Record<string, string>) {
-  return new NextRequest("http://test/api/webhooks/twilio-voice-status", {
+function req(fields: Record<string, string>, ref?: string) {
+  const url = ref
+    ? `http://test/api/webhooks/twilio-voice-status?ref=${encodeURIComponent(ref)}`
+    : "http://test/api/webhooks/twilio-voice-status"
+  return new NextRequest(url, {
     method: "POST",
     body: new URLSearchParams(fields).toString(),
     headers: {
@@ -101,22 +104,17 @@ describe("twilio voice status webhook", () => {
     expect(h.state.updates).toBeNull()
   })
 
-  // --- V3d far-leg capture ---
-  test("child-leg callback (ParentCallSid) captures far_leg_sid = CallSid", async () => {
-    h.state.row = { id: "c1", answered_at: null, far_leg_sid: null }
+  // --- C1a: conference-model ref correlation ---
+  test("resolves the row by ?ref= (prospect leg has no ParentCallSid)", async () => {
+    await POST(req({ CallSid: "CA-prospect", CallStatus: "completed", CallDuration: "88" }, "CA-agent"))
+    expect(h.state.queriedSid).toBe("CA-agent")
+    expect(h.state.updates.status).toBe("completed")
+    expect(h.state.updates.duration).toBe(88)
+  })
+
+  test("far_leg_sid is no longer captured here (moved to dial time in C1a)", async () => {
+    h.state.row = { id: "c1", answered_at: null }
     await POST(req({ CallSid: "CH-child", ParentCallSid: "CA-parent", CallStatus: "in-progress" }))
-    expect(h.state.updates.far_leg_sid).toBe("CH-child")
-  })
-
-  test("does NOT overwrite an already-captured far_leg_sid", async () => {
-    h.state.row = { id: "c1", answered_at: null, far_leg_sid: "CH-old" }
-    await POST(req({ CallSid: "CH-new", ParentCallSid: "CA-parent", CallStatus: "in-progress" }))
-    expect(h.state.updates.far_leg_sid).toBeUndefined()
-  })
-
-  test("no ParentCallSid → far_leg_sid not set", async () => {
-    h.state.row = { id: "c1", answered_at: null, far_leg_sid: null }
-    await POST(req({ CallSid: "CH1", CallStatus: "ringing" }))
     expect(h.state.updates.far_leg_sid).toBeUndefined()
   })
 })

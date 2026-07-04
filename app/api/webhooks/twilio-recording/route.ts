@@ -16,9 +16,10 @@ function baseUrl(): string {
   return (process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/$/, "")
 }
 
-// Public URL Twilio signs against — must match the <Dial recordingStatusCallback>.
-function callbackUrl(): string {
-  return `${baseUrl()}/api/webhooks/twilio-recording`
+// Full public URL Twilio signed against — includes the ?ref=… query (conference
+// recording), so signature validation must match it exactly.
+function fullCallbackUrl(url: URL): string {
+  return `${baseUrl()}${url.pathname}${url.search}`
 }
 
 // Twilio media URLs require Basic auth (accountSid:authToken). Retry — the media can
@@ -53,8 +54,10 @@ export async function POST(request: NextRequest) {
     console.error("[twilio-recording] LISTHIT_TWILIO_AUTH_TOKEN is not set; rejecting webhook")
     return new NextResponse("Forbidden", { status: 403 })
   }
+  const url = new URL(request.url)
+  const ref = url.searchParams.get("ref")
   const signature = request.headers.get("x-twilio-signature") || ""
-  if (!twilio.validateRequest(authToken, signature, callbackUrl(), params)) {
+  if (!twilio.validateRequest(authToken, signature, fullCallbackUrl(url), params)) {
     return new NextResponse("Invalid signature", { status: 403 })
   }
 
@@ -62,10 +65,13 @@ export async function POST(request: NextRequest) {
   const recordingUrl = params.RecordingUrl
   const recordingDuration = Number(params.RecordingDuration)
   const recordingStatus = params.RecordingStatus
-  const callSid = params.CallSid
+  const conferenceSid = params.ConferenceSid
 
-  if (!callSid) {
-    return new NextResponse("Missing CallSid", { status: 400 })
+  // Conference recording callbacks carry no CallSid — correlate via ?ref=<agentCallSid>.
+  // Keep CallSid as a fallback for any legacy dial-recording callback.
+  const matchSid = ref || params.CallSid
+  if (!matchSid) {
+    return new NextResponse("Missing ref/CallSid", { status: 400 })
   }
 
   // Never clobber a voicemail row — that flow (V3a) owns its own recording. If no
@@ -73,37 +79,37 @@ export async function POST(request: NextRequest) {
   const { data: existing } = await supabaseAdmin
     .from("calls")
     .select("status")
-    .eq("call_sid", callSid)
+    .eq("call_sid", matchSid)
     .maybeSingle()
   if (!existing) {
-    console.warn("[twilio-recording] no matching calls row", { callSid })
+    console.warn("[twilio-recording] no matching calls row", { matchSid })
     return new NextResponse(null, { status: 204 })
   }
   if (existing.status === "voicemail") {
-    console.log("[twilio-recording] skipping — row is a voicemail", { callSid })
+    console.log("[twilio-recording] skipping — row is a voicemail", { matchSid })
     return new NextResponse(null, { status: 204 })
   }
 
   // No usable recording (never answered / empty): mark state ready, leave status.
   if (recordingStatus !== "completed" || !Number.isFinite(recordingDuration) || recordingDuration <= 0) {
-    await supabaseAdmin.from("calls").update({ recording_state: "ready" }).eq("call_sid", callSid)
+    await supabaseAdmin.from("calls").update({ recording_state: "ready" }).eq("call_sid", matchSid)
     return new NextResponse(null, { status: 204 })
   }
 
   // Download the mp3. Storage hiccups must NOT 5xx (Twilio would retry+redownload).
   const bytes = recordingUrl ? await downloadRecording(`${recordingUrl}.mp3`) : null
   if (!bytes) {
-    await supabaseAdmin.from("calls").update({ recording_state: "failed" }).eq("call_sid", callSid)
+    await supabaseAdmin.from("calls").update({ recording_state: "failed" }).eq("call_sid", matchSid)
     return new NextResponse(null, { status: 204 })
   }
 
-  const path = recordingStoragePath(recordingSid || callSid)
+  const path = recordingStoragePath(recordingSid || matchSid)
   const { error: uploadErr } = await supabaseAdmin.storage
     .from(RECORDING_BUCKET)
     .upload(path, Buffer.from(bytes), { contentType: "audio/mpeg", upsert: true })
   if (uploadErr) {
-    console.error("[twilio-recording] upload failed", { callSid, path, error: uploadErr })
-    await supabaseAdmin.from("calls").update({ recording_state: "failed" }).eq("call_sid", callSid)
+    console.error("[twilio-recording] upload failed", { matchSid, path, error: uploadErr })
+    await supabaseAdmin.from("calls").update({ recording_state: "failed" }).eq("call_sid", matchSid)
     return new NextResponse(null, { status: 204 })
   }
 
@@ -115,10 +121,11 @@ export async function POST(request: NextRequest) {
       recording_url: path,
       recording_state: "ready",
       recording_duration_seconds: Number.isFinite(recordingDuration) ? recordingDuration : null,
+      ...(conferenceSid ? { conference_sid: conferenceSid } : {}),
     })
-    .eq("call_sid", callSid)
+    .eq("call_sid", matchSid)
   if (updateErr) {
-    console.error("[twilio-recording] calls update failed", { callSid, error: updateErr })
+    console.error("[twilio-recording] calls update failed", { matchSid, error: updateErr })
     return new NextResponse("Error", { status: 500 })
   }
 

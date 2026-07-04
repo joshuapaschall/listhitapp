@@ -7,6 +7,8 @@ import { formatPhoneE164 } from "@/lib/dedup-utils"
 import { getOrgTwilio } from "@/lib/org-twilio/service"
 import { resolveVoiceProviderName, parseTelnyxPinnedOrgIds } from "@/lib/providers/voice/routing"
 import { parseVoiceIdentity } from "@/lib/providers/voice/identity"
+import { getTwilioClient } from "@/lib/providers/twilio/client"
+import { conferenceRoomName, refCallbackUrl } from "@/lib/voice/twilio-conference"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -84,10 +86,15 @@ export async function POST(request: NextRequest) {
     return xml(HANGUP_TWIML)
   }
 
-  // Insert the call-log row keyed on the parent (browser) leg CallSid. Non-fatal:
+  // Conference model: the agent joins a named room; the prospect is dialed into the
+  // SAME room. Room name + ref both derive from the agent (browser) leg CallSid.
+  const agentCallSid = params.CallSid
+  const room = conferenceRoomName(agentCallSid)
+
+  // Insert the call-log row keyed on the agent (browser) leg CallSid. Non-fatal:
   // the call must still connect even if logging fails.
   const { error: insertErr } = await supabaseAdmin.from("calls").insert({
-    call_sid: params.CallSid,
+    call_sid: agentCallSid,
     org_id: orgId,
     direction: "outbound",
     from_number: callerId,
@@ -95,29 +102,47 @@ export async function POST(request: NextRequest) {
     status: "initiated",
     provider: "twilio",
     webrtc: true,
+    conference_name: room,
   })
   if (insertErr) {
     console.error("[twilio-voice-twiml] call-log insert failed (non-fatal)", { orgId, error: insertErr })
   }
 
-  const vr = new twilio.twiml.VoiceResponse()
-  const dial = vr.dial({
-    callerId,
-    // Auto-record the bridged conversation (dual channel, only after answer),
-    // matching the Telnyx auto-record model. Completion posts to the recording
-    // webhook. Independent of the <Number> statusCallback below.
-    record: "record-from-answer-dual",
-    recordingStatusCallback: `${baseUrl()}/api/webhooks/twilio-recording`,
-    recordingStatusCallbackMethod: "POST",
-    recordingStatusCallbackEvent: ["completed"],
-  })
-  dial.number(
-    {
+  // Dial the prospect INTO the room. The created leg IS the far party (prospect) —
+  // capture its SID immediately so V3d cold transfer keeps working. Its status
+  // callback is correlated back to the row via ?ref=<agentCallSid>. The prospect's
+  // endConferenceOnExit=false keeps the room alive if they drop before the agent.
+  try {
+    const leg = await getTwilioClient().calls.create({
+      to,
+      from: callerId,
+      twiml: `<Response><Dial><Conference startConferenceOnEnter="true" endConferenceOnExit="false">${room}</Conference></Dial></Response>`,
+      statusCallback: refCallbackUrl(baseUrl(), "/api/webhooks/twilio-voice-status", agentCallSid),
       statusCallbackEvent: ["initiated", "ringing", "answered", "completed"],
-      statusCallback: `${baseUrl()}/api/webhooks/twilio-voice-status`,
       statusCallbackMethod: "POST",
+    })
+    await supabaseAdmin.from("calls").update({ far_leg_sid: leg.sid }).eq("call_sid", agentCallSid)
+  } catch (err) {
+    console.error("[twilio-voice-twiml] prospect dial-in failed", { room, error: String(err) })
+    return xml(HANGUP_TWIML)
+  }
+
+  // Return the agent into the room. record-from-start records the whole conference;
+  // endConferenceOnExit on the AGENT preserves today's "agent hangs up → call ends".
+  // All callbacks carry ?ref=<agentCallSid> for correlation.
+  const vr = new twilio.twiml.VoiceResponse()
+  const dial = vr.dial({})
+  dial.conference(
+    {
+      startConferenceOnEnter: true,
+      endConferenceOnExit: true,
+      record: "record-from-start",
+      recordingStatusCallback: refCallbackUrl(baseUrl(), "/api/webhooks/twilio-recording", agentCallSid),
+      recordingStatusCallbackEvent: ["completed"],
+      statusCallback: refCallbackUrl(baseUrl(), "/api/webhooks/twilio-conference-events", agentCallSid),
+      statusCallbackEvent: ["start", "end", "join", "leave"],
     },
-    to,
+    room,
   )
   return xml(vr.toString())
 }

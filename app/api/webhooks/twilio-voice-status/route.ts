@@ -9,11 +9,11 @@ export const dynamic = "force-dynamic"
 
 assertServer()
 
-// Public URL Twilio signs against — must match the <Number statusCallback=…> set by
-// the TwiML webhook.
-function callbackUrl(): string {
+// Full public URL Twilio signed against — includes the ?ref=… query (conference
+// model), so signature validation must match it exactly.
+function fullCallbackUrl(url: URL): string {
   const base = (process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/$/, "")
-  return `${base}/api/webhooks/twilio-voice-status`
+  return `${base}${url.pathname}${url.search}`
 }
 
 export async function GET() {
@@ -29,8 +29,10 @@ export async function POST(request: NextRequest) {
     console.error("[twilio-voice-status] LISTHIT_TWILIO_AUTH_TOKEN is not set; rejecting webhook")
     return new NextResponse("Forbidden", { status: 403 })
   }
+  const url = new URL(request.url)
+  const ref = url.searchParams.get("ref")
   const signature = request.headers.get("x-twilio-signature") || ""
-  if (!twilio.validateRequest(authToken, signature, callbackUrl(), params)) {
+  if (!twilio.validateRequest(authToken, signature, fullCallbackUrl(url), params)) {
     return new NextResponse("Invalid signature", { status: 403 })
   }
 
@@ -39,17 +41,18 @@ export async function POST(request: NextRequest) {
   const callStatus = params.CallStatus
   const callDuration = params.CallDuration
 
-  // The call-log row is keyed on the parent (browser) leg CallSid inserted by the
-  // TwiML webhook. The status callback fires on the child (PSTN) leg, so prefer
-  // ParentCallSid; fall back to CallSid.
-  const matchSid = parentCallSid || callSid
+  // Correlate to the call-log row. The prospect leg's callback (conference model)
+  // carries ?ref=<agentCallSid>; prefer it. Keep ParentCallSid/CallSid fallbacks so
+  // any lingering direct-dial callback still resolves. Far-leg capture is now done
+  // at dial time in the TwiML webhook, so it is intentionally not repeated here.
+  const matchSid = ref || parentCallSid || callSid
   if (!matchSid || !callStatus) {
     return new NextResponse("Missing params", { status: 400 })
   }
 
   const { data: existing } = await supabaseAdmin
     .from("calls")
-    .select("id, answered_at, far_leg_sid")
+    .select("id, answered_at")
     .eq("call_sid", matchSid)
     .maybeSingle()
 
@@ -79,13 +82,6 @@ export async function POST(request: NextRequest) {
     default:
       // initiated / ringing / queued — status only.
       break
-  }
-
-  // Far-leg capture (V3d): a callback carrying ParentCallSid is the child (far
-  // party) leg of an outbound <Dial>. Record its CallSid once so a cold transfer
-  // can redirect the far party. Guarded — never overwrite a captured SID.
-  if (parentCallSid && !existing.far_leg_sid) {
-    updates.far_leg_sid = callSid
   }
 
   const { error } = await supabaseAdmin.from("calls").update(updates).eq("id", existing.id)

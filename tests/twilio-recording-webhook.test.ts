@@ -61,8 +61,11 @@ const { POST } = await import("../app/api/webhooks/twilio-recording/route");
 const ACCOUNT = "AC" + "0".repeat(32);
 const AUTH = "auth_token_123";
 
-function req(fields: Record<string, string>) {
-  return new NextRequest("http://test/api/webhooks/twilio-recording", {
+function req(fields: Record<string, string>, ref?: string) {
+  const url = ref
+    ? `http://test/api/webhooks/twilio-recording?ref=${encodeURIComponent(ref)}`
+    : "http://test/api/webhooks/twilio-recording";
+  return new NextRequest(url, {
     method: "POST",
     body: new URLSearchParams(fields).toString(),
     headers: {
@@ -160,5 +163,38 @@ describe("twilio conversation recording webhook", () => {
     expect(res.status).toBe(204);
     expect(h.state.uploadPath).toBeNull();
     expect(h.state.updates).toEqual({ recording_state: "failed" });
+  });
+
+  // --- C1a: conference recording (no CallSid, correlated via ?ref=) ---
+  test("conference recording (ConferenceSid, no CallSid) → resolves by ref, stores + conference_sid", async () => {
+    const res = await POST(
+      req(
+        {
+          RecordingSid: "RE-conf",
+          RecordingUrl: "https://api.twilio.com/rec/RE-conf",
+          RecordingDuration: "60",
+          RecordingStatus: "completed",
+          ConferenceSid: "CF123",
+        },
+        "CA-agent",
+      ),
+    );
+    expect(res.status).toBe(204);
+    expect(h.state.updatedSid).toBe("CA-agent");
+    expect(h.state.bucket).toBe("call-recordings");
+    expect(h.state.uploadPath).toMatch(/^\d{4}\/\d{2}\/RE-conf\.mp3$/);
+    expect(h.state.updates).toEqual(
+      expect.objectContaining({ recording_url: h.state.uploadPath, recording_state: "ready", conference_sid: "CF123" }),
+    );
+  });
+
+  test("conference voicemail row is still skipped (ref matches a voicemail)", async () => {
+    h.state.row = { status: "voicemail" };
+    const res = await POST(
+      req({ RecordingSid: "RE-conf", RecordingUrl: "u", RecordingDuration: "60", RecordingStatus: "completed" }, "CA-agent"),
+    );
+    expect(res.status).toBe(204);
+    expect(h.state.uploadPath).toBeNull();
+    expect(h.state.updates).toBeNull();
   });
 });
