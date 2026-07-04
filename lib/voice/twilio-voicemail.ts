@@ -40,3 +40,12 @@ export function voicemailStoragePath(recordingSid: string, when = new Date()): s
   const safe = recordingSid.replace(/[^A-Za-z0-9_-]/g, "")
   return `${yyyy}/${mm}/${safe}.mp3`
 }
+
+// Conversation-recording storage path (call-recordings bucket). Same dating scheme
+// as voicemail but a different bucket, so the two flows never collide.
+export function recordingStoragePath(recordingSid: string, when = new Date()): string {
+  const yyyy = when.getUTCFullYear()
+  const mm = String(when.getUTCMonth() + 1).padStart(2, "0")
+  const safe = recordingSid.replace(/[^A-Za-z0-9_-]/g, "")
+  return `${yyyy}/${mm}/${safe}.mp3`
+}

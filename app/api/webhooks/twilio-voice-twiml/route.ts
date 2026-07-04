@@ -101,7 +101,16 @@ export async function POST(request: NextRequest) {
   }
 
   const vr = new twilio.twiml.VoiceResponse()
-  const dial = vr.dial({ callerId })
+  const dial = vr.dial({
+    callerId,
+    // Auto-record the bridged conversation (dual channel, only after answer),
+    // matching the Telnyx auto-record model. Completion posts to the recording
+    // webhook. Independent of the <Number> statusCallback below.
+    record: "record-from-answer-dual",
+    recordingStatusCallback: `${baseUrl()}/api/webhooks/twilio-recording`,
+    recordingStatusCallbackMethod: "POST",
+    recordingStatusCallbackEvent: ["completed"],
+  })
   dial.number(
     {
       statusCallbackEvent: ["initiated", "ringing", "answered", "completed"],

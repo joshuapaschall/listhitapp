@@ -171,6 +171,21 @@ describe("twilio voice incoming webhook", () => {
     expect(xml).not.toContain("<Record");
   });
 
+  test("ring <Dial> auto-records the answered conversation", async () => {
+    const res = await POST(req(inbound));
+    const xml = await res.text();
+    expect(xml).toContain('record="record-from-answer-dual"');
+    expect(xml).toContain("/api/webhooks/twilio-recording");
+  });
+
+  test("voicemail path does NOT record-from-answer (separate flow → voicemail webhook)", async () => {
+    const res = await POST(req({ ...inbound, DialCallStatus: "no-answer" }));
+    const xml = await res.text();
+    expect(xml).toContain("<Record");
+    expect(xml).toContain("/api/webhooks/twilio-voicemail-recording");
+    expect(xml).not.toContain("record-from-answer-dual");
+  });
+
   test("action callback: DialCallStatus no-answer → voicemail <Record>", async () => {
     const res = await POST(req({ ...inbound, DialCallStatus: "no-answer" }));
     expect(res.status).toBe(200);
