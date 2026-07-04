@@ -5,6 +5,10 @@ const h = vi.hoisted(() => {
     row: null as any,
     updates: null as any,
     queriedSid: null as any,
+    rpcResult: [{ remaining: 0, answered: false }] as any,
+    rpcArgs: null as any,
+    redirectedSid: null as any,
+    redirectTwiml: null as any,
   }
   const client = {
     from: (table: string) => {
@@ -24,8 +28,12 @@ const h = vi.hoisted(() => {
       }
       throw new Error(`Unexpected table ${table}`)
     },
+    rpc: async (_name: string, args: any) => {
+      state.rpcArgs = args
+      return { data: state.rpcResult, error: null }
+    },
   }
-  return { state, client, validateMock: vi.fn(() => true) }
+  return { state, client, validateMock: vi.fn(() => true), greetingMock: vi.fn(async () => null as string | null) }
 })
 
 vi.mock("twilio", async (importOriginal) => {
@@ -34,13 +42,28 @@ vi.mock("twilio", async (importOriginal) => {
   return { ...actual, default: { ...d, validateRequest: h.validateMock } }
 })
 vi.mock("@/lib/supabase", () => ({ supabase: h.client, supabaseAdmin: h.client }))
+vi.mock("@/lib/voice/routing", () => ({ getVoicemailGreetingUrl: h.greetingMock }))
+vi.mock("@/lib/providers/twilio/client", () => ({
+  getTwilioClient: () => ({
+    calls: (sid: string) => {
+      h.state.redirectedSid = sid
+      return {
+        update: async (opts: any) => {
+          h.state.redirectTwiml = opts.twiml
+          return {}
+        },
+      }
+    },
+  }),
+}))
 
 const { POST } = await import("../app/api/webhooks/twilio-voice-status/route")
 
-function req(fields: Record<string, string>, ref?: string) {
-  const url = ref
-    ? `http://test/api/webhooks/twilio-voice-status?ref=${encodeURIComponent(ref)}`
-    : "http://test/api/webhooks/twilio-voice-status"
+function req(fields: Record<string, string>, ref?: string, role?: string) {
+  const qs: string[] = []
+  if (ref) qs.push(`ref=${encodeURIComponent(ref)}`)
+  if (role) qs.push(`role=${encodeURIComponent(role)}`)
+  const url = `http://test/api/webhooks/twilio-voice-status${qs.length ? `?${qs.join("&")}` : ""}`
   return new NextRequest(url, {
     method: "POST",
     body: new URLSearchParams(fields).toString(),
@@ -54,13 +77,19 @@ function req(fields: Record<string, string>, ref?: string) {
 describe("twilio voice status webhook", () => {
   beforeEach(() => {
     h.validateMock.mockReset().mockReturnValue(true)
+    h.greetingMock.mockReset().mockResolvedValue(null)
     h.state.row = { id: "c1", answered_at: null }
     h.state.updates = null
     h.state.queriedSid = null
+    h.state.rpcResult = [{ remaining: 0, answered: false }]
+    h.state.rpcArgs = null
+    h.state.redirectedSid = null
+    h.state.redirectTwiml = null
     process.env.NEXT_PUBLIC_BASE_URL = "https://app.listhit.io"
     process.env.LISTHIT_TWILIO_AUTH_TOKEN = "AUTH"
   })
 
+  // --- outbound prospect legs (C1a), no role — unchanged ---
   test("bad signature → 403", async () => {
     h.validateMock.mockReturnValue(false)
     const res = await POST(req({ CallSid: "CH1", CallStatus: "completed", CallDuration: "42" }))
@@ -78,7 +107,6 @@ describe("twilio voice status webhook", () => {
     await POST(req({ CallSid: "CH1", ParentCallSid: "CA1", CallStatus: "in-progress" }))
     expect(typeof h.state.updates.answered_at).toBe("string")
 
-    // Already answered → keep the original timestamp.
     h.state.row = { id: "c1", answered_at: "2020-01-01T00:00:00Z" }
     await POST(req({ CallSid: "CH1", ParentCallSid: "CA1", CallStatus: "in-progress" }))
     expect(h.state.updates.answered_at).toBe("2020-01-01T00:00:00Z")
@@ -104,7 +132,6 @@ describe("twilio voice status webhook", () => {
     expect(h.state.updates).toBeNull()
   })
 
-  // --- C1a: conference-model ref correlation ---
   test("resolves the row by ?ref= (prospect leg has no ParentCallSid)", async () => {
     await POST(req({ CallSid: "CA-prospect", CallStatus: "completed", CallDuration: "88" }, "CA-agent"))
     expect(h.state.queriedSid).toBe("CA-agent")
@@ -112,9 +139,48 @@ describe("twilio voice status webhook", () => {
     expect(h.state.updates.duration).toBe(88)
   })
 
-  test("far_leg_sid is no longer captured here (moved to dial time in C1a)", async () => {
-    h.state.row = { id: "c1", answered_at: null }
-    await POST(req({ CallSid: "CH-child", ParentCallSid: "CA-parent", CallStatus: "in-progress" }))
-    expect(h.state.updates.far_leg_sid).toBeUndefined()
+  // --- C1b: inbound agent legs (role=agent) ---
+  test("agent in-progress → agent_answered true, answered_at set, no duration", async () => {
+    await POST(req({ CallSid: "CA-agent-leg", CallStatus: "in-progress" }, "CA-caller", "agent"))
+    expect(h.state.updates.agent_answered).toBe(true)
+    expect(h.state.updates.status).toBe("in-progress")
+    expect(typeof h.state.updates.answered_at).toBe("string")
+    expect(h.state.updates.duration).toBeUndefined()
+  })
+
+  test("last agent leg ends unanswered → redirects the caller to voicemail", async () => {
+    h.state.rpcResult = [{ remaining: 0, answered: false }]
+    h.state.row = { to_number: "+18885551234", status: "ringing" }
+    const res = await POST(req({ CallSid: "CA-agent-leg", CallStatus: "no-answer" }, "CA-caller", "agent"))
+    expect(res.status).toBe(204)
+    expect(h.state.rpcArgs).toEqual({ p_call_sid: "CA-caller" })
+    expect(h.state.redirectedSid).toBe("CA-caller")
+    expect(h.state.redirectTwiml).toContain("<Record")
+  })
+
+  test("agent leg ends but others still outstanding → no redirect", async () => {
+    h.state.rpcResult = [{ remaining: 1, answered: false }]
+    await POST(req({ CallSid: "CA-agent-leg", CallStatus: "no-answer" }, "CA-caller", "agent"))
+    expect(h.state.redirectedSid).toBeNull()
+  })
+
+  test("last agent leg ends but someone answered → no redirect", async () => {
+    h.state.rpcResult = [{ remaining: 0, answered: true }]
+    await POST(req({ CallSid: "CA-agent-leg", CallStatus: "completed" }, "CA-caller", "agent"))
+    expect(h.state.redirectedSid).toBeNull()
+  })
+
+  test("no redirect when the caller row is already a voicemail", async () => {
+    h.state.rpcResult = [{ remaining: 0, answered: false }]
+    h.state.row = { to_number: "+18885551234", status: "voicemail" }
+    await POST(req({ CallSid: "CA-agent-leg", CallStatus: "failed" }, "CA-caller", "agent"))
+    expect(h.state.redirectedSid).toBeNull()
+  })
+
+  test("agent ringing → 204, no-op (no update, no rpc)", async () => {
+    const res = await POST(req({ CallSid: "CA-agent-leg", CallStatus: "ringing" }, "CA-caller", "agent"))
+    expect(res.status).toBe(204)
+    expect(h.state.updates).toBeNull()
+    expect(h.state.rpcArgs).toBeNull()
   })
 })

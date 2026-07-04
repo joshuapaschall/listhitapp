@@ -3,17 +3,23 @@ import twilio from "twilio"
 
 import { assertServer } from "@/utils/assert-server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { getVoicemailGreetingUrl } from "@/lib/voice/routing"
+import { appendVoicemailTwiml } from "@/lib/voice/twilio-voicemail"
+import { getTwilioClient } from "@/lib/providers/twilio/client"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 assertServer()
 
-// Full public URL Twilio signed against — includes the ?ref=… query (conference
-// model), so signature validation must match it exactly.
+function baseUrl(): string {
+  return (process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/$/, "")
+}
+
+// Full public URL Twilio signed against — includes the FULL ?ref=…&role=… query, so
+// signature validation must match it exactly.
 function fullCallbackUrl(url: URL): string {
-  const base = (process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/$/, "")
-  return `${base}${url.pathname}${url.search}`
+  return `${baseUrl()}${url.pathname}${url.search}`
 }
 
 export async function GET() {
@@ -31,6 +37,7 @@ export async function POST(request: NextRequest) {
   }
   const url = new URL(request.url)
   const ref = url.searchParams.get("ref")
+  const role = url.searchParams.get("role")
   const signature = request.headers.get("x-twilio-signature") || ""
   if (!twilio.validateRequest(authToken, signature, fullCallbackUrl(url), params)) {
     return new NextResponse("Invalid signature", { status: 403 })
@@ -40,6 +47,62 @@ export async function POST(request: NextRequest) {
   const parentCallSid = params.ParentCallSid
   const callStatus = params.CallStatus
   const callDuration = params.CallDuration
+
+  // Inbound agent leg (C1b): each dialed-in agent reports here with ?ref=<callerCallSid>
+  // &role=agent. These callbacks drive the no-answer counter — they are NOT the call
+  // itself, so we never write the agent leg's own status onto the call row.
+  if (role === "agent") {
+    if (!ref || !callStatus) return new NextResponse("Missing params", { status: 400 })
+
+    // An agent answered → mark the call answered.
+    if (callStatus === "in-progress") {
+      const { data: crow } = await supabaseAdmin
+        .from("calls")
+        .select("answered_at")
+        .eq("call_sid", ref)
+        .maybeSingle()
+      await supabaseAdmin
+        .from("calls")
+        .update({
+          agent_answered: true,
+          answered_at: crow?.answered_at ?? new Date().toISOString(),
+          status: "in-progress",
+        })
+        .eq("call_sid", ref)
+      return new NextResponse(null, { status: 204 })
+    }
+
+    // An agent leg ended. Atomically decrement the outstanding counter; when the LAST
+    // leg ends and nobody answered, redirect the still-waiting caller to voicemail.
+    if (["no-answer", "busy", "failed", "canceled", "completed"].includes(callStatus)) {
+      const { data: rpc } = await supabaseAdmin.rpc("note_twilio_agent_leg_ended", { p_call_sid: ref })
+      const result = Array.isArray(rpc) ? rpc[0] : rpc
+      if (result && result.remaining === 0 && result.answered === false) {
+        const { data: crow } = await supabaseAdmin
+          .from("calls")
+          .select("to_number, status")
+          .eq("call_sid", ref)
+          .maybeSingle()
+        if (crow && crow.status !== "voicemail") {
+          const greetingUrl = await getVoicemailGreetingUrl(crow.to_number)
+          const vr = new twilio.twiml.VoiceResponse()
+          appendVoicemailTwiml(vr, {
+            greetingUrl,
+            recordingStatusCallback: `${baseUrl()}/api/webhooks/twilio-voicemail-recording`,
+          })
+          try {
+            await getTwilioClient().calls(ref).update({ twiml: vr.toString() })
+          } catch (err) {
+            console.error("[twilio-voice-status] voicemail redirect failed", { ref, error: String(err) })
+          }
+        }
+      }
+      return new NextResponse(null, { status: 204 })
+    }
+
+    // initiated / ringing / queued — no-op.
+    return new NextResponse(null, { status: 204 })
+  }
 
   // Correlate to the call-log row. The prospect leg's callback (conference model)
   // carries ?ref=<agentCallSid>; prefer it. Keep ParentCallSid/CallSid fallbacks so
