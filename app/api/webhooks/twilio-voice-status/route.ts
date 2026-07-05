@@ -132,6 +132,9 @@ export async function POST(request: NextRequest) {
       updates.answered_at = existing.answered_at ?? now
       break
     case "completed":
+      // The call-log table + stats read duration_seconds (the column the UI uses);
+      // keep duration too for backward consistency.
+      updates.duration_seconds = Number(callDuration) || null
       updates.duration = Number(callDuration) || null
       updates.ended_at = now
       break

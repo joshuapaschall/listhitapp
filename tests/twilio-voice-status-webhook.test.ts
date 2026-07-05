@@ -112,9 +112,10 @@ describe("twilio voice status webhook", () => {
     expect(h.state.updates.answered_at).toBe("2020-01-01T00:00:00Z")
   })
 
-  test("completed writes duration + ended_at", async () => {
+  test("completed writes duration_seconds (the UI column) + duration + ended_at", async () => {
     await POST(req({ CallSid: "CH1", ParentCallSid: "CA1", CallStatus: "completed", CallDuration: "137" }))
     expect(h.state.updates.status).toBe("completed")
+    expect(h.state.updates.duration_seconds).toBe(137)
     expect(h.state.updates.duration).toBe(137)
     expect(typeof h.state.updates.ended_at).toBe("string")
   })

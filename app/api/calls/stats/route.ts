@@ -5,8 +5,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const APP_TIMEZONE = process.env.APP_TIMEZONE || "America/New_York";
-const CONNECTED_STATUSES = new Set(["completed", "answered", "bridged"]);
-const MISSED_STATUSES = new Set(["missed", "no_answer", "failed"]);
+// Includes both Telnyx's vocabulary (no_answer) and Twilio's (in-progress, no-answer,
+// canceled, busy) so Twilio call rows count the same as Telnyx in the dashboard.
+const CONNECTED_STATUSES = new Set(["completed", "answered", "bridged", "in-progress"]);
+const MISSED_STATUSES = new Set(["missed", "no_answer", "failed", "no-answer", "canceled", "busy"]);
 
 function getTodayRange(timeZone: string): { startIso: string; endIso: string } {
   const now = new Date();

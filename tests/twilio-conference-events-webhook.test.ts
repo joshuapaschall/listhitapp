@@ -89,6 +89,69 @@ describe("twilio conference events webhook", () => {
     expect(h.state.updates).toBeNull();
   });
 
+  // --- V4: inbound disposition + duration on conference-end ---
+  test("conference-end on an answered inbound row → completed + duration_seconds (from payload Duration)", async () => {
+    h.state.row = {
+      id: "c1",
+      ended_at: null,
+      status: "in-progress",
+      direction: "inbound",
+      answered_at: "2020-01-01T00:00:00Z",
+      duration_seconds: null,
+    };
+    const res = await POST(
+      req({ StatusCallbackEvent: "conference-end", ConferenceSid: "CF1", Duration: "137" }, "CA-caller"),
+    );
+    expect(res.status).toBe(204);
+    expect(h.state.updates.status).toBe("completed");
+    expect(h.state.updates.duration_seconds).toBe(137);
+    expect(typeof h.state.updates.ended_at).toBe("string");
+  });
+
+  test("conference-end without a payload Duration → computes duration from answered_at", async () => {
+    h.state.row = {
+      id: "c1",
+      ended_at: null,
+      status: "in-progress",
+      direction: "inbound",
+      answered_at: "2020-01-01T00:00:00Z",
+      duration_seconds: null,
+    };
+    await POST(req({ StatusCallbackEvent: "conference-end", ConferenceSid: "CF1" }, "CA-caller"));
+    expect(h.state.updates.status).toBe("completed");
+    expect(typeof h.state.updates.duration_seconds).toBe("number");
+    expect(h.state.updates.duration_seconds).toBeGreaterThan(0);
+  });
+
+  test("conference-end does NOT clobber a voicemail row (only fills ended_at)", async () => {
+    h.state.row = {
+      id: "c1",
+      ended_at: null,
+      status: "voicemail",
+      direction: "inbound",
+      answered_at: null,
+      duration_seconds: 5,
+    };
+    await POST(req({ StatusCallbackEvent: "conference-end", ConferenceSid: "CF1", Duration: "10" }, "CA-caller"));
+    expect(h.state.updates.status).toBeUndefined();
+    expect(h.state.updates.duration_seconds).toBeUndefined();
+    expect(typeof h.state.updates.ended_at).toBe("string");
+  });
+
+  test("conference-end on an outbound row does not set completed here (status webhook owns it)", async () => {
+    h.state.row = {
+      id: "c1",
+      ended_at: null,
+      status: "in-progress",
+      direction: "outbound",
+      answered_at: "2020-01-01T00:00:00Z",
+      duration_seconds: null,
+    };
+    await POST(req({ StatusCallbackEvent: "conference-end", ConferenceSid: "CF1", Duration: "137" }, "CA-agent"));
+    expect(h.state.updates.status).toBeUndefined();
+    expect(typeof h.state.updates.ended_at).toBe("string");
+  });
+
   test("join/leave events → 204, no update", async () => {
     const res = await POST(req({ StatusCallbackEvent: "participant-join", ConferenceSid: "CF1" }, "CA-agent"));
     expect(res.status).toBe(204);
