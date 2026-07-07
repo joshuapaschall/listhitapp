@@ -7,11 +7,15 @@ import { renderTemplate } from "@/lib/utils"
 import type { Buyer } from "@/lib/supabase"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useMyMergeContext } from "@/hooks/use-my-merge-context"
+import { applyShortLinkPreview } from "@/lib/shortlink-preview"
 
 interface SmsPhonePreviewProps {
   message: string
   buyerIds: string[]
   mediaUrls?: string[]
+  shortenActive?: boolean
+  shortDomain?: string
+  slugLength?: number
 }
 
 const FALLBACK_BUYERS: Buyer[] = [
@@ -19,7 +23,7 @@ const FALLBACK_BUYERS: Buyer[] = [
   { id: "sample2", fname: "Jane", lname: "Smith" } as Buyer,
 ]
 
-export default function SmsPhonePreview({ message, buyerIds, mediaUrls = [] }: SmsPhonePreviewProps) {
+export default function SmsPhonePreview({ message, buyerIds, mediaUrls = [], shortenActive = false, shortDomain = "", slugLength = 7 }: SmsPhonePreviewProps) {
   const [sampleBuyers, setSampleBuyers] = useState<Buyer[]>(FALLBACK_BUYERS)
   const [previewIndex, setPreviewIndex] = useState(0)
   const myMergeContext = useMyMergeContext()
@@ -45,6 +49,10 @@ export default function SmsPhonePreview({ message, buyerIds, mediaUrls = [] }: S
   const rendered = useMemo(
     () => renderTemplate(message || "", activeBuyer, myMergeContext),
     [message, activeBuyer, myMergeContext],
+  )
+  const displayed = useMemo(
+    () => (shortenActive && shortDomain ? applyShortLinkPreview(rendered, shortDomain, slugLength).effective : rendered),
+    [rendered, shortenActive, shortDomain, slugLength],
   )
 
   return (
@@ -91,7 +99,7 @@ export default function SmsPhonePreview({ message, buyerIds, mediaUrls = [] }: S
                   )}
                   <div className="flex justify-end">
                     <div className="max-w-[80%] rounded-2xl px-3 py-2 text-sm text-white whitespace-pre-wrap" style={{ wordBreak: "break-word", backgroundColor: "#0A84FF" }}>
-                      {rendered || "Your message preview appears here"}
+                      {displayed || "Your message preview appears here"}
                     </div>
                   </div>
                   <span className="self-end text-[10px] text-muted-foreground">Delivered</span>
