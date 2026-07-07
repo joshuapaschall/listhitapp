@@ -16,7 +16,11 @@ export default async function NewCampaignPage({ searchParams }: { searchParams: 
   const orgId = await resolveOrgIdForUser(user.id)
   if (!orgId) redirect("/login")
 
-  const channel = searchParams?.type === "sms" ? "sms" : "email"
+  // Channel can arrive via ?type= (from the channel picker) or ?prefill= (from the
+  // Buyers "Email these"/"Text these" buttons, which redirect through /campaigns).
+  // Honor either; default to email.
+  const channelParam = searchParams?.type ?? searchParams?.prefill
+  const channel = channelParam === "sms" ? "sms" : "email"
   const prefill = searchParams?.prefill
   let campaignId = ""
 
