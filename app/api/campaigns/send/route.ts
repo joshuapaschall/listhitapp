@@ -11,6 +11,7 @@ import { getCronRequestToken, isJwtLike } from "@/lib/cron-auth"
 import { linkifyHtml } from "@/lib/email/linkify-html"
 import { calculateSmsSegments } from "@/lib/sms-utils"
 import { applyShortLinkPreview } from "@/lib/shortlink-preview"
+import { fetchAllRows, fetchRowsByIdChunks } from "@/lib/supabase-fetch-all"
 import { formatPhoneE164, normalizeEmail } from "@/lib/dedup-utils"
 import * as smsCampaignSender from "@/services/sms-campaign-sender"
 import { requireOrgContext, resolveOrgIdForUser } from "@/lib/auth/org-context"
@@ -235,34 +236,45 @@ export async function POST(request: NextRequest) {
 
   const idSet = new Set<string>(buyerIds)
   if (groupIds.length) {
-    const { data: groupRows, error: groupErr } = await applyChannelEligibility(
-      supabase
-        .from("buyer_groups")
-        .select("buyer_id, buyers!inner(id)")
-        .in("group_id", groupIds),
-      campaign.channel,
-      "buyers.",
-    )
-    if (groupErr) {
+    let groupRows: Array<{ buyer_id: string }>
+    try {
+      groupRows = await fetchAllRows<{ buyer_id: string }>(
+        () =>
+          applyChannelEligibility(
+            supabase
+              .from("buyer_groups")
+              .select("buyer_id, buyers!inner(id)")
+              .in("group_id", groupIds),
+            campaign.channel,
+            "buyers.",
+          ),
+        "buyer_id",
+      )
+    } catch (groupErr) {
       console.error("Error fetching group buyers", groupErr)
       return new Response(JSON.stringify({ error: "Failed to fetch recipients" }), { status: 500 })
     }
-    for (const row of groupRows || []) {
+    for (const row of groupRows) {
       idSet.add(row.buyer_id)
     }
   }
 
   let finalIds = Array.from(idSet)
-  const allowedQuery = applyChannelEligibility(
-    supabase.from("buyers").select("id").in("id", finalIds),
-    campaign.channel,
-  )
-  const { data: allowed, error: allowErr } = await allowedQuery
-  if (allowErr) {
+  try {
+    // Chunk the .in() so we neither cap at 1000 nor overflow the URL with thousands of ids.
+    const allowed = await fetchRowsByIdChunks<{ id: string }>(
+      finalIds,
+      (chunk) =>
+        applyChannelEligibility(
+          supabase.from("buyers").select("id").in("id", chunk),
+          campaign.channel,
+        ),
+    )
+    finalIds = allowed.map((r) => r.id)
+  } catch (allowErr) {
     console.error("Error filtering recipients", allowErr)
     return new Response(JSON.stringify({ error: "Failed to fetch recipients" }), { status: 500 })
   }
-  finalIds = (allowed || []).map((r: any) => r.id)
 
   if (campaign.channel === "sms") {
     const { data: existingRows, error: existingErr } = await supabase
@@ -303,19 +315,23 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const recipientsQuery = applyChannelEligibility(
-    supabase
-      .from("campaign_recipients")
-      .select(
-        "id,buyer_id,status,buyers!inner(id,fname,lname,email,phone,phone2,phone3,can_receive_sms,can_receive_email,deleted_at)"
-      )
-      .eq("campaign_id", campaignId),
-    campaign.channel,
-    "buyers.",
-  )
-  const { data: recipients, error: recErr } = await recipientsQuery
-
-  if (recErr) {
+  let recipients: any[]
+  try {
+    recipients = await fetchAllRows<any>(
+      () =>
+        applyChannelEligibility(
+          supabase
+            .from("campaign_recipients")
+            .select(
+              "id,buyer_id,status,buyers!inner(id,fname,lname,email,phone,phone2,phone3,can_receive_sms,can_receive_email,deleted_at)"
+            )
+            .eq("campaign_id", campaignId),
+          campaign.channel,
+          "buyers.",
+        ),
+      "id",
+    )
+  } catch (recErr) {
     console.error("Error fetching recipients", recErr)
     return new Response(JSON.stringify({ error: "Failed to fetch recipients" }), { status: 500 })
   }
