@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { supabase } from "@/lib/supabase"
 import type { Buyer, Tag } from "@/lib/supabase"
 import { createLogger } from "@/lib/logger"
+import { fetchAllRows } from "@/lib/supabase-fetch-all"
 import { filterStateToDefinition } from "@/lib/segments/filter-mapping"
 import { applyAttributeConditions } from "@/lib/segments/apply-filters"
 import type { AttributeCondition } from "@/lib/segments/types"
@@ -218,30 +219,33 @@ const fetchBuyerIds = async (
   groupId?: string,
   channel?: "email" | "sms",
 ) => {
-  let query: any = supabase.from("buyers")
-
-  if (groupId) {
-    query = query
-      .select("id,buyer_groups!inner(group_id)")
-      .eq("buyer_groups.group_id", groupId)
-  } else {
-    query = query.select("id")
+  // Build a FRESH query each page — Postgrest builders can only be awaited once.
+  const buildQuery = () => {
+    let query: any = supabase.from("buyers")
+    if (groupId) {
+      query = query
+        .select("id,buyer_groups!inner(group_id)")
+        .eq("buyer_groups.group_id", groupId)
+    } else {
+      query = query.select("id")
+    }
+    query = query.is("deleted_at", null)
+    query = applyBuyerFilterPredicates(query, filters)
+    if (channel === "email") query = applyEmailEligibility(query)
+    else if (channel === "sms") query = applySmsEligibility(query)
+    return query
   }
 
-  query = query.is("deleted_at", null)
-  query = applyBuyerFilterPredicates(query, filters)
-
-  if (channel === "email") query = applyEmailEligibility(query)
-  else if (channel === "sms") query = applySmsEligibility(query)
-
-  const { data, error } = await query
-
-  if (error) {
+  let rows: Array<{ id: string }>
+  try {
+    // Paginate past Supabase's 1000-row cap so we resolve the FULL match set,
+    // not just the first page (mirrors lib/segments/resolver.ts collectColumn).
+    rows = await fetchAllRows<{ id: string }>(buildQuery, "id")
+  } catch (error) {
     log("error", "Failed to fetch buyer ids", { error })
     throw error
   }
-
-  return (data || []).map((row: any) => row.id) as string[]
+  return rows.map((row) => row.id) as string[]
 }
 
 function BuyersPageContent() {
