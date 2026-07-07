@@ -8,6 +8,8 @@ import { sendCampaignSMS } from "@/services/campaign-sender.server"
 import { getUserMergeContext } from "@/lib/user-context"
 import { requirePermission } from "@/lib/permissions/server"
 import { resolveOrgIdForUser } from "@/lib/auth/org-context"
+import { createShortLink } from "@/services/shortlink-service"
+import { SMS_URL_REGEX } from "@/lib/shortlink-preview"
 
 function parseMediaUrls(value: unknown): string[] {
   if (!value || typeof value !== "string") return []
@@ -49,8 +51,26 @@ export async function POST(request: Request) {
     { fname: "Test", lname: "User", phone: formattedPhone } as any,
     senderContext,
   )
+  let finalBody = rendered
+  const shortenOn = campaign.shorten_links !== false
+  if (shortenOn && process.env.SHORT_LINK_DEFAULT_DOMAIN) {
+    const urls = Array.from(new Set(finalBody.match(SMS_URL_REGEX) || []))
+    for (const url of urls) {
+      try {
+        const link = await createShortLink({
+          targetUrl: url,
+          campaignId,
+          createdBy: user.id,
+          tags: ["test", `campaign:${campaignId}`],
+        })
+        finalBody = finalBody.split(url).join(link.shortUrl)
+      } catch (err) {
+        console.error("[test-send-sms] short link creation failed for", url, err)
+      }
+    }
+  }
   const dryRun = forceDryRun ?? (process.env.LISTHIT_DRY_RUN === "1")
-  const results = await sendCampaignSMS({ buyerId: undefined, to: [formattedPhone], body: rendered, mediaUrls, dryRun, campaignId: undefined, isTest: true, orgId })
+  const results = await sendCampaignSMS({ buyerId: undefined, to: [formattedPhone], body: finalBody, mediaUrls, dryRun, campaignId: undefined, isTest: true, orgId })
   if (dryRun) {
     return NextResponse.json({
       ok: true,
@@ -59,6 +79,7 @@ export async function POST(request: Request) {
       fromNumber: results[0]?.from ?? null,
       message: "Dry-run: no Telnyx call made",
       rendered,
+      sent: finalBody,
       results,
     })
   }

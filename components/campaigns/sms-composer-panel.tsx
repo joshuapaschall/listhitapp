@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import EmojiPicker from "emoji-picker-react"
-import { ChevronDown, Clipboard, Mail, Phone, Smile, User, UserRound } from "lucide-react"
+import { ChevronDown, Clipboard, Link as LinkIcon, Mail, Phone, Smile, User, UserRound } from "lucide-react"
 import AssistantButton from "@/components/chat-assistant-button"
 import SmsPhonePreview from "@/components/campaigns/sms-phone-preview"
 import TemplatePicker from "@/components/templates/template-picker"
@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { estimateCampaignCost, formatUsd } from "@/lib/sms-pricing"
 import { estimateDeliveryTime, fetchMessagingThroughput } from "@/lib/sms-throughput"
 import { calculateSmsSegments } from "@/lib/sms-utils"
+import { applyShortLinkPreview, sampleSlug, shortLinkLength, type ShortLinkConfig } from "@/lib/shortlink-preview"
 import SmsCostGuard from "@/components/campaigns/sms-cost-guard"
 
 interface SmsComposerPanelProps {
@@ -24,15 +25,24 @@ interface SmsComposerPanelProps {
   buyerIds: string[]
   recipientCount: number
   mediaUrls?: string[]
+  shortenLinks: boolean
+  onShortenLinksChange: (value: boolean) => void
+  shortConfig: ShortLinkConfig
 }
 
 const STOP_SUFFIX_RE = /\s*Reply STOP to opt out\s*$/i
 
-export default function SmsComposerPanel({ message, onMessageChange, buyerIds, recipientCount, mediaUrls = [] }: SmsComposerPanelProps) {
+export default function SmsComposerPanel({ message, onMessageChange, buyerIds, recipientCount, mediaUrls = [], shortenLinks, onShortenLinksChange, shortConfig }: SmsComposerPanelProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const [emojiOpen, setEmojiOpen] = useState(false)
   const [throughputConfig, setThroughputConfig] = useState({ poolSize: 15, perNumberMpm: 2 })
-  const segmentInfo = useMemo(() => calculateSmsSegments(message || ""), [message])
+  const shortenActive = shortenLinks && shortConfig.configured
+  const linkPreview = useMemo(
+    () => applyShortLinkPreview(message || "", shortConfig.domain, shortConfig.slugLength),
+    [message, shortConfig.domain, shortConfig.slugLength],
+  )
+  const effectiveMessage = shortenActive ? linkPreview.effective : message || ""
+  const segmentInfo = useMemo(() => calculateSmsSegments(effectiveMessage), [effectiveMessage])
   const charCount = segmentInfo.charCount
   const capacity = segmentInfo.segments <= 1 ? segmentInfo.charsPerSegment : segmentInfo.segments * segmentInfo.charsPerSegment
   const percentFull = Math.min(100, Math.max(0, (charCount / Math.max(1, capacity)) * 100))
@@ -140,6 +150,17 @@ export default function SmsComposerPanel({ message, onMessageChange, buyerIds, r
             <span className="text-muted-foreground">{formatUsd(cost.perRecipient)} / recipient</span>
           </div>
           <Progress value={percentFull} className={segmentInfo.segments >= 10 ? "[&>div]:bg-red-500" : segmentInfo.segments >= 4 ? "[&>div]:bg-amber-500" : ""} />
+          {charCount > 0 && (
+            segmentInfo.remaining <= 0 ? (
+              <p className="text-xs font-medium text-red-600">
+                At the segment {segmentInfo.segments} limit — one more character adds a segment.
+              </p>
+            ) : (
+              <p className={`text-xs font-medium ${segmentInfo.remaining <= 15 ? "text-amber-600" : "text-muted-foreground"}`}>
+                {segmentInfo.remaining} characters before segment {segmentInfo.segments + 1}
+              </p>
+            )
+          )}
           {recipientCount > 0 && (
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span>Est. delivery: <span className="font-medium text-foreground">{throughput.label}</span> · {throughput.poolSize} numbers × {throughput.perNumberMpm} MPM</span>
@@ -148,13 +169,43 @@ export default function SmsComposerPanel({ message, onMessageChange, buyerIds, r
           )}
           {segmentInfo.segments > 10 && <p className="text-sm text-red-600">Message exceeds the 10-segment Telnyx limit. Shorten it or split into multiple campaigns.</p>}
         </div>
+        {shortenActive && linkPreview.urlCount > 0 && (
+          <div className="rounded-md border p-3 text-xs">
+            <div className="mb-1 flex items-center gap-1.5 text-muted-foreground">
+              <LinkIcon className="h-3.5 w-3.5" /> Counted as (what recipients get)
+            </div>
+            <div className="break-all font-mono text-foreground">
+              <span className="text-muted-foreground">https://</span>
+              {shortConfig.domain}
+              <span className="text-muted-foreground">/</span>
+              <span className="rounded bg-brand/10 px-1 py-0.5 text-brand">{sampleSlug(shortConfig.slugLength)}</span>
+            </div>
+            <p className="mt-1 text-muted-foreground">
+              {shortLinkLength(shortConfig.domain, shortConfig.slugLength)} chars · the {shortConfig.slugLength}-char code is unique per recipient and always counted
+            </p>
+          </div>
+        )}
       </div>
       <SmsCostGuard message={message} onApply={onMessageChange} />
+      <div className="flex items-center gap-3 rounded-md border p-3">
+        <Switch checked={shortenLinks} onCheckedChange={onShortenLinksChange} disabled={!shortConfig.configured} />
+        <div>
+          <p className="text-sm">
+            Shorten links{" "}
+            {shortConfig.configured
+              ? <span className="text-muted-foreground">· click tracking on</span>
+              : <span className="text-muted-foreground">· no short domain configured</span>}
+          </p>
+          {shortConfig.configured
+            ? <p className="text-xs text-muted-foreground">Using <span className="font-mono">{shortConfig.domain}</span></p>
+            : <p className="text-xs text-muted-foreground">Set a short-link domain to enable link shortening and click tracking.</p>}
+        </div>
+      </div>
       <div className="flex items-center gap-3 rounded-md border p-3">
         <Switch checked={hasStopFooter} onCheckedChange={toggleStopFooter} />
         <span className="text-sm">Append &apos;Reply STOP to opt out&apos; (10DLC compliance)</span>
       </div>
     </div>
-    <div className="md:col-span-5"><SmsPhonePreview message={message} buyerIds={buyerIds} mediaUrls={mediaUrls} /></div>
+    <div className="md:col-span-5"><SmsPhonePreview message={message} buyerIds={buyerIds} mediaUrls={mediaUrls} shortenActive={shortenActive} shortDomain={shortConfig.domain} slugLength={shortConfig.slugLength} /></div>
   </div>
 }

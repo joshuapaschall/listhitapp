@@ -9,7 +9,7 @@ import { supabaseAdmin as supabase } from "@/lib/supabase"
 
 // Alphabet of 56 chars; omits 0/O/1/l/I to avoid confusion in printed/spoken URLs.
 const SLUG_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
-const SLUG_LENGTH = 7
+export const SLUG_LENGTH = 7
 
 const generateRawSlug = customAlphabet(SLUG_ALPHABET, SLUG_LENGTH)
 

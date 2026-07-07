@@ -10,6 +10,7 @@ import { assertServer } from "@/utils/assert-server"
 import { getCronRequestToken, isJwtLike } from "@/lib/cron-auth"
 import { linkifyHtml } from "@/lib/email/linkify-html"
 import { calculateSmsSegments } from "@/lib/sms-utils"
+import { applyShortLinkPreview } from "@/lib/shortlink-preview"
 import { formatPhoneE164, normalizeEmail } from "@/lib/dedup-utils"
 import * as smsCampaignSender from "@/services/sms-campaign-sender"
 import { requireOrgContext, resolveOrgIdForUser } from "@/lib/auth/org-context"
@@ -146,7 +147,13 @@ export async function POST(request: NextRequest) {
     }
   }
   if (campaign.channel === "sms") {
-    const seg = calculateSmsSegments(campaign.message || "")
+    const shortenOn = campaign.shorten_links !== false
+    const guardDomain = process.env.SHORT_LINK_DEFAULT_DOMAIN || ""
+    const guardBody =
+      shortenOn && guardDomain
+        ? applyShortLinkPreview(campaign.message || "", guardDomain).effective
+        : campaign.message || ""
+    const seg = calculateSmsSegments(guardBody)
     if (seg.segments > 10) {
       return new Response(
         JSON.stringify({ error: `Message is ${seg.segments} segments. Telnyx hard-caps at 10. Shorten and re-send.` }),
@@ -329,7 +336,7 @@ export async function POST(request: NextRequest) {
   type RecipientLinkEntry = { originalUrl: string; shortUrl: string; slug: string }
   const shortLinksByRecipient = new Map<string, RecipientLinkEntry[]>()
 
-  if (campaign.channel === "sms" && !dryRun) {
+  if (campaign.channel === "sms" && !dryRun && campaign.shorten_links !== false) {
     const urlRegex = /(https?:\/\/[^\s"'>]+)/g
     const messageText: string = campaign.message || ""
     const messageUrls = Array.from(new Set(messageText.match(urlRegex) || []))

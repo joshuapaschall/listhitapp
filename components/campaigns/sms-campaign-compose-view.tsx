@@ -16,6 +16,7 @@ import SmsSendTimeCard from "@/components/campaigns/sms-send-time-card"
 import CampaignPropertySelector from "@/components/campaigns/campaign-property-selector"
 import { readAudienceSnapshot, clearAudienceSnapshot, type CampaignAudienceSnapshot } from "@/lib/campaign-audience"
 import { calculateSmsSegments } from "@/lib/sms-utils"
+import { applyShortLinkPreview, fetchShortLinkConfig, type ShortLinkConfig } from "@/lib/shortlink-preview"
 import { formatPhoneE164 } from "@/lib/dedup-utils"
 import { supabaseBrowser } from "@/lib/supabase-browser"
 import { Button } from "@/components/ui/button"
@@ -63,6 +64,7 @@ export default function SmsCampaignComposeView({ initialCampaign }: { initialCam
   const [sendingTest, setSendingTest] = useState(false)
   const [resolvedGroupBuyerIds, setResolvedGroupBuyerIds] = useState<string[]>([])
   const [sendConfirmOpen, setSendConfirmOpen] = useState(false)
+  const [shortConfig, setShortConfig] = useState<ShortLinkConfig>({ domain: "", slugLength: 7, configured: false })
   const parsedTestPhone = useMemo(() => {
     if (!testPhone.trim()) return null
     return formatPhoneE164(testPhone)
@@ -89,8 +91,20 @@ export default function SmsCampaignComposeView({ initialCampaign }: { initialCam
   }, [campaign.buyer_ids, resolvedGroupBuyerIds])
 
   useEffect(() => setTestPhone(localStorage.getItem("listhit:smsTestNumber") ?? ""), [])
+
+  useEffect(() => {
+    let mounted = true
+    fetchShortLinkConfig().then((c) => { if (mounted) setShortConfig(c) }).catch(() => {})
+    return () => { mounted = false }
+  }, [])
+
   const mediaUrls = parseMediaUrls(campaign.media_url)
-  const segmentInfo = calculateSmsSegments(campaign.message ?? "")
+  const shortenLinks = campaign.shorten_links ?? true
+  const shortenActive = shortenLinks && shortConfig.configured
+  const effectiveMessage = shortenActive
+    ? applyShortLinkPreview(campaign.message ?? "", shortConfig.domain, shortConfig.slugLength).effective
+    : (campaign.message ?? "")
+  const segmentInfo = calculateSmsSegments(effectiveMessage)
   // Prefer the resolved audience count; fall back to a prefill snapshot, then to
   // legacy buyer_ids/group_ids for campaigns created before the picker.
   const recipientCount =
@@ -183,7 +197,7 @@ export default function SmsCampaignComposeView({ initialCampaign }: { initialCam
         <CampaignAudienceStep channel="sms" campaign={campaign} update={update} audienceSelection={audienceSelection} onAudienceChange={handleAudienceChange} recipientCount={recipientCount} />
       )}</CardRow>
       <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="from" title="From" valid={fromValid} ctaText="View sender" summary="Per-recipient routing with fallback"><SmsFromCard buyerIds={allRecipientIds} /></CardRow>
-      <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="content" title="Content" valid={contentValid} ctaText="Compose SMS" summary={campaign.message?.trim() ? `Message ready — ${segmentInfo.segments} segments` : "Write your message"}><SmsComposerPanel message={campaign.message || ""} onMessageChange={(value) => update({ message: value })} buyerIds={allRecipientIds} recipientCount={recipientCount} mediaUrls={mediaUrls} /></CardRow>
+      <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="content" title="Content" valid={contentValid} ctaText="Compose SMS" summary={campaign.message?.trim() ? `Message ready — ${segmentInfo.segments} segments` : "Write your message"}><SmsComposerPanel message={campaign.message || ""} onMessageChange={(value) => update({ message: value })} buyerIds={allRecipientIds} recipientCount={recipientCount} mediaUrls={mediaUrls} shortenLinks={shortenLinks} onShortenLinksChange={(value) => update({ shorten_links: value })} shortConfig={shortConfig} /></CardRow>
       <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="media" title="Media" valid={true} ctaText="Add media" summary={mediaUrls.length ? `${mediaUrls.length} attachment(s)` : "Optional MMS attachments"}><SmsMediaCard mediaUrls={mediaUrls} onChange={(urls) => update({ media_url: JSON.stringify(urls) })} subject={campaign.subject} onSubjectChange={(value) => update({ subject: value })} /></CardRow>
       <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="property" title="Property" valid={true} ctaText="Attribute property" summary={campaign.property_id ? "Campaign cost attributed to a property" : "Optional property attribution"}><CampaignPropertySelector value={campaign.property_id ?? null} onChange={(property_id) => update({ property_id })} /></CardRow>
       <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="sendTime" title="Send time" valid={sendTimeValid} ctaText="Set send time" summary={campaign.scheduled_at ? `Scheduled for ${new Date(campaign.scheduled_at).toLocaleString()}` : "Send immediately when you click Send"}><SmsSendTimeCard scheduledAt={campaign.scheduled_at} onScheduledAtChange={(value) => update({ scheduled_at: value })} weekdayOnly={campaign.weekday_only} onWeekdayOnlyChange={(value) => update({ weekday_only: value })} runFrom={campaign.run_from} onRunFromChange={(value) => update({ run_from: value })} runUntil={campaign.run_until} onRunUntilChange={(value) => update({ run_until: value })} /></CardRow>
