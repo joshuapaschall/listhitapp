@@ -42,7 +42,22 @@ const h = vi.hoisted(() => {
         else rows = rows.filter((r) => nested(r, col) !== val)
         return q
       },
-      order: () => q,
+      // Real PostgREST orders by the column; deterministic paging depends on it.
+      order: (col: string, opts?: { ascending?: boolean }) => {
+        const asc = opts?.ascending !== false
+        rows = [...rows].sort((a, b) => {
+          const x = nested(a, col)
+          const y = nested(b, col)
+          if (x === y) return 0
+          return (x > y ? 1 : -1) * (asc ? 1 : -1)
+        })
+        return q
+      },
+      // `to` is INCLUSIVE in PostgREST.
+      range: (from: number, to: number) => {
+        rows = rows.slice(from, to + 1)
+        return q
+      },
       limit: () => q,
       maybeSingle: async () => ({ data: rows[0] || null, error: null }),
       single: async () => ({ data: rows[0] || null, error: null }),

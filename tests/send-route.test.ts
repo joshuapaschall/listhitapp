@@ -44,7 +44,22 @@ const h = vi.hoisted(() => {
         else rows = rows.filter((r) => nested(r, col) !== val)
         return q
       },
-      order: () => q,
+      // Real PostgREST orders by the column; deterministic paging depends on it.
+      order: (col: string, opts?: { ascending?: boolean }) => {
+        const asc = opts?.ascending !== false
+        rows = [...rows].sort((a, b) => {
+          const x = nested(a, col)
+          const y = nested(b, col)
+          if (x === y) return 0
+          return (x > y ? 1 : -1) * (asc ? 1 : -1)
+        })
+        return q
+      },
+      // `to` is INCLUSIVE in PostgREST.
+      range: (from: number, to: number) => {
+        rows = rows.slice(from, to + 1)
+        return q
+      },
       limit: () => q,
       maybeSingle: async () => ({ data: rows[0] || null, error: null }),
       single: async () => ({ data: rows[0] || null, error: null }),
@@ -217,6 +232,28 @@ describe("send route templates", () => {
         ]),
       }),
     )
+  })
+
+  test("reads back more than one page of recipients (pagination past the 1000-row cap)", async () => {
+    // 1,500 SMS-eligible buyers — forces the campaign_recipients read-back to page
+    // twice (1000 + 500). Guards the #779 contract: fetchAllRows must chain
+    // .order().range() and loop, not truncate at the first 1000-row page.
+    const ids = Array.from({ length: 1500 }, (_, i) => `bp${String(i).padStart(4, "0")}`)
+    h.state.campaigns.push({ id: "cpage", channel: "sms", message: "Hi", buyer_ids: ids })
+    ids.forEach((id, i) =>
+      h.state.buyers.push({
+        id,
+        phone: `+1512555${String(1000 + i).padStart(4, "0")}`,
+        can_receive_sms: true,
+        sms_suppressed: false,
+        deleted_at: null,
+        email_suppressed: false,
+      }),
+    )
+    const res = await POST(req("cpage"))
+    expect(res.status).toBe(200)
+    const arg = (smsSender.queueSmsCampaign as any).mock.calls[0][0]
+    expect(arg.recipients).toHaveLength(1500)
   })
 
   test("queues email with the raw subject/html (rendering deferred)", async () => {
