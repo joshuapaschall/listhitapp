@@ -36,6 +36,12 @@ export interface CallContextValue {
   startRecording: () => Promise<void>;
   stopRecording: () => Promise<void>;
   transfer: (number: string) => Promise<void>;
+  voiceProvider: VoiceProvider | null;
+  warmTransferState: "idle" | "dialing" | "announcing";
+  warmColleagueSid: string | null;
+  startWarmTransfer: (number: string) => Promise<void>;
+  completeWarmTransfer: () => Promise<void>;
+  cancelWarmTransfer: () => Promise<void>;
   sendDTMF: (digits: string) => void;
   joinConference: (conferenceId?: string) => Promise<void>;
   leaveConference: () => Promise<void>;
@@ -68,6 +74,11 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   // neither engine spins up until it resolves, so nothing dials the wrong rail.
   const [voiceProvider, setVoiceProvider] = useState<VoiceProvider | null>(null);
   const [twilioReady, setTwilioReady] = useState(false);
+  // Warm-transfer stepper state (Twilio only). "dialing" = colleague is ringing,
+  // caller on hold; "announcing" = colleague answered, agent talking privately.
+  const [warmTransferState, setWarmTransferState] = useState<"idle" | "dialing" | "announcing">("idle");
+  // The colleague's Call SID (from the start route). Client-held, server-validated.
+  const [warmColleagueSid, setWarmColleagueSid] = useState<string | null>(null);
   const twilioEngineRef = useRef<TwilioVoiceEngine | null>(null);
   const { can, loading: permissionsLoading } = usePermissions();
   const canMakeReceiveCalls = can("calls.make_receive");
@@ -88,6 +99,9 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
   const customerLegIdRef = useRef<string | null>(null);
   useEffect(() => { activeCallRef.current = activeCall; }, [activeCall]);
+  // When the active call clears (hangup on either rail, engine unregister), any
+  // in-flight warm transfer is moot — reset the stepper so it can't linger.
+  useEffect(() => { if (!activeCall) { setWarmTransferState("idle"); setWarmColleagueSid(null); } }, [activeCall]);
   useEffect(() => { incomingCallRef.current = incomingCall; }, [incomingCall]);
   useEffect(() => { customerLegIdRef.current = customerLegId; }, [customerLegId]);
 
@@ -607,6 +621,70 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     }
   }, [voiceProvider]);
 
+  // ---- Warm transfer (Twilio only). Telnyx keeps cold `transfer` above. --------
+  const startWarmTransfer = useCallback(async (number: string) => {
+    if (voiceProvider !== "twilio") { console.warn("[telnyx] warm transfer not supported"); return; }
+    setWarmTransferState("dialing");
+    try {
+      const res = await fetch("/api/twilio/warm-transfer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "start", to: number }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d?.colleagueSid) throw new Error(d?.error || "Could not reach that number");
+      // Server held the caller and dialed the colleague in.
+      setWarmColleagueSid(d.colleagueSid as string);
+      setWarmTransferState("announcing");
+      setIsOnHold(true);
+    } catch (err) {
+      setWarmTransferState("idle");
+      setWarmColleagueSid(null);
+      setIsOnHold(false);
+      throw err;
+    }
+  }, [voiceProvider]);
+
+  const completeWarmTransfer = useCallback(async () => {
+    if (voiceProvider !== "twilio") { console.warn("[telnyx] warm transfer not supported"); return; }
+    const res = await fetch("/api/twilio/warm-transfer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "complete", colleagueSid: warmColleagueSid }),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      throw new Error(d?.error || "Warm transfer failed");
+    }
+    // The agent's leg is removed server-side; the browser call ends naturally.
+    // Mirror disconnectCall's Twilio local cleanup WITHOUT a second SDK hangup.
+    setWarmTransferState("idle");
+    setWarmColleagueSid(null);
+    setActiveCall(null);
+    setIncomingCall(null);
+    setIsMuted(false);
+    setIsOnHold(false);
+    setStatus("idle");
+    setCurrentContact(null);
+  }, [voiceProvider, warmColleagueSid]);
+
+  const cancelWarmTransfer = useCallback(async () => {
+    if (voiceProvider !== "twilio") { console.warn("[telnyx] warm transfer not supported"); return; }
+    const res = await fetch("/api/twilio/warm-transfer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "cancel", colleagueSid: warmColleagueSid }),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      throw new Error(d?.error || "Warm transfer failed");
+    }
+    // Colleague dropped, caller un-held server-side; agent is back with the caller.
+    setWarmTransferState("idle");
+    setWarmColleagueSid(null);
+    setIsOnHold(false);
+  }, [voiceProvider, warmColleagueSid]);
+
   const sendDTMF = useCallback((digits: string) => {
     if (voiceProvider === "twilio") { twilioEngineRef.current?.sendDigits(digits); return; }
     (activeCallRef.current as any)?.dtmf?.(digits);
@@ -669,7 +747,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     ? (twilioReady ? (twilioEngineRef.current as any) : null)
     : device;
 
-  const value: CallContextValue = { device: exposedDevice, status, activeCall, incomingCall, isMuted, isOnHold, customerLegId, currentContact, setCurrentContact, connectCall, makeCall, answerCall, disconnectCall, toggleMute, unmute, toggleHold, unhold, startRecording, stopRecording, transfer, sendDTMF, joinConference, leaveConference, addToConference, dialerOpen, setDialerOpen, openDialer };
+  const value: CallContextValue = { device: exposedDevice, status, activeCall, incomingCall, isMuted, isOnHold, customerLegId, currentContact, setCurrentContact, connectCall, makeCall, answerCall, disconnectCall, toggleMute, unmute, toggleHold, unhold, startRecording, stopRecording, transfer, voiceProvider, warmTransferState, warmColleagueSid, startWarmTransfer, completeWarmTransfer, cancelWarmTransfer, sendDTMF, joinConference, leaveConference, addToConference, dialerOpen, setDialerOpen, openDialer };
   return <CallContext.Provider value={value}>{children}<CallWidget /><IncomingRingtone /></CallContext.Provider>;
 }
 
