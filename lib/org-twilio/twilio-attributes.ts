@@ -151,9 +151,12 @@ export function buildCampaignAttributes(inputs: CampaignInputs): Record<string, 
     ? baseDescription
     : `${baseDescription} Recipients have consented to receive these messages.`.slice(0, 4096)
 
+  const optInSource = inputs.optInUrl ? `a lead capture form at ${inputs.optInUrl}` : "a lead capture form on our website"
   const messageFlow =
-    `Recipients opt in${inputs.optInUrl ? ` at ${inputs.optInUrl}` : ""} by submitting their phone number ` +
-    `through a web form or by providing it directly to ${inputs.legalBusinessName}, consenting to receive SMS.`
+    `Recipients opt in by submitting their phone number through ${optInSource}. ` +
+    `The form includes a required checkbox stating they agree to receive automated marketing text messages from ` +
+    `${inputs.legalBusinessName}. The opt-in language discloses STOP and HELP instructions and links to the Terms ` +
+    `and Privacy Policy. Consent is captured and stored before any message is sent.`
 
   return {
     brandRegistrationSid: inputs.brandRegistrationSid,

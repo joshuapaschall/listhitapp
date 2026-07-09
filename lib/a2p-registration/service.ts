@@ -28,14 +28,29 @@ function composeAddress(org: any): string {
     .join(", ")
 }
 
+// Mirrors the structure of a TCR-approved MARKETING registration: what is sent,
+// who receives it, and that consent is explicit + web-form captured. Tokenized —
+// no tenant's copy is ever hardcoded here.
 function buildCampaignDescription(brandToken: string, website: string): string {
-  return `This campaign sends text messages to people who joined the ${brandToken} property buyer list at ${website} and opted in — new off-market deals, investment opportunities, and list updates, plus replies to properties they ask about.`
+  const via = website ? ` via ${website}` : " via our website"
+  return (
+    `${brandToken} sends promotional real estate deal alerts to buyers who opt in${via}. ` +
+    `Messages include property availability, pricing, and closing details. ` +
+    `Recipients provide explicit SMS consent through a web form before any messages are sent.`
+  )
 }
 
+// Two samples (Twilio requires 2–5). Each names the brand, states the offer, has a
+// reply keyword, and carries opt-out language; one carries HELP. Bracketed tokens
+// are placeholders the tenant edits.
 function defaultSamples(brandToken: string): { sample1: string; sample2: string } {
   return {
-    sample1: `${brandToken}: New off-market deal in [city] — [beds]bd/[baths]ba, asking [price]. Reply YES for details. Msg & data rates may apply. Reply STOP to opt out.`,
-    sample2: `${brandToken}: Here's the info on [address] you asked about: [link]. Reply with any questions. Reply STOP to opt out.`,
+    sample1:
+      `${brandToken}: New off-market deal in [city] — [beds]bd/[baths]ba, cash price [price]. ` +
+      `Reply YES for full details. Msg & data rates may apply. Reply STOP to unsubscribe.`,
+    sample2:
+      `${brandToken}: Here are the details on [address] you asked about: [link]. ` +
+      `Need help? Reply HELP. To unsubscribe, reply STOP.`,
   }
 }
 

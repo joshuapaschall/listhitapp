@@ -36,6 +36,21 @@ function trimBase(): string {
   return base ? base.replace(/\/$/, "") : ""
 }
 
+// Normalize a tenant's stored website into a scheme + host root (e.g.
+// "https://example.com"), tolerating a missing scheme. Returns null when blank or
+// unparseable so the A2P campaign omits policy URLs rather than guessing.
+function normalizeSiteRoot(raw: string | null | undefined): string | null {
+  const v = (raw ?? "").trim()
+  if (!v) return null
+  const withScheme = /^https?:\/\//i.test(v) ? v : `https://${v}`
+  try {
+    const u = new URL(withScheme)
+    return `${u.protocol}//${u.host}`
+  } catch {
+    return null
+  }
+}
+
 // The T5 inbound-SMS route path — set on the Messaging Service now so the rail is
 // ready to receive once wired. Undefined when no base URL is configured.
 function resolveInboundRequestUrl(): string | undefined {
@@ -153,7 +168,10 @@ export async function provisionMessaging(orgId: string): Promise<MessagingResult
         })
       }
 
-      const base = trimBase()
+      // A tenant's A2P campaign must reference THAT TENANT's policies — never
+      // ListHit's. Derive from the org's own website; omit when unknown (blank is
+      // acceptable to TCR, a wrong brand's URL is not).
+      const siteRoot = normalizeSiteRoot(org?.website_url)
       const inputs: CampaignInputs = {
         brandRegistrationSid: row.brand_sid,
         useCase: str(reg?.use_case) || null,
@@ -162,8 +180,8 @@ export async function provisionMessaging(orgId: string): Promise<MessagingResult
         sample2: str(reg?.sample_message_2) || null,
         optInUrl: str(reg?.opt_in_url) || null,
         legalBusinessName: legalName,
-        privacyPolicyUrl: base ? `${base}/privacy` : null,
-        termsUrl: base ? `${base}/terms` : null,
+        privacyPolicyUrl: siteRoot ? `${siteRoot}/privacy` : null,
+        termsUrl: siteRoot ? `${siteRoot}/terms` : null,
       }
 
       const campaign = await client.messaging.v1
