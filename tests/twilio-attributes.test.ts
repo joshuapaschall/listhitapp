@@ -352,6 +352,31 @@ describe("buildCampaignAttributes", () => {
       buildCampaignAttributes({ ...campaignBase, sample1: null, sample2: "  " }),
     ).toThrow(/sample message/i)
   })
+
+  test("messageFlow describes checkbox consent, STOP/HELP, and the tenant's optInUrl", () => {
+    const flow = buildCampaignAttributes(campaignBase).messageFlow as string
+    expect(flow).toContain("checkbox")
+    expect(flow).toContain("STOP")
+    expect(flow).toContain("HELP")
+    expect(flow).toContain("https://acme.com")
+    expect(flow.length).toBeGreaterThanOrEqual(40)
+  })
+
+  test("messageFlow falls back cleanly when optInUrl is null", () => {
+    const flow = buildCampaignAttributes({ ...campaignBase, optInUrl: null }).messageFlow as string
+    expect(flow).not.toContain("null")
+    expect(flow).not.toContain("undefined")
+    expect(flow).toContain("checkbox")
+    expect(flow).toContain("STOP")
+    expect(flow).toContain("HELP")
+    expect(flow.length).toBeGreaterThanOrEqual(40)
+  })
+
+  test("omits privacyPolicyUrl/termsAndConditionsUrl when the inputs are null", () => {
+    const attrs = buildCampaignAttributes({ ...campaignBase, privacyPolicyUrl: null, termsUrl: null })
+    expect("privacyPolicyUrl" in attrs).toBe(false)
+    expect("termsAndConditionsUrl" in attrs).toBe(false)
+  })
 })
 
 describe("summarizeEvaluationFailures", () => {
