@@ -17,10 +17,11 @@ const initialsOf = (s: string) =>
   s.split(" ").map((n) => n[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "?";
 
 export function CallWidget() {
-  const { status, activeCall, incomingCall, currentContact, answerCall, disconnectCall, toggleMute, isMuted, toggleHold, isOnHold, sendDTMF, transfer, dialerOpen, setDialerOpen } = useCall();
+  const { status, activeCall, incomingCall, currentContact, answerCall, disconnectCall, toggleMute, isMuted, toggleHold, isOnHold, sendDTMF, transfer, voiceProvider, warmTransferState, startWarmTransfer, completeWarmTransfer, cancelWarmTransfer, dialerOpen, setDialerOpen } = useCall();
   const [keypadOpen, setKeypadOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
   const [destination, setDestination] = useState("");
+  const [warmError, setWarmError] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const drag = useRef<{dx:number;dy:number}|null>(null);
@@ -138,7 +139,39 @@ export function CallWidget() {
         </div>
 
         {keypadOpen ? <div className="mt-4 grid grid-cols-3 gap-2">{["1","2","3","4","5","6","7","8","9","*","0","#"].map((d)=><Button key={d} type="button" variant="outline" className="h-10 font-mono" onClick={()=>tone(d)}>{d}</Button>)}</div> : null}
-        {transferOpen ? <div className="mt-4 flex gap-2"><Input value={destination} onChange={(e)=>setDestination(e.target.value)} placeholder="Transfer to number" /><Button onClick={() => transfer(destination)}>Transfer</Button></div> : null}
+        {transferOpen ? (
+          voiceProvider === "twilio" ? (
+            warmTransferState === "announcing" ? (
+              <div className="mt-4 flex flex-col gap-2">
+                <p className="text-sm text-muted-foreground">Connected to {destination}. Caller is on hold.</p>
+                <div className="flex gap-2">
+                  <Button className="flex-1" onClick={async () => { await completeWarmTransfer(); setTransferOpen(false); }}>
+                    Complete transfer
+                  </Button>
+                  <Button variant="outline" className="flex-1" onClick={async () => { await cancelWarmTransfer(); }}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-4 flex flex-col gap-2">
+                <div className="flex gap-2">
+                  <Input value={destination} onChange={(e)=>{ setDestination(e.target.value); setWarmError(null); }} placeholder="Transfer to number" />
+                  <Button disabled={warmTransferState === "dialing" || !destination} onClick={async () => { setWarmError(null); try { await startWarmTransfer(destination); } catch (err) { setWarmError(err instanceof Error ? err.message : "Could not reach that number"); } }}>
+                    {warmTransferState === "dialing" ? "Dialing…" : "Call"}
+                  </Button>
+                </div>
+                {warmTransferState === "dialing" ? <p className="text-sm text-muted-foreground">Caller is on hold. Ringing {destination}…</p> : null}
+                {warmError ? <p className="text-sm text-destructive">{warmError}</p> : null}
+              </div>
+            )
+          ) : (
+            <div className="mt-4 flex gap-2">
+              <Input value={destination} onChange={(e)=>setDestination(e.target.value)} placeholder="Transfer to number" />
+              <Button onClick={() => transfer(destination)}>Transfer</Button>
+            </div>
+          )
+        ) : null}
 
         <Button type="button" className="mt-4 w-full text-white hover:opacity-90" style={{ backgroundColor: HANGUP_RED }} onClick={disconnectCall}>
           <PhoneOff className="mr-2 h-4 w-4" />End call
