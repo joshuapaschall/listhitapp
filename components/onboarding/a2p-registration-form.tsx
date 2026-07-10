@@ -31,6 +31,9 @@ export function A2pRegistrationForm() {
   const [state, setState] = useState<A2pAssembledState | null>(null)
   const [sample1, setSample1] = useState("")
   const [sample2, setSample2] = useState("")
+  const [sample3, setSample3] = useState("")
+  const [sample4, setSample4] = useState("")
+  const [sample5, setSample5] = useState("")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
@@ -47,6 +50,9 @@ export function A2pRegistrationForm() {
         setState(data)
         setSample1(data.samples.sample1)
         setSample2(data.samples.sample2)
+        setSample3(data.samples.sample3)
+        setSample4(data.samples.sample4)
+        setSample5(data.samples.sample5)
       } catch {
         if (active) setError("Couldn't load your registration. Try refreshing.")
       } finally {
@@ -68,7 +74,13 @@ export function A2pRegistrationForm() {
       const res = await fetch("/api/a2p-registration", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sample_message_1: sample1.trim(), sample_message_2: sample2.trim() }),
+        body: JSON.stringify({
+          sample_message_1: sample1.trim(),
+          sample_message_2: sample2.trim(),
+          sample_message_3: sample3.trim(),
+          sample_message_4: sample4.trim(),
+          sample_message_5: sample5.trim(),
+        }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data?.error || "Failed to save")
@@ -210,6 +222,19 @@ export function A2pRegistrationForm() {
           <Label htmlFor="sample2">Sample 2</Label>
           <Textarea id="sample2" rows={3} value={sample2} onChange={(e) => setSample2(e.target.value)} />
         </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="sample3">Sample 3 (optional)</Label>
+          <Textarea id="sample3" rows={3} value={sample3} onChange={(e) => setSample3(e.target.value)} />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="sample4">Sample 4 (optional)</Label>
+          <Textarea id="sample4" rows={3} value={sample4} onChange={(e) => setSample4(e.target.value)} />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="sample5">Sample 5 (optional)</Label>
+          <Textarea id="sample5" rows={3} value={sample5} onChange={(e) => setSample5(e.target.value)} />
+        </div>
+        <p className="text-sm text-muted-foreground">Carriers review these. Two are required; up to five improves approval odds.</p>
       </Card>
 
       {done ? (

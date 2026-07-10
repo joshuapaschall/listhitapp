@@ -40,16 +40,27 @@ function buildCampaignDescription(brandToken: string, website: string): string {
   )
 }
 
-// Two samples (Twilio requires 2–5). Each names the brand, states the offer, has a
-// reply keyword, and carries opt-out language; one carries HELP. Bracketed tokens
-// are placeholders the tenant edits.
-function defaultSamples(brandToken: string): { sample1: string; sample2: string } {
+// Five samples (Twilio accepts 2–5). Each names the brand, states the offer, has a
+// reply keyword, and carries opt-out language; several carry HELP. Bracketed tokens
+// are placeholders the tenant edits. Fully tokenized — no tenant copy is hardcoded.
+function defaultSamples(brandToken: string): {
+  sample1: string; sample2: string; sample3: string; sample4: string; sample5: string
+} {
   return {
     sample1:
       `${brandToken}: New off-market deal in [city] — [beds]bd/[baths]ba, cash price [price]. ` +
       `Reply YES for full details. Msg & data rates may apply. Reply STOP to unsubscribe.`,
     sample2:
       `${brandToken}: Here are the details on [address] you asked about: [link]. ` +
+      `Need help? Reply HELP. To unsubscribe, reply STOP.`,
+    sample3:
+      `Hi [name], this is [contact_first_name] with ${brandToken}. We just listed a [beds]BR/[baths]BA property ` +
+      `in [city] for [price]. Want the full details? Reply YES. Reply STOP to unsubscribe.`,
+    sample4:
+      `${brandToken}: New deal alert — [count] discounted properties available in [city] and [city2]. ` +
+      `Reply YES for photos and comps. STOP to unsubscribe.`,
+    sample5:
+      `Thanks for joining ${brandToken} buyer alerts. You'll now get exclusive off-market deals. ` +
       `Need help? Reply HELP. To unsubscribe, reply STOP.`,
   }
 }
@@ -84,9 +95,17 @@ export async function getA2pState(orgId: string): Promise<A2pAssembledState> {
 
   const contactName = [s(ver?.contact_first_name), s(ver?.contact_last_name)].filter(Boolean).join(" ")
 
-  const storedSamples = isNonEmpty(row?.sample_message_1) || isNonEmpty(row?.sample_message_2)
+  // Any stored sample → return the full stored set (blanks preserved); otherwise
+  // the generated defaults. Mirrors the original 2-sample precedence for all five.
+  const storedSamples = [1, 2, 3, 4, 5].some((n) => isNonEmpty(row?.[`sample_message_${n}`]))
   const samples = storedSamples
-    ? { sample1: s(row?.sample_message_1), sample2: s(row?.sample_message_2) }
+    ? {
+        sample1: s(row?.sample_message_1),
+        sample2: s(row?.sample_message_2),
+        sample3: s(row?.sample_message_3),
+        sample4: s(row?.sample_message_4),
+        sample5: s(row?.sample_message_5),
+      }
     : defaultSamples(brandToken)
 
   return {
@@ -123,6 +142,9 @@ export async function saveA2p(orgId: string, payload: unknown): Promise<SaveResu
 
   const sample1 = s(body.sample_message_1)
   const sample2 = s(body.sample_message_2)
+  const sample3 = s(body.sample_message_3)
+  const sample4 = s(body.sample_message_4)
+  const sample5 = s(body.sample_message_5)
 
   // Recompute the brand-derived program copy server-side (never trust the client
   // for these — they're assembled from our own records).
@@ -142,6 +164,7 @@ export async function saveA2p(orgId: string, payload: unknown): Promise<SaveResu
   const website = s(org?.website_url)
   const campaignDescription = buildCampaignDescription(brandToken, website || "your website")
 
+  // Samples 1 AND 2 are required for "ready"; 3–5 are optional and never affect status.
   const status: A2pStatus = isNonEmpty(sample1) && isNonEmpty(sample2) ? "ready" : "draft"
 
   const now = new Date().toISOString()
@@ -152,6 +175,9 @@ export async function saveA2p(orgId: string, payload: unknown): Promise<SaveResu
       campaign_description: campaignDescription,
       sample_message_1: sample1 || null,
       sample_message_2: sample2 || null,
+      sample_message_3: sample3 || null,
+      sample_message_4: sample4 || null,
+      sample_message_5: sample5 || null,
       opt_in_url: website || null,
       status,
       updated_at: now,
