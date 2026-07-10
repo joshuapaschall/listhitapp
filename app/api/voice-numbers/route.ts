@@ -10,6 +10,7 @@ export async function GET() {
   const inboundRes = await supabase
     .from("inbound_numbers")
     .select("e164, enabled")
+    .eq("org_id", orgId) // RLS isn't filtering these tables — scope explicitly so we never surface another tenant's DIDs
     .eq("enabled", true)
 
   if (inboundRes.error) {
@@ -24,6 +25,7 @@ export async function GET() {
     const voiceRes = await supabase
       .from("voice_numbers")
       .select("phone_number")
+      .eq("org_id", orgId) // voice_numbers.org_id DEFAULTs to the owner's org — must filter explicitly or every tenant sees the owner's numbers
     if (voiceRes.error) {
       console.error("Failed to fetch voice numbers", voiceRes.error)
       return NextResponse.json({ error: "Database error" }, { status: 500 })

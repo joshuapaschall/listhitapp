@@ -9,7 +9,9 @@ const cspReportOnly = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://api.mapbox.com",
   "font-src 'self' https://fonts.gstatic.com data:",
   "img-src 'self' data: blob: https://*.supabase.co https://images.unsplash.com https://*.mapbox.com https://www.google-analytics.com https://www.googletagmanager.com https://www.facebook.com https://maps.gstatic.com",
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.mapbox.com https://*.telnyx.com wss://*.telnyx.com https://www.google-analytics.com https://region1.google-analytics.com https://www.googletagmanager.com https://connect.facebook.net",
+  // Both voice vendors need HTTPS + WSS: Telnyx WebRTC, and the Twilio Voice SDK's
+  // signaling WebSocket (wss://voice-js.*.twilio.com) + insights (eventgw.twilio.com).
+  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.mapbox.com https://*.telnyx.com wss://*.telnyx.com https://*.twilio.com wss://*.twilio.com https://www.google-analytics.com https://region1.google-analytics.com https://www.googletagmanager.com https://connect.facebook.net",
   "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://td.doubleclick.net",
   "media-src 'self' blob: https://*.supabase.co",
   "worker-src 'self' blob:",
