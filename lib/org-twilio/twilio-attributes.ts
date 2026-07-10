@@ -121,8 +121,7 @@ export interface CampaignInputs {
   brandRegistrationSid: string
   useCase: string | null
   description: string | null
-  sample1: string | null
-  sample2: string | null
+  samples: Array<string | null | undefined>
   optInUrl: string | null
   legalBusinessName: string
   privacyPolicyUrl?: string | null
@@ -132,16 +131,15 @@ export interface CampaignInputs {
 // Builds the UsAppToPerson.create payload. Applies minimum-length padding and guarantees
 // >= 2 samples so Twilio's validation passes; throws only if there is truly no sample text.
 export function buildCampaignAttributes(inputs: CampaignInputs): Record<string, unknown> {
-  const samples = [inputs.sample1, inputs.sample2]
-    .map((s) => (s ?? "").trim())
-    .filter((s) => s.length > 0)
-  if (samples.length === 0) {
+  const provided = (inputs.samples ?? []).map((v) => (v ?? "").trim()).filter((v) => v.length > 0)
+  if (provided.length === 0) {
     throw new Error("At least one campaign sample message is required.")
   }
-  // Ensure 2 samples (duplicate the first if only one was provided) and pad short ones to 20 chars.
-  while (samples.length < 2) samples.push(samples[0])
-  const paddedSamples = samples.slice(0, 5).map((s) =>
-    s.length >= 20 ? s : `${s} — reply STOP to opt out.`.slice(0, 1024),
+  // Ensure 2 samples (duplicate the first if only one was provided), cap at 5, and
+  // pad short ones to Twilio's 20-char minimum.
+  while (provided.length < 2) provided.push(provided[0])
+  const paddedSamples = provided.slice(0, 5).map((v) =>
+    v.length >= 20 ? v.slice(0, 1024) : `${v} — reply STOP to opt out.`.slice(0, 1024),
   )
 
   const baseDescription =

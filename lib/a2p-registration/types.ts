@@ -11,6 +11,9 @@ export interface A2pRegistration {
   campaign_description: string | null
   sample_message_1: string | null
   sample_message_2: string | null
+  sample_message_3: string | null
+  sample_message_4: string | null
+  sample_message_5: string | null
   opt_in_url: string | null
   status: A2pStatus
   created_at: string
@@ -18,8 +21,8 @@ export interface A2pRegistration {
 }
 
 // What GET returns: brand identity assembled from business_verification +
-// organizations (read live, never duplicated), the generated program copy, the
-// two samples, the resolved status, and dependency signals for the UI.
+// organizations (read live, never duplicated), the generated program copy, up to
+// five samples, the resolved status, and dependency signals for the UI.
 export interface A2pAssembledState {
   brand: {
     legalDisplay: string
@@ -37,6 +40,9 @@ export interface A2pAssembledState {
   samples: {
     sample1: string
     sample2: string
+    sample3: string
+    sample4: string
+    sample5: string
   }
   status: A2pStatus
   ready: {

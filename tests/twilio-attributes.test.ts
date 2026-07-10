@@ -291,10 +291,10 @@ describe("buildCampaignAttributes", () => {
     useCase: "marketing",
     description:
       "This campaign sends off-market real estate deals and list updates to buyers who opted in via our web form.",
-    sample1:
+    samples: [
       "Acme: New off-market deal in Austin — 3bd/2ba, asking $450k. Reply YES for details. Reply STOP to opt out.",
-    sample2:
       "Acme: Here's the info on 123 Main St you asked about: link. Reply with questions. Reply STOP to opt out.",
+    ],
     optInUrl: "https://acme.com",
     legalBusinessName: "Acme Holdings LLC",
   }
@@ -316,16 +316,34 @@ describe("buildCampaignAttributes", () => {
   })
 
   test("duplicates the single sample when only one provided", () => {
-    const attrs = buildCampaignAttributes({ ...campaignBase, sample2: null })
+    const attrs = buildCampaignAttributes({ ...campaignBase, samples: [campaignBase.samples[0]] })
     const samples = attrs.messageSamples as string[]
     expect(samples.length).toBe(2)
     expect(samples[0]).toBe(samples[1])
   })
 
   test("pads short samples to at least 20 chars", () => {
-    const attrs = buildCampaignAttributes({ ...campaignBase, sample1: "Hi", sample2: "Yo" })
+    const attrs = buildCampaignAttributes({ ...campaignBase, samples: ["Hi", "Yo"] })
     const samples = attrs.messageSamples as string[]
     for (const s of samples) expect(s.length).toBeGreaterThanOrEqual(20)
+  })
+
+  test("emits all five samples when five are provided", () => {
+    const five = [
+      "Acme sample one — reply STOP to opt out of these alerts anytime.",
+      "Acme sample two — reply STOP to opt out of these alerts anytime.",
+      "Acme sample three — reply STOP to opt out of these alerts anytime.",
+      "Acme sample four — reply STOP to opt out of these alerts anytime.",
+      "Acme sample five — reply STOP to opt out of these alerts anytime.",
+    ]
+    const attrs = buildCampaignAttributes({ ...campaignBase, samples: five })
+    expect((attrs.messageSamples as string[]).length).toBe(5)
+  })
+
+  test("slices to five when more than five are provided", () => {
+    const six = Array.from({ length: 6 }, (_, i) => `Acme sample ${i + 1} — reply STOP to opt out anytime.`)
+    const attrs = buildCampaignAttributes({ ...campaignBase, samples: six })
+    expect((attrs.messageSamples as string[]).length).toBe(5)
   })
 
   test("synthesizes a >=40 char description when none provided", () => {
@@ -349,7 +367,7 @@ describe("buildCampaignAttributes", () => {
 
   test("throws when there is no sample text", () => {
     expect(() =>
-      buildCampaignAttributes({ ...campaignBase, sample1: null, sample2: "  " }),
+      buildCampaignAttributes({ ...campaignBase, samples: [null, "  "] }),
     ).toThrow(/sample message/i)
   })
 
