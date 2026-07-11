@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import { NextRequest, NextResponse } from "next/server";
+import { requireOrgContext } from "@/lib/auth/org-context";
 import { TELNYX_API_URL, telnyxHeaders } from "@/lib/telnyx";
 
 // Types based on Telnyx API documentation
@@ -118,6 +119,10 @@ function inferDirection(from: string, to: string, phoneA: string, phoneB: string
 
 export async function GET(request: NextRequest) {
   try {
+    const { user, orgId } = await requireOrgContext();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!orgId) return NextResponse.json({ error: "Missing org" }, { status: 400 });
+
     const searchParams = request.nextUrl.searchParams;
     
     // Required parameters

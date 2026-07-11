@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
+import { requireOrgContext } from "@/lib/auth/org-context"
 import { ensureFfmpegAvailable } from "@/utils/ffmpeg-path"
 import { mirrorMediaUrl } from "@/utils/mms.server"
 
 export const runtime = "nodejs"
 
 export async function POST(req: NextRequest) {
+  const { user, orgId } = await requireOrgContext()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!orgId) return NextResponse.json({ error: "Missing org" }, { status: 400 })
+
   const body = await req.json().catch(() => ({}))
   const { url, direction = "incoming" } = body
 
