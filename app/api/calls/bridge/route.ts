@@ -1,12 +1,17 @@
 import { apiError } from "@/lib/api-error"
 import { NextRequest, NextResponse } from "next/server"
 
+import { requireOrgContext } from "@/lib/auth/org-context"
 import { TELNYX_API_URL, telnyxHeaders } from "@/lib/telnyx"
 import { getCallControlAppId } from "@/lib/voice-env"
 
 // Conference bridge configuration
 export async function POST(request: NextRequest) {
   try {
+    const { user, orgId } = await requireOrgContext()
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!orgId) return NextResponse.json({ error: "Missing org" }, { status: 400 })
+
     const { action, phoneNumber } = await request.json()
 
     if (action === "create") {

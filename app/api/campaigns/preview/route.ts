@@ -1,6 +1,6 @@
 import { apiError } from "@/lib/api-error"
 import { NextRequest } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { requireOrgContext } from "@/lib/auth/org-context"
 
 type Row = {
   id: string
@@ -11,6 +11,10 @@ type Row = {
 
 export async function POST(req: NextRequest) {
   try {
+    const { user, orgId, supabase } = await requireOrgContext()
+    if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 })
+    if (!orgId) return new Response(JSON.stringify({ error: "Missing org" }), { status: 400 })
+
     const body = await req.json()
     const groupIds: string[] = Array.isArray(body?.groupIds) ? body.groupIds : []
     if (!groupIds.length) {
@@ -20,6 +24,7 @@ export async function POST(req: NextRequest) {
     const { data: buyers, error } = await supabase
       .from("buyers")
       .select("id,email,can_receive_email,deleted_at,buyer_groups!inner(group_id)")
+      .eq("org_id", orgId) // scope to caller's org — belt & braces alongside RLS
       .in("buyer_groups.group_id", groupIds as any)
     if (error) return apiError(error, 500)
 

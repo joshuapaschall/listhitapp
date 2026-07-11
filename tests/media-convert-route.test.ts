@@ -2,6 +2,11 @@ import { NextRequest } from "next/server"
 import { POST } from "../app/api/media/convert/route"
 import { MEDIA_BUCKET } from "../utils/uploadMedia"
 
+// Route now authenticates via requireOrgContext; give every request a valid session.
+vi.mock("@/lib/auth/org-context", () => ({
+  requireOrgContext: async () => ({ user: { id: "u1" }, orgId: "org-1", supabase: {} }),
+}))
+
 vi.mock("fluent-ffmpeg", () => {
   const ffmpeg = vi.fn(() => {
     const callbacks: Record<string, (...args: any[]) => void> = {}
