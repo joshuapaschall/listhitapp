@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react"
 import { init, type TemplateContent, type TemplaticalEditor, type ThemeOverrides } from "@templatical/editor"
+import { toast } from "sonner"
 import { supabaseBrowser } from "@/lib/supabase-browser"
 
 export type { TemplaticalEditor } from "@templatical/editor"
@@ -15,49 +16,72 @@ interface TemplaticalEmailEditorProps {
 type UploadMediaResponse = { url: string; alt?: string }
 
 const theme: ThemeOverrides = {
-  primary: "#059669",
-  primaryHover: "#047857",
+  primary: "#F0303A",
+  primaryHover: "#D0202A",
   primaryLight: "#ECFDF5",
   canvasBg: "#F9FAFB",
 }
 
-async function openImageUpload(): Promise<UploadMediaResponse | null> {
+async function pickImageFile(): Promise<File | null> {
   const input = document.createElement("input")
   input.type = "file"
   input.accept = "image/*"
+  input.style.display = "none"
+  document.body.appendChild(input)
 
-  const file = await new Promise<File | null>((resolve) => {
-    input.onchange = () => resolve(input.files?.[0] ?? null)
-    input.click()
-  })
-
-  if (!file) return null
-
-  const signRes = await fetch("/api/campaigns/email/upload-image", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name: file.name, type: file.type, size: file.size }),
-  })
-
-  if (!signRes.ok) {
-    throw new Error("Failed to sign upload URL")
+  try {
+    return await new Promise<File | null>((resolve) => {
+      input.addEventListener("change", () => resolve(input.files?.[0] ?? null), { once: true })
+      input.addEventListener("cancel", () => resolve(null), { once: true })
+      input.click()
+    })
+  } finally {
+    input.remove()
   }
+}
 
-  const { path, token, publicUrl } = (await signRes.json()) as {
-    path: string
-    token: string
-    publicUrl: string
+async function openImageUpload(): Promise<UploadMediaResponse | null> {
+  try {
+    const file = await pickImageFile()
+    if (!file) return null
+
+    const signRes = await fetch("/api/campaigns/email/upload-image", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: file.name, type: file.type, size: file.size }),
+    })
+
+    if (!signRes.ok) {
+      const body = (await signRes.json().catch(() => ({}))) as { error?: string; details?: string }
+      const detail = body.details || body.error || `HTTP ${signRes.status}`
+      toast.error(`Couldn't prepare the upload: ${detail}`)
+      console.error("[email-upload-image] sign request failed", { status: signRes.status, body })
+      return null
+    }
+
+    const { path, token, publicUrl } = (await signRes.json()) as {
+      path: string
+      token: string
+      publicUrl: string
+    }
+
+    const { error } = await supabaseBrowser().storage
+      .from("email-assets")
+      .uploadToSignedUrl(path, token, file, { contentType: file.type })
+
+    if (error) {
+      toast.error(`Image upload failed: ${error.message}`)
+      console.error("[email-upload-image] upload failed", error)
+      return null
+    }
+
+    toast.success("Image uploaded")
+    return { url: publicUrl, alt: "" }
+  } catch (err) {
+    toast.error("Image upload failed. Check your connection and try again.")
+    console.error("[email-upload-image] unexpected error", err)
+    return null
   }
-
-  const { error } = await supabaseBrowser().storage
-    .from("email-assets")
-    .uploadToSignedUrl(path, token, file, { contentType: file.type })
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return { url: publicUrl, alt: "" }
 }
 
 export default function TemplaticalEmailEditor({ initialContent, onChange, onReady }: TemplaticalEmailEditorProps) {
