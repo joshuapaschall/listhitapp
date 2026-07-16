@@ -14,7 +14,7 @@ import {
   ORANGE,
   brandedFooter,
   logoBlock,
-  preheader,
+  withPreheader,
 } from "./shared"
 
 const def: EmailTemplateDef = {
@@ -32,10 +32,9 @@ const def: EmailTemplateDef = {
     })
 
     c.blocks = [
-      preheader(),
       logoBlock(),
       createTitleBlock({
-        content: `<h1 style="font-family:${HEAD}">Welcome aboard, {{first_name}}</h1>`,
+        content: `<span style="font-family:${HEAD}">Welcome aboard, {{first_name}}</span>`,
         level: 1,
         textAlign: "center",
         color: NAVY,
@@ -43,13 +42,13 @@ const def: EmailTemplateDef = {
       createParagraphBlock({
         content: `<p>Thanks for joining ${DEFAULT_BRAND.companyName}. You are now on our active cash buyer list and will receive deal alerts with clear numbers, timelines, and walkthrough instructions.</p>`,
       }),
-      createTitleBlock({ content: "<h3>What we send</h3>", level: 3, color: NAVY }),
+      createTitleBlock({ content: "What we send", level: 3, color: NAVY }),
       createParagraphBlock({
         content:
           "<p>Expect off-market and value-add properties with asking price, ARV, estimated repairs, and rent comps so you can underwrite fast.</p>",
       }),
       createTitleBlock({
-        content: "<h3>How fast you must move</h3>",
+        content: "How fast you must move",
         level: 3,
         color: NAVY,
       }),
@@ -58,7 +57,7 @@ const def: EmailTemplateDef = {
           "<p>Our best opportunities are often claimed within hours. If a deal fits, reply right away and include proof of funds to secure priority.</p>",
       }),
       createTitleBlock({
-        content: "<h3>How to set your buy box</h3>",
+        content: "How to set your buy box",
         level: 3,
         color: NAVY,
       }),
@@ -80,7 +79,7 @@ const def: EmailTemplateDef = {
       ...brandedFooter(),
     ]
 
-    return c
+    return withPreheader(c, "Welcome — here's how our deal flow works.")
   },
 }
 

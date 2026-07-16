@@ -298,9 +298,8 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
 
     try {
       const design = editor.getContent()
-      const mjml = await editor.toMjml()
 
-      if (!design || !mjml.trim()) {
+      if (!design || !Array.isArray(design.blocks) || design.blocks.length === 0) {
         toast.error("Nothing to save yet — add content first")
         return
       }
@@ -308,15 +307,15 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
       const res = await fetch("/api/campaigns/email/render", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mjml }),
+        body: JSON.stringify({ design }),
       })
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        throw new Error(body?.error || "Failed to render email")
+        throw new Error(body?.errors?.join("; ") || body?.error || "Failed to render email")
       }
 
-      const { html } = await res.json()
+      const { html, mjml } = await res.json()
       update({ message: html, design_json: design, mjml })
       setContentSheetOpen(false)
     } catch (error) {
@@ -334,21 +333,20 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
     setSavingTemplate(true)
     try {
       const design = editor.getContent()
-      const mjml = await editor.toMjml()
-      if (!design || !mjml.trim()) {
+      if (!design || !Array.isArray(design.blocks) || design.blocks.length === 0) {
         toast.error("Nothing to save yet — add content first")
         return
       }
       const res = await fetch("/api/campaigns/email/render", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mjml }),
+        body: JSON.stringify({ design }),
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        throw new Error(body?.error || "Failed to render email")
+        throw new Error(body?.errors?.join("; ") || body?.error || "Failed to render email")
       }
-      const { html } = await res.json()
+      const { html, mjml } = await res.json()
       await TemplateService.addTemplate({
         name: templateName.trim(),
         subject: campaign.subject ?? null,

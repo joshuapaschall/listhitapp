@@ -25,4 +25,12 @@ export interface EmailTemplateDef {
   build: () => TemplateContent
 }
 
-export const PLACEHOLDER_IMAGE = "/placeholder.jpg"
+const EMAIL_ASSET_ORIGIN = (
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  process.env.NEXT_PUBLIC_BASE_URL ||
+  ""
+).replace(/\/+$/, "")
+
+export const PLACEHOLDER_IMAGE = EMAIL_ASSET_ORIGIN
+  ? `${EMAIL_ASSET_ORIGIN}/placeholder.jpg`
+  : "/placeholder.jpg"

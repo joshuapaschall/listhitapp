@@ -77,21 +77,20 @@ export default function EmailTemplateBuilder({ slug, mode, id, initialName = "",
     setSaving(true)
     try {
       const design = editor.getContent()
-      const mjml = await editor.toMjml()
-      if (!design || !mjml.trim()) {
+      if (!design || !Array.isArray(design.blocks) || design.blocks.length === 0) {
         toast.error("Nothing to save yet — add content first")
         return
       }
       const renderRes = await fetch("/api/campaigns/email/render", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mjml }),
+        body: JSON.stringify({ design }),
       })
       if (!renderRes.ok) {
         const body = await renderRes.json().catch(() => ({}))
-        throw new Error(body?.error || "Failed to render email")
+        throw new Error(body?.errors?.join("; ") || body?.error || "Failed to render email")
       }
-      const { html } = await renderRes.json()
+      const { html, mjml } = await renderRes.json()
       const payload = { name: name.trim(), message: html, design_json: design, mjml }
       if (mode === "new") {
         await TemplateService.addTemplate(payload, "email")
