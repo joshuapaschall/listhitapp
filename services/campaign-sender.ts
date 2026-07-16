@@ -1,12 +1,11 @@
 import { supabaseAdmin } from "@/lib/supabase"
 import { resolveOrgIdForUser } from "@/lib/auth/org-context"
 import { createLogger } from "@/lib/logger"
-import { renderTemplate } from "@/lib/utils"
 import { getUserMergeContext, type UserMergeContext } from "@/lib/user-context"
 import { sendSesEmail } from "@/lib/ses"
 import { getSesQuota } from "@/lib/ses-quota"
-import { appendUnsubscribeFooter, buildUnsubscribeUrl } from "@/lib/unsubscribe"
-import { htmlToText } from "@/lib/email/html-to-text"
+import { buildUnsubscribeUrl } from "@/lib/unsubscribe"
+import { buildCampaignEmail } from "@/lib/email/build-campaign-email"
 import { evaluateCampaignSafety, type CampaignSafetyVerdict } from "@/lib/email/deliverability-guard"
 import { insertNotification } from "@/lib/notifications"
 
@@ -60,7 +59,7 @@ function compactParts(parts: Array<string | null | undefined>) {
   return parts.map((part) => part?.trim()).filter((part): part is string => Boolean(part))
 }
 
-async function stampBusinessAddressForCampaign(html: string, campaignId?: string | null) {
+export async function stampBusinessAddressForCampaign(html: string, campaignId?: string | null) {
   if (!campaignId || !html.includes(BUSINESS_ADDRESS_PLACEHOLDER)) return html
 
   const supabase = requireAdmin()
@@ -613,15 +612,13 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
       }
       const content = job.campaign_id ? contentMap.get(job.campaign_id) : undefined
       const rawSubject = content?.subject ?? payload.subject ?? ""
-      const rawHtml = content?.html ?? payload.html ?? ""
+      let rawHtml = content?.html ?? payload.html ?? ""
       const senderContext = campaignMergeContextMap.get(job.campaign_id || payload.campaignId || "")
-      const subject = renderTemplate(rawSubject, buyer, senderContext)
-      let html = renderTemplate(rawHtml, buyer, senderContext)
       if (!emailShortlinksDisabled()) {
         try {
           const { replaceUrlsWithShortLinks } = await import("./shortlink-service")
-          const replaced = await replaceUrlsWithShortLinks(html, { anchorHrefOnly: true })
-          html = replaced.html
+          const replaced = await replaceUrlsWithShortLinks(rawHtml, { anchorHrefOnly: true })
+          rawHtml = replaced.html
         } catch (err) {
           console.error("Short.io replacement failed", err)
         }
@@ -642,11 +639,14 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
       if (!EMAIL_PHYSICAL_ADDRESS) {
         throw new Error("EMAIL_PHYSICAL_ADDRESS is not configured — required for CAN-SPAM compliance")
       }
-      html = appendUnsubscribeFooter(html, {
+      const { subject, html, text } = buildCampaignEmail({
+        rawSubject,
+        rawHtml,
+        buyer,
+        senderContext,
         unsubscribeUrl,
         physicalAddress: EMAIL_PHYSICAL_ADDRESS,
       })
-      const text = htmlToText(html)
       const tags = {
         campaign_id: payload.campaignId,
         recipient_id: contact.recipientId,

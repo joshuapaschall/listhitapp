@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { ArrowLeft, CheckCircle2, Circle } from "lucide-react"
+import { ArrowLeft, CheckCircle2, Circle, TestTube2 } from "lucide-react"
 import type { TemplateContent } from "@templatical/editor"
 import { createDefaultTemplateContent, createHtmlBlock } from "@templatical/types"
 import { toast } from "sonner"
@@ -83,6 +83,8 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
   const [editorKey, setEditorKey] = useState(0)
   const [editorInstance, setEditorInstance] = useState<TemplaticalEditor | null>(null)
   const [sendConfirmOpen, setSendConfirmOpen] = useState(false)
+  const [testEmail, setTestEmail] = useState("")
+  const [sendingTest, setSendingTest] = useState(false)
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false)
   const [changeTemplateOpen, setChangeTemplateOpen] = useState(false)
   const isPickerStep = builderStep === "picker"
@@ -215,6 +217,33 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
   }, [campaign.channel])
 
   const itemsMissing = [!toValid && "Recipients", !fromValid && "Sender", !subjectValid && "Subject", !contentValid && "Content"].filter(Boolean).join(", ")
+
+  const isTestEmailInvalid = useMemo(() => {
+    const value = testEmail.trim()
+    if (!value) return false
+    return !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+  }, [testEmail])
+
+  const sendTest = async () => {
+    setSendingTest(true)
+    try {
+      const res = await fetch("/api/campaigns/test-send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ campaignId: campaign.id, to: testEmail.trim() }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (res.ok && body?.ok) {
+        toast.success("Test email sent — check your inbox")
+      } else {
+        toast.error(body?.error || "Failed to send test email")
+      }
+    } catch {
+      toast.error("Failed to send test email")
+    } finally {
+      setSendingTest(false)
+    }
+  }
 
   const hasExistingDesign = () =>
     !!campaign.design_json &&
@@ -368,7 +397,7 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
     <div className="sticky top-0 bg-background/80 backdrop-blur z-10 border-b border-border py-4 px-6">
       <div className="max-w-4xl mx-auto flex items-center justify-between">
         <div className="flex items-center gap-2"><Button variant="ghost" size="icon" onClick={() => router.push("/campaigns")}><ArrowLeft className="h-4 w-4" /></Button><Input className="w-auto min-w-[200px] max-w-[400px]" value={campaign.name || "Untitled campaign"} onChange={(e) => update({ name: e.target.value })} /><CampaignStatusBadge status={campaign.status} />{hasEdited && <span className="text-xs text-muted-foreground ml-2">{autosaveState === "saving" ? "Saving…" : autosaveState === "failed" ? "Save failed" : "Saved"}</span>}</div>
-        <div className="flex gap-2"><Button variant="ghost" onClick={() => router.push("/campaigns")}>Finish later</Button><Can permission="campaigns.send_email"><Button variant="brand" disabled={!canSend || !!campaign.scheduled_at} title={!canSend ? `Add: ${itemsMissing}` : ""} onClick={() => setSendConfirmOpen(true)}>Send</Button></Can></div>
+        <div className="flex items-start gap-2"><Button variant="ghost" onClick={() => router.push("/campaigns")}>Finish later</Button><div><Input className="h-9 w-[220px]" value={testEmail} onChange={(e) => setTestEmail(e.target.value)} placeholder="you@yourdomain.com" />{isTestEmailInvalid && <p className="mt-1 text-xs text-red-500">Enter a valid email address</p>}</div><Can permission="campaigns.send_email"><Button variant="outline" size="sm" disabled={!testEmail.trim() || isTestEmailInvalid || sendingTest || !campaign.message?.trim() || !campaign.subject?.trim()} onClick={sendTest}><TestTube2 className="h-4 w-4" />{sendingTest ? "Sending…" : "Send test"}</Button></Can><Can permission="campaigns.send_email"><Button variant="brand" disabled={!canSend || !!campaign.scheduled_at} title={!canSend ? `Add: ${itemsMissing}` : ""} onClick={() => setSendConfirmOpen(true)}>Send</Button></Can></div>
       </div>
     </div>
     <main className="max-w-4xl mx-auto px-6 py-8 space-y-3">
