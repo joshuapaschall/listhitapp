@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react"
 import { init, type TemplateContent, type TemplaticalEditor, type ThemeOverrides } from "@templatical/editor"
 import { toast } from "sonner"
 import { supabaseBrowser } from "@/lib/supabase-browser"
+import { EMAIL_CUSTOM_FONTS, EMAIL_DEFAULT_FALLBACK, EMAIL_DEFAULT_FONT } from "@/lib/email-templates/email-fonts"
 
 export type { TemplaticalEditor } from "@templatical/editor"
 
@@ -116,12 +117,9 @@ export default function TemplaticalEmailEditor({ initialContent, onChange, onRea
       uiTheme: "light",
       theme,
       fonts: {
-        defaultFont: "Inter",
-        defaultFallback: "Helvetica, Arial, sans-serif",
-        customFonts: [
-          { name: "Inter", url: "https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap", fallback: "Helvetica, Arial, sans-serif" },
-          { name: "Playfair Display", url: "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&display=swap", fallback: "Georgia, serif" },
-        ],
+        defaultFont: EMAIL_DEFAULT_FONT,
+        defaultFallback: EMAIL_DEFAULT_FALLBACK,
+        customFonts: EMAIL_CUSTOM_FONTS,
       },
       mergeTags: {
         syntax: "handlebars",

@@ -22,9 +22,5 @@ export const DEFAULT_BRAND: BrandConfig = {
     heading: "Playfair Display, Georgia, serif",
     body: "Inter, Helvetica, Arial, sans-serif",
   },
-  socials: {
-    facebook: "https://",
-    instagram: "https://",
-    youtube: "https://",
-  },
+  socials: {},
 }

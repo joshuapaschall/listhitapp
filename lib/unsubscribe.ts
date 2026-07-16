@@ -132,6 +132,15 @@ export function buildUnsubscribeUrl({
   return url.toString()
 }
 
+function escapeFooterHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+}
+
 export function appendUnsubscribeFooter(
   html: string,
   {
@@ -142,8 +151,21 @@ export function appendUnsubscribeFooter(
     physicalAddress?: string
   },
 ) {
-  const addressLine = physicalAddress || "ListHit CRM · 123 Main St · Anytown, USA"
-  const footer = `\n<div style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:12px;color:#4b5563;line-height:1.5;">\n  <p style="margin:0 0 8px 0;">If you no longer wish to receive these emails, <a href="${unsubscribeUrl}">unsubscribe here</a>.</p>\n  <p style="margin:0;">${addressLine}</p>\n</div>\n`
+  const addressLine = physicalAddress
+  if (!addressLine) {
+    throw new Error("physicalAddress is required for the CAN-SPAM footer")
+  }
+  const escapedAddress = escapeFooterHtml(addressLine)
+  const footer = `
+<table role="presentation" border="0" cellpadding="0" cellspacing="0" align="center" width="600" style="width:100%;max-width:600px;margin:0 auto;border-collapse:collapse;">
+  <tr>
+    <td align="left" style="padding:24px 10px;border-top:1px solid #e5e7eb;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.5;color:#4b5563;">
+      <p style="margin:0 0 8px 0;">If you no longer wish to receive these emails, <a href="${unsubscribeUrl}" style="color:#4b5563;">unsubscribe here</a>.</p>
+      <p style="margin:0;">${escapedAddress}</p>
+    </td>
+  </tr>
+</table>
+`
   const closingBodyTag = /<\/body>/i
   if (closingBodyTag.test(html)) {
     return html.replace(closingBodyTag, `${footer}</body>`)

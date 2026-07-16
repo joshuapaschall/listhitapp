@@ -5,6 +5,7 @@ import {
   createSocialIconsBlock,
   createSpacerBlock,
 } from "@templatical/types"
+import type { TemplateContent } from "@templatical/types"
 import { DEFAULT_BRAND } from "../brand"
 import { PLACEHOLDER_IMAGE } from "../types"
 
@@ -15,10 +16,10 @@ export const MUTED = DEFAULT_BRAND.colors.muted
 export const HEAD = DEFAULT_BRAND.fonts.heading
 export const BODY = DEFAULT_BRAND.fonts.body
 
-export const preheader = () =>
-  createParagraphBlock({
-    content: `<p style="color:#9CA3AF;font-size:12px;text-align:center;margin:0">View this email in your browser · ${DEFAULT_BRAND.companyName}</p>`,
-  })
+export const withPreheader = (c: TemplateContent, text: string): TemplateContent => {
+  c.settings.preheaderText = text
+  return c
+}
 
 export const logoBlock = () => {
   const b = createImageBlock({
@@ -33,31 +34,29 @@ export const logoBlock = () => {
   return b
 }
 
-export const brandedFooter = () => [
-  createDividerBlock({ color: DEFAULT_BRAND.colors.divider, thickness: 1 }),
-  createSocialIconsBlock({
-    iconStyle: "circle",
-    iconSize: "medium",
-    icons: [
-      {
-        id: crypto.randomUUID(),
-        platform: "facebook",
-        url: DEFAULT_BRAND.socials.facebook ?? "https://",
-      },
-      {
-        id: crypto.randomUUID(),
-        platform: "instagram",
-        url: DEFAULT_BRAND.socials.instagram ?? "https://",
-      },
-      {
-        id: crypto.randomUUID(),
-        platform: "youtube",
-        url: DEFAULT_BRAND.socials.youtube ?? "https://",
-      },
-    ],
-  }),
-  createParagraphBlock({
-    content: `<p style="color:${DEFAULT_BRAND.colors.muted};font-size:12px;text-align:center;line-height:1.6;margin:0">${DEFAULT_BRAND.companyName}<br/>${DEFAULT_BRAND.tagline}<br/>${DEFAULT_BRAND.address}</p>`,
-  }),
-  createSpacerBlock({ height: 16 }),
-]
+export const brandedFooter = () => {
+  const socialEntries = (["facebook", "instagram", "youtube"] as const)
+    .map((platform) => ({ platform, url: DEFAULT_BRAND.socials[platform] }))
+    .filter((e): e is { platform: typeof e.platform; url: string } => Boolean(e.url))
+
+  return [
+    createDividerBlock({ color: DEFAULT_BRAND.colors.divider, thickness: 1 }),
+    ...(socialEntries.length > 0
+      ? [
+          createSocialIconsBlock({
+            iconStyle: "solid",
+            iconSize: "medium",
+            icons: socialEntries.map((entry) => ({
+              id: crypto.randomUUID(),
+              platform: entry.platform,
+              url: entry.url,
+            })),
+          }),
+        ]
+      : []),
+    createParagraphBlock({
+      content: `<p style="color:${DEFAULT_BRAND.colors.muted};font-size:12px;text-align:center;line-height:1.6;margin:0">${DEFAULT_BRAND.companyName}<br/>${DEFAULT_BRAND.tagline}<br/>${DEFAULT_BRAND.address}</p>`,
+    }),
+    createSpacerBlock({ height: 16 }),
+  ]
+}

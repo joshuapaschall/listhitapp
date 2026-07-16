@@ -6,6 +6,7 @@ import { getUserMergeContext, type UserMergeContext } from "@/lib/user-context"
 import { sendSesEmail } from "@/lib/ses"
 import { getSesQuota } from "@/lib/ses-quota"
 import { appendUnsubscribeFooter, buildUnsubscribeUrl } from "@/lib/unsubscribe"
+import { htmlToText } from "@/lib/email/html-to-text"
 import { evaluateCampaignSafety, type CampaignSafetyVerdict } from "@/lib/email/deliverability-guard"
 import { insertNotification } from "@/lib/notifications"
 
@@ -33,7 +34,7 @@ const EMAIL_QUEUE_BASE_BACKOFF_MS = Number(process.env.EMAIL_QUEUE_BASE_BACKOFF_
 const EMAIL_QUEUE_JITTER_MS = Number(process.env.EMAIL_QUEUE_JITTER_MS || 500)
 const SITE_URL =
   process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_BASE_URL || process.env.DISPOTOOL_BASE_URL
-const EMAIL_PHYSICAL_ADDRESS = process.env.EMAIL_PHYSICAL_ADDRESS || "ListHit CRM · 123 Main St · Anytown, USA"
+const EMAIL_PHYSICAL_ADDRESS = process.env.EMAIL_PHYSICAL_ADDRESS?.trim() || ""
 
 const DEFAULT_SES_COST_PER_EMAIL_USD = 0.0001
 const parsedSesCostPerEmailUsd = Number(process.env.SES_COST_PER_EMAIL_USD ?? "0.0001")
@@ -112,6 +113,7 @@ export interface EmailOptions {
   to: string | string[]
   subject: string
   html: string
+  text?: string
   dryRun?: boolean
   fromEmail?: string
   fromName?: string
@@ -193,6 +195,7 @@ export async function sendEmailCampaign({
   to,
   subject,
   html,
+  text,
   dryRun,
   fromEmail,
   fromName,
@@ -213,6 +216,7 @@ export async function sendEmailCampaign({
         to: recipient,
         subject,
         html,
+        text,
         fromEmail,
         fromName,
         replyTo,
@@ -545,6 +549,7 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
     contact: string,
     subject: string,
     html: string,
+    text: string,
     fromEmail?: string,
     fromName?: string,
     replyTo?: string,
@@ -557,6 +562,7 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
         to: contact,
         subject,
         html,
+        text,
         fromEmail,
         fromName,
         replyTo,
@@ -571,6 +577,7 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
           contact,
           subject,
           html,
+          text,
           fromEmail,
           fromName,
           replyTo,
@@ -632,10 +639,14 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
         campaignId: payload.campaignId,
         recipientId: contact.recipientId,
       })
+      if (!EMAIL_PHYSICAL_ADDRESS) {
+        throw new Error("EMAIL_PHYSICAL_ADDRESS is not configured — required for CAN-SPAM compliance")
+      }
       html = appendUnsubscribeFooter(html, {
         unsubscribeUrl,
         physicalAddress: EMAIL_PHYSICAL_ADDRESS,
       })
+      const text = htmlToText(html)
       const tags = {
         campaign_id: payload.campaignId,
         recipient_id: contact.recipientId,
@@ -645,6 +656,7 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
         contact.email,
         subject,
         html,
+        text,
         payload.fromEmail,
         payload.fromName,
         payload.replyTo,

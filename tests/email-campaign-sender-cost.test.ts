@@ -6,6 +6,8 @@ process.env.SITE_URL = "https://example.test"
 process.env.SES_COST_PER_EMAIL_USD = "0.1234"
 process.env.EMAIL_SEND_DELAY_MS = "0"
 process.env.EMAIL_RETRY_BACKOFF_MS = "0"
+// CAN-SPAM: campaign sends now hard-require a physical address (see services/campaign-sender.ts).
+process.env.EMAIL_PHYSICAL_ADDRESS = "Test Co, 1 Test St, Testville, GA"
 
 vi.mock("../lib/ses", () => ({
   sendSesEmail: sendSesEmailMock,
