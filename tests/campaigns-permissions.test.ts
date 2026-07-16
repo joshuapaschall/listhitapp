@@ -174,7 +174,7 @@ describe("campaign permission gates", () => {
     const { POST } = await import("../app/api/campaigns/test-send/route")
     const req = new NextRequest("http://test/api/campaigns/test-send", {
       method: "POST",
-      body: JSON.stringify({ to: "buyer@example.com", subject: "Test", html: "<p>Hello</p>" }),
+      body: JSON.stringify({ campaignId: "email-1", to: "buyer@example.com" }),
     })
     return POST(req)
   }
@@ -263,18 +263,18 @@ describe("campaign permission gates", () => {
   })
 
   test("gates email test sends on campaigns.send_email", async () => {
+    // This suite only verifies the permission gate. The full test-send happy path
+    // (real sender resolver, footer, text/plain, no analytics tags) is covered by
+    // tests/campaigns-test-send-route.test.ts.
     const denied = await postEmailTest()
     expect(denied.status).toBe(403)
     expect(state.emailMock).not.toHaveBeenCalled()
 
     grant("campaigns.send_email")
     const allowed = await postEmailTest()
-    expect(allowed.status).toBe(200)
-    expect(state.emailMock).toHaveBeenCalledWith({
-      to: "buyer@example.com",
-      subject: "Test",
-      html: "<p>Hello</p>",
-    })
+    // Permission passed — the request proceeds past the 403 gate. (It then 404s
+    // because this harness doesn't seed the admin-client campaign lookup.)
+    expect(allowed.status).not.toBe(403)
   })
 
   describe("POST /api/campaigns/delete", () => {
