@@ -95,6 +95,12 @@ function encodeJpeg(
   canvas.height = height
   const ctx = canvas.getContext("2d")
   if (!ctx) return Promise.resolve(null)
+  // JPEG has no alpha channel and a fresh canvas is transparent black, so any
+  // transparent source pixel would encode as black. Flatten onto white first —
+  // this is baked pixel data in an end user's photo, so it is a literal white,
+  // deliberately NOT a theme token.
+  ctx.fillStyle = "#FFFFFF"
+  ctx.fillRect(0, 0, width, height)
   ctx.drawImage(source, 0, 0, width, height)
   return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob), "image/jpeg", quality))
 }
