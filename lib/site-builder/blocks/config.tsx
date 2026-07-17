@@ -7,6 +7,7 @@ import { DealsSection } from "@/components/sites/deals-section"
 import { SiteFooter } from "@/components/sites/site-footer"
 import { SiteHeader } from "@/components/sites/site-header"
 import { siteImage, siteSrcSet } from "@/lib/site-builder/image-url"
+import { PHOTO_FRAME_RATIO, PHOTO_FRAME_W, PHOTO_FRAME_H } from "@/lib/site-builder/image-frame"
 import { SiteStyles } from "@/components/sites/site-styles"
 import { ImageUploadField } from "@/components/sites/image-upload-field"
 
@@ -378,18 +379,18 @@ export const siteConfig: Config = {
                     <LeadForm title={formTitle} subtitle={formSubtitle} ctaLabel={ctaLabel} />
                   </div>
                 </div>
-                <div style={{ position: "relative", borderRadius: 18, overflow: "hidden", minHeight: 360 }}>
+                <div style={{ position: "relative", borderRadius: 18, overflow: "hidden", aspectRatio: PHOTO_FRAME_RATIO }}>
                   <img
                     src={siteImage(imageUrl, { width: 900, quality: 80 })}
                     srcSet={siteSrcSet(imageUrl, [600, 900, 1200], 80)}
-                    sizes="(max-width: 900px) 100vw, 400px"
+                    sizes="(max-width: 900px) 100vw, 660px"
                     alt=""
-                    width={800}
-                    height={600}
+                    width={PHOTO_FRAME_W * 200}
+                    height={PHOTO_FRAME_H * 200}
                     loading="eager"
                     fetchPriority="high"
                     decoding="async"
-                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", minHeight: 360 }}
+                    style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                   />
                   {stat && (
                     <div
