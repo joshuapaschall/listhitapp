@@ -5,6 +5,11 @@
 // content-negotiated WebP/AVIF from Supabase's edge. No Vercel image optimizer
 // is involved — next.config keeps images.unoptimized: true.
 //
+// Every Supabase render URL passes resize=contain so the CDN scales the WHOLE
+// image proportionally and never crops — framing is CSS's job (object-fit
+// cover vs contain, per component). Without it Supabase defaults to a cover
+// crop of projecting parts, which CSS can't recover.
+//
 // Non-Supabase URLs (Unsplash hero defaults, any external) pass through
 // untouched. Kill switch: NEXT_PUBLIC_SITE_IMAGE_TRANSFORM="0" reverts every
 // image to its raw public URL (use if the Supabase plan lacks Image
@@ -12,6 +17,14 @@
 
 const OBJECT_PUBLIC = "/storage/v1/object/public/"
 const RENDER_PUBLIC = "/storage/v1/render/image/public/"
+
+/**
+ * Supabase Image Transformations accept width/height as an integer 1–2500.
+ * Requests outside that range are invalid. Our normalizer caps stored photos at
+ * MAX_EDGE = 2560, so an un-clamped srcset candidate can exceed this.
+ */
+const SUPABASE_MAX_DIMENSION = 2500
+const SUPABASE_MIN_DIMENSION = 1
 
 function transformsEnabled(): boolean {
   return process.env.NEXT_PUBLIC_SITE_IMAGE_TRANSFORM !== "0"
@@ -60,7 +73,11 @@ export function siteImage(
     url.slice(0, i) + RENDER_PUBLIC + url.slice(i + OBJECT_PUBLIC.length)
   const sep = rendered.includes("?") ? "&" : "?"
   const quality = opts.quality ?? 75
-  return `${rendered}${sep}width=${Math.round(opts.width)}&quality=${quality}`
+  const width = Math.max(
+    SUPABASE_MIN_DIMENSION,
+    Math.min(Math.round(opts.width), SUPABASE_MAX_DIMENSION),
+  )
+  return `${rendered}${sep}width=${width}&resize=contain&quality=${quality}`
 }
 
 /**

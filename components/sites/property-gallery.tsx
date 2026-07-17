@@ -262,7 +262,7 @@ export function PropertyGallery({ images, alt }: { images: { image_url: string }
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={siteImage(current.image_url, { width: 1920, quality: 82 })}
-                srcSet={siteSrcSet(current.image_url, [1280, 1920, 2560], 82)}
+                srcSet={siteSrcSet(current.image_url, [1280, 1920, 2500], 82)}
                 sizes="100vw"
                 alt={alt}
                 decoding="async"
