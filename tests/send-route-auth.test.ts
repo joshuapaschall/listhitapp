@@ -207,7 +207,7 @@ describe("send route auth", () => {
 
   test("allows owner token and queues the SMS campaign", async () => {
     h.state.campaigns.push({ id: "c2", org_id: "org-1", user_id: "u2", channel: "sms", message: "Yo", buyer_ids: ["b2"] })
-    h.state.buyers.push({ id: "b2", phone: "+15125550123", can_receive_sms: true, sms_suppressed: false, deleted_at: null, email_suppressed: false })
+    h.state.buyers.push({ id: "b2", org_id: "org-1", phone: "+15125550123", can_receive_sms: true, sms_suppressed: false, deleted_at: null, email_suppressed: false })
     h.state.authUser = { id: "u2" }
     const req = new NextRequest("http://test", {
       method: "POST",

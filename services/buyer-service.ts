@@ -324,23 +324,6 @@ export class BuyerService {
   }
 
   // Get unique buyer ids for a list of groups
-  static async getBuyerIdsForGroups(groupIds: string[]) {
-    if (groupIds.length === 0) return [] as string[]
-    const { data, error } = await supabase
-      .from("buyer_groups")
-      .select("buyer_id, buyers!inner(id)")
-      .in("group_id", groupIds)
-      .is("buyers.deleted_at", null)
-
-    if (error) {
-      log("error", "Failed to fetch group buyers", { error })
-      throw error
-    }
-
-    const ids = Array.from(new Set((data || []).map((r) => r.buyer_id)))
-    return ids
-  }
-
   static async unsubscribeBuyer(id: string) {
     const res = await fetch(`/api/buyers/${id}/unsubscribe`, {
       method: "POST",

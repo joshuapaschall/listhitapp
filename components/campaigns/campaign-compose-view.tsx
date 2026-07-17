@@ -25,7 +25,6 @@ import { Sheet, SheetContent } from "@/components/ui/sheet"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
-import { BuyerService } from "@/services/buyer-service"
 import { TemplateService } from "@/services/template-service"
 import SmsSendTimeCard from "@/components/campaigns/sms-send-time-card"
 import CampaignPropertySelector from "@/components/campaigns/campaign-property-selector"
@@ -94,29 +93,50 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
   const currentBuilderStep = builderStep
   const [templateName, setTemplateName] = useState("")
   const [savingTemplate, setSavingTemplate] = useState(false)
-  const [resolvedGroupBuyerIds, setResolvedGroupBuyerIds] = useState<string[]>([])
+  const [audience, setAudience] = useState<{ count: number; sampleIds: string[] } | null>(null)
+  const [audienceLoading, setAudienceLoading] = useState(false)
   const [emailSenders, setEmailSenders] = useState<EmailSenderOption[]>([])
   const [sendersLoaded, setSendersLoaded] = useState(false)
   const initialFromEmailRef = useRef<string | null>(campaign.from_email ?? null)
+  const audienceSeq = useRef(0)
+  const audienceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const campaignGroupIdsKey = useMemo(() => JSON.stringify(campaign.group_ids || []), [campaign.group_ids])
+  const campaignBuyerIdsKey = useMemo(() => JSON.stringify(campaign.buyer_ids || []), [campaign.buyer_ids])
 
+  // Resolve the audience count server-side (the same resolver the send path uses),
+  // debounced and sequence-guarded so a stale response can't overwrite a newer one.
   useEffect(() => {
     const groupIds = JSON.parse(campaignGroupIdsKey) as string[]
-    if (!groupIds.length) {
-      setResolvedGroupBuyerIds([])
+    const buyerIds = JSON.parse(campaignBuyerIdsKey) as string[]
+    if (!groupIds.length && !buyerIds.length) {
+      setAudience({ count: 0, sampleIds: [] })
+      setAudienceLoading(false)
       return
     }
-    let alive = true
-    BuyerService.getBuyerIdsForGroups(groupIds)
-      .then((ids) => { if (alive) setResolvedGroupBuyerIds(ids) })
-      .catch(() => { if (alive) setResolvedGroupBuyerIds([]) })
-    return () => { alive = false }
-  }, [campaignGroupIdsKey])
-
-  const allRecipientIds = useMemo(() => {
-    const direct = campaign.buyer_ids || []
-    return Array.from(new Set([...direct, ...resolvedGroupBuyerIds]))
-  }, [campaign.buyer_ids, resolvedGroupBuyerIds])
+    if (audienceTimer.current) clearTimeout(audienceTimer.current)
+    const mySeq = ++audienceSeq.current
+    setAudienceLoading(true)
+    audienceTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/campaigns/audience/count", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ channel: "email", buyerIds, groupIds }),
+        })
+        const body = await res.json().catch(() => ({}))
+        if (mySeq !== audienceSeq.current) return // a newer change superseded this one
+        if (!res.ok) throw new Error(body?.error || "audience count failed")
+        setAudience({ count: body.count ?? 0, sampleIds: body.sampleIds ?? [] })
+      } catch (err) {
+        if (mySeq !== audienceSeq.current) return
+        console.error("[audience-count] fetch failed", err)
+        setAudience(null) // do not toast — this fires on near-keystroke changes
+      } finally {
+        if (mySeq === audienceSeq.current) setAudienceLoading(false)
+      }
+    }, 400)
+    return () => { if (audienceTimer.current) clearTimeout(audienceTimer.current) }
+  }, [campaignGroupIdsKey, campaignBuyerIdsKey])
 
   const selectedSender = useMemo(
     () => emailSenders.find((sender) => sender.from_email === campaign.from_email),
@@ -126,7 +146,11 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
   // Prefer the resolved audience count; fall back to a prefill snapshot, then to
   // legacy buyer_ids/group_ids for campaigns created before the picker.
   const recipientCount =
-    campaign.audience_preview_count ?? hasPrefillSnapshot?.recipientCount ?? allRecipientIds.length
+    campaign.audience_preview_count ?? hasPrefillSnapshot?.recipientCount ?? audience?.count ?? 0
+  // The server count must have loaded before an operator can dispatch — never send
+  // against a count that failed to resolve.
+  const audienceUnknown =
+    audienceLoading || (audience === null && !campaign.audience_preview_count && !hasPrefillSnapshot)
   const toValid =
     recipientCount > 0 ||
     ((campaign.group_ids?.length || 0) + (campaign.buyer_ids?.length || 0)) > 0 ||
@@ -306,14 +330,19 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ campaignId: campaign.id }),
+      body: JSON.stringify({ campaignId: campaign.id, expectedCount: recipientCount }),
     })
+    const body = await response.json().catch(() => ({}))
+    if (response.ok && body?.reason === "audience_count_mismatch") {
+      toast.error(`Audience changed — it now resolves to ${body.resolved} recipients, not ${body.expected}. Reopen the campaign and check the audience.`)
+      setSendConfirmOpen(false)
+      return
+    }
     if (response.ok) {
       toast.success("Campaign sending…")
       setSendConfirmOpen(false)
       router.push(`/campaigns/${campaign.id}`)
     } else {
-      const body = await response.json().catch(() => ({}))
       toast.error(body?.error || "Send failed")
     }
   }
@@ -397,7 +426,7 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
     <div className="sticky top-0 bg-background/80 backdrop-blur z-10 border-b border-border py-4 px-6">
       <div className="max-w-4xl mx-auto flex items-center justify-between">
         <div className="flex items-center gap-2"><Button variant="ghost" size="icon" onClick={() => router.push("/campaigns")}><ArrowLeft className="h-4 w-4" /></Button><Input className="w-auto min-w-[200px] max-w-[400px]" value={campaign.name || "Untitled campaign"} onChange={(e) => update({ name: e.target.value })} /><CampaignStatusBadge status={campaign.status} />{hasEdited && <span className="text-xs text-muted-foreground ml-2">{autosaveState === "saving" ? "Saving…" : autosaveState === "failed" ? "Save failed" : "Saved"}</span>}</div>
-        <div className="flex items-start gap-2"><Button variant="ghost" onClick={() => router.push("/campaigns")}>Finish later</Button><div><Input className="h-9 w-[220px]" value={testEmail} onChange={(e) => setTestEmail(e.target.value)} placeholder="you@yourdomain.com" />{isTestEmailInvalid && <p className="mt-1 text-xs text-red-500">Enter a valid email address</p>}</div><Can permission="campaigns.send_email"><Button variant="outline" size="sm" disabled={!testEmail.trim() || isTestEmailInvalid || sendingTest || !campaign.message?.trim() || !campaign.subject?.trim()} onClick={sendTest}><TestTube2 className="h-4 w-4" />{sendingTest ? "Sending…" : "Send test"}</Button></Can><Can permission="campaigns.send_email"><Button variant="brand" disabled={!canSend || !!campaign.scheduled_at} title={!canSend ? `Add: ${itemsMissing}` : ""} onClick={() => setSendConfirmOpen(true)}>Send</Button></Can></div>
+        <div className="flex items-start gap-2"><Button variant="ghost" onClick={() => router.push("/campaigns")}>Finish later</Button><div><Input className="h-9 w-[220px]" value={testEmail} onChange={(e) => setTestEmail(e.target.value)} placeholder="you@yourdomain.com" />{isTestEmailInvalid && <p className="mt-1 text-xs text-red-500">Enter a valid email address</p>}</div><Can permission="campaigns.send_email"><Button variant="outline" size="sm" disabled={!testEmail.trim() || isTestEmailInvalid || sendingTest || !campaign.message?.trim() || !campaign.subject?.trim()} onClick={sendTest}><TestTube2 className="h-4 w-4" />{sendingTest ? "Sending…" : "Send test"}</Button></Can><Can permission="campaigns.send_email"><Button variant="brand" disabled={!canSend || !!campaign.scheduled_at || audienceUnknown} title={!canSend ? `Add: ${itemsMissing}` : ""} onClick={() => setSendConfirmOpen(true)}>Send</Button></Can></div>
       </div>
     </div>
     <main className="max-w-4xl mx-auto px-6 py-8 space-y-3">
@@ -462,7 +491,7 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
         <AlertDialogHeader>
           <AlertDialogTitle>Send campaign?</AlertDialogTitle>
           <AlertDialogDescription>
-            This will send {hasPrefillSnapshot?.recipientCount ?? allRecipientIds.length} emails now. This can&apos;t be undone.
+            This will send {recipientCount.toLocaleString()} emails now. This can&apos;t be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

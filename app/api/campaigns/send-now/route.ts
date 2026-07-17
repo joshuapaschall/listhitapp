@@ -3,7 +3,7 @@ import { requireOrgContext } from "@/lib/auth/org-context"
 import { requirePermission } from "@/lib/permissions/server"
 
 export async function POST(request: NextRequest) {
-  const { campaignId } = await request.json()
+  const { campaignId, expectedCount } = await request.json()
 
   if (!campaignId) {
     return new Response(JSON.stringify({ error: "campaignId required" }), {
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
         Authorization: `Bearer ${cronSecret}`,
         "x-cron-secret": cronSecret,
       },
-      body: JSON.stringify({ campaignId }),
+      body: JSON.stringify({ campaignId, ...(typeof expectedCount === "number" ? { expectedCount } : {}) }),
       cache: "no-store",
       redirect: "manual",
     })
@@ -127,7 +127,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    return new Response(JSON.stringify({ ok: true }), {
+    // Forward the upstream body verbatim on success so the audience_count_mismatch
+    // guard (a 200 carrying { paused, reason, resolved, expected }) reaches the client.
+    let okBody: unknown = { ok: true }
+    if (text.trim().length > 0 && contentType.includes("application/json")) {
+      try {
+        okBody = JSON.parse(text)
+      } catch (err) {
+        console.error("Failed to parse send response", err)
+      }
+    }
+    return new Response(JSON.stringify(okBody), {
       status: res.status,
       headers: { "Content-Type": "application/json" },
     })
