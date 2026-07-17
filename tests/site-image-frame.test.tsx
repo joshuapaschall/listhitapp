@@ -110,12 +110,33 @@ describe("PropertyGallery hero", () => {
     expect(hero.hasAttribute("srcset")).toBe(true)
   })
 
-  test("empty gallery still renders a 4:3 frame", () => {
+  test("empty gallery renders a fixed-height stage, not a 4:3 frame", () => {
     const { container } = render(<PropertyGallery images={[]} alt="test" />)
     const el = container.firstChild as HTMLElement
     const style = el.getAttribute("style") || ""
-    expect(style).toContain("aspect-ratio")
-    expect(style).not.toContain("16 / 10")
+    expect(style).toContain("clamp(")
+    expect(style).not.toContain("aspect-ratio")
+  })
+
+  test("the hero photo has no width/height attrs and contains at natural ratio", () => {
+    const { container } = render(<PropertyGallery images={[{ image_url: SUPA_URL }]} alt="test" />)
+    const hero = container.querySelector("img") as HTMLImageElement
+    expect(hero.hasAttribute("width")).toBe(false)
+    expect(hero.hasAttribute("height")).toBe(false)
+    const style = hero.getAttribute("style") || ""
+    expect(style).toContain("object-fit: contain")
+    expect(style).toContain("max-height: 100%")
+  })
+
+  test("the hero stage is a frameless clamp-height box, no aspect-ratio/border/vh", () => {
+    const { container } = render(<PropertyGallery images={[{ image_url: SUPA_URL }]} alt="test" />)
+    const stage = (container.firstChild as HTMLElement).firstElementChild as HTMLElement
+    const style = stage.getAttribute("style") || ""
+    expect(style).toContain("clamp(")
+    expect(style).toContain("56cqw")
+    expect(style).not.toContain("aspect-ratio")
+    expect(style).not.toContain("border")
+    expect(style).not.toContain("vh")
   })
 
   test("lightbox is closed by default", () => {

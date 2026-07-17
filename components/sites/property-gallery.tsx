@@ -2,12 +2,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { siteImage, siteSrcSet } from "@/lib/site-builder/image-url"
-import {
-  PHOTO_FRAME_RATIO,
-  PHOTO_FRAME_W,
-  PHOTO_FRAME_H,
-  frameHeight,
-} from "@/lib/site-builder/image-frame"
+import { frameHeight } from "@/lib/site-builder/image-frame"
 
 // Client gallery: a large primary image plus a clickable thumbnail strip.
 // Theme-token framed; uses plain <img> (next.config has images.unoptimized).
@@ -125,7 +120,7 @@ export function PropertyGallery({ images, alt }: { images: { image_url: string }
       <div
         style={{
           width: "100%",
-          aspectRatio: PHOTO_FRAME_RATIO,
+          height: "clamp(460px, 56cqw, 720px)",
           borderRadius: 16,
           border: "1px solid #eef1f5",
           background: "color-mix(in srgb, var(--p) 5%, #fff)",
@@ -142,51 +137,52 @@ export function PropertyGallery({ images, alt }: { images: { image_url: string }
         style={{
           position: "relative",
           width: "100%",
-          aspectRatio: PHOTO_FRAME_RATIO,
-          borderRadius: 16,
-          overflow: "hidden",
-          border: "1px solid #eef1f5",
-          background: "color-mix(in srgb, var(--p) 5%, #fff)",
+          height: "clamp(460px, 56cqw, 720px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
         }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={siteImage(current.image_url, { width: 1280, quality: 80 })}
-          srcSet={siteSrcSet(current.image_url, [800, 1280, 1600], 80)}
-          sizes="(max-width: 900px) 100vw, 760px"
-          alt={alt}
-          width={PHOTO_FRAME_W * 300}
-          height={PHOTO_FRAME_H * 300}
-          loading={active === 0 ? "eager" : "lazy"}
-          fetchPriority={active === 0 ? "high" : "auto"}
-          decoding="async"
-          style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            objectFit: "contain",
-            display: "block",
-          }}
-        />
-        {/* Full-frame click target under the arrows (zIndex 0 < arrows' zIndex 1). */}
+        {/* Photo-hugging click target under the arrows (zIndex 0 < arrows' zIndex 1). */}
         <button
           ref={heroButtonRef}
           type="button"
           aria-label="View photo larger"
           onClick={() => setOpen(true)}
           style={{
-            position: "absolute",
-            inset: 0,
+            display: "flex",
+            maxWidth: "100%",
+            maxHeight: "100%",
+            minWidth: 0,
+            minHeight: 0,
             zIndex: 0,
-            width: "100%",
-            height: "100%",
             padding: 0,
             border: "none",
             background: "none",
             cursor: "zoom-in",
+            lineHeight: 0,
           }}
-        />
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={siteImage(current.image_url, { width: 1280, quality: 80 })}
+            srcSet={siteSrcSet(current.image_url, [800, 1280, 1600], 80)}
+            sizes="(max-width: 900px) 100vw, 760px"
+            alt={alt}
+            loading={active === 0 ? "eager" : "lazy"}
+            fetchPriority={active === 0 ? "high" : "auto"}
+            decoding="async"
+            style={{
+              maxWidth: "100%",
+              maxHeight: "100%",
+              width: "auto",
+              height: "auto",
+              objectFit: "contain",
+              display: "block",
+              borderRadius: 14,
+            }}
+          />
+        </button>
         {list.length > 1 ? (
           <>
             <button type="button" aria-label="Previous photo" onClick={goPrev} style={navBtnStyle("left", 36)}>
