@@ -1,6 +1,14 @@
 "use client"
 import React, { useState } from "react"
 import { siteImage, siteSrcSet } from "@/lib/site-builder/image-url"
+import {
+  PHOTO_FRAME_RATIO,
+  PHOTO_FRAME_W,
+  PHOTO_FRAME_H,
+  HERO_BACKDROP_WIDTH,
+  HERO_BACKDROP_QUALITY,
+  frameHeight,
+} from "@/lib/site-builder/image-frame"
 
 // Client gallery: a large primary image plus a clickable thumbnail strip.
 // Theme-token framed; uses plain <img> (next.config has images.unoptimized).
@@ -14,7 +22,7 @@ export function PropertyGallery({ images, alt }: { images: { image_url: string }
       <div
         style={{
           width: "100%",
-          aspectRatio: "16 / 10",
+          aspectRatio: PHOTO_FRAME_RATIO,
           borderRadius: 16,
           border: "1px solid #eef1f5",
           background:
@@ -30,25 +38,56 @@ export function PropertyGallery({ images, alt }: { images: { image_url: string }
     <div>
       <div
         style={{
+          position: "relative",
           width: "100%",
+          aspectRatio: PHOTO_FRAME_RATIO,
           borderRadius: 16,
           overflow: "hidden",
           border: "1px solid #eef1f5",
           background: "color-mix(in srgb, var(--p) 5%, #fff)",
         }}
       >
+        {/* Blurred backdrop: the same photo at a deliberately tiny size (~2KB) —
+            detail is imperceptible through a 28px blur. Fills the letterbox for
+            off-ratio photos so nothing is ever cropped. scale(1.15) hides the
+            blur's transparent edge bleed. Decorative only. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={siteImage(current.image_url, { width: HERO_BACKDROP_WIDTH, quality: HERO_BACKDROP_QUALITY })}
+          alt=""
+          aria-hidden="true"
+          loading={active === 0 ? "eager" : "lazy"}
+          decoding="async"
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            filter: "blur(28px) saturate(1.25)",
+            transform: "scale(1.15)",
+            display: "block",
+          }}
+        />
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={siteImage(current.image_url, { width: 1280, quality: 80 })}
           srcSet={siteSrcSet(current.image_url, [800, 1280, 1600], 80)}
           sizes="(max-width: 900px) 100vw, 760px"
           alt={alt}
-          width={1200}
-          height={750}
+          width={PHOTO_FRAME_W * 300}
+          height={PHOTO_FRAME_H * 300}
           loading={active === 0 ? "eager" : "lazy"}
           fetchPriority={active === 0 ? "high" : "auto"}
           decoding="async"
-          style={{ width: "100%", height: "auto", aspectRatio: "16 / 10", objectFit: "cover", display: "block" }}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "contain",
+            display: "block",
+          }}
         />
       </div>
 
@@ -80,10 +119,10 @@ export function PropertyGallery({ images, alt }: { images: { image_url: string }
                   sizes="96px"
                   alt={`${alt} — photo ${i + 1}`}
                   width={96}
-                  height={68}
+                  height={frameHeight(96)}
                   loading="lazy"
                   decoding="async"
-                  style={{ width: 96, height: 68, objectFit: "cover", display: "block" }}
+                  style={{ width: 96, height: frameHeight(96), objectFit: "cover", display: "block" }}
                 />
               </button>
             )

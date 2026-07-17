@@ -1,6 +1,7 @@
 import React from "react"
 import type { DealSummary } from "@/lib/site-builder/types"
 import { siteImage, siteSrcSet } from "@/lib/site-builder/image-url"
+import { PHOTO_FRAME_RATIO, PHOTO_FRAME_W, PHOTO_FRAME_H } from "@/lib/site-builder/image-frame"
 import { chipStyle, termsLabelFrom } from "@/lib/site-builder/deal-chips"
 
 export interface DealCardProps {
@@ -56,7 +57,7 @@ export function DealCard({ property, variant = "teaser", locked = false, href, s
           height: "100%",
         }}
       >
-        <div style={{ position: "relative", height: 150, background: gradient }}>
+        <div style={{ position: "relative", aspectRatio: PHOTO_FRAME_RATIO, background: gradient }}>
           <span
             style={{
               position: "absolute",
@@ -152,7 +153,7 @@ export function DealCard({ property, variant = "teaser", locked = false, href, s
         height: "100%",
       }}
     >
-      <div style={{ position: "relative", height: 150, background: gradient }}>
+      <div style={{ position: "relative", aspectRatio: PHOTO_FRAME_RATIO, background: gradient }}>
         {property.primary_image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -160,11 +161,11 @@ export function DealCard({ property, variant = "teaser", locked = false, href, s
             srcSet={siteSrcSet(property.primary_image_url, [400, 800])}
             sizes="(max-width: 768px) 100vw, 380px"
             alt={cityState || property.slug}
-            width={400}
-            height={150}
+            width={PHOTO_FRAME_W * 100}
+            height={PHOTO_FRAME_H * 100}
             loading="lazy"
             decoding="async"
-            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
           />
         ) : null}
         {!locked ? (
