@@ -94,6 +94,7 @@
     "ffmpeg-static": "^5.1.0",
     "fluent-ffmpeg": "^2.1.2",
     "googleapis": "150.0.1",
+    "heic2any": "0.0.4",
     "input-otp": "1.4.1",
     "libphonenumber-js": "^1.13.2",
     "lucide-react": "^0.454.0",

@@ -41,6 +41,7 @@ import type { Buyer } from "@/lib/supabase";
 import type { PropertyComp } from "@/lib/site-builder/types";
 import { PROPERTY_TYPE_GROUPS } from "@/lib/constant";
 import { cn } from "@/lib/utils";
+import { normalizeImageFiles } from "@/lib/images/normalize-image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -86,6 +87,7 @@ export interface PropertyEditorData {
 }
 
 type ExistingImage = { id: string; image_url: string; sort_order: number; is_featured: boolean };
+type StagedPhoto = { file: File; url: string };
 
 const toNum = (value: string) => {
   if (!value || !value.trim()) return null;
@@ -155,9 +157,11 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
   const [coords, setCoords] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
   const [showOnSite, setShowOnSite] = useState(true); // desired publish state
   const [savedShowOnSite, setSavedShowOnSite] = useState(false); // last-persisted publish state
-  const [stagedPhotos, setStagedPhotos] = useState<File[]>([]);
+  const [stagedPhotos, setStagedPhotos] = useState<StagedPhoto[]>([]);
+  const stagedRef = useRef<StagedPhoto[]>([]);
   const [existingImages, setExistingImages] = useState<ExistingImage[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [processing, setProcessing] = useState(false);
   const [matchedBuyers, setMatchedBuyers] = useState<Buyer[]>([]);
   const [selectedBuyers, setSelectedBuyers] = useState<string[]>([]);
   const initialBuyers = useRef<string[]>([]);
@@ -310,11 +314,11 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.city, form.state, form.property_type, numericPrice, form.buyer_fit, form.deal_type, form.tags]);
 
-  const stagedPreviews = useMemo(
-    () => stagedPhotos.map((photo) => ({ name: photo.name, url: URL.createObjectURL(photo) })),
-    [stagedPhotos],
-  );
-  useEffect(() => () => stagedPreviews.forEach((p) => URL.revokeObjectURL(p.url)), [stagedPreviews]);
+  // Keep a ref of the staged photos so the unmount-only cleanup can revoke their
+  // object URLs without re-running on every list change (which would revoke URLs
+  // still in the DOM — the old useMemo-during-render bug).
+  useEffect(() => { stagedRef.current = stagedPhotos; }, [stagedPhotos]);
+  useEffect(() => () => { stagedRef.current.forEach((p) => URL.revokeObjectURL(p.url)); }, []);
 
   // Image tiles: real rows once a property id exists, otherwise staged previews.
   const imageItems: ImageItem[] = useMemo(() => {
@@ -323,8 +327,8 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
         .sort((a, b) => a.sort_order - b.sort_order)
         .map((img) => ({ id: img.id, url: img.image_url, isNew: false, isFeatured: img.is_featured }));
     }
-    return stagedPreviews.map((p, i) => ({ id: `new-${i}`, url: p.url, isNew: true, isFeatured: i === 0, label: p.name }));
-  }, [savedId, existingImages, stagedPreviews]);
+    return stagedPhotos.map((p, i) => ({ id: `new-${i}`, url: p.url, isNew: true, isFeatured: i === 0, label: p.file.name }));
+  }, [savedId, existingImages, stagedPhotos]);
 
   const imageCount = savedId ? existingImages.length : stagedPhotos.length;
   const hasCover = imageCount > 0;
@@ -352,18 +356,54 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
   const handleFiles = useCallback(
     async (files: FileList | null) => {
       if (!files || files.length === 0) return;
-      const list = Array.from(files);
-      if (!savedId) {
-        setStagedPhotos((prev) => [...prev, ...list].slice(0, 50));
-        return;
-      }
-      if (existingImages.length + list.length > 50) {
+      const incoming = Array.from(files);
+
+      const currentCount = savedId ? existingImages.length : stagedPhotos.length;
+      if (currentCount + incoming.length > 50) {
         toast.error("Up to 50 photos per property");
         return;
       }
+
+      // Normalize (HEIC → JPEG, downscale, bound size) in the browser first, so
+      // Storage only ever receives renderable JPEG/PNG/WebP.
+      setProcessing(true);
+      let normalized: File[] = [];
+      let normErrors: string[] = [];
+      try {
+        const result = await normalizeImageFiles(incoming);
+        normalized = result.files;
+        normErrors = result.errors;
+      } catch (e) {
+        console.error("[property-editor] normalize failed", e);
+        toast.error("Could not process those photos");
+        setProcessing(false);
+        return;
+      }
+      setProcessing(false);
+
+      if (normErrors.length) {
+        toast.error(
+          normErrors.length === 1
+            ? `Skipped ${normErrors[0]}`
+            : `Skipped ${normErrors.length} photos: ${normErrors.join(", ")}`,
+        );
+      }
+      if (!normalized.length) return;
+
+      if (!savedId) {
+        setStagedPhotos((prev) => {
+          // Only create object URLs for the files we'll actually keep — slicing
+          // after createObjectURL would leak the dropped entries' URLs.
+          const room = Math.max(0, 50 - prev.length);
+          const added = normalized.slice(0, room).map((file) => ({ file, url: URL.createObjectURL(file) }));
+          return [...prev, ...added];
+        });
+        return;
+      }
+
       setUploading(true);
       try {
-        const { errors } = await PropertyService.uploadImages(savedId, list);
+        const { errors } = await PropertyService.uploadImages(savedId, normalized);
         if (errors.length) toast.warning(`Some photos failed: ${errors.join(", ")}`);
         await refreshImages(savedId);
       } catch (e) {
@@ -373,7 +413,7 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
         setUploading(false);
       }
     },
-    [savedId, existingImages.length],
+    [savedId, existingImages.length, stagedPhotos.length],
   );
 
   const handleReorder = async (reordered: ImageItem[]) => {
@@ -389,7 +429,7 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
     } else {
       const next = reordered
         .map((item) => stagedPhotos[parseInt(item.id.replace("new-", ""), 10)])
-        .filter((f): f is File => Boolean(f));
+        .filter((p): p is StagedPhoto => Boolean(p));
       setStagedPhotos(next);
     }
   };
@@ -417,7 +457,11 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
   const handleDeleteImage = async (id: string) => {
     if (!savedId) {
       const idx = parseInt(id.replace("new-", ""), 10);
-      setStagedPhotos((prev) => prev.filter((_, i) => i !== idx));
+      setStagedPhotos((prev) => {
+        const removed = prev[idx];
+        if (removed) URL.revokeObjectURL(removed.url);
+        return prev.filter((_, i) => i !== idx);
+      });
       return;
     }
     setExistingImages((prev) => prev.filter((img) => img.id !== id));
@@ -497,8 +541,9 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
         setPublicSlug(created.slug ?? null);
         if (stagedPhotos.length > 0) {
           setUploading(true);
-          const { errors } = await PropertyService.uploadImages(newId, stagedPhotos).catch((e) => ({ uploaded: [], errors: [e instanceof Error ? e.message : "upload failed"] }));
+          const { errors } = await PropertyService.uploadImages(newId, stagedPhotos.map((p) => p.file)).catch((e) => ({ uploaded: [], errors: [e instanceof Error ? e.message : "upload failed"] }));
           if (errors.length) toast.warning(`Some photos failed: ${errors.join(", ")}`);
+          stagedPhotos.forEach((p) => URL.revokeObjectURL(p.url));
           setStagedPhotos([]);
           await refreshImages(newId);
           setUploading(false);
@@ -514,8 +559,9 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
         setPublicSlug(updated.slug ?? publicSlug);
         if (stagedPhotos.length > 0) {
           setUploading(true);
-          const { errors } = await PropertyService.uploadImages(savedId, stagedPhotos).catch((e) => ({ uploaded: [], errors: [e instanceof Error ? e.message : "upload failed"] }));
+          const { errors } = await PropertyService.uploadImages(savedId, stagedPhotos.map((p) => p.file)).catch((e) => ({ uploaded: [], errors: [e instanceof Error ? e.message : "upload failed"] }));
           if (errors.length) toast.warning(`Some photos failed: ${errors.join(", ")}`);
+          stagedPhotos.forEach((p) => URL.revokeObjectURL(p.url));
           setStagedPhotos([]);
           await refreshImages(savedId);
           setUploading(false);
@@ -796,12 +842,29 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
             {/* Photos */}
             <div className="space-y-3">
               <SectionLabel icon={ImageIcon}>Photos</SectionLabel>
-              <input ref={fileInputRef} type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic" className="hidden" onChange={(e) => handleFiles(e.target.files)} />
-              <button type="button" onClick={() => fileInputRef.current?.click()} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); handleFiles(e.dataTransfer.files); }}
-                className="flex w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-border p-6 text-muted-foreground transition-colors hover:border-brand/50 hover:bg-muted/30">
-                {uploading ? <Loader2 className="mb-2 h-5 w-5 animate-spin" /> : <Upload className="mb-2 h-5 w-5" />}
-                <span className="text-sm">{uploading ? "Uploading…" : "Drag photos here or click to browse"}</span>
-                <span className="mt-1 text-xs text-muted-foreground/60">JPEG, PNG, WebP — up to 50 photos. Tap the star to set the cover.</span>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/*,.heic,.heif"
+                className="hidden"
+                onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => { e.preventDefault(); handleFiles(e.dataTransfer.files); }}
+                disabled={processing || uploading}
+                className="flex w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-border p-6 text-muted-foreground transition-colors hover:border-brand/50 hover:bg-muted/30 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {processing || uploading ? <Loader2 className="mb-2 h-5 w-5 animate-spin" /> : <Upload className="mb-2 h-5 w-5" />}
+                <span className="text-sm">
+                  {processing ? "Processing photos…" : uploading ? "Uploading…" : "Drag photos here or click to browse"}
+                </span>
+                <span className="mt-1 text-xs text-muted-foreground/60">
+                  JPEG, PNG, WebP, HEIC — up to 50 photos. Tap the star to set the cover.
+                </span>
               </button>
               <SortableImageGrid items={imageItems} onReorder={handleReorder} onSetFeatured={handleSetFeatured} onDelete={handleDeleteImage} />
             </div>

@@ -5,7 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 
 const BUCKET = "property-images"
 const MAX_FILE_SIZE = 10 * 1024 * 1024
-const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic"]
+const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"]
 
 type RouteContext = { params: Promise<{ id: string }> }
 
