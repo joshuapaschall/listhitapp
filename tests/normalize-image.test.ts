@@ -6,6 +6,7 @@ import {
   isHeic,
   normalizeImageFile,
   normalizeImageFiles,
+  normalizeImageFilesStreaming,
   MAX_INPUT_BYTES,
   MAX_OUTPUT_BYTES,
   MAX_EDGE,
@@ -180,5 +181,98 @@ describe("encodeJpeg white matting", () => {
     }
     expect(ctxCalls.some((c) => c.kind === "fillRect")).toBe(false)
     expect(ctxCalls.some((c) => c.kind === "drawImage")).toBe(false)
+  })
+})
+
+const flushMicrotasks = async () => {
+  for (let k = 0; k < 20; k++) await Promise.resolve()
+}
+
+describe("normalizeImageFilesStreaming", () => {
+  const getCib = () => globalThis.createImageBitmap as unknown as ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    // Restore the default decode stub (individual tests may override it).
+    const cib = getCib()
+    cib.mockReset()
+    cib.mockImplementation(async () => ({ width: 4000, height: 3000, close: vi.fn() }))
+  })
+
+  test("streams a result per file, once per index", async () => {
+    const seen: number[] = []
+    await normalizeImageFilesStreaming(
+      [goodJpeg("a.jpg"), goodJpeg("b.jpg"), goodJpeg("c.jpg")],
+      (i) => seen.push(i),
+    )
+    expect(seen).toHaveLength(3)
+    expect([...seen].sort()).toEqual([0, 1, 2])
+  })
+
+  test("never exceeds the concurrency cap", async () => {
+    const cib = getCib()
+    const deferreds: Array<() => void> = []
+    let inFlight = 0
+    let maxInFlight = 0
+    // Each decode registers a deferred we resolve manually — one createImageBitmap
+    // is pending per in-flight normalizeImageFile.
+    cib.mockImplementation(() => {
+      inFlight++
+      maxInFlight = Math.max(maxInFlight, inFlight)
+      return new Promise((resolve) => {
+        deferreds.push(() => {
+          inFlight--
+          resolve({ width: 800, height: 600, close: vi.fn() })
+        })
+      })
+    })
+
+    const files = [goodJpeg("a.jpg"), goodJpeg("b.jpg"), goodJpeg("c.jpg"), goodJpeg("d.jpg")]
+    const seen: number[] = []
+    const done = normalizeImageFilesStreaming(files, (i) => seen.push(i), 2)
+
+    let guard = 0
+    while (seen.length < files.length && guard++ < 500) {
+      await flushMicrotasks()
+      const fn = deferreds.shift()
+      if (fn) fn()
+    }
+    await done
+
+    expect(maxInFlight).toBeLessThanOrEqual(2)
+    expect([...seen].sort()).toEqual([0, 1, 2, 3])
+  })
+
+  test("contains an unexpected throw and still settles the rest", async () => {
+    // A file whose very first access (size) throws — normalizeImageFile can't
+    // handle that gracefully, so the streaming wrapper must catch it.
+    const boom = goodJpeg("boom.jpg")
+    Object.defineProperty(boom, "size", {
+      get() {
+        throw new Error("boom")
+      },
+    })
+
+    const results = new Array<NonNullable<unknown>>()
+    const byIndex: Record<number, { ok: boolean }> = {}
+    await normalizeImageFilesStreaming([goodJpeg("a.jpg"), boom, goodJpeg("c.jpg")], (i, r) => {
+      results.push(r)
+      byIndex[i] = { ok: r.ok }
+    })
+
+    expect(results).toHaveLength(3)
+    expect(byIndex[1].ok).toBe(false)
+    expect(byIndex[0].ok).toBe(true)
+    expect(byIndex[2].ok).toBe(true)
+  })
+
+  test("normalizeImageFiles preserves input order despite out-of-order callbacks", async () => {
+    // The bad file settles synchronously (before the good files' async decode),
+    // so callbacks arrive out of input order — the batch must still be in order.
+    const { files, errors } = await normalizeImageFiles([goodJpeg("first.jpg"), oversized(), goodJpeg("third.jpg")])
+    expect(files).toHaveLength(2)
+    expect(files[0].name).toBe("first.jpg")
+    expect(files[1].name).toBe("third.jpg")
+    expect(errors).toHaveLength(1)
+    expect(errors[0].startsWith("huge.jpg")).toBe(true)
   })
 })
