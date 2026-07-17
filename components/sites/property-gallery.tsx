@@ -5,8 +5,6 @@ import {
   PHOTO_FRAME_RATIO,
   PHOTO_FRAME_W,
   PHOTO_FRAME_H,
-  HERO_BACKDROP_WIDTH,
-  HERO_BACKDROP_QUALITY,
   frameHeight,
 } from "@/lib/site-builder/image-frame"
 
@@ -25,14 +23,14 @@ export function PropertyGallery({ images, alt }: { images: { image_url: string }
           aspectRatio: PHOTO_FRAME_RATIO,
           borderRadius: 16,
           border: "1px solid #eef1f5",
-          background:
-            "linear-gradient(135deg, color-mix(in srgb, var(--p) 22%, #fff), color-mix(in srgb, var(--a) 22%, #fff))",
+          background: "color-mix(in srgb, var(--p) 5%, #fff)",
         }}
       />
     )
   }
 
-  const current = list[Math.min(active, list.length - 1)]
+  const idx = Math.min(active, list.length - 1)
+  const current = list[idx]
 
   return (
     <div>
@@ -47,28 +45,6 @@ export function PropertyGallery({ images, alt }: { images: { image_url: string }
           background: "color-mix(in srgb, var(--p) 5%, #fff)",
         }}
       >
-        {/* Blurred backdrop: the same photo at a deliberately tiny size (~2KB) —
-            detail is imperceptible through a 28px blur. Fills the letterbox for
-            off-ratio photos so nothing is ever cropped. scale(1.15) hides the
-            blur's transparent edge bleed. Decorative only. */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={siteImage(current.image_url, { width: HERO_BACKDROP_WIDTH, quality: HERO_BACKDROP_QUALITY })}
-          alt=""
-          aria-hidden="true"
-          loading={active === 0 ? "eager" : "lazy"}
-          decoding="async"
-          style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            filter: "blur(28px) saturate(1.25)",
-            transform: "scale(1.15)",
-            display: "block",
-          }}
-        />
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={siteImage(current.image_url, { width: 1280, quality: 80 })}
@@ -89,6 +65,74 @@ export function PropertyGallery({ images, alt }: { images: { image_url: string }
             display: "block",
           }}
         />
+        {list.length > 1 ? (
+          <>
+            <button
+              type="button"
+              aria-label="Previous photo"
+              onClick={() =>
+                setActive((i) => {
+                  const c = Math.min(i, list.length - 1)
+                  return (c - 1 + list.length) % list.length
+                })
+              }
+              style={{
+                position: "absolute",
+                left: 12,
+                top: "50%",
+                transform: "translateY(-50%)",
+                zIndex: 1,
+                width: 36,
+                height: 36,
+                borderRadius: 999,
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+                background: "rgba(255,255,255,.92)",
+                boxShadow: "0 2px 10px rgba(5,12,24,.15)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <polyline points="10 4 6 8 10 12" stroke="#0b1220" strokeWidth={2} fill="none" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              aria-label="Next photo"
+              onClick={() =>
+                setActive((i) => {
+                  const c = Math.min(i, list.length - 1)
+                  return (c + 1) % list.length
+                })
+              }
+              style={{
+                position: "absolute",
+                right: 12,
+                top: "50%",
+                transform: "translateY(-50%)",
+                zIndex: 1,
+                width: 36,
+                height: 36,
+                borderRadius: 999,
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+                background: "rgba(255,255,255,.92)",
+                boxShadow: "0 2px 10px rgba(5,12,24,.15)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <polyline points="6 4 10 8 6 12" stroke="#0b1220" strokeWidth={2} fill="none" />
+              </svg>
+            </button>
+          </>
+        ) : null}
       </div>
 
       {list.length > 1 ? (

@@ -7,8 +7,9 @@
 // and no letterbox bars.
 //
 // Grid tiles (DealCard) cover — uniform tiles matter more than an outlier's
-// edges. The detail-page hero contains over a blurred backdrop so that nothing
-// is ever cropped where the buyer is actually deciding.
+// edges. The detail-page hero contains within a neutral frame that matches the
+// page surface, so nothing is ever cropped and the frame is identical on every
+// photo.
 
 /** CSS aspect-ratio value for every tenant-site property photo frame. */
 export const PHOTO_FRAME_RATIO = "4 / 3"
@@ -21,11 +22,3 @@ export const PHOTO_FRAME_H = 3
 export function frameHeight(width: number): number {
   return Math.round((width * PHOTO_FRAME_H) / PHOTO_FRAME_W)
 }
-
-/**
- * The hero backdrop is a 28px-blurred copy of the same photo. Detail is
- * imperceptible through that blur, so it is requested at a deliberately tiny
- * size — roughly 2KB — rather than reusing the full-size render.
- */
-export const HERO_BACKDROP_WIDTH = 64
-export const HERO_BACKDROP_QUALITY = 40
