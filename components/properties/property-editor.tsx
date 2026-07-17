@@ -34,14 +34,14 @@ import RichTextEditor from "@/components/gmail/rich-text-editor";
 import AddressAutocomplete from "@/components/properties/address-autocomplete";
 import MapPreview from "@/components/properties/map-preview";
 import TagSelector from "@/components/buyers/tag-selector";
-import SortableImageGrid, { type ImageItem } from "@/components/properties/sortable-image-grid";
+import SortableImageGrid, { type ImageItem, type ImageStatus } from "@/components/properties/sortable-image-grid";
 import { PropertyService } from "@/services/property-service";
 import { BuyerService } from "@/services/buyer-service";
 import type { Buyer } from "@/lib/supabase";
 import type { PropertyComp } from "@/lib/site-builder/types";
 import { PROPERTY_TYPE_GROUPS } from "@/lib/constant";
 import { cn } from "@/lib/utils";
-import { normalizeImageFiles } from "@/lib/images/normalize-image";
+import { normalizeImageFilesStreaming } from "@/lib/images/normalize-image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -87,7 +87,17 @@ export interface PropertyEditorData {
 }
 
 type ExistingImage = { id: string; image_url: string; sort_order: number; is_featured: boolean };
-type StagedPhoto = { file: File; url: string };
+type StagedPhoto = {
+  id: string;
+  name: string;
+  status: ImageStatus;
+  file?: File; // present once normalized
+  url?: string; // object URL, present once normalized
+  error?: string;
+};
+
+// Module-level id source — array index can't be an id since tiles reorder and filter.
+let stagedSeq = 0;
 
 const toNum = (value: string) => {
   if (!value || !value.trim()) return null;
@@ -318,19 +328,39 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
   // object URLs without re-running on every list change (which would revoke URLs
   // still in the DOM — the old useMemo-during-render bug).
   useEffect(() => { stagedRef.current = stagedPhotos; }, [stagedPhotos]);
-  useEffect(() => () => { stagedRef.current.forEach((p) => URL.revokeObjectURL(p.url)); }, []);
+  useEffect(() => () => { stagedRef.current.forEach((p) => { if (p.url) URL.revokeObjectURL(p.url); }); }, []);
 
-  // Image tiles: real rows once a property id exists, otherwise staged previews.
+  // Image tiles: saved images first, then any in-flight staged tiles appended.
   const imageItems: ImageItem[] = useMemo(() => {
+    const staged: ImageItem[] = stagedPhotos.map((p) => ({
+      id: p.id,
+      url: p.url,
+      isNew: true,
+      isFeatured: false,
+      label: p.name,
+      status: p.status,
+      error: p.error,
+    }));
     if (savedId) {
-      return [...existingImages]
+      const existing: ImageItem[] = [...existingImages]
         .sort((a, b) => a.sort_order - b.sort_order)
-        .map((img) => ({ id: img.id, url: img.image_url, isNew: false, isFeatured: img.is_featured }));
+        .map((img) => ({ id: img.id, url: img.image_url, isNew: false, isFeatured: img.is_featured, status: "ready" as const }));
+      return [...existing, ...staged];
     }
-    return stagedPhotos.map((p, i) => ({ id: `new-${i}`, url: p.url, isNew: true, isFeatured: i === 0, label: p.file.name }));
+    // create mode: the cover is the first READY tile (a skeleton isn't a photo yet).
+    const firstReady = staged.findIndex((s) => s.status === "ready");
+    return staged.map((s, i) => ({ ...s, isFeatured: i === firstReady }));
   }, [savedId, existingImages, stagedPhotos]);
 
-  const imageCount = savedId ? existingImages.length : stagedPhotos.length;
+  // Progress across in-flight staged tiles (a skeleton doesn't count as a photo).
+  const stagedTotal = stagedPhotos.length;
+  const stagedDone = stagedPhotos.filter((p) => p.status === "ready" || p.status === "error").length;
+  const stagedInFlight = stagedPhotos.some((p) => p.status === "processing" || p.status === "uploading");
+  const stagedReady = stagedPhotos.filter((p) => p.status === "ready").length;
+  const stagedFailed = stagedPhotos.filter((p) => p.status === "error").length;
+  const stagedPct = stagedTotal > 0 ? Math.round((stagedDone / stagedTotal) * 100) : 0;
+
+  const imageCount = savedId ? existingImages.length : stagedReady;
   const hasCover = imageCount > 0;
   const hasAddress = form.address.trim().length > 0;
   const hasPrice = Boolean(numericPrice);
@@ -358,59 +388,76 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
       if (!files || files.length === 0) return;
       const incoming = Array.from(files);
 
-      const currentCount = savedId ? existingImages.length : stagedPhotos.length;
+      // Cap: saved images + in-flight staged (edit mode) vs staged (create mode).
+      const currentCount = savedId ? existingImages.length + stagedPhotos.length : stagedPhotos.length;
       if (currentCount + incoming.length > 50) {
         toast.error("Up to 50 photos per property");
         return;
       }
 
-      // Normalize (HEIC → JPEG, downscale, bound size) in the browser first, so
-      // Storage only ever receives renderable JPEG/PNG/WebP.
+      // Optimistic tiles FIRST — every selected file gets a skeleton before any
+      // async work starts. `ids` lets out-of-order callbacks address tiles by id.
+      const ids = incoming.map(() => `staged-${++stagedSeq}`);
+      const placeholders: StagedPhoto[] = incoming.map((file, i) => ({
+        id: ids[i],
+        name: file.name,
+        status: "processing" as const,
+      }));
+      setStagedPhotos((prev) => [...prev, ...placeholders]);
+
       setProcessing(true);
-      let normalized: File[] = [];
-      let normErrors: string[] = [];
+      const uploads: Promise<void>[] = [];
+      const editId = savedId; // narrowed & captured for the callbacks
       try {
-        const result = await normalizeImageFiles(incoming);
-        normalized = result.files;
-        normErrors = result.errors;
+        await normalizeImageFilesStreaming(incoming, (i, result) => {
+          if (!result.ok) {
+            setStagedPhotos((prev) =>
+              prev.map((p) => (p.id === ids[i] ? { ...p, status: "error", error: result.reason } : p)),
+            );
+            return;
+          }
+          const file = result.file;
+          const url = URL.createObjectURL(file);
+          setStagedPhotos((prev) =>
+            prev.map((p) => (p.id === ids[i] ? { ...p, status: editId ? "uploading" : "ready", file, url } : p)),
+          );
+
+          // Edit mode: upload this photo immediately and independently.
+          if (editId) {
+            uploads.push(
+              (async () => {
+                try {
+                  const { errors } = await PropertyService.uploadImages(editId, [file]);
+                  if (errors.length) {
+                    setStagedPhotos((prev) =>
+                      prev.map((p) => (p.id === ids[i] ? { ...p, status: "error", error: errors.join(", ") } : p)),
+                    );
+                  } else {
+                    URL.revokeObjectURL(url);
+                    setStagedPhotos((prev) => prev.filter((p) => p.id !== ids[i]));
+                  }
+                } catch (e) {
+                  setStagedPhotos((prev) =>
+                    prev.map((p) =>
+                      p.id === ids[i]
+                        ? { ...p, status: "error", error: e instanceof Error ? e.message : "upload failed" }
+                        : p,
+                    ),
+                  );
+                }
+              })(),
+            );
+          }
+        });
+        if (editId) {
+          await Promise.all(uploads);
+          await refreshImages(editId);
+        }
       } catch (e) {
         console.error("[property-editor] normalize failed", e);
         toast.error("Could not process those photos");
-        setProcessing(false);
-        return;
-      }
-      setProcessing(false);
-
-      if (normErrors.length) {
-        toast.error(
-          normErrors.length === 1
-            ? `Skipped ${normErrors[0]}`
-            : `Skipped ${normErrors.length} photos: ${normErrors.join(", ")}`,
-        );
-      }
-      if (!normalized.length) return;
-
-      if (!savedId) {
-        setStagedPhotos((prev) => {
-          // Only create object URLs for the files we'll actually keep — slicing
-          // after createObjectURL would leak the dropped entries' URLs.
-          const room = Math.max(0, 50 - prev.length);
-          const added = normalized.slice(0, room).map((file) => ({ file, url: URL.createObjectURL(file) }));
-          return [...prev, ...added];
-        });
-        return;
-      }
-
-      setUploading(true);
-      try {
-        const { errors } = await PropertyService.uploadImages(savedId, normalized);
-        if (errors.length) toast.warning(`Some photos failed: ${errors.join(", ")}`);
-        await refreshImages(savedId);
-      } catch (e) {
-        console.error(e);
-        toast.error(e instanceof Error ? e.message : "Photo upload failed");
       } finally {
-        setUploading(false);
+        setProcessing(false);
       }
     },
     [savedId, existingImages.length, stagedPhotos.length],
@@ -418,7 +465,10 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
 
   const handleReorder = async (reordered: ImageItem[]) => {
     if (savedId) {
-      const order = reordered.map((item, i) => ({ id: item.id, sort_order: i }));
+      // Only existing (saved) images carry a sort order; skeleton/error staged
+      // tiles are appended after them and are not draggable.
+      const existingOrder = reordered.filter((item) => !item.isNew);
+      const order = existingOrder.map((item, i) => ({ id: item.id, sort_order: i }));
       setExistingImages((prev) =>
         prev.map((img) => ({ ...img, sort_order: order.find((o) => o.id === img.id)?.sort_order ?? img.sort_order })),
       );
@@ -427,19 +477,22 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
         toast.error("Failed to reorder photos");
       });
     } else {
-      const next = reordered
-        .map((item) => stagedPhotos[parseInt(item.id.replace("new-", ""), 10)])
-        .filter((p): p is StagedPhoto => Boolean(p));
-      setStagedPhotos(next);
+      // Reorder ready tiles by id; keep non-ready (skeleton/error) at the end.
+      const byId = new Map(stagedPhotos.map((p) => [p.id, p]));
+      const readyOrdered = reordered
+        .map((item) => byId.get(item.id))
+        .filter((p): p is StagedPhoto => Boolean(p) && p?.status === "ready");
+      const rest = stagedPhotos.filter((p) => p.status !== "ready");
+      setStagedPhotos([...readyOrdered, ...rest]);
     }
   };
 
   const handleSetFeatured = async (id: string) => {
     if (!savedId) {
-      // Pre-save: move the chosen staged photo to the front (cover = first).
-      const idx = parseInt(id.replace("new-", ""), 10);
+      // Pre-save: move the chosen READY staged photo to the front (cover = first ready).
       setStagedPhotos((prev) => {
-        if (idx <= 0 || idx >= prev.length) return prev;
+        const idx = prev.findIndex((p) => p.id === id);
+        if (idx < 0 || prev[idx].status !== "ready") return prev;
         const next = [...prev];
         const [moved] = next.splice(idx, 1);
         next.unshift(moved);
@@ -455,15 +508,14 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
   };
 
   const handleDeleteImage = async (id: string) => {
-    if (!savedId) {
-      const idx = parseInt(id.replace("new-", ""), 10);
-      setStagedPhotos((prev) => {
-        const removed = prev[idx];
-        if (removed) URL.revokeObjectURL(removed.url);
-        return prev.filter((_, i) => i !== idx);
-      });
+    // A staged tile (create OR an edit-mode error tile) is dismissed by id.
+    const staged = stagedPhotos.find((p) => p.id === id);
+    if (staged) {
+      if (staged.url) URL.revokeObjectURL(staged.url);
+      setStagedPhotos((prev) => prev.filter((p) => p.id !== id));
       return;
     }
+    if (!savedId) return;
     setExistingImages((prev) => prev.filter((img) => img.id !== id));
     await PropertyService.deleteImageViaApi(savedId, id).catch((e) => {
       console.error(e);
@@ -530,6 +582,10 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
       toast.error("Address is required");
       return;
     }
+    if (stagedPhotos.some((p) => p.status === "processing" || p.status === "uploading")) {
+      toast.error("Wait for photos to finish processing");
+      return;
+    }
     const publish = showOnSite && canPublish;
     setSaving(true);
     try {
@@ -540,13 +596,16 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
         setSavedId(newId);
         setPublicSlug(created.slug ?? null);
         if (stagedPhotos.length > 0) {
-          setUploading(true);
-          const { errors } = await PropertyService.uploadImages(newId, stagedPhotos.map((p) => p.file)).catch((e) => ({ uploaded: [], errors: [e instanceof Error ? e.message : "upload failed"] }));
-          if (errors.length) toast.warning(`Some photos failed: ${errors.join(", ")}`);
-          stagedPhotos.forEach((p) => URL.revokeObjectURL(p.url));
+          const readyFiles = stagedPhotos.flatMap((p) => (p.status === "ready" && p.file ? [p.file] : []));
+          if (readyFiles.length > 0) {
+            setUploading(true);
+            const { errors } = await PropertyService.uploadImages(newId, readyFiles).catch((e) => ({ uploaded: [], errors: [e instanceof Error ? e.message : "upload failed"] }));
+            if (errors.length) toast.warning(`Some photos failed: ${errors.join(", ")}`);
+            setUploading(false);
+          }
+          stagedPhotos.forEach((p) => { if (p.url) URL.revokeObjectURL(p.url); });
           setStagedPhotos([]);
           await refreshImages(newId);
-          setUploading(false);
         }
         await persistBuyers(newId);
         setSavedShowOnSite(publish);
@@ -558,13 +617,16 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
         const updated = (await PropertyService.updateProperty(savedId, payload)) as any;
         setPublicSlug(updated.slug ?? publicSlug);
         if (stagedPhotos.length > 0) {
-          setUploading(true);
-          const { errors } = await PropertyService.uploadImages(savedId, stagedPhotos.map((p) => p.file)).catch((e) => ({ uploaded: [], errors: [e instanceof Error ? e.message : "upload failed"] }));
-          if (errors.length) toast.warning(`Some photos failed: ${errors.join(", ")}`);
-          stagedPhotos.forEach((p) => URL.revokeObjectURL(p.url));
+          const readyFiles = stagedPhotos.flatMap((p) => (p.status === "ready" && p.file ? [p.file] : []));
+          if (readyFiles.length > 0) {
+            setUploading(true);
+            const { errors } = await PropertyService.uploadImages(savedId, readyFiles).catch((e) => ({ uploaded: [], errors: [e instanceof Error ? e.message : "upload failed"] }));
+            if (errors.length) toast.warning(`Some photos failed: ${errors.join(", ")}`);
+            setUploading(false);
+          }
+          stagedPhotos.forEach((p) => { if (p.url) URL.revokeObjectURL(p.url); });
           setStagedPhotos([]);
           await refreshImages(savedId);
-          setUploading(false);
         }
         await persistBuyers(savedId);
         setSavedShowOnSite(publish);
@@ -860,12 +922,28 @@ export default function PropertyEditor({ mode, propertyId }: { mode: "create" | 
               >
                 {processing || uploading ? <Loader2 className="mb-2 h-5 w-5 animate-spin" /> : <Upload className="mb-2 h-5 w-5" />}
                 <span className="text-sm">
-                  {processing ? "Processing photos…" : uploading ? "Uploading…" : "Drag photos here or click to browse"}
+                  {processing ? "Adding photos…" : uploading ? "Uploading…" : "Drag photos here or click to browse"}
                 </span>
                 <span className="mt-1 text-xs text-muted-foreground/60">
                   JPEG, PNG, WebP, HEIC — up to 50 photos. Tap the star to set the cover.
                 </span>
               </button>
+              {stagedInFlight ? (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-medium text-foreground">Photos</span>
+                    <span className="tabular-nums text-muted-foreground">Processing {stagedDone} of {stagedTotal}</span>
+                  </div>
+                  <div className="h-[3px] w-full rounded-full bg-muted">
+                    <div className="h-full rounded-full bg-brand transition-[width] duration-300" style={{ width: `${stagedPct}%` }} />
+                  </div>
+                </div>
+              ) : stagedFailed > 0 ? (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-medium text-foreground">Photos</span>
+                  <span className="tabular-nums text-muted-foreground">{stagedReady} photos ready · {stagedFailed} skipped</span>
+                </div>
+              ) : null}
               <SortableImageGrid items={imageItems} onReorder={handleReorder} onSetFeatured={handleSetFeatured} onDelete={handleDeleteImage} />
             </div>
 

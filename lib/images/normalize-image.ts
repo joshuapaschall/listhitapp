@@ -174,17 +174,59 @@ export async function normalizeImageFile(file: File): Promise<NormalizeResult> {
   }
 }
 
+// heic2any multiplexes onto ONE internal worker, so parallelism buys little — a
+// small pool only overlaps main-thread canvas work with the worker's next decode.
+// Keep it low; a big pool won't speed anything up and risks mobile-Safari memory.
+export const NORMALIZE_CONCURRENCY = 3
+
 /**
- * Normalize sequentially — heic2any is WASM-heavy and converting 20 photos in
- * parallel blows out memory on mobile Safari.
+ * Normalize with results streamed back as each file settles, so the UI can render
+ * a tile per photo immediately instead of waiting for the whole batch. Runs at
+ * most `concurrency` files at once via a shared cursor + worker loops. `onResult`
+ * fires with each file's ORIGINAL index (callback order is not guaranteed). One
+ * bad file never aborts the batch. Resolves once every file has settled.
+ */
+export async function normalizeImageFilesStreaming(
+  files: File[],
+  onResult: (index: number, result: NormalizeResult) => void,
+  concurrency: number = NORMALIZE_CONCURRENCY,
+): Promise<void> {
+  let next = 0
+  const workerCount = Math.max(1, Math.min(concurrency, files.length))
+
+  async function worker(): Promise<void> {
+    for (;;) {
+      const index = next++
+      if (index >= files.length) return
+      let result: NormalizeResult
+      try {
+        result = await normalizeImageFile(files[index])
+      } catch {
+        result = { ok: false, name: files[index].name, reason: "could not process this photo" }
+      }
+      onResult(index, result)
+    }
+  }
+
+  await Promise.all(Array.from({ length: workerCount }, () => worker()))
+}
+
+/**
+ * Batch form of the streaming normalizer. Preserves INPUT order in the returned
+ * arrays even though callbacks arrive out of order — the first photo becomes the
+ * cover, so that ordering is load-bearing.
  */
 export async function normalizeImageFiles(files: File[]): Promise<{ files: File[]; errors: string[] }> {
+  const results = new Array<NormalizeResult | undefined>(files.length)
+  await normalizeImageFilesStreaming(files, (i, r) => {
+    results[i] = r
+  })
   const out: File[] = []
   const errors: string[] = []
-  for (const file of files) {
-    const result = await normalizeImageFile(file)
-    if (result.ok) out.push(result.file)
-    else errors.push(`${result.name}: ${result.reason}`)
+  for (const r of results) {
+    if (!r) continue
+    if (r.ok) out.push(r.file)
+    else errors.push(`${r.name}: ${r.reason}`)
   }
   return { files: out, errors }
 }
