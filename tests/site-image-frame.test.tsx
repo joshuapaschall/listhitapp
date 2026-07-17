@@ -59,32 +59,27 @@ describe("DealCard framing", () => {
 })
 
 describe("PropertyGallery hero", () => {
-  test("renders a blurred backdrop plus a contained foreground for one photo", () => {
+  test("renders a single contained photo with no blurred backdrop", () => {
     const { container } = render(<PropertyGallery images={[{ image_url: SUPA_URL }]} alt="test" />)
     const imgs = container.querySelectorAll("img")
-    expect(imgs).toHaveLength(2)
+    // The blurred backdrop was removed — one photo, one <img>.
+    expect(imgs).toHaveLength(1)
 
-    const [backdrop, hero] = Array.from(imgs) as HTMLImageElement[]
-
-    // Backdrop: decorative, blurred.
-    expect(backdrop.getAttribute("aria-hidden")).toBe("true")
-    expect(backdrop.getAttribute("alt")).toBe("")
-    expect(backdrop.style.filter).toContain("blur(")
-
-    // Foreground: the real photo, contained (never cropped).
+    const hero = imgs[0] as HTMLImageElement
     expect(hero.getAttribute("alt")).toBe("test")
     expect(hero.style.objectFit).toBe("contain")
     expect(hero.style.objectFit).not.toBe("cover")
+    expect(hero.style.filter || "").not.toContain("blur(")
   })
 
-  test("the backdrop requests a tiny image and carries no srcset", () => {
+  test("the hero requests the full-size image with a srcset (no tiny backdrop)", () => {
     const { container } = render(<PropertyGallery images={[{ image_url: SUPA_URL }]} alt="test" />)
-    const backdrop = container.querySelector("img") as HTMLImageElement
+    const hero = container.querySelector("img") as HTMLImageElement
 
-    const src = backdrop.getAttribute("src") || ""
-    expect(src).toContain("width=64")
-    expect(src).toContain("quality=40")
-    expect(backdrop.hasAttribute("srcset")).toBe(false)
+    const src = hero.getAttribute("src") || ""
+    expect(src).toContain("width=1280")
+    expect(src).not.toContain("width=64")
+    expect(hero.hasAttribute("srcset")).toBe(true)
   })
 
   test("empty gallery still renders a 4:3 frame", () => {
