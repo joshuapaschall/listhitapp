@@ -358,7 +358,7 @@ describe("send route templates", () => {
 
   // ── Phase 3c-ii: dynamic resolve-at-dispatch ──────────────────────────────
   const smsBuyer = (id: string, n: string) => ({
-    id, phone: n, can_receive_sms: true, sms_suppressed: false, deleted_at: null, email_suppressed: false,
+    id, org_id: "org-1", phone: n, can_receive_sms: true, sms_suppressed: false, deleted_at: null, email_suppressed: false,
   })
 
   test("audience_definition re-resolves fresh at send (not the stale buyer_ids)", async () => {
@@ -470,7 +470,7 @@ describe("send route templates", () => {
       id: "d-shrink", channel: "sms", message: "Hi", org_id: "org-1",
       audience_definition: { match: "all", conditions: [] }, buyer_ids: ["snap1"], audience_preview_count: 100,
     })
-    h.state.buyers.push({ id: "b1", phone: "+15125550001", can_receive_sms: true, sms_suppressed: false, deleted_at: null })
+    h.state.buyers.push({ id: "b1", org_id: "org-1", phone: "+15125550001", can_receive_sms: true, sms_suppressed: false, deleted_at: null })
     h.state.resolveImpl = async () => new Set(["b1"])
 
     const res = await POST(req("d-shrink"))
@@ -480,7 +480,7 @@ describe("send route templates", () => {
   })
 
   test("legacy campaign (no segment fields) never calls resolveSegment", async () => {
-    h.state.campaigns.push({ id: "d6", channel: "sms", message: "Hi", buyer_ids: ["b1"] })
+    h.state.campaigns.push({ id: "d6", channel: "sms", message: "Hi", org_id: "org-1", buyer_ids: ["b1"] })
     h.state.buyers.push(smsBuyer("b1", "+15125557050"))
     const res = await POST(req("d6"))
     expect(res.status).toBe(200)

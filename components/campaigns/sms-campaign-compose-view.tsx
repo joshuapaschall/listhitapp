@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { ArrowLeft, CheckCircle2, Circle, TestTube2 } from "lucide-react"
 import { toast } from "sonner"
@@ -22,7 +22,6 @@ import { supabaseBrowser } from "@/lib/supabase-browser"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { BuyerService } from "@/services/buyer-service"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { Can } from "@/components/auth/Can"
 
@@ -62,33 +61,54 @@ export default function SmsCampaignComposeView({ initialCampaign }: { initialCam
   const [previewOpen, setPreviewOpen] = useState(false)
   const [testPhone, setTestPhone] = useState("")
   const [sendingTest, setSendingTest] = useState(false)
-  const [resolvedGroupBuyerIds, setResolvedGroupBuyerIds] = useState<string[]>([])
+  const [audience, setAudience] = useState<{ count: number; sampleIds: string[] } | null>(null)
+  const [audienceLoading, setAudienceLoading] = useState(false)
   const [sendConfirmOpen, setSendConfirmOpen] = useState(false)
   const [shortConfig, setShortConfig] = useState<ShortLinkConfig>({ domain: "", slugLength: 7, configured: false })
+  const audienceSeq = useRef(0)
+  const audienceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const parsedTestPhone = useMemo(() => {
     if (!testPhone.trim()) return null
     return formatPhoneE164(testPhone)
   }, [testPhone])
   const isTestPhoneInvalid = testPhone.trim().length > 0 && !parsedTestPhone
   const campaignGroupIdsKey = useMemo(() => JSON.stringify(campaign.group_ids || []), [campaign.group_ids])
+  const campaignBuyerIdsKey = useMemo(() => JSON.stringify(campaign.buyer_ids || []), [campaign.buyer_ids])
 
+  // Resolve the audience count server-side (the same resolver the send path uses),
+  // debounced and sequence-guarded so a stale response can't overwrite a newer one.
   useEffect(() => {
     const groupIds = JSON.parse(campaignGroupIdsKey) as string[]
-    if (!groupIds.length) {
-      setResolvedGroupBuyerIds([])
+    const buyerIds = JSON.parse(campaignBuyerIdsKey) as string[]
+    if (!groupIds.length && !buyerIds.length) {
+      setAudience({ count: 0, sampleIds: [] })
+      setAudienceLoading(false)
       return
     }
-    let alive = true
-    BuyerService.getBuyerIdsForGroups(groupIds)
-      .then((ids) => { if (alive) setResolvedGroupBuyerIds(ids) })
-      .catch(() => { if (alive) setResolvedGroupBuyerIds([]) })
-    return () => { alive = false }
-  }, [campaignGroupIdsKey])
-
-  const allRecipientIds = useMemo(() => {
-    const direct = campaign.buyer_ids || []
-    return Array.from(new Set([...direct, ...resolvedGroupBuyerIds]))
-  }, [campaign.buyer_ids, resolvedGroupBuyerIds])
+    if (audienceTimer.current) clearTimeout(audienceTimer.current)
+    const mySeq = ++audienceSeq.current
+    setAudienceLoading(true)
+    audienceTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/campaigns/audience/count", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ channel: "sms", buyerIds, groupIds }),
+        })
+        const body = await res.json().catch(() => ({}))
+        if (mySeq !== audienceSeq.current) return // a newer change superseded this one
+        if (!res.ok) throw new Error(body?.error || "audience count failed")
+        setAudience({ count: body.count ?? 0, sampleIds: body.sampleIds ?? [] })
+      } catch (err) {
+        if (mySeq !== audienceSeq.current) return
+        console.error("[audience-count] fetch failed", err)
+        setAudience(null) // do not toast — this fires on near-keystroke changes
+      } finally {
+        if (mySeq === audienceSeq.current) setAudienceLoading(false)
+      }
+    }, 400)
+    return () => { if (audienceTimer.current) clearTimeout(audienceTimer.current) }
+  }, [campaignGroupIdsKey, campaignBuyerIdsKey])
 
   useEffect(() => setTestPhone(localStorage.getItem("listhit:smsTestNumber") ?? ""), [])
 
@@ -108,7 +128,11 @@ export default function SmsCampaignComposeView({ initialCampaign }: { initialCam
   // Prefer the resolved audience count; fall back to a prefill snapshot, then to
   // legacy buyer_ids/group_ids for campaigns created before the picker.
   const recipientCount =
-    campaign.audience_preview_count ?? hasPrefillSnapshot?.recipientCount ?? allRecipientIds.length
+    campaign.audience_preview_count ?? hasPrefillSnapshot?.recipientCount ?? audience?.count ?? 0
+  // The server count must have loaded before an operator can dispatch — never send
+  // against a count that failed to resolve.
+  const audienceUnknown =
+    audienceLoading || (audience === null && !campaign.audience_preview_count && !hasPrefillSnapshot)
   const toValid = recipientCount > 0 || !!hasPrefillSnapshot
   const fromValid = true
   const contentValid = (!!campaign.message?.trim() || mediaUrls.length > 0) && segmentInfo.segments <= 10
@@ -162,13 +186,18 @@ export default function SmsCampaignComposeView({ initialCampaign }: { initialCam
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ campaignId: campaign.id }),
+      body: JSON.stringify({ campaignId: campaign.id, expectedCount: recipientCount }),
     })
+    const body = await res.json().catch(() => ({}))
+    if (res.ok && body?.reason === "audience_count_mismatch") {
+      toast.error(`Audience changed — it now resolves to ${body.resolved} recipients, not ${body.expected}. Reopen the campaign and check the audience.`)
+      setSendConfirmOpen(false)
+      return
+    }
     if (res.ok) {
       toast.success("Campaign sending…")
       router.push(`/campaigns/${campaign.id}`)
     } else {
-      const body = await res.json().catch(() => ({}))
       toast.error(body?.error || "Send failed")
     }
   }
@@ -191,13 +220,13 @@ export default function SmsCampaignComposeView({ initialCampaign }: { initialCam
 
 
   return <div className="min-h-screen bg-background">
-    <div className="sticky top-0 bg-background/80 backdrop-blur z-10 border-b border-border py-4 px-6"><div className="max-w-4xl mx-auto flex items-center justify-between"><div className="flex items-center gap-2"><Button variant="ghost" size="icon" onClick={() => router.push("/campaigns")}><ArrowLeft className="h-4 w-4" /></Button><Input className="w-auto min-w-[200px] max-w-[400px]" value={campaign.name || "Untitled campaign"} onChange={(e) => update({ name: e.target.value })} /><CampaignStatusBadge status={campaign.status} />{hasEdited && <span className="text-xs text-muted-foreground">{autosaveState === "saving" ? "Saving…" : autosaveState === "failed" ? "Save failed" : "Saved"}</span>}</div><div className="flex items-start gap-2"><div><Input className="h-9 w-[130px]" value={testPhone} onChange={(e) => setTestPhone(e.target.value)} placeholder="+1 (770) 555-0123" />{isTestPhoneInvalid && <p className="mt-1 text-xs text-red-500">Enter a valid US phone number</p>}</div><Can permission="campaigns.send_sms"><Button variant="outline" size="sm" disabled={!testPhone.trim() || isTestPhoneInvalid || sendingTest || !campaign.message?.trim()} onClick={sendTest}><TestTube2 className="h-4 w-4" />Send test</Button></Can><Can permission="campaigns.send_sms"><Button variant="brand" disabled={!canSend || !!campaign.scheduled_at} onClick={() => setSendConfirmOpen(true)}>Send</Button></Can></div></div></div>
+    <div className="sticky top-0 bg-background/80 backdrop-blur z-10 border-b border-border py-4 px-6"><div className="max-w-4xl mx-auto flex items-center justify-between"><div className="flex items-center gap-2"><Button variant="ghost" size="icon" onClick={() => router.push("/campaigns")}><ArrowLeft className="h-4 w-4" /></Button><Input className="w-auto min-w-[200px] max-w-[400px]" value={campaign.name || "Untitled campaign"} onChange={(e) => update({ name: e.target.value })} /><CampaignStatusBadge status={campaign.status} />{hasEdited && <span className="text-xs text-muted-foreground">{autosaveState === "saving" ? "Saving…" : autosaveState === "failed" ? "Save failed" : "Saved"}</span>}</div><div className="flex items-start gap-2"><div><Input className="h-9 w-[130px]" value={testPhone} onChange={(e) => setTestPhone(e.target.value)} placeholder="+1 (770) 555-0123" />{isTestPhoneInvalid && <p className="mt-1 text-xs text-red-500">Enter a valid US phone number</p>}</div><Can permission="campaigns.send_sms"><Button variant="outline" size="sm" disabled={!testPhone.trim() || isTestPhoneInvalid || sendingTest || !campaign.message?.trim()} onClick={sendTest}><TestTube2 className="h-4 w-4" />Send test</Button></Can><Can permission="campaigns.send_sms"><Button variant="brand" disabled={!canSend || !!campaign.scheduled_at || audienceUnknown} onClick={() => setSendConfirmOpen(true)}>Send</Button></Can></div></div></div>
     <main className="max-w-4xl mx-auto px-6 py-8 space-y-3">
       <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="to" title="To" valid={toValid} ctaText="Add recipients" summary={toValid ? `${recipientCount} recipients` : "Who are you sending this to?"}>{hasPrefillSnapshot ? <AudienceFilterSummaryCard snapshot={hasPrefillSnapshot} onPreview={() => setPreviewOpen(true)} onAdjust={() => router.push("/buyers")} onClear={() => { setHasPrefillSnapshot(null); update({ buyer_ids: [] }) }} /> : (
         <CampaignAudienceStep channel="sms" campaign={campaign} update={update} audienceSelection={audienceSelection} onAudienceChange={handleAudienceChange} recipientCount={recipientCount} />
       )}</CardRow>
-      <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="from" title="From" valid={fromValid} ctaText="View sender" summary="Per-recipient routing with fallback"><SmsFromCard buyerIds={allRecipientIds} /></CardRow>
-      <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="content" title="Content" valid={contentValid} ctaText="Compose SMS" summary={campaign.message?.trim() ? `Message ready — ${segmentInfo.segments} segments` : "Write your message"}><SmsComposerPanel message={campaign.message || ""} onMessageChange={(value) => update({ message: value })} buyerIds={allRecipientIds} recipientCount={recipientCount} mediaUrls={mediaUrls} shortenLinks={shortenLinks} onShortenLinksChange={(value) => update({ shorten_links: value })} shortConfig={shortConfig} /></CardRow>
+      <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="from" title="From" valid={fromValid} ctaText="View sender" summary="Per-recipient routing with fallback"><SmsFromCard recipientCount={recipientCount} /></CardRow>
+      <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="content" title="Content" valid={contentValid} ctaText="Compose SMS" summary={campaign.message?.trim() ? `Message ready — ${segmentInfo.segments} segments` : "Write your message"}><SmsComposerPanel message={campaign.message || ""} onMessageChange={(value) => update({ message: value })} buyerIds={audience?.sampleIds ?? []} recipientCount={recipientCount} mediaUrls={mediaUrls} shortenLinks={shortenLinks} onShortenLinksChange={(value) => update({ shorten_links: value })} shortConfig={shortConfig} /></CardRow>
       <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="media" title="Media" valid={true} ctaText="Add media" summary={mediaUrls.length ? `${mediaUrls.length} attachment(s)` : "Optional MMS attachments"}><SmsMediaCard mediaUrls={mediaUrls} onChange={(urls) => update({ media_url: JSON.stringify(urls) })} subject={campaign.subject} onSubjectChange={(value) => update({ subject: value })} /></CardRow>
       <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="property" title="Property" valid={true} ctaText="Attribute property" summary={campaign.property_id ? "Campaign cost attributed to a property" : "Optional property attribution"}><CampaignPropertySelector value={campaign.property_id ?? null} onChange={(property_id) => update({ property_id })} /></CardRow>
       <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="sendTime" title="Send time" valid={sendTimeValid} ctaText="Set send time" summary={campaign.scheduled_at ? `Scheduled for ${new Date(campaign.scheduled_at).toLocaleString()}` : "Send immediately when you click Send"}><SmsSendTimeCard scheduledAt={campaign.scheduled_at} onScheduledAtChange={(value) => update({ scheduled_at: value })} weekdayOnly={campaign.weekday_only} onWeekdayOnlyChange={(value) => update({ weekday_only: value })} runFrom={campaign.run_from} onRunFromChange={(value) => update({ run_from: value })} runUntil={campaign.run_until} onRunUntilChange={(value) => update({ run_until: value })} /></CardRow>
@@ -207,7 +236,7 @@ export default function SmsCampaignComposeView({ initialCampaign }: { initialCam
         <AlertDialogHeader>
           <AlertDialogTitle>Send campaign?</AlertDialogTitle>
           <AlertDialogDescription>
-            This will send {recipientCount} SMS {recipientCount === 1 ? "message" : "messages"} now. This can&apos;t be undone.
+            This will send {recipientCount.toLocaleString()} SMS {recipientCount === 1 ? "message" : "messages"} now. This can&apos;t be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

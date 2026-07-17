@@ -5,10 +5,10 @@ import { Phone, Users, Wand2 } from "lucide-react"
 import { fetchMessagingThroughput } from "@/lib/sms-throughput"
 
 interface SmsFromCardProps {
-  buyerIds: string[]
+  recipientCount: number
 }
 
-export default function SmsFromCard({ buyerIds }: SmsFromCardProps) {
+export default function SmsFromCard({ recipientCount }: SmsFromCardProps) {
   const [poolSize, setPoolSize] = useState(15)
   const defaultDid = process.env.NEXT_PUBLIC_DEFAULT_OUTBOUND_DID ?? null
 
@@ -51,7 +51,7 @@ export default function SmsFromCard({ buyerIds }: SmsFromCardProps) {
         </div>
       </div>
 
-      <p className="text-xs text-muted-foreground">Multi-market routing (separate pools per market) is coming soon. {buyerIds.length > 0 ? `(${buyerIds.length.toLocaleString()} recipients selected)` : ""}</p>
+      <p className="text-xs text-muted-foreground">Multi-market routing (separate pools per market) is coming soon. {recipientCount > 0 ? `(${recipientCount.toLocaleString()} recipients selected)` : ""}</p>
     </div>
   )
 }

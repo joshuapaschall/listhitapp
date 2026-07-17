@@ -11,7 +11,8 @@ import { getCronRequestToken, isJwtLike } from "@/lib/cron-auth"
 import { linkifyHtml } from "@/lib/email/linkify-html"
 import { calculateSmsSegments } from "@/lib/sms-utils"
 import { applyShortLinkPreview } from "@/lib/shortlink-preview"
-import { fetchAllRows, fetchRowsByIdChunks } from "@/lib/supabase-fetch-all"
+import { fetchAllRows } from "@/lib/supabase-fetch-all"
+import { resolveAudienceIds } from "@/lib/campaigns/resolve-audience-ids"
 import { formatPhoneE164, normalizeEmail } from "@/lib/dedup-utils"
 import * as smsCampaignSender from "@/services/sms-campaign-sender"
 import { requireOrgContext, resolveOrgIdForUser } from "@/lib/auth/org-context"
@@ -63,7 +64,8 @@ export async function POST(request: NextRequest) {
   const { supabaseAdmin } = await import("@/lib/supabase")
   const supabase = supabaseAdmin
 
-  const { campaignId, dryRun: dryRunFromBody } = await request.json()
+  const body = await request.json()
+  const { campaignId, dryRun: dryRunFromBody } = body
   const dryRun = (dryRunFromBody === true) || process.env.LISTHIT_DRY_RUN === "1"
 
   if (!campaignId) {
@@ -234,46 +236,41 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const idSet = new Set<string>(buyerIds)
-  if (groupIds.length) {
-    let groupRows: Array<{ buyer_id: string }>
-    try {
-      groupRows = await fetchAllRows<{ buyer_id: string }>(
-        () =>
-          applyChannelEligibility(
-            supabase
-              .from("buyer_groups")
-              .select("buyer_id, buyers!inner(id)")
-              .in("group_id", groupIds),
-            campaign.channel,
-            "buyers.",
-          ),
-        "buyer_id",
-      )
-    } catch (groupErr) {
-      console.error("Error fetching group buyers", groupErr)
-      return new Response(JSON.stringify({ error: "Failed to fetch recipients" }), { status: 500 })
-    }
-    for (const row of groupRows) {
-      idSet.add(row.buyer_id)
-    }
+  // Resolve the audience through the SAME function the preview count uses, so the
+  // shown count and the sent count are guaranteed to agree.
+  let finalIds: string[]
+  try {
+    finalIds = await resolveAudienceIds({
+      supabase,
+      orgId: campaign.org_id,
+      channel: campaign.channel,
+      buyerIds,
+      groupIds,
+    })
+  } catch (err) {
+    console.error("Error resolving campaign audience", err)
+    return new Response(JSON.stringify({ error: "Failed to fetch recipients" }), { status: 500 })
   }
 
-  let finalIds = Array.from(idSet)
-  try {
-    // Chunk the .in() so we neither cap at 1000 nor overflow the URL with thousands of ids.
-    const allowed = await fetchRowsByIdChunks<{ id: string }>(
-      finalIds,
-      (chunk) =>
-        applyChannelEligibility(
-          supabase.from("buyers").select("id").in("id", chunk),
-          campaign.channel,
-        ),
-    )
-    finalIds = allowed.map((r) => r.id)
-  } catch (allowErr) {
-    console.error("Error filtering recipients", allowErr)
-    return new Response(JSON.stringify({ error: "Failed to fetch recipients" }), { status: 500 })
+  // Expected-count guard — mirror of audience_drift_guard, only trips on expansion
+  // beyond the count the operator confirmed. Optional, so the cron path (which posts
+  // only { campaignId }) is unaffected. Shrinkage is always safe.
+  const expectedCount = typeof body?.expectedCount === "number" ? body.expectedCount : null
+  if (expectedCount !== null && expectedCount > 0) {
+    const ceiling = Math.max(Math.ceil(expectedCount * 1.1), expectedCount + 50)
+    if (finalIds.length > ceiling) {
+      await supabase
+        .from("campaigns")
+        .update({
+          status: "error",
+          error: `audience_count_mismatch: resolved ${finalIds.length} exceeds ceiling ${ceiling} (expected ${expectedCount})`,
+        })
+        .eq("id", campaignId)
+      return NextResponse.json(
+        { ok: false, paused: true, reason: "audience_count_mismatch", resolved: finalIds.length, expected: expectedCount },
+        { status: 200 },
+      )
+    }
   }
 
   if (campaign.channel === "sms") {
