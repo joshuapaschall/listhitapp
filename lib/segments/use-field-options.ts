@@ -16,6 +16,7 @@ export type OptionField =
   | "source"
   | "property_type"
   | "campaigns"
+  | "groups"
 
 // Simple module-level in-memory cache so repeated condition rows don't refetch
 // the same option list. Keyed by field; lives for the page session.

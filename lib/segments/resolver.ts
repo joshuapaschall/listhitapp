@@ -22,6 +22,7 @@ import type {
   AttributeCondition,
   BehavioralCondition,
   BehavioralScope,
+  GroupCondition,
   ResolveContext,
   SegmentCondition,
   SegmentDefinition,
@@ -138,6 +139,13 @@ export function validateDefinition(def: SegmentDefinition): void {
         if (!isFiniteNumber(n) || n < 1) {
           throw new Error("Invalid behavioral last_n_campaigns scope: n must be a finite number >= 1")
         }
+      }
+    } else if (cond.kind === "group") {
+      if (cond.operator !== "in_any" && cond.operator !== "in_all" && cond.operator !== "not_in") {
+        throw new Error(`Group operator must be "in_any", "in_all", or "not_in", got "${String(cond.operator)}"`)
+      }
+      if (!Array.isArray(cond.groupIds) || cond.groupIds.some((id) => typeof id !== "string")) {
+        throw new Error("Group condition groupIds must be an array of strings")
       }
     } else {
       throw new Error(`Unknown condition kind: ${String((cond as SegmentCondition as any).kind)}`)
@@ -304,6 +312,50 @@ export async function resolveAttributeCondition(
 }
 
 // ---------------------------------------------------------------------------
+// Group-membership resolver
+// ---------------------------------------------------------------------------
+
+// The set of buyer ids that belong to ANY of `groupIds`, org-scoped through the
+// buyers join (buyer_groups has no org_id column of its own).
+async function groupMemberSet(ctx: ResolveContext, groupIds: string[]): Promise<Set<string>> {
+  if (groupIds.length === 0) return new Set<string>()
+  return collectColumn(
+    () =>
+      ctx.supabase
+        .from("buyer_groups")
+        .select("buyer_id, buyers!inner(org_id, deleted_at)")
+        .in("group_id", groupIds)
+        .eq("buyers.org_id", ctx.orgId)
+        .is("buyers.deleted_at", null),
+    "buyer_id",
+  )
+}
+
+export async function resolveGroupCondition(
+  cond: GroupCondition,
+  ctx: ResolveContext,
+): Promise<Set<string>> {
+  const groupIds = Array.isArray(cond.groupIds) ? cond.groupIds.filter(Boolean) : []
+  // Incomplete condition → match no one, so it never silently widens a segment.
+  if (groupIds.length === 0) return new Set<string>()
+
+  if (cond.operator === "in_any") {
+    return groupMemberSet(ctx, groupIds)
+  }
+  if (cond.operator === "in_all") {
+    // Member of EVERY listed group = intersection of each group's member set.
+    const sets = await Promise.all(groupIds.map((id) => groupMemberSet(ctx, [id])))
+    return intersectSets(sets)
+  }
+  // not_in → eligible universe minus anyone in any listed group.
+  const [universe, members] = await Promise.all([
+    resolveEligibleUniverse(ctx),
+    groupMemberSet(ctx, groupIds),
+  ])
+  return subtractSets(universe, members)
+}
+
+// ---------------------------------------------------------------------------
 // Behavioral resolver
 // ---------------------------------------------------------------------------
 
@@ -455,9 +507,9 @@ export async function resolveEligibleUniverse(ctx: ResolveContext): Promise<Set<
 // ---------------------------------------------------------------------------
 
 async function resolveCondition(cond: SegmentCondition, ctx: ResolveContext): Promise<Set<string>> {
-  return cond.kind === "attribute"
-    ? resolveAttributeCondition(cond, ctx)
-    : resolveBehavioralCondition(cond, ctx)
+  if (cond.kind === "attribute") return resolveAttributeCondition(cond, ctx)
+  if (cond.kind === "group") return resolveGroupCondition(cond, ctx)
+  return resolveBehavioralCondition(cond, ctx)
 }
 
 export async function resolveSegment(

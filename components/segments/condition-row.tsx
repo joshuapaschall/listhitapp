@@ -15,7 +15,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import ValueInput from "./value-input"
-import { OptionsCombobox } from "./options-combobox"
+import { OptionsCombobox, OptionsMultiCombobox } from "./options-combobox"
 import {
   ATTRIBUTE_CATALOG,
   ATTRIBUTE_BY_FIELD,
@@ -25,6 +25,7 @@ import {
 import {
   defaultAttributeCondition,
   defaultBehavioralCondition,
+  defaultGroupCondition,
   didNotHelper,
   isConditionComplete,
 } from "@/lib/segments/condition-utils"
@@ -36,6 +37,8 @@ import type {
   BehavioralCondition,
   BehavioralMetric,
   BehavioralScope,
+  GroupCondition,
+  GroupOperator,
   SegmentCondition,
 } from "@/lib/segments/types"
 
@@ -149,6 +152,51 @@ function AttributeRow({
           />
         </div>
       )}
+    </>
+  )
+}
+
+const GROUP_OPERATOR_LABELS: Record<GroupOperator, string> = {
+  in_any: "in any of",
+  in_all: "in all of",
+  not_in: "not in",
+}
+
+function GroupRow({
+  condition,
+  onChange,
+}: {
+  condition: GroupCondition
+  onChange: (c: SegmentCondition) => void
+}) {
+  return (
+    <>
+      <div className="flex h-9 items-center rounded-md border bg-muted/40 px-3 text-sm text-muted-foreground w-[180px]">
+        Group membership
+      </div>
+
+      <Select
+        value={condition.operator}
+        onValueChange={(op) => onChange({ ...condition, operator: op as GroupOperator })}
+      >
+        <SelectTrigger className="w-[160px]">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="in_any">{GROUP_OPERATOR_LABELS.in_any}</SelectItem>
+          <SelectItem value="in_all">{GROUP_OPERATOR_LABELS.in_all}</SelectItem>
+          <SelectItem value="not_in">{GROUP_OPERATOR_LABELS.not_in}</SelectItem>
+        </SelectContent>
+      </Select>
+
+      <div className="min-w-[220px] flex-1">
+        <OptionsMultiCombobox
+          field="groups"
+          value={condition.groupIds ?? []}
+          onChange={(groupIds) => onChange({ ...condition, groupIds })}
+          placeholder="Select groups…"
+        />
+      </div>
     </>
   )
 }
@@ -337,6 +385,8 @@ export default function ConditionRow({
     >
       {condition.kind === "attribute" ? (
         <AttributeRow condition={condition} onChange={onChange} />
+      ) : condition.kind === "group" ? (
+        <GroupRow condition={condition} onChange={onChange} />
       ) : (
         <BehavioralRow
           condition={condition}

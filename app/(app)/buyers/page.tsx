@@ -840,7 +840,13 @@ function BuyersPageContent() {
   const [segmentName, setSegmentName] = useState("")
   const [segmentDescription, setSegmentDescription] = useState("")
   const [savingSegment, setSavingSegment] = useState(false)
-  const filterMapping = useMemo(() => filterStateToDefinition(filters as any), [filters])
+  const filterMapping = useMemo(
+    () =>
+      filterStateToDefinition(filters as any, {
+        groupIds: selectedGroupId ? [selectedGroupId] : [],
+      }),
+    [filters, selectedGroupId],
+  )
 
   const handleSaveAsSegment = async () => {
     if (!segmentName.trim()) return

@@ -53,7 +53,16 @@ export interface BehavioralCondition {
   channel?: "email" | "sms" | "any"
 }
 
-export type SegmentCondition = AttributeCondition | BehavioralCondition
+export type GroupOperator = "in_any" | "in_all" | "not_in"
+
+export interface GroupCondition {
+  kind: "group"
+  operator: GroupOperator
+  // group ids from public.groups. Empty = incomplete (excluded from resolve).
+  groupIds: string[]
+}
+
+export type SegmentCondition = AttributeCondition | BehavioralCondition | GroupCondition
 
 export interface SegmentDefinition {
   match: SegmentMatch
