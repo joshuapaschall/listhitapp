@@ -9,23 +9,36 @@
 export const BLENDED_SMS_RATE_USD = 0.008
 export const BLENDED_MMS_RATE_USD = 0.024
 
+export type SmsBillingProvider = "telnyx" | "twilio"
+
+// Blended US estimates. Telnyx values are the current cited ones.
+// TWILIO values are approximate blended US rates — Josh should verify against
+// his Twilio negotiated/published pricing and tune these two constants.
+const RATES: Record<SmsBillingProvider, { sms: number; mms: number }> = {
+  telnyx: { sms: BLENDED_SMS_RATE_USD, mms: BLENDED_MMS_RATE_USD },
+  twilio: { sms: 0.0083, mms: 0.02 }, // VERIFY against Twilio pricing
+}
+
 export interface CostEstimateInput {
   recipients: number
   segments: number
   hasMedia: boolean
+  provider?: SmsBillingProvider
 }
 
 export interface CostEstimate {
   perRecipient: number
   total: number
-  rateLabel: string
+  rateLabel: "SMS" | "MMS"
+  estimated: true
 }
 
-export function estimateCampaignCost({ recipients, segments, hasMedia }: CostEstimateInput): CostEstimate {
-  const rate = hasMedia ? BLENDED_MMS_RATE_USD : BLENDED_SMS_RATE_USD
-  const perRecipient = rate * Math.max(1, segments)
+export function estimateCampaignCost({ recipients, segments, hasMedia, provider = "telnyx" }: CostEstimateInput): CostEstimate {
+  const rate = RATES[provider] ?? RATES.telnyx
+  // MMS is billed per message; SMS is billed per segment.
+  const perRecipient = hasMedia ? rate.mms : rate.sms * Math.max(1, segments)
   const total = perRecipient * Math.max(0, recipients)
-  return { perRecipient, total, rateLabel: hasMedia ? "MMS" : "SMS" }
+  return { perRecipient, total, rateLabel: hasMedia ? "MMS" : "SMS", estimated: true }
 }
 
 export function formatUsd(value: number): string {

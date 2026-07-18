@@ -35,7 +35,10 @@ export default function CampaignPropertySelector({
   onChange,
 }: {
   value?: string | null;
-  onChange: (propertyId: string | null) => void;
+  // `label` is the property's address label (or null when cleared) so the parent
+  // can show it in a collapsed summary without a second fetch. Optional second
+  // arg — single-arg callers keep working.
+  onChange: (propertyId: string | null, label?: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [properties, setProperties] = useState<Property[]>([]);
@@ -100,7 +103,7 @@ export default function CampaignPropertySelector({
                 <CommandItem
                   value={NO_PROPERTY_VALUE}
                   onSelect={() => {
-                    onChange(null);
+                    onChange(null, null);
                     setOpen(false);
                   }}
                 >
@@ -117,7 +120,7 @@ export default function CampaignPropertySelector({
                     key={property.id}
                     value={`${property.id} ${propertyLabel(property)}`}
                     onSelect={() => {
-                      onChange(property.id);
+                      onChange(property.id, propertyLabel(property));
                       setOpen(false);
                     }}
                   >

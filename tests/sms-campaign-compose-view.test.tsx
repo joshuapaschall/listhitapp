@@ -16,7 +16,8 @@ describe("SmsCampaignComposeView", () => {
     expect(screen.getByText("To")).toBeTruthy()
     expect(screen.getByText("From")).toBeTruthy()
     expect(screen.getByText("Content")).toBeTruthy()
-    expect(screen.getByText("Media")).toBeTruthy()
+    // Media was folded into the Content card; Property remains its own card.
+    expect(screen.getByText("Property")).toBeTruthy()
     expect(screen.getByText("Send time")).toBeTruthy()
   })
 

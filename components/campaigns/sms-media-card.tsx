@@ -4,6 +4,7 @@ import { useRef, useState } from "react"
 import { Image as ImageIcon, X } from "lucide-react"
 import { toast } from "sonner"
 import { ALLOWED_MMS_EXTENSIONS, MAX_MMS_SIZE, uploadMediaFile } from "@/utils/uploadMedia"
+import { resizeImageFile } from "@/lib/images/resize-image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
@@ -23,21 +24,30 @@ export default function SmsMediaCard({ mediaUrls, onChange, subject, onSubjectCh
     if (!files?.length) return
     setUploading(true)
     const next = [...mediaUrls]
-    for (const file of Array.from(files)) {
-      const ext = `.${file.name.split(".").pop()?.toLowerCase() || ""}`
+    for (const original of Array.from(files)) {
+      const ext = `.${original.name.split(".").pop()?.toLowerCase() || ""}`
       if (!ALLOWED_MMS_EXTENSIONS.includes(ext as any)) {
-        toast.error(`Unsupported file type: ${file.name}`)
+        toast.error(`Unsupported file type: ${original.name}`)
         continue
       }
+      // Auto-downscale/compress images so oversized photos upload instead of
+      // hard-failing. Non-images pass through untouched.
+      let file = original
+      try {
+        file = await resizeImageFile(original)
+      } catch {
+        file = original // best-effort — fall back to the original on any failure
+      }
+      // Only reject if it's STILL over the MMS ceiling after resize (rare).
       if (file.size > MAX_MMS_SIZE) {
-        toast.error(`${file.name} exceeds 1MB limit`)
+        toast.error(`${original.name} is too large to send as MMS, even after resizing.`)
         continue
       }
       try {
         const url = await uploadMediaFile(file, "outgoing")
         next.push(url)
       } catch {
-        toast.error(`Failed uploading ${file.name}`)
+        toast.error(`Failed uploading ${original.name}`)
       }
     }
     onChange(next)
@@ -77,7 +87,7 @@ export default function SmsMediaCard({ mediaUrls, onChange, subject, onSubjectCh
           <ImageIcon className="h-5 w-5 text-muted-foreground" />
         </div>
         <p className="text-sm font-medium">{dragOver ? "Drop to upload" : "Drag images here or click to browse"}</p>
-        <p className="text-xs text-muted-foreground">JPG, PNG, GIF, WebP — up to 1 MB each</p>
+        <p className="text-xs text-muted-foreground">JPG, PNG, GIF, WebP — images auto-resized to fit</p>
       </div>
     </div>
     <input ref={inputRef} type="file" multiple accept={ALLOWED_MMS_EXTENSIONS.join(",")} className="hidden" onChange={(e) => onFiles(e.target.files)} />
