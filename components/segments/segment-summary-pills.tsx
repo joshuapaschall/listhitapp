@@ -8,9 +8,10 @@ interface SegmentSummaryPillsProps {
   definition: SegmentDefinition
   /** Cap pills shown; remainder collapses into a "+N" pill. */
   max?: number
+  groupNameById?: Record<string, string>
 }
 
-export default function SegmentSummaryPills({ definition, max = 6 }: SegmentSummaryPillsProps) {
+export default function SegmentSummaryPills({ definition, max = 6, groupNameById }: SegmentSummaryPillsProps) {
   const conditions = definition?.conditions ?? []
 
   if (conditions.length === 0) {
@@ -27,7 +28,7 @@ export default function SegmentSummaryPills({ definition, max = 6 }: SegmentSumm
         <span key={i} className="inline-flex items-center gap-1.5">
           {i > 0 && <span className="text-[10px] font-semibold uppercase text-muted-foreground">{joiner}</span>}
           <Badge variant="secondary" className="font-normal">
-            {describeCondition(cond)}
+            {describeCondition(cond, { groupNameById })}
           </Badge>
         </span>
       ))}

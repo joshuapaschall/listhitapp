@@ -12,7 +12,7 @@ import {
   CommandList,
 } from "@/components/ui/command"
 import { ATTRIBUTE_CATALOG, BEHAVIORAL_CATALOG } from "@/lib/segments/catalog"
-import { defaultAttributeCondition, defaultBehavioralCondition } from "@/lib/segments/condition-utils"
+import { defaultAttributeCondition, defaultBehavioralCondition, defaultGroupCondition } from "@/lib/segments/condition-utils"
 import type { SegmentCondition } from "@/lib/segments/types"
 
 interface AddConditionMenuProps {
@@ -63,6 +63,14 @@ export default function AddConditionMenu({ channel, onAdd }: AddConditionMenuPro
         </div>
         <CommandList className="max-h-[300px] overflow-y-auto">
           <CommandEmpty>No conditions found.</CommandEmpty>
+          <CommandGroup heading="Membership">
+            <CommandItem
+              value="group membership smart group"
+              onSelect={() => pick(defaultGroupCondition())}
+            >
+              Group membership
+            </CommandItem>
+          </CommandGroup>
           <CommandGroup heading="Who they are">
             {ATTRIBUTE_CATALOG.map((spec) => (
               <CommandItem

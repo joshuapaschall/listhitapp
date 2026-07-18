@@ -66,4 +66,36 @@ describe("filterStateToDefinition", () => {
     expect(r.droppedSearch).toBe(true)
     expect(r.droppedReachability).toBe(true)
   })
+
+  test("no opts → NO group condition (byte-identical to prior behavior)", () => {
+    const withOpts = filterStateToDefinition(f({ selectedTags: ["vip"] }), {})
+    const noOpts = filterStateToDefinition(f({ selectedTags: ["vip"] }))
+    expect(withOpts.definition).toEqual(noOpts.definition)
+    expect(noOpts.definition.conditions.some((c) => c.kind === "group")).toBe(false)
+    // Existing attribute mapping still holds.
+    expect(noOpts.definition.conditions).toContainEqual({
+      kind: "attribute", field: "tags", operator: "contains_all", value: ["vip"],
+    })
+  })
+
+  test("groupIds opt appends exactly one in_any group condition", () => {
+    const { definition } = filterStateToDefinition(empty, { groupIds: ["g1"] })
+    expect(definition.conditions).toContainEqual({ kind: "group", operator: "in_any", groupIds: ["g1"] })
+    expect(definition.conditions.filter((c) => c.kind === "group")).toHaveLength(1)
+  })
+
+  test("equivalence: group ∩ location → match all with two conditions (matches Buyers page)", () => {
+    const { definition } = filterStateToDefinition(
+      f({ selectedLocations: ["Fulton County (GA)"] }),
+      { groupIds: ["conv-agents-id"] },
+    )
+    expect(definition.match).toBe("all")
+    expect(definition.conditions).toHaveLength(2)
+    expect(definition.conditions).toContainEqual({
+      kind: "attribute", field: "locations", operator: "contains", value: ["Fulton County (GA)"],
+    })
+    expect(definition.conditions).toContainEqual({
+      kind: "group", operator: "in_any", groupIds: ["conv-agents-id"],
+    })
+  })
 })

@@ -9,7 +9,7 @@
 //                      automatically at send time by the shared eligibility gate
 // Both are flagged so the UI can tell the user.
 
-import type { AttributeCondition, SegmentDefinition } from "./types"
+import type { AttributeCondition, SegmentCondition, SegmentDefinition } from "./types"
 
 // Mirrors app/page.tsx FilterState exactly.
 export interface BuyersFilterState {
@@ -34,8 +34,11 @@ export interface FilterMappingResult {
   droppedReachability: boolean
 }
 
-export function filterStateToDefinition(f: BuyersFilterState): FilterMappingResult {
-  const conditions: AttributeCondition[] = []
+export function filterStateToDefinition(
+  f: BuyersFilterState,
+  opts?: { groupIds?: string[] },
+): FilterMappingResult {
+  const conditions: SegmentCondition[] = []
 
   // Tags: the page uses .contains (has ALL) — must map to contains_all, not contains.
   if (f.selectedTags && f.selectedTags.length > 0) {
@@ -74,6 +77,14 @@ export function filterStateToDefinition(f: BuyersFilterState): FilterMappingResu
       operator: "between",
       value: { min: f.createdAfter || undefined, max: f.createdBefore || undefined } as any,
     })
+  }
+
+  // Active smart group(s) → a group-membership condition. Only emitted when the
+  // caller passes groupIds (the "Save as segment" door). The Buyers list query
+  // does NOT pass this, because it applies the buyer_groups join itself.
+  const groupIds = (opts?.groupIds ?? []).filter(Boolean)
+  if (groupIds.length > 0) {
+    conditions.push({ kind: "group", operator: "in_any", groupIds })
   }
 
   const droppedSearch = !!(f.search && f.search.trim())

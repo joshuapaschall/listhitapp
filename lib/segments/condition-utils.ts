@@ -9,6 +9,8 @@ import type {
   AttributeOperator,
   BehavioralCondition,
   BehavioralMetric,
+  GroupCondition,
+  GroupOperator,
   SegmentCondition,
 } from "./types"
 
@@ -39,6 +41,10 @@ export function defaultBehavioralCondition(metric: BehavioralMetric): Behavioral
   return { kind: "behavioral", metric, operator: "did", scope: { type: "any_campaign" } }
 }
 
+export function defaultGroupCondition(): GroupCondition {
+  return { kind: "group", operator: "in_any", groupIds: [] }
+}
+
 const VALUELESS_OPERATORS: AttributeOperator[] = ["is_blank", "is_not_blank"]
 
 function isFiniteNumber(v: unknown): boolean {
@@ -48,6 +54,9 @@ function isFiniteNumber(v: unknown): boolean {
 // Is the condition fully specified enough to send to the resolver? Incomplete
 // conditions are excluded from the live count and block Save.
 export function isConditionComplete(cond: SegmentCondition): boolean {
+  if (cond.kind === "group") {
+    return Array.isArray(cond.groupIds) && cond.groupIds.length > 0
+  }
   if (cond.kind === "attribute") {
     const spec = ATTRIBUTE_BY_FIELD[cond.field]
     if (!spec) return false
@@ -119,8 +128,28 @@ function formatValue(cond: AttributeCondition): string {
   return v == null ? "" : String(v)
 }
 
+const GROUP_OPERATOR_WORDS: Record<GroupOperator, string> = {
+  in_any: "in any of",
+  in_all: "in all of",
+  not_in: "not in",
+}
+
 // Short plain-English description for summary pills / inline labels.
-export function describeCondition(cond: SegmentCondition): string {
+export function describeCondition(
+  cond: SegmentCondition,
+  opts?: { groupNameById?: Record<string, string> },
+): string {
+  if (cond.kind === "group") {
+    const word = GROUP_OPERATOR_WORDS[cond.operator] ?? cond.operator
+    const ids = cond.groupIds ?? []
+    const map = opts?.groupNameById
+    if (map && ids.length > 0) {
+      const names = ids.map((id) => map[id] ?? "unknown group")
+      return `Group ${word} ${names.join(", ")}`
+    }
+    const noun = ids.length === 1 ? "group" : "groups"
+    return `Group ${word} ${ids.length} ${noun}`
+  }
   if (cond.kind === "attribute") {
     const spec = ATTRIBUTE_BY_FIELD[cond.field]
     const label = spec?.label ?? cond.field

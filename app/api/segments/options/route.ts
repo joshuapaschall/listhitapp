@@ -65,6 +65,21 @@ export async function GET(request: Request) {
       return NextResponse.json({ options })
     }
 
+    if (field === "groups") {
+      const { data, error } = await supabase
+        .from("groups")
+        .select("id, name")
+        .eq("org_id", orgId)
+        .order("name", { ascending: true })
+        .limit(OPTION_LIMIT)
+      if (error) throw error
+      const options = (data ?? []).map((g: any) => ({
+        value: g.id,
+        label: g.name || "(unnamed group)",
+      }))
+      return NextResponse.json({ options })
+    }
+
     // Scalar buyer columns → distinct values.
     if (field === "status" || field === "source") {
       const { data, error } = await supabase
