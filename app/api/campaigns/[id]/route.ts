@@ -15,6 +15,8 @@ async function hasAnyCampaignSendPermission(supabase: any) {
 
 const allowed = new Set([
   "name", "subject", "message", "group_ids", "buyer_ids", "scheduled_at", "timezone", "run_from", "run_until", "weekday_only", "media_url", "send_to_all_numbers", "from_name", "from_email", "preview_text", "status", "design_json", "mjml", "property_id", "shorten_links",
+  // Which campaign-purpose market's number pool sends this SMS campaign.
+  "sending_market_id",
   // Segment provenance (Phase 3b): resolved buyer_ids stay the send source; these
   // record which segment/definition produced them for Phase 3c re-resolution.
   "segment_id",

@@ -9,6 +9,8 @@ import { evaluateSmsCampaignSafety, type SmsSafetyVerdict } from "@/lib/sms/sms-
 import { isWithinQuietHours, nextSendTime, SMS_CAMPAIGN_MPM } from "@/lib/sms/area-code-timezone"
 import { suppressBuyerSms } from "@/lib/sms/suppress"
 import { resolveOutboundFrom, recordStickyFrom } from "@/lib/sender/sticky-sender"
+import { resolveSendingMarketId } from "@/lib/campaigns/resolve-sending-market"
+import { NoSendingPoolError } from "@/lib/sender/campaign-from-pool"
 import { ensurePublicMediaUrls } from "@/utils/mms.server"
 import { resolveSmsProvider } from "@/lib/providers/sms"
 
@@ -197,6 +199,7 @@ async function sendSingleCampaignSms({
   mediaUrls,
   campaignId,
   orgId,
+  sendingMarketId,
 }: {
   buyerId: string
   toNumber: string
@@ -205,6 +208,8 @@ async function sendSingleCampaignSms({
   campaignId?: string
   // Org context for provider routing; derived from the org-scoped campaign row.
   orgId?: string
+  // Campaign market pool for cold recipients (with orgId). Sticky always wins.
+  sendingMarketId?: string
 }): Promise<TelnyxSendResult> {
   if (!telnyxApiKey || !messagingProfileId) {
     throw new Error("Telnyx environment variables are not properly configured")
@@ -213,12 +218,15 @@ async function sendSingleCampaignSms({
   const formatted = formatPhoneE164(toNumber)
   if (!formatted) throw new Error(`Invalid phone number: ${toNumber}`)
 
-  // Deterministic caller ID via the shared resolver (sticky → DEFAULT_OUTBOUND_DID).
+  // Deterministic caller ID via the shared resolver: sticky first, then rotate
+  // the selected campaign market's pool for cold recipients (no env DID fallback).
   const fromNumber = await resolveOutboundFrom({
     client: supabaseAdmin,
     buyerId,
     threadId: null,
     explicitFrom: null,
+    sendingMarketId,
+    orgId,
   })
 
   let finalMediaUrls: string[] | undefined
@@ -383,7 +391,7 @@ export async function processSmsQueue(limit = 5, opts: { leaseSeconds?: number; 
   const { data: campaignRows } = campaignIds.length
     ? await supabase
         .from("campaigns")
-        .select("id,user_id,org_id")
+        .select("id,user_id,org_id,sending_market_id")
         .in("id", campaignIds)
     : { data: [] }
   const campaignUserIdMap = new Map(
@@ -392,6 +400,30 @@ export async function processSmsQueue(limit = 5, opts: { leaseSeconds?: number; 
   const campaignOrgIdMap = new Map(
     campaignRows?.map((row) => [row.id, (row as any).org_id as string | null]) ?? [],
   )
+
+  // Resolve each campaign's sending market ONCE. A campaign whose pool can't be
+  // resolved (no/ambiguous campaign market) is failed rather than sent from the
+  // wrong number — its message is recorded as an error per recipient below.
+  const campaignSendingMarketMap = new Map<string, string>()
+  const campaignMarketErrorMap = new Map<string, string>()
+  for (const row of campaignRows ?? []) {
+    const rowOrgId = (row as any).org_id as string | null
+    if (!rowOrgId) continue
+    try {
+      const marketId = await resolveSendingMarketId(
+        supabase,
+        rowOrgId,
+        (row as any).sending_market_id ?? null,
+      )
+      campaignSendingMarketMap.set(row.id, marketId)
+    } catch (err: any) {
+      if (err instanceof NoSendingPoolError) {
+        campaignMarketErrorMap.set(row.id, err.message)
+      } else {
+        throw err
+      }
+    }
+  }
   const campaignMergeContextEntries = await Promise.all(
     Array.from(campaignUserIdMap.entries()).map(async ([campaignId, userId]) => [
       campaignId,
@@ -405,6 +437,27 @@ export async function processSmsQueue(limit = 5, opts: { leaseSeconds?: number; 
   for (const rawJob of jobs) {
     const job = rawJob as any
     if (job.campaign_id && pausedCampaignIds.has(job.campaign_id)) {
+      continue
+    }
+    // No usable sending pool for this campaign → fail the recipient, never send
+    // from a fallback/main number.
+    if (job.campaign_id && campaignMarketErrorMap.has(job.campaign_id)) {
+      const msg = campaignMarketErrorMap.get(job.campaign_id)!
+      const nowIso = new Date().toISOString()
+      await supabase
+        .from("sms_campaign_queue")
+        .update({
+          status: "error",
+          attempts: Number(job.attempts ?? 0) + 1,
+          locked_at: null,
+          lock_expires_at: null,
+          locked_by: null,
+          last_error: msg,
+          last_error_at: nowIso,
+        })
+        .eq("id", job.id)
+      await updateRecipientStatus(job.campaign_id, job.recipient_id, { status: "error", error: msg })
+      await refreshCampaignStatus(job.campaign_id)
       continue
     }
     const attemptNumber = Number(job.attempts ?? 0) + 1
@@ -458,6 +511,7 @@ export async function processSmsQueue(limit = 5, opts: { leaseSeconds?: number; 
         mediaUrls: payload.mediaUrls,
         campaignId: payload.campaignId || job.campaign_id,
         orgId: campaignOrgIdMap.get(campaignKey) ?? undefined,
+        sendingMarketId: campaignSendingMarketMap.get(campaignKey),
       })
       const sentAt = new Date().toISOString()
       sent += 1

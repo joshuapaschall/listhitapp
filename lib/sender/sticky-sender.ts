@@ -1,11 +1,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { formatPhoneE164, normalizePhone } from "@/lib/dedup-utils"
+import { pickPoolFromNumber } from "./campaign-from-pool"
 
 interface ResolveArgs {
   client: SupabaseClient
   buyerId?: string | null
   threadId?: string | null
   explicitFrom?: string | null
+  // Campaign context: when both are provided, cold recipients rotate the
+  // selected campaign market's pool instead of falling back to the env DID.
+  sendingMarketId?: string | null
+  orgId?: string | null
 }
 
 interface RecordArgs {
@@ -54,13 +59,16 @@ async function isOwnedNumber(
  *   2. thread.preferred_from_number
  *   3. newest inbound message's to_number on the thread
  *   4. buyer_sms_senders.from_number
- *   5. process.env.DEFAULT_OUTBOUND_DID
+ *   5a. campaign path (sendingMarketId + orgId): rotate the market's pool — no env fallback.
+ *   5b. 1:1 / transactional path: process.env.DEFAULT_OUTBOUND_DID
  */
 export async function resolveOutboundFrom({
   client,
   buyerId,
   threadId,
   explicitFrom,
+  sendingMarketId,
+  orgId,
 }: ResolveArgs): Promise<string | null> {
   // 1. Explicit pick — honored only if the org owns it.
   if (explicitFrom) {
@@ -105,7 +113,13 @@ export async function resolveOutboundFrom({
     if (stuck) return stuck
   }
 
-  // 5. Env default.
+  // 5a. Campaign path: rotate the selected market's pool. No env fallback —
+  // let NoSendingPoolError propagate so a blast never goes out a main line.
+  if (sendingMarketId && orgId) {
+    return pickPoolFromNumber(orgId, sendingMarketId)
+  }
+
+  // 5b. Env default — ONLY for 1:1 / transactional (no sendingMarketId).
   if (process.env.DEFAULT_OUTBOUND_DID) {
     const def = formatPhoneE164(process.env.DEFAULT_OUTBOUND_DID)
     if (def) return def
