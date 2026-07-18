@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { ArrowLeft, Ban, CheckCircle2, Circle, TestTube2, Users, Wand2 } from "lucide-react"
+import { ArrowLeft, Ban, CheckCircle2, Circle, Clock, Home, MessageSquare, Phone, TestTube2, Users, Wand2 } from "lucide-react"
 import { toast } from "sonner"
 import CampaignStatusBadge from "@/components/campaigns/campaign-status-badge"
 import AudienceFilterSummaryCard from "@/components/campaigns/audience-filter-summary-card"
@@ -16,6 +16,8 @@ import SmsSendTimeCard from "@/components/campaigns/sms-send-time-card"
 import CampaignPropertySelector from "@/components/campaigns/campaign-property-selector"
 import { readAudienceSnapshot, clearAudienceSnapshot, type CampaignAudienceSnapshot } from "@/lib/campaign-audience"
 import { calculateSmsSegments } from "@/lib/sms-utils"
+import { estimateCampaignCost, formatUsd, type SmsBillingProvider } from "@/lib/sms-pricing"
+import { Badge } from "@/components/ui/badge"
 import { applyShortLinkPreview, fetchShortLinkConfig, type ShortLinkConfig } from "@/lib/shortlink-preview"
 import { formatPhoneE164 } from "@/lib/dedup-utils"
 import { supabaseBrowser } from "@/lib/supabase-browser"
@@ -28,17 +30,19 @@ import { Can } from "@/components/auth/Can"
 
 
 
-function CardRow({ id, title, summary, valid, ctaText, expandedCard, setExpandedCard, children }: {
+function CardRow({ id, title, summary, valid, ctaText, expandedCard, setExpandedCard, icon: Icon, children }: {
   id: string
   title: string
-  summary: string
+  summary: React.ReactNode
   valid: boolean
   ctaText: string
   expandedCard: string | null
   setExpandedCard: (v: any) => void
+  icon?: React.ComponentType<{ className?: string }>
   children: React.ReactNode
 }) {
-  return <Card className="overflow-hidden"><button onClick={() => setExpandedCard(expandedCard === id ? null : id)} className="w-full flex items-center justify-between p-5 hover:bg-muted/40 text-left"><div className="flex items-center gap-3">{valid ? <CheckCircle2 className="h-5 w-5 text-brand" /> : <Circle className="h-5 w-5 text-muted-foreground" />}<div><p className="font-medium text-base">{title}</p><p className="text-sm text-muted-foreground">{summary}</p></div></div><span className="text-sm text-brand font-medium">{expandedCard === id ? "Cancel" : valid ? "Edit" : ctaText}</span></button>{expandedCard === id && <div className="border-t p-5 bg-muted/20">{children}</div>}</Card>
+  const LeadIcon = Icon ?? (valid ? CheckCircle2 : Circle)
+  return <Card className="overflow-hidden"><button onClick={() => setExpandedCard(expandedCard === id ? null : id)} className="w-full flex items-center justify-between p-5 hover:bg-muted/40 text-left"><div className="flex items-center gap-3"><LeadIcon className={`h-5 w-5 shrink-0 ${valid ? "text-brand" : "text-muted-foreground"}`} /><div className="min-w-0"><p className="font-medium text-base">{title}</p><div className="text-sm text-muted-foreground">{summary}</div></div></div><span className="text-sm text-brand font-medium shrink-0">{expandedCard === id ? "Cancel" : valid ? "Edit" : ctaText}</span></button>{expandedCard === id && <div className="border-t p-5 bg-muted/20">{children}</div>}</Card>
 }
 
 // From section: pick which campaign market's number pool sends this SMS campaign,
@@ -118,7 +122,7 @@ export default function SmsCampaignComposeView({ initialCampaign }: { initialCam
   const router = useRouter()
   const searchParams = useSearchParams()
   const [campaign, setCampaign] = useState<any>(initialCampaign)
-  const [expandedCard, setExpandedCard] = useState<"to"|"from"|"content"|"media"|"sendTime"|"property"|null>(null)
+  const [expandedCard, setExpandedCard] = useState<"to"|"from"|"content"|"sendTime"|"property"|null>(null)
   const [autosaveState, setAutosaveState] = useState<"idle"|"saving"|"saved"|"failed">("idle")
   const [hasEdited, setHasEdited] = useState(false)
   const [hasPrefillSnapshot, setHasPrefillSnapshot] = useState<CampaignAudienceSnapshot | null>(null)
@@ -182,6 +186,34 @@ export default function SmsCampaignComposeView({ initialCampaign }: { initialCam
     return () => { mounted = false }
   }, [])
 
+  // The org's SMS provider drives the client-side cost estimate (Telnyx vs Twilio rates).
+  const [provider, setProvider] = useState<SmsBillingProvider>("telnyx")
+  useEffect(() => {
+    let mounted = true
+    fetch("/api/org/messaging-provider")
+      .then((r) => r.json())
+      .then((d) => { if (mounted && d?.provider === "twilio") setProvider("twilio") })
+      .catch(() => {})
+    return () => { mounted = false }
+  }, [])
+
+  // Best-effort segment name for the "To" summary (falls back to a plain count).
+  const [segmentName, setSegmentName] = useState<string | null>(null)
+  useEffect(() => {
+    const sid = campaign.segment_id
+    if (!sid) { setSegmentName(null); return }
+    let mounted = true
+    fetch(`/api/segments/${sid}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (mounted) setSegmentName(d?.segment?.name ?? null) })
+      .catch(() => {})
+    return () => { mounted = false }
+  }, [campaign.segment_id])
+
+  // Address label of the chosen property, surfaced by the selector on change so
+  // the collapsed summary can show it (null when none selected this session).
+  const [selectedPropertyLabel, setSelectedPropertyLabel] = useState<string | null>(null)
+
   // Campaign-purpose markets are the SMS sending pools. `null` = still loading.
   const [markets, setMarkets] = useState<any[] | null>(null)
   useEffect(() => {
@@ -230,9 +262,38 @@ export default function SmsCampaignComposeView({ initialCampaign }: { initialCam
     : campaignMarkets.length === 0
       ? "No campaign market — SMS can't send"
       : selectedMarket
-        ? `Sending from ${selectedMarket.name} · ${selectedMarket.numberCount ?? 0} numbers`
-        : "Choose a sending market"
+        ? `${selectedMarket.name} · rotating ${selectedMarket.numberCount ?? 0} numbers`
+        : "Per-recipient routing with fallback"
   const contentValid = (!!campaign.message?.trim() || mediaUrls.length > 0) && segmentInfo.segments <= 10
+
+  // Enriched, at-a-glance card summaries -----------------------------------
+  const hasMedia = mediaUrls.length > 0
+  const cost = estimateCampaignCost({ recipients: recipientCount, segments: segmentInfo.segments, hasMedia, provider })
+  const messageText = (campaign.message ?? "").trim()
+  const messageSnippet = messageText ? `${messageText.slice(0, 40)}${messageText.length > 40 ? "…" : ""}` : ""
+
+  const toSummary = toValid
+    ? segmentName
+      ? `${segmentName} · ${recipientCount.toLocaleString()} recipients`
+      : `${recipientCount.toLocaleString()} recipients`
+    : "Who are you sending this to?"
+
+  const contentSummary = messageText || hasMedia ? (
+    <span className="flex items-center gap-2">
+      {hasMedia && mediaUrls[0] && <img src={mediaUrls[0]} alt="" className="h-6 w-6 shrink-0 rounded border object-cover" />}
+      {messageSnippet && <span className="truncate">{messageSnippet}</span>}
+      <Badge variant={hasMedia ? "default" : "outline"} className="shrink-0">{cost.rateLabel}</Badge>
+      {recipientCount > 0 && (
+        <span className="shrink-0">{formatUsd(cost.perRecipient)}/recipient · {formatUsd(cost.total)} total</span>
+      )}
+    </span>
+  ) : "Write your message"
+
+  const propertySummary = selectedPropertyLabel
+    ? selectedPropertyLabel
+    : campaign.property_id
+      ? "Property attached"
+      : "Optional property attribution"
   const sendTimeValid = !campaign.scheduled_at || new Date(campaign.scheduled_at).getTime() > Date.now()
   const canSend = toValid && fromValid && contentValid && sendTimeValid
 
@@ -319,14 +380,16 @@ export default function SmsCampaignComposeView({ initialCampaign }: { initialCam
   return <div className="min-h-screen bg-background">
     <div className="sticky top-0 bg-background/80 backdrop-blur z-10 border-b border-border py-4 px-6"><div className="max-w-4xl mx-auto flex items-center justify-between"><div className="flex items-center gap-2"><Button variant="ghost" size="icon" onClick={() => router.push("/campaigns")}><ArrowLeft className="h-4 w-4" /></Button><Input className="w-auto min-w-[200px] max-w-[400px]" value={campaign.name || "Untitled campaign"} onChange={(e) => update({ name: e.target.value })} /><CampaignStatusBadge status={campaign.status} />{hasEdited && <span className="text-xs text-muted-foreground">{autosaveState === "saving" ? "Saving…" : autosaveState === "failed" ? "Save failed" : "Saved"}</span>}</div><div className="flex items-start gap-2"><div><Input className="h-9 w-[130px]" value={testPhone} onChange={(e) => setTestPhone(e.target.value)} placeholder="+1 (770) 555-0123" />{isTestPhoneInvalid && <p className="mt-1 text-xs text-red-500">Enter a valid US phone number</p>}</div><Can permission="campaigns.send_sms"><Button variant="outline" size="sm" disabled={!testPhone.trim() || isTestPhoneInvalid || sendingTest || !campaign.message?.trim()} onClick={sendTest}><TestTube2 className="h-4 w-4" />Send test</Button></Can><Can permission="campaigns.send_sms"><Button variant="brand" disabled={!canSend || !!campaign.scheduled_at || audienceUnknown} onClick={() => setSendConfirmOpen(true)}>Send</Button></Can></div></div></div>
     <main className="max-w-4xl mx-auto px-6 py-8 space-y-3">
-      <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="to" title="To" valid={toValid} ctaText="Add recipients" summary={toValid ? `${recipientCount} recipients` : "Who are you sending this to?"}>{hasPrefillSnapshot ? <AudienceFilterSummaryCard snapshot={hasPrefillSnapshot} onPreview={() => setPreviewOpen(true)} onAdjust={() => router.push("/buyers")} onClear={() => { setHasPrefillSnapshot(null); update({ buyer_ids: [] }) }} /> : (
+      <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="to" title="To" valid={toValid} ctaText="Add recipients" icon={Users} summary={toSummary}>{hasPrefillSnapshot ? <AudienceFilterSummaryCard snapshot={hasPrefillSnapshot} onPreview={() => setPreviewOpen(true)} onAdjust={() => router.push("/buyers")} onClear={() => { setHasPrefillSnapshot(null); update({ buyer_ids: [] }) }} /> : (
         <CampaignAudienceStep channel="sms" campaign={campaign} update={update} audienceSelection={audienceSelection} onAudienceChange={handleAudienceChange} recipientCount={recipientCount} />
       )}</CardRow>
-      <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="from" title="From" valid={fromValid} ctaText="Choose sender" summary={fromSummary}><SmsFromSection campaignMarkets={campaignMarkets} marketsLoading={marketsLoading} selectedMarketId={selectedMarketId} onSelect={(id) => update({ sending_market_id: id })} /></CardRow>
-      <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="content" title="Content" valid={contentValid} ctaText="Compose SMS" summary={campaign.message?.trim() ? `Message ready — ${segmentInfo.segments} segments` : "Write your message"}><SmsComposerPanel message={campaign.message || ""} onMessageChange={(value) => update({ message: value })} buyerIds={audience?.sampleIds ?? []} recipientCount={recipientCount} mediaUrls={mediaUrls} shortenLinks={shortenLinks} onShortenLinksChange={(value) => update({ shorten_links: value })} shortConfig={shortConfig} /></CardRow>
-      <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="media" title="Media" valid={true} ctaText="Add media" summary={mediaUrls.length ? `${mediaUrls.length} attachment(s)` : "Optional MMS attachments"}><SmsMediaCard mediaUrls={mediaUrls} onChange={(urls) => update({ media_url: JSON.stringify(urls) })} subject={campaign.subject} onSubjectChange={(value) => update({ subject: value })} /></CardRow>
-      <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="property" title="Property" valid={true} ctaText="Attribute property" summary={campaign.property_id ? "Campaign cost attributed to a property" : "Optional property attribution"}><CampaignPropertySelector value={campaign.property_id ?? null} onChange={(property_id) => update({ property_id })} /></CardRow>
-      <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="sendTime" title="Send time" valid={sendTimeValid} ctaText="Set send time" summary={campaign.scheduled_at ? `Scheduled for ${new Date(campaign.scheduled_at).toLocaleString()}` : "Send immediately when you click Send"}><SmsSendTimeCard scheduledAt={campaign.scheduled_at} onScheduledAtChange={(value) => update({ scheduled_at: value })} weekdayOnly={campaign.weekday_only} onWeekdayOnlyChange={(value) => update({ weekday_only: value })} runFrom={campaign.run_from} onRunFromChange={(value) => update({ run_from: value })} runUntil={campaign.run_until} onRunUntilChange={(value) => update({ run_until: value })} /></CardRow>
+      <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="from" title="From" valid={fromValid} ctaText="Choose sender" icon={Phone} summary={fromSummary}><SmsFromSection campaignMarkets={campaignMarkets} marketsLoading={marketsLoading} selectedMarketId={selectedMarketId} onSelect={(id) => update({ sending_market_id: id })} /></CardRow>
+      <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="content" title="Content" valid={contentValid} ctaText="Compose SMS" icon={MessageSquare} summary={contentSummary}>
+        <SmsComposerPanel message={campaign.message || ""} onMessageChange={(value) => update({ message: value })} buyerIds={audience?.sampleIds ?? []} recipientCount={recipientCount} mediaUrls={mediaUrls} shortenLinks={shortenLinks} onShortenLinksChange={(value) => update({ shorten_links: value })} shortConfig={shortConfig} provider={provider} />
+        <div className="mt-4 border-t pt-4"><SmsMediaCard mediaUrls={mediaUrls} onChange={(urls) => update({ media_url: JSON.stringify(urls) })} subject={campaign.subject} onSubjectChange={(value) => update({ subject: value })} /></div>
+      </CardRow>
+      <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="property" title="Property" valid={true} ctaText="Attribute property" icon={Home} summary={propertySummary}><CampaignPropertySelector value={campaign.property_id ?? null} onChange={(property_id, label) => { update({ property_id }); setSelectedPropertyLabel(label ?? null) }} /></CardRow>
+      <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="sendTime" title="Send time" valid={sendTimeValid} ctaText="Set send time" icon={Clock} summary={campaign.scheduled_at ? `Scheduled for ${new Date(campaign.scheduled_at).toLocaleString()}` : "Send immediately when you click Send"}><SmsSendTimeCard scheduledAt={campaign.scheduled_at} onScheduledAtChange={(value) => update({ scheduled_at: value })} weekdayOnly={campaign.weekday_only} onWeekdayOnlyChange={(value) => update({ weekday_only: value })} runFrom={campaign.run_from} onRunFromChange={(value) => update({ run_from: value })} runUntil={campaign.run_until} onRunUntilChange={(value) => update({ run_until: value })} /></CardRow>
     </main>
     <AlertDialog open={sendConfirmOpen} onOpenChange={setSendConfirmOpen}>
       <AlertDialogContent>
