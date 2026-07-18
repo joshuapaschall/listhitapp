@@ -5,6 +5,7 @@ import { calculateSmsSegments } from "@/lib/sms-utils"
 import { renderTemplate } from "@/lib/utils"
 import { formatPhoneE164 } from "@/lib/dedup-utils"
 import { sendCampaignSMS } from "@/services/campaign-sender.server"
+import { resolveSendingMarketId } from "@/lib/campaigns/resolve-sending-market"
 import { getUserMergeContext } from "@/lib/user-context"
 import { requirePermission } from "@/lib/permissions/server"
 import { resolveOrgIdForUser } from "@/lib/auth/org-context"
@@ -70,18 +71,25 @@ export async function POST(request: Request) {
     }
   }
   const dryRun = forceDryRun ?? (process.env.LISTHIT_DRY_RUN === "1")
-  const results = await sendCampaignSMS({ buyerId: undefined, to: [formattedPhone], body: finalBody, mediaUrls, dryRun, campaignId: undefined, isTest: true, orgId })
-  if (dryRun) {
-    return NextResponse.json({
-      ok: true,
-      dryRun: true,
-      formattedTo: formattedPhone,
-      fromNumber: results[0]?.from ?? null,
-      message: "Dry-run: no Telnyx call made",
-      rendered,
-      sent: finalBody,
-      results,
-    })
+  try {
+    // Same pool the real send uses — a test rotates the market pool, never the env DID.
+    const sendingMarketId = await resolveSendingMarketId(supabase, orgId, campaign.sending_market_id ?? null)
+    const results = await sendCampaignSMS({ buyerId: undefined, to: [formattedPhone], body: finalBody, mediaUrls, dryRun, campaignId: undefined, isTest: true, orgId, sendingMarketId })
+    if (dryRun) {
+      return NextResponse.json({
+        ok: true,
+        dryRun: true,
+        formattedTo: formattedPhone,
+        fromNumber: results[0]?.from ?? null,
+        message: "Dry-run: no Telnyx call made",
+        rendered,
+        sent: finalBody,
+        results,
+      })
+    }
+    return NextResponse.json({ ok: true, dryRun, formattedTo: formattedPhone, fromNumber: results[0]?.from ?? null, results })
+  } catch (err: any) {
+    const msg = err?.message || "Test send failed"
+    return NextResponse.json({ error: msg }, { status: 400 })
   }
-  return NextResponse.json({ ok: true, dryRun, formattedTo: formattedPhone, fromNumber: results[0]?.from ?? null, results })
 }

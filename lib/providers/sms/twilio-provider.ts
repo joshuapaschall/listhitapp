@@ -5,11 +5,13 @@ export interface TwilioSmsProviderOptions {
   messagingServiceSid: string
 }
 
-// Twilio implementation. The org's Messaging Service is the sender (it selects the
-// number), so we pass `messagingServiceSid` — never `from`. A per-message
-// `statusCallback` points delivery receipts at the Twilio status webhook. Error
-// normalization mirrors the Telnyx provider so downstream `err.status` /
-// `err.providerCode` checks keep working across providers.
+// Twilio implementation. When the caller resolves an explicit `from` (campaign
+// market-pool rotation), send from that number so rotation stays correct; only
+// fall back to the org's Messaging Service (`messagingServiceSid`, which selects
+// its own number) when no `from` is provided. A per-message `statusCallback`
+// points delivery receipts at the Twilio status webhook. Error normalization
+// mirrors the Telnyx provider so downstream `err.status` / `err.providerCode`
+// checks keep working across providers.
 export class TwilioSmsProvider implements SmsProvider {
   readonly name = "twilio"
   // The Messaging Service queues and paces sends server-side at the campaign's
@@ -25,9 +27,14 @@ export class TwilioSmsProvider implements SmsProvider {
     const client = getTwilioClient()
     const base = (process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/$/, "")
     const statusCallback = base ? `${base}/api/webhooks/twilio-status` : undefined
+    const from = input.from ? String(input.from).trim() : ""
+    // Explicit rotated number wins; otherwise let the Messaging Service pick.
+    const senderParams = from
+      ? { from }
+      : { messagingServiceSid: this.messagingServiceSid }
     try {
       const msg = await client.messages.create({
-        messagingServiceSid: this.messagingServiceSid,
+        ...senderParams,
         to: input.to,
         body: input.text,
         ...(input.mediaUrls && input.mediaUrls.length ? { mediaUrl: input.mediaUrls } : {}),

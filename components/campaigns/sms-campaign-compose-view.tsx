@@ -1,8 +1,9 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
+import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { ArrowLeft, CheckCircle2, Circle, TestTube2 } from "lucide-react"
+import { ArrowLeft, Ban, CheckCircle2, Circle, TestTube2, Users, Wand2 } from "lucide-react"
 import { toast } from "sonner"
 import CampaignStatusBadge from "@/components/campaigns/campaign-status-badge"
 import AudienceFilterSummaryCard from "@/components/campaigns/audience-filter-summary-card"
@@ -10,7 +11,6 @@ import RecipientsPreviewSheet from "@/components/campaigns/recipients-preview-sh
 import CampaignAudienceStep from "@/components/campaigns/campaign-audience-step"
 import { useCampaignAudience } from "@/components/segments/use-campaign-audience"
 import SmsComposerPanel from "@/components/campaigns/sms-composer-panel"
-import SmsFromCard from "@/components/campaigns/sms-from-card"
 import SmsMediaCard from "@/components/campaigns/sms-media-card"
 import SmsSendTimeCard from "@/components/campaigns/sms-send-time-card"
 import CampaignPropertySelector from "@/components/campaigns/campaign-property-selector"
@@ -22,6 +22,7 @@ import { supabaseBrowser } from "@/lib/supabase-browser"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { Can } from "@/components/auth/Can"
 
@@ -38,6 +39,69 @@ function CardRow({ id, title, summary, valid, ctaText, expandedCard, setExpanded
   children: React.ReactNode
 }) {
   return <Card className="overflow-hidden"><button onClick={() => setExpandedCard(expandedCard === id ? null : id)} className="w-full flex items-center justify-between p-5 hover:bg-muted/40 text-left"><div className="flex items-center gap-3">{valid ? <CheckCircle2 className="h-5 w-5 text-brand" /> : <Circle className="h-5 w-5 text-muted-foreground" />}<div><p className="font-medium text-base">{title}</p><p className="text-sm text-muted-foreground">{summary}</p></div></div><span className="text-sm text-brand font-medium">{expandedCard === id ? "Cancel" : valid ? "Edit" : ctaText}</span></button>{expandedCard === id && <div className="border-t p-5 bg-muted/20">{children}</div>}</Card>
+}
+
+// From section: pick which campaign market's number pool sends this SMS campaign,
+// and explain the real per-recipient routing (no more "15 numbers rotate" fiction).
+function SmsFromSection({ campaignMarkets, marketsLoading, selectedMarketId, onSelect }: {
+  campaignMarkets: any[]
+  marketsLoading: boolean
+  selectedMarketId: string | null
+  onSelect: (id: string) => void
+}) {
+  if (marketsLoading) {
+    return <p className="text-sm text-muted-foreground">Loading sending market…</p>
+  }
+  if (campaignMarkets.length === 0) {
+    return (
+      <div className="space-y-3 text-sm">
+        <p className="text-muted-foreground">SMS campaigns send from a campaign market&apos;s pool of numbers, and you don&apos;t have one yet.</p>
+        <Link className="font-medium text-brand underline" href="/settings/markets">Create a campaign market to send SMS →</Link>
+      </div>
+    )
+  }
+
+  const single = campaignMarkets.length === 1
+  const selected = campaignMarkets.find((m) => m.id === selectedMarketId) ?? (single ? campaignMarkets[0] : null)
+  const count = selected?.numberCount ?? 0
+
+  return (
+    <div className="space-y-4 text-sm">
+      {single ? (
+        <p className="text-muted-foreground">
+          Sending from <span className="font-medium text-foreground">{selected?.name}</span> · {count} {count === 1 ? "number" : "numbers"}.
+        </p>
+      ) : (
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-muted-foreground">Sending from</label>
+          <Select value={selectedMarketId ?? ""} onValueChange={onSelect}>
+            <SelectTrigger className="w-full sm:w-[320px]"><SelectValue placeholder="Choose a sending market" /></SelectTrigger>
+            <SelectContent>
+              {campaignMarkets.map((m) => (
+                <SelectItem key={m.id} value={m.id}>{m.name} · {m.numberCount ?? 0} numbers</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {!selectedMarketId && <p className="text-xs text-amber-600 dark:text-amber-500">Choose a sending market.</p>}
+        </div>
+      )}
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border bg-card p-3">
+          <div className="mb-1.5 flex items-center gap-2"><div className="flex h-7 w-7 items-center justify-center rounded-full bg-brand/10"><Users className="h-3.5 w-3.5 text-brand" /></div><span className="text-xs font-medium">Existing conversation</span></div>
+          <p className="text-xs text-muted-foreground">The buyer stays on the number they last texted with — no surprise area-code switches mid-thread.</p>
+        </div>
+        <div className="rounded-lg border bg-card p-3">
+          <div className="mb-1.5 flex items-center gap-2"><div className="flex h-7 w-7 items-center justify-center rounded-full bg-brand/10"><Wand2 className="h-3.5 w-3.5 text-brand" /></div><span className="text-xs font-medium">First contact</span></div>
+          <p className="text-xs text-muted-foreground">A cold recipient is sent from the least-recently-used SMS number in {selected?.name ?? "the selected market"}, rotating across its {count} {count === 1 ? "number" : "numbers"}.</p>
+        </div>
+        <div className="rounded-lg border bg-card p-3">
+          <div className="mb-1.5 flex items-center gap-2"><div className="flex h-7 w-7 items-center justify-center rounded-full bg-brand/10"><Ban className="h-3.5 w-3.5 text-brand" /></div><span className="text-xs font-medium">No pool</span></div>
+          <p className="text-xs text-muted-foreground">If the market has no SMS-enabled numbers, the send is blocked — it never falls back to a main line.</p>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function parseMediaUrls(value: unknown): string[] {
@@ -118,6 +182,23 @@ export default function SmsCampaignComposeView({ initialCampaign }: { initialCam
     return () => { mounted = false }
   }, [])
 
+  // Campaign-purpose markets are the SMS sending pools. `null` = still loading.
+  const [markets, setMarkets] = useState<any[] | null>(null)
+  useEffect(() => {
+    let mounted = true
+    fetch("/api/markets")
+      .then((r) => r.json())
+      .then((d) => { if (mounted) setMarkets(d?.ok ? (d.markets ?? []) : []) })
+      .catch(() => { if (mounted) setMarkets([]) })
+    return () => { mounted = false }
+  }, [])
+  const marketsLoading = markets === null
+  const campaignMarkets = useMemo(() => (markets ?? []).filter((m: any) => m.purpose === "campaign"), [markets])
+  // Effective market for display: explicit choice, or the sole campaign market.
+  const selectedMarketId: string | null =
+    campaign.sending_market_id ?? (campaignMarkets.length === 1 ? campaignMarkets[0]?.id ?? null : null)
+  const selectedMarket = campaignMarkets.find((m: any) => m.id === selectedMarketId) ?? null
+
   const mediaUrls = parseMediaUrls(campaign.media_url)
   const shortenLinks = campaign.shorten_links ?? true
   const shortenActive = shortenLinks && shortConfig.configured
@@ -134,7 +215,23 @@ export default function SmsCampaignComposeView({ initialCampaign }: { initialCam
   const audienceUnknown =
     audienceLoading || (audience === null && !campaign.audience_preview_count && !hasPrefillSnapshot)
   const toValid = recipientCount > 0 || !!hasPrefillSnapshot
-  const fromValid = true
+  // From is valid once a sending pool is determinable: single campaign market
+  // (auto), or an explicit choice when multiple exist. Zero markets blocks send.
+  // While markets load, stay optimistic — the server resolver is the real gate.
+  const fromValid = marketsLoading
+    ? true
+    : campaignMarkets.length === 0
+      ? false
+      : campaignMarkets.length === 1
+        ? true
+        : Boolean(campaign.sending_market_id)
+  const fromSummary = marketsLoading
+    ? "Loading sending market…"
+    : campaignMarkets.length === 0
+      ? "No campaign market — SMS can't send"
+      : selectedMarket
+        ? `Sending from ${selectedMarket.name} · ${selectedMarket.numberCount ?? 0} numbers`
+        : "Choose a sending market"
   const contentValid = (!!campaign.message?.trim() || mediaUrls.length > 0) && segmentInfo.segments <= 10
   const sendTimeValid = !campaign.scheduled_at || new Date(campaign.scheduled_at).getTime() > Date.now()
   const canSend = toValid && fromValid && contentValid && sendTimeValid
@@ -225,7 +322,7 @@ export default function SmsCampaignComposeView({ initialCampaign }: { initialCam
       <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="to" title="To" valid={toValid} ctaText="Add recipients" summary={toValid ? `${recipientCount} recipients` : "Who are you sending this to?"}>{hasPrefillSnapshot ? <AudienceFilterSummaryCard snapshot={hasPrefillSnapshot} onPreview={() => setPreviewOpen(true)} onAdjust={() => router.push("/buyers")} onClear={() => { setHasPrefillSnapshot(null); update({ buyer_ids: [] }) }} /> : (
         <CampaignAudienceStep channel="sms" campaign={campaign} update={update} audienceSelection={audienceSelection} onAudienceChange={handleAudienceChange} recipientCount={recipientCount} />
       )}</CardRow>
-      <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="from" title="From" valid={fromValid} ctaText="View sender" summary="Per-recipient routing with fallback"><SmsFromCard recipientCount={recipientCount} /></CardRow>
+      <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="from" title="From" valid={fromValid} ctaText="Choose sender" summary={fromSummary}><SmsFromSection campaignMarkets={campaignMarkets} marketsLoading={marketsLoading} selectedMarketId={selectedMarketId} onSelect={(id) => update({ sending_market_id: id })} /></CardRow>
       <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="content" title="Content" valid={contentValid} ctaText="Compose SMS" summary={campaign.message?.trim() ? `Message ready — ${segmentInfo.segments} segments` : "Write your message"}><SmsComposerPanel message={campaign.message || ""} onMessageChange={(value) => update({ message: value })} buyerIds={audience?.sampleIds ?? []} recipientCount={recipientCount} mediaUrls={mediaUrls} shortenLinks={shortenLinks} onShortenLinksChange={(value) => update({ shorten_links: value })} shortConfig={shortConfig} /></CardRow>
       <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="media" title="Media" valid={true} ctaText="Add media" summary={mediaUrls.length ? `${mediaUrls.length} attachment(s)` : "Optional MMS attachments"}><SmsMediaCard mediaUrls={mediaUrls} onChange={(urls) => update({ media_url: JSON.stringify(urls) })} subject={campaign.subject} onSubjectChange={(value) => update({ subject: value })} /></CardRow>
       <CardRow expandedCard={expandedCard} setExpandedCard={setExpandedCard} id="property" title="Property" valid={true} ctaText="Attribute property" summary={campaign.property_id ? "Campaign cost attributed to a property" : "Optional property attribution"}><CampaignPropertySelector value={campaign.property_id ?? null} onChange={(property_id) => update({ property_id })} /></CardRow>

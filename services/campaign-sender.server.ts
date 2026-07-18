@@ -30,9 +30,13 @@ interface SmsOptions {
   // Org context for provider routing. Omit when there is genuinely no org in
   // scope — resolveSmsProvider(undefined) falls back to Telnyx (safe default).
   orgId?: string
+  // Campaign market whose number pool sends cold recipients. When set (with
+  // orgId), resolveOutboundFrom rotates that pool and never uses the env DID.
+  // Omitted by 1:1 / transactional callers, which keep the env fallback.
+  sendingMarketId?: string
 }
 
-export async function sendCampaignSMS({ buyerId, to, body, mediaUrls, dryRun, campaignId, isTest, orgId }: SmsOptions): Promise<SmsSendResult[]> {
+export async function sendCampaignSMS({ buyerId, to, body, mediaUrls, dryRun, campaignId, isTest, orgId, sendingMarketId }: SmsOptions): Promise<SmsSendResult[]> {
   if (!telnyxApiKey || !messagingProfileId) {
     throw new Error("Telnyx environment variables are not properly configured")
   }
@@ -71,6 +75,8 @@ export async function sendCampaignSMS({ buyerId, to, body, mediaUrls, dryRun, ca
       buyerId,
       threadId: null,
       explicitFrom: null,
+      sendingMarketId,
+      orgId,
     })
     const sendRequest = async () => {
       const result = await provider.sendMessage({
