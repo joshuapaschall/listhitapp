@@ -13,7 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Progress } from "@/components/ui/progress"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
-import { estimateCampaignCost, formatUsd } from "@/lib/sms-pricing"
+import { estimateCampaignCost, formatUsd, type SmsBillingProvider } from "@/lib/sms-pricing"
 import { estimateDeliveryTime, fetchMessagingThroughput } from "@/lib/sms-throughput"
 import { calculateSmsSegments } from "@/lib/sms-utils"
 import { applyShortLinkPreview, sampleSlug, shortLinkLength, type ShortLinkConfig } from "@/lib/shortlink-preview"
@@ -28,11 +28,12 @@ interface SmsComposerPanelProps {
   shortenLinks: boolean
   onShortenLinksChange: (value: boolean) => void
   shortConfig: ShortLinkConfig
+  provider?: SmsBillingProvider
 }
 
 const STOP_SUFFIX_RE = /\s*Reply STOP to opt out\s*$/i
 
-export default function SmsComposerPanel({ message, onMessageChange, buyerIds, recipientCount, mediaUrls = [], shortenLinks, onShortenLinksChange, shortConfig }: SmsComposerPanelProps) {
+export default function SmsComposerPanel({ message, onMessageChange, buyerIds, recipientCount, mediaUrls = [], shortenLinks, onShortenLinksChange, shortConfig, provider = "telnyx" }: SmsComposerPanelProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const [emojiOpen, setEmojiOpen] = useState(false)
   const [throughputConfig, setThroughputConfig] = useState({ poolSize: 15, perNumberMpm: 2 })
@@ -46,8 +47,8 @@ export default function SmsComposerPanel({ message, onMessageChange, buyerIds, r
   const charCount = segmentInfo.charCount
   const capacity = segmentInfo.segments <= 1 ? segmentInfo.charsPerSegment : segmentInfo.segments * segmentInfo.charsPerSegment
   const percentFull = Math.min(100, Math.max(0, (charCount / Math.max(1, capacity)) * 100))
-  const hasMedia = false
-  const cost = estimateCampaignCost({ recipients: recipientCount, segments: segmentInfo.segments, hasMedia })
+  const hasMedia = mediaUrls.length > 0
+  const cost = estimateCampaignCost({ recipients: recipientCount, segments: segmentInfo.segments, hasMedia, provider })
   const throughput = estimateDeliveryTime({
     recipients: recipientCount,
     segments: segmentInfo.segments,
@@ -147,7 +148,10 @@ export default function SmsComposerPanel({ message, onMessageChange, buyerIds, r
               <Badge variant="outline">{segmentInfo.encoding}</Badge>
               <span className="text-muted-foreground">{charCount} / {capacity} chars</span>
             </div>
-            <span className="text-muted-foreground">{formatUsd(cost.perRecipient)} / recipient</span>
+            <span className="flex items-center gap-1.5 text-muted-foreground">
+              {cost.rateLabel === "MMS" && <Badge variant="outline">MMS</Badge>}
+              {formatUsd(cost.perRecipient)} / recipient · est.
+            </span>
           </div>
           <Progress value={percentFull} className={segmentInfo.segments >= 10 ? "[&>div]:bg-red-500" : segmentInfo.segments >= 4 ? "[&>div]:bg-amber-500" : ""} />
           {charCount > 0 && (
