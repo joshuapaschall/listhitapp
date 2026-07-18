@@ -7,6 +7,7 @@ import { getSesQuota } from "@/lib/ses-quota"
 import { buildUnsubscribeUrl } from "@/lib/unsubscribe"
 import { buildCampaignEmail } from "@/lib/email/build-campaign-email"
 import { evaluateCampaignSafety, type CampaignSafetyVerdict } from "@/lib/email/deliverability-guard"
+import { isGuardOverrideActive } from "@/lib/email/guard-override"
 import { insertNotification } from "@/lib/notifications"
 
 const log = createLogger("campaign-sender")
@@ -478,8 +479,12 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
   }
 
   if (latestReputationSnapshot?.sending_state === "frozen") {
-    log("queue", "Email sending frozen by account reputation guard")
-    return { processed: 0, sent: 0, frozen: true }
+    const overridden = await isGuardOverrideActive()
+    if (!overridden) {
+      log("queue", "Email sending frozen by account reputation guard")
+      return { processed: 0, sent: 0, frozen: true }
+    }
+    log("queue", "Reputation frozen but manual override active — allowing send")
   }
 
   const effectiveLimit = Math.max(1, limit || EMAIL_QUEUE_CONCURRENCY)

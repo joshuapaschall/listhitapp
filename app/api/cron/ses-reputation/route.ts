@@ -3,6 +3,7 @@ import { assertCronAuth } from "@/lib/cron-auth"
 import { evaluateAccountState, type AccountState } from "@/lib/email/deliverability-guard"
 import { insertNotification } from "@/lib/notifications"
 import { getSesAccountHealth } from "@/lib/ses-account"
+import { isGuardOverrideActive } from "@/lib/email/guard-override"
 import { supabaseAdmin } from "@/lib/supabase/admin"
 
 export const runtime = "nodejs"
@@ -124,16 +125,22 @@ export async function POST(request: NextRequest) {
     if (insertError) throw insertError
 
     if (verdict.state === "frozen" && previousState !== "frozen") {
-      await pauseAllEmailSending()
+      const overridden = await isGuardOverrideActive()
+      if (!overridden) {
+        await pauseAllEmailSending()
+      }
       await insertNotification({
         type: "account_sending_frozen",
-        title: "Email sending frozen",
-        body: `Account reputation guard tripped (${verdict.reason}). All campaigns paused.`,
+        title: overridden ? "Reputation still high (override active)" : "Email sending frozen",
+        body: overridden
+          ? `Bounce/complaint rate still above safe levels (${verdict.reason}), but a manual override is keeping sending on. Clean your list — the override expires soon.`
+          : `Account reputation guard tripped (${verdict.reason}). All campaigns paused.`,
         metadata: {
           reason: verdict.reason,
           bounceRate: verdict.bounceRate,
           complaintRate: verdict.complaintRate,
           enforcementStatus: health.enforcementStatus,
+          overrideActive: overridden,
         },
       })
     } else if (verdict.state === "warn" && previousState === "healthy") {
