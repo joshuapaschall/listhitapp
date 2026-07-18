@@ -2,9 +2,21 @@
 
 import { FormEvent, useEffect, useState } from "react"
 import Link from "next/link"
-import { HelpCircle, Loader2, Plus } from "lucide-react"
+import { AlertTriangle, HelpCircle, Loader2, Plus } from "lucide-react"
+import { toast } from "sonner"
 
 import { PermissionGate } from "@/components/auth/PermissionGate"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -26,6 +38,14 @@ function statusLabel(status: EmailDomain["status"]) {
   return "Pending"
 }
 
+type GuardState = {
+  frozen: boolean
+  override: { overrideUntil: string } | null
+}
+
+const OVERRIDE_CONFIRM_TEXT =
+  "Only do this after removing hard bounces and validating your list. This lifts the freeze for 2 hours; the guard automatically re-checks after that. Sending to a dirty list again can get your AWS account suspended."
+
 export default function EmailDomainsPage() {
   const [domains, setDomains] = useState<DomainWithSenders[]>([])
   const [domain, setDomain] = useState("")
@@ -33,6 +53,8 @@ export default function EmailDomainsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [open, setOpen] = useState(false)
+  const [guard, setGuard] = useState<GuardState | null>(null)
+  const [overriding, setOverriding] = useState(false)
 
   async function loadDomains() {
     setLoading(true)
@@ -42,8 +64,57 @@ export default function EmailDomainsPage() {
     setLoading(false)
   }
 
+  async function loadGuard() {
+    try {
+      const response = await fetch("/api/admin/email-guard/override", { cache: "no-store" })
+      const payload = await response.json()
+      if (payload.ok) setGuard({ frozen: Boolean(payload.frozen), override: payload.override ?? null })
+    } catch {
+      // Non-fatal: the banner just won't show.
+    }
+  }
+
+  async function activateOverride() {
+    setOverriding(true)
+    try {
+      const response = await fetch("/api/admin/email-guard/override", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hours: 2, reason: "Operator cleaned list from Email Domains page" }),
+      })
+      const payload = await response.json()
+      if (!response.ok || !payload.ok) {
+        toast.error(payload.error || "Failed to resume sending")
+        return
+      }
+      toast.success(
+        `Sending resumed — ${payload.resumedCampaigns} campaign(s), ${payload.resumedQueue} queued email(s)`,
+      )
+      await loadGuard()
+    } finally {
+      setOverriding(false)
+    }
+  }
+
+  async function cancelOverride() {
+    setOverriding(true)
+    try {
+      const response = await fetch("/api/admin/email-guard/override", { method: "DELETE" })
+      const payload = await response.json()
+      if (!response.ok || !payload.ok) {
+        toast.error(payload.error || "Failed to cancel override")
+        return
+      }
+      toast.success("Override cancelled — the guard is active again")
+      await loadGuard()
+    } finally {
+      setOverriding(false)
+    }
+  }
+
   useEffect(() => {
     loadDomains()
+    loadGuard()
   }, [])
 
   async function addDomain(event: FormEvent<HTMLFormElement>) {
@@ -129,6 +200,54 @@ export default function EmailDomainsPage() {
             </DialogContent>
           </Dialog>
         </div>
+
+        {guard?.frozen ? (
+          <Card className="border-destructive/40 bg-destructive/5">
+            <CardContent className="flex flex-col gap-3 p-6 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="mt-0.5 size-5 shrink-0 text-destructive" />
+                <div>
+                  <p className="text-sm font-medium text-destructive">
+                    Email sending is frozen — your recent bounce rate is too high.
+                  </p>
+                  {guard.override ? (
+                    <p className="text-sm text-muted-foreground">
+                      Override active until {new Date(guard.override.overrideUntil).toLocaleString()}. Sending is on while you clean your list.
+                    </p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      Remove hard bounces and validate your list, then resume for a bounded window.
+                    </p>
+                  )}
+                </div>
+              </div>
+              {guard.override ? (
+                <Button variant="outline" disabled={overriding} onClick={cancelOverride}>
+                  {overriding ? <Loader2 className="size-4 animate-spin" /> : null}
+                  Cancel override
+                </Button>
+              ) : (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" disabled={overriding}>
+                      I&apos;ve cleaned my list — resume sending (2h)
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Resume sending for 2 hours?</AlertDialogTitle>
+                      <AlertDialogDescription>{OVERRIDE_CONFIRM_TEXT}</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={activateOverride}>Resume sending</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
+            </CardContent>
+          </Card>
+        ) : null}
 
         {loading ? (
           <Card>
