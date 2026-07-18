@@ -7,7 +7,8 @@ import { getTelnyxApiKey } from "@/lib/voice-env"
 import { insertNotification } from "@/lib/notifications"
 import { evaluateSmsCampaignSafety, type SmsSafetyVerdict } from "@/lib/sms/sms-safety-guard"
 import { isWithinQuietHours, nextSendTime, SMS_CAMPAIGN_MPM } from "@/lib/sms/area-code-timezone"
-import { suppressBuyerSms } from "@/lib/sms/suppress"
+import { suppressBuyerSms, disableSmsSender } from "@/lib/sms/suppress"
+import { classifySmsFailure } from "@/lib/sms/failure-classifier"
 import { resolveOutboundFrom, recordStickyFrom } from "@/lib/sender/sticky-sender"
 import { resolveSendingMarketId } from "@/lib/campaigns/resolve-sending-market"
 import { NoSendingPoolError } from "@/lib/sender/campaign-from-pool"
@@ -551,7 +552,20 @@ export async function processSmsQueue(limit = 5, opts: { leaseSeconds?: number; 
       if (err?.telnyxCode === "40300") {
         await suppressBuyerSms(job.buyer_id, "carrier_opt_out")
       }
-      const retryable = isRetryableError(err)
+      // Classify the hard failure and self-heal:
+      //  - bad recipient (invalid/landline) → suppress the buyer so future sends skip them
+      //  - bad sender (pool number not on account) → disable that number so rotation stops using it
+      const classification = classifySmsFailure(errorDetails)
+      const jobOrgId = campaignOrgIdMap.get(job.campaign_id || (job.payload as any)?.campaignId || "") ?? undefined
+      if (classification.kind === "bad_recipient") {
+        await suppressBuyerSms(job.buyer_id, classification.reason)
+      } else if (classification.kind === "bad_sender" && classification.senderNumber) {
+        await disableSmsSender(jobOrgId, classification.senderNumber, classification.reason)
+      }
+      const retryable =
+        classification.kind === "bad_sender" ? true          // recipient is fine — retry gets a good pool number
+        : classification.kind === "bad_recipient" ? false     // dead number — don't waste attempts
+        : isRetryableError(err)
       const updates: Record<string, any> = {
         attempts: attemptNumber,
         locked_at: null,
