@@ -15,6 +15,61 @@ type CallStatus = "idle" | "connecting" | "on-call" | "error";
 
 type VoiceProvider = "telnyx" | "twilio";
 
+// Resolve the org's voice engine from GET /api/voice/provider, retrying on any
+// inconclusive response instead of failing open to a rail.
+//
+// The bug this fixes: on a fresh login the Supabase session cookie isn't hydrated
+// on first paint, so the route returns 401 (`requireOrgContext` → no user). A 401
+// does NOT throw, so treating a non-OK response as "not twilio" silently commits a
+// Twilio-voice org to the Telnyx dialer permanently (the effect ran once). Here we
+// only ever commit to an EXACT `"twilio"`/`"telnyx"` value returned on a 200; a
+// 401/5xx/network error/garbage body is "not yet known" → retry with backoff.
+//
+// Exported (and parameterized on fetch/sleep/cancellation) so it can be unit-tested
+// without standing up a full CallProvider render harness.
+export async function resolveVoiceProviderWithRetry(
+  fetchImpl: typeof fetch = (...args: Parameters<typeof fetch>) => fetch(...args),
+  opts: {
+    maxAttempts?: number;
+    sleep?: (ms: number) => Promise<void>;
+    isCancelled?: () => boolean;
+  } = {},
+): Promise<VoiceProvider | null> {
+  const maxAttempts = opts.maxAttempts ?? 8;
+  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const isCancelled = opts.isCancelled ?? (() => false);
+
+  let attempt = 0;
+  while (!isCancelled()) {
+    try {
+      const res = await fetchImpl("/api/voice/provider", { cache: "no-store" });
+      if (res.ok) {
+        const json = (await res.json().catch(() => null)) as { provider?: string } | null;
+        if (json?.provider === "twilio" || json?.provider === "telnyx") {
+          // The only thing we ever commit to: an exact provider on a 200.
+          return json.provider;
+        }
+        // 200 but unexpected body — inconclusive, retry.
+      }
+      // 401 (session not hydrated yet) / 5xx / unexpected → do NOT commit; retry.
+    } catch {
+      // network error → retry
+    }
+    attempt += 1;
+    if (attempt >= maxAttempts) {
+      // After sustained failure (~seconds — many session-hydration windows) fall
+      // back to telnyx so the legacy dialer still works for genuinely-Telnyx orgs
+      // (the safe default) instead of spinning forever. A Twilio org would rather
+      // wait for a correct answer than be mis-routed, and 8 tries covers hydration
+      // many times over.
+      return "telnyx";
+    }
+    await sleep(Math.min(250 * 2 ** attempt, 2000));
+  }
+  // Cancelled (unmount) — caller discards this; never sets state.
+  return null;
+}
+
 export interface CallContextValue {
   device: TelnyxRTC | null;
   status: CallStatus;
@@ -129,18 +184,19 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     }).catch(() => {});
   }, []);
 
-  // Resolve the org's voice engine once on mount. Defaults to telnyx on any error
-  // (fail-safe — matches the server pin philosophy).
+  // Resolve the org's voice engine on mount. A 401 here means the Supabase session
+  // isn't hydrated yet on a fresh login (a race, confirmed by a co-occurring
+  // /api/notifications 401) — NOT that the org is telnyx. resolveVoiceProviderWithRetry
+  // retries until the call succeeds and only ever commits to an exact provider value,
+  // with a safety fallback to telnyx after sustained failure. `voiceProvider` stays
+  // null until then, so neither engine spins up on the wrong rail.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      try {
-        const res = await fetch("/api/voice/provider", { cache: "no-store" });
-        const json = await res.json().catch(() => ({} as any));
-        if (!cancelled) setVoiceProvider(json?.provider === "twilio" ? "twilio" : "telnyx");
-      } catch {
-        if (!cancelled) setVoiceProvider("telnyx");
-      }
+      const provider = await resolveVoiceProviderWithRetry(undefined, {
+        isCancelled: () => cancelled,
+      });
+      if (!cancelled && provider) setVoiceProvider(provider);
     })();
     return () => {
       cancelled = true;
@@ -444,6 +500,13 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   }, [dialInternal, voiceProvider]);
 
   const makeCall = useCallback(async (destination: string, buyerId?: string, fromNumber?: string) => {
+    if (voiceProvider === null) {
+      // Provider still resolving (session hydrating). Refuse rather than fall
+      // through to the Telnyx branch by default. Defense-in-depth — the dialer UI
+      // already gates on `device` being non-null.
+      console.warn("[voice] provider not resolved yet; ignoring dial");
+      return { ok: false, error: "Phone is still connecting" };
+    }
     if (voiceProvider === "twilio") {
       // Caller ID is server-enforced by the TwiML webhook — fromNumber is ignored.
       setCurrentContact({ number: destination });
