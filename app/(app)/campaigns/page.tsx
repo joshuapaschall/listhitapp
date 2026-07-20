@@ -35,7 +35,7 @@ import { CanAny } from "@/components/auth/Can"
 import { usePermissions } from "@/hooks/use-permissions"
 
 type CampaignRow = any
-type UiStatus = "draft" | "scheduled" | "sending" | "sent" | "error" | "completed_with_errors"
+type UiStatus = "draft" | "scheduled" | "sending" | "sent" | "error" | "completed_with_errors" | "paused"
 
 export default function CampaignsPage() {
   const [search, setSearch] = useState("")
@@ -89,6 +89,7 @@ export default function CampaignsPage() {
     if (status === "draft" || status === "scheduled" || status === "sent" || status === "error" || status === "completed_with_errors") {
       return status
     }
+    if (status === "paused_by_safety") return "paused"
     return "draft"
   }
 
@@ -209,6 +210,7 @@ export default function CampaignsPage() {
               <SelectItem value="draft">Draft</SelectItem>
               <SelectItem value="scheduled">Scheduled</SelectItem>
               <SelectItem value="sending">Sending</SelectItem>
+              <SelectItem value="paused">Paused</SelectItem>
               <SelectItem value="sent">Sent</SelectItem>
               <SelectItem value="error">Error</SelectItem>
             </SelectContent>
@@ -284,11 +286,23 @@ export default function CampaignsPage() {
               </TableHeader>
               <TableBody>
                 {filteredCampaigns.map((campaign: CampaignRow) => {
-                  const uiStatus = normalizedStatus(campaign.status)
+                  const baseStatus = normalizedStatus(campaign.status)
+                  // A still-"Sending" email campaign whose account is under an SES
+                  // reputation freeze isn't progressing — surface it as Paused.
+                  const isFrozen =
+                    baseStatus === "sending" && campaign.channel === "email" && campaign.emailReputationFrozen
+                  const uiStatus = isFrozen ? "paused" : baseStatus
                   const recipientsCount = campaign.recipientCount || 0
                   const opens = recipientsCount ? Math.round(((campaign.openedCount || 0) / recipientsCount) * 100) : 0
                   const delivered = recipientsCount ? Math.round(((campaign.deliveredCount || 0) / recipientsCount) * 100) : 0
                   const clicks = recipientsCount ? Math.round(((campaign.clickedCount || 0) / recipientsCount) * 100) : 0
+                  // Honest-progress inputs for the Status cell.
+                  const total = campaign.recipientCount || 0
+                  const sentSoFar = campaign.sentCount || 0
+                  const waiting = campaign.queuePending || 0
+                  const progressPct = total ? Math.min(100, Math.round((sentSoFar / total) * 100)) : 0
+                  const nextAt = campaign.queueEarliestNext ? new Date(campaign.queueEarliestNext) : null
+                  const resumesInFuture = !!nextAt && nextAt.getTime() > Date.now()
                   const subjectPreview = (campaign.subject || campaign.message || "").slice(0, 60)
                   const isSms = campaign.channel === "sms"
                   const isEmail = campaign.channel === "email"
@@ -306,7 +320,49 @@ export default function CampaignsPage() {
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="px-4 py-4 align-middle"><CampaignStatusBadge status={uiStatus} /></TableCell>
+                      <TableCell className="px-4 py-4 align-top">
+                        <CampaignStatusBadge status={uiStatus} />
+
+                        {uiStatus === "sending" && (
+                          <div className="mt-2 w-[220px]">
+                            <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                              <div className="h-full bg-brand" style={{ width: `${progressPct}%` }} />
+                            </div>
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              {sentSoFar.toLocaleString()} of {total.toLocaleString()} sent
+                              {waiting > 0 && (
+                                <>
+                                  {" · "}
+                                  <span className="text-foreground">
+                                    {waiting.toLocaleString()} {campaign.channel === "sms" ? "waiting for quiet hours" : "queued"}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                            {campaign.channel === "sms" && waiting > 0 && (
+                              <div className="text-[11px] text-muted-foreground">
+                                {resumesInFuture
+                                  ? `Resumes ${formatDistanceToNow(nextAt as Date, { addSuffix: true })}`
+                                  : "Sending in recipients' local hours (8am–9pm)"}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {uiStatus === "paused" && (
+                          <div className="mt-1 w-[220px] text-xs text-muted-foreground">
+                            {isFrozen ? (
+                              <>
+                                <span className="text-foreground">Email reputation frozen</span>
+                                {waiting > 0 ? ` · ${waiting.toLocaleString()} remaining` : ""}
+                                <div className="text-[11px]">Auto-resumes when reputation recovers</div>
+                              </>
+                            ) : (
+                              <span className="text-foreground">High failure rate · safety stop</span>
+                            )}
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell className="px-4 py-4 text-right text-sm tabular-nums">{recipientsCount || "—"}</TableCell>
                       <TableCell className="px-4 py-4 text-right text-sm tabular-nums">
                         <span className={uiStatus === "error" || uiStatus === "completed_with_errors" ? "text-red-700" : "text-muted-foreground"}>
@@ -324,7 +380,7 @@ export default function CampaignsPage() {
                       </TableCell>
                       <TableCell className="px-4 py-4 text-right">
                         <div className="flex items-center justify-end gap-1">
-                          {(uiStatus === "sent" || uiStatus === "sending" || uiStatus === "completed_with_errors") && (
+                          {(uiStatus === "sent" || uiStatus === "sending" || uiStatus === "completed_with_errors" || uiStatus === "paused") && (
                             <Button variant="ghost" size="icon" onClick={() => router.push(`/campaigns/${campaign.id}`)}>
                               <BarChart3 className="size-4" />
                             </Button>
