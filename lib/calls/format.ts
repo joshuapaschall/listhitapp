@@ -5,6 +5,7 @@ export interface CallParty {
   fname?: string | null;
   lname?: string | null;
   phone?: string | null;
+  email?: string | null;
 }
 
 export interface CallAgent {
@@ -57,6 +58,17 @@ export function relativeCallTime(iso?: string | null): string {
 export function externalNumber(call: CallLike): string {
   if (call.direction === "inbound") return call.from_number ?? "";
   return call.to_number ?? "";
+}
+
+// The org-owned DID that handled the call (opposite of the external party).
+export function ownedNumber(call: CallLike): string {
+  if (call.direction === "inbound") return call.to_number ?? "";
+  return call.from_number ?? "";
+}
+
+// Label for the owned DID line in the UI.
+export function ownedNumberLabel(call: CallLike): string {
+  return call.direction === "inbound" ? "Received on" : "Called from";
 }
 
 export function contactName(call: CallLike): string {

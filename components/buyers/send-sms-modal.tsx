@@ -28,12 +28,15 @@ import {
 } from "@/utils/uploadMedia"
 import { useMyMergeContext } from "@/hooks/use-my-merge-context"
 import RecipientPicker, { type RecipientValue } from "@/components/messaging/recipient-picker"
+import { formatPhone } from "@/lib/calls/format"
 
 interface SendSmsModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   buyer: Buyer | null
   onSuccess?: () => void
+  initialTo?: string | null      // freeform recipient number when there is no buyer
+  initialFrom?: string | null    // E.164 DID to send from (reply-from-dialed-number)
 }
 
 function displayName(b: Buyer) {
@@ -43,7 +46,7 @@ function displayName(b: Buyer) {
 const STICKY = "__sticky__"
 const fetcher = (url: string) => fetch(url, { cache: "no-store" }).then((r) => r.json())
 
-export default function SendSmsModal({ open, onOpenChange, buyer, onSuccess }: SendSmsModalProps) {
+export default function SendSmsModal({ open, onOpenChange, buyer, onSuccess, initialTo, initialFrom }: SendSmsModalProps) {
   const [recipient, setRecipient] = useState<RecipientValue | null>(null)
   const [message, setMessage] = useState("")
   const [attachments, setAttachments] = useState<File[]>([])
@@ -74,10 +77,18 @@ export default function SendSmsModal({ open, onOpenChange, buyer, onSuccess }: S
     if (open) {
       TemplateService.listTemplates().then(setTemplates)
       PromptService.listPrompts().then(setPrompts)
-      setSenderValue(STICKY)
-      setRecipient(buyer ? { buyerId: buyer.id, value: buyer.phone || "", label: displayName(buyer) } : null)
+      if (buyer) {
+        setRecipient({ buyerId: buyer.id, value: buyer.phone || "", label: displayName(buyer) })
+      } else if (initialTo) {
+        // Unknown caller: prefill the freeform recipient (reply-from-dialed-number).
+        setRecipient({ value: initialTo, label: formatPhone(initialTo) })
+      } else {
+        setRecipient(null)
+      }
+      // initialFrom (the DID they dialed) makes override true so the POST sends from it.
+      setSenderValue(initialFrom ? initialFrom : STICKY)
     }
-  }, [open, buyer])
+  }, [open, buyer, initialTo, initialFrom])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files ? Array.from(e.target.files) : []
