@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
 
   const { data: existing } = await supabaseAdmin
     .from("calls")
-    .select("id, answered_at")
+    .select("id, answered_at, started_at")
     .eq("call_sid", matchSid)
     .maybeSingle()
 
@@ -148,6 +148,14 @@ export async function POST(request: NextRequest) {
     default:
       // initiated / ringing / queued — status only.
       break
+  }
+
+  // Defensive backfill: if a terminal update lands on a row whose started_at is
+  // still NULL (e.g. an insert raced or failed), stamp it now so the call can't be
+  // filtered out of the Calls page. Never overwrite a real value.
+  const isTerminal = ["completed", "no-answer", "busy", "failed", "canceled"].includes(callStatus)
+  if (isTerminal && !existing.started_at) {
+    updates.started_at = now
   }
 
   const { error } = await supabaseAdmin.from("calls").update(updates).eq("id", existing.id)

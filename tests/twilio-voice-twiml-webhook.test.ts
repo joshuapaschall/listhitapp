@@ -95,6 +95,11 @@ describe("twilio voice TwiML webhook (conference model)", () => {
     expect(xml).toContain("/api/webhooks/twilio-conference-events?ref=CA1")
     expect(xml).toContain("/api/webhooks/twilio-recording?ref=CA1")
 
+    // Ringback (not hold music) while the prospect leg dials in: waitUrl points at
+    // the ringback route.
+    expect(xml).toContain("waitUrl=")
+    expect(xml).toContain("/api/webhooks/twilio-voice-ringback")
+
     // Prospect dialed into the SAME room via calls.create, ref'd status callback.
     expect(h.createMock).toHaveBeenCalledTimes(1)
     const arg = h.createMock.mock.calls[0][0]
@@ -115,6 +120,9 @@ describe("twilio voice TwiML webhook (conference model)", () => {
         conference_name: ROOM,
       }),
     )
+    // started_at is stamped so the row survives the Calls page "Today" filter.
+    expect(typeof h.inserted[0].started_at).toBe("string")
+    expect(Number.isNaN(Date.parse(h.inserted[0].started_at))).toBe(false)
     expect(h.updates).toContainEqual({ far_leg_sid: "CA-prospect" })
   })
 
