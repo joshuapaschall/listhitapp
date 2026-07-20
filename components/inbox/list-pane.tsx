@@ -94,17 +94,19 @@ export default function ListPane({ onSelect, selectedId }: ListPaneProps) {
     count: filtered.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 64,
+    overscan: 8,
   });
+
+  const virtualItems = rowVirtualizer.getVirtualItems();
+  const lastItemIndex = virtualItems.length ? virtualItems[virtualItems.length - 1].index : -1;
 
   /* ---------- load the next page as the user nears the end ---------- */
   useEffect(() => {
-    const items = rowVirtualizer.getVirtualItems();
-    const last = items[items.length - 1];
-    if (!last) return;
-    if (last.index >= filtered.length - 10 && hasNextPage && !isFetchingNextPage) {
+    if (lastItemIndex < 0) return;
+    if (lastItemIndex >= filtered.length - 10 && hasNextPage && !isFetchingNextPage) {
       fetchNextPage();
     }
-  }, [rowVirtualizer.getVirtualItems(), filtered.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [lastItemIndex, filtered.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const handleRestore = async (threadId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -118,15 +120,22 @@ export default function ListPane({ onSelect, selectedId }: ListPaneProps) {
 
   /* ---------- realtime invalidate ---------- */
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
     const channel = supabase
       .channel("thread-list")
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "messages" },
-        () => queryClient.invalidateQueries({ queryKey: ["message-threads"] }),
+        () => {
+          if (timer) clearTimeout(timer);
+          timer = setTimeout(() => {
+            queryClient.invalidateQueries({ queryKey: ["message-threads"] });
+          }, 2000);
+        },
       )
       .subscribe();
     return () => {
+      if (timer) clearTimeout(timer);
       supabase.removeChannel(channel);
     };
   }, [queryClient]);
@@ -196,8 +205,8 @@ export default function ListPane({ onSelect, selectedId }: ListPaneProps) {
           </div>
         ) : (
           <>
-            <div style={{ height: rowVirtualizer.getTotalSize() }}>
-              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+            <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative", width: "100%" }}>
+              {virtualItems.map((virtualRow) => {
                 const item = filtered[virtualRow.index] as any;
                 const key = tab === "autosent" ? (item as AutosentMessage).id : (item as ThreadWithBuyer).id;
                 return (
@@ -205,6 +214,13 @@ export default function ListPane({ onSelect, selectedId }: ListPaneProps) {
                     key={key}
                     data-index={virtualRow.index}
                     ref={rowVirtualizer.measureElement}
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
                   >
                     {tab === "autosent" ? (
                       <AutosentRow
