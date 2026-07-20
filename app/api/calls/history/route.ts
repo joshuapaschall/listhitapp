@@ -37,7 +37,8 @@ export async function GET(request: NextRequest) {
           id,
           fname,
           lname,
-          phone
+          phone,
+          email
         )
       `, { count: 'exact' });
 

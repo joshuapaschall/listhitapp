@@ -4,7 +4,7 @@ import { ArrowDownLeft, ArrowUpRight, Phone, Play } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
-import { contactName, externalNumber, formatDuration, formatPhone, relativeCallTime, CallLike } from "@/lib/calls/format";
+import { contactName, externalNumber, formatDuration, formatPhone, ownedNumber, relativeCallTime, CallLike } from "@/lib/calls/format";
 import CallStatusBadge from "@/components/calls/call-status-badge";
 
 export interface CallRow extends CallLike {
@@ -61,7 +61,10 @@ export default function CallLogTable({ calls, loading, pagination, setPage, sele
                 </Avatar>
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{call.buyer ? name : formatPhone(externalNumber(call))}</p>
-                  <p className="truncate font-mono text-xs text-muted-foreground">{formatPhone(externalNumber(call))}</p>
+                  <p className="truncate font-mono text-xs text-muted-foreground">
+                    {formatPhone(externalNumber(call))}
+                    {ownedNumber(call) ? <span className="text-muted-foreground/70"> → on {formatPhone(ownedNumber(call))}</span> : null}
+                  </p>
                 </div>
               </div>
 

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowUpRight, Phone, RefreshCw } from "lucide-react";
+import { ArrowUpRight, Mail, MessageSquare, Phone, RefreshCw } from "lucide-react";
 import MainLayout from "@/components/layout/main-layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,21 +14,61 @@ import CallLogFilters, { CallLogFiltersValue } from "@/components/calls/call-log
 import CallLogTable, { CallRow } from "@/components/calls/call-log-table";
 import CallStatusBadge from "@/components/calls/call-status-badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { contactName, externalNumber, formatPhone, relativeCallTime } from "@/lib/calls/format";
+import { contactName, externalNumber, formatPhone, ownedNumber, ownedNumberLabel, relativeCallTime } from "@/lib/calls/format";
 import { useCall } from "@/components/voice/CallProvider";
+import SendSmsModal from "@/components/buyers/send-sms-modal";
+import SendEmailModal from "@/components/buyers/send-email-modal";
+import type { Buyer } from "@/lib/supabase";
 
-function CallDetailContent({ call, onCallBack, recent }: { call: CallRow | null; onCallBack: (call: CallRow) => void; recent: CallRow[] }) {
+// The send modals expect a full Buyer; build a minimal one from the call's partial
+// buyer (the modals only read id/fname/lname/full_name/phone/email).
+function callBuyerToBuyer(call: CallRow): Buyer | null {
+  const b = call.buyer;
+  if (!b?.id) return null;
+  const full_name = `${b.fname ?? ""} ${b.lname ?? ""}`.trim();
+  return { id: b.id, fname: b.fname ?? null, lname: b.lname ?? null, full_name, phone: b.phone ?? null, email: b.email ?? null } as Buyer;
+}
+
+function CallDetailContent({ call, onCallBack, onText, onEmail, recent }: { call: CallRow | null; onCallBack: (call: CallRow) => void; onText: (call: CallRow) => void; onEmail: (call: CallRow) => void; recent: CallRow[] }) {
   if (!call) return <p className="text-sm text-muted-foreground">Select a call to view detail.</p>;
+  const did = ownedNumber(call);
+  const isSaved = Boolean(call.buyer?.id);
+  const hasEmail = Boolean(call.buyer?.email);
   return (
     <div className="space-y-4">
       <div>
         <p className="font-semibold">{contactName(call)}</p>
         <p className="text-sm text-muted-foreground">{formatPhone(externalNumber(call))}</p>
-        {call.buyer?.id ? <Link href={`/buyers/${call.buyer.id}`} className="mt-1 inline-flex items-center gap-1 text-sm text-brand">View buyer <ArrowUpRight className="h-3.5 w-3.5" /></Link> : null}
       </div>
+
+      {did ? (
+        <div className="flex items-center justify-between gap-2 rounded-md bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+          <span>{ownedNumberLabel(call)}</span>
+          <span className="font-mono text-foreground">{formatPhone(did)}</span>
+        </div>
+      ) : null}
+
       <Can permission="calls.make_receive">
         <Button variant="brand" className="w-full" onClick={() => onCallBack(call)}>Call back</Button>
       </Can>
+
+      {isSaved ? (
+        <>
+          <div className={`grid gap-2 ${hasEmail ? "grid-cols-2" : "grid-cols-1"}`}>
+            <Button variant="outline" className="gap-1.5" onClick={() => onText(call)}><MessageSquare className="h-4 w-4" />Text</Button>
+            {hasEmail ? <Button variant="outline" className="gap-1.5" onClick={() => onEmail(call)}><Mail className="h-4 w-4" />Email</Button> : null}
+          </div>
+          <div className="text-center">
+            <Link href={`/buyers?buyerId=${call.buyer!.id}`} className="inline-flex items-center gap-1 text-sm text-brand">View buyer <ArrowUpRight className="h-3.5 w-3.5" /></Link>
+          </div>
+        </>
+      ) : (
+        <>
+          <Button variant="outline" className="w-full gap-1.5" onClick={() => onText(call)}><MessageSquare className="h-4 w-4" />Text back</Button>
+          {did ? <p className="text-center text-xs text-muted-foreground">Replies send from {formatPhone(did)} — the number they dialed.</p> : null}
+        </>
+      )}
+
       {call.telnyx_recording_id || call.recording_url || call.voicemail_storage_path ? <Can permission="calls.recordings"><div className="rounded-lg border border-border bg-card p-3"><audio controls className="w-full" src={call.call_sid ? `/api/recordings/${call.call_sid}/stream` : call.recording_url ?? call.voicemail_storage_path ?? undefined} /></div></Can> : null}
       <div>
         <p className="mb-2 text-sm font-medium">Recent with this contact</p>
@@ -73,10 +113,35 @@ export default function CallsPage() {
   const { can, loading: permissionsLoading } = usePermissions();
   const canMakeReceiveCalls = can("calls.make_receive");
 
+  const [showSms, setShowSms] = useState(false);
+  const [smsBuyer, setSmsBuyer] = useState<Buyer | null>(null);
+  const [smsInitialTo, setSmsInitialTo] = useState<string | null>(null);
+  const [smsInitialFrom, setSmsInitialFrom] = useState<string | null>(null);
+  const [showEmail, setShowEmail] = useState(false);
+  const [emailBuyer, setEmailBuyer] = useState<Buyer | null>(null);
+
   useEffect(() => setPage(1), [filters]);
 
   const handleCallBack = (call: CallRow) => {
     makeCall(call.direction === "inbound" ? call.from_number ?? "" : call.to_number ?? "", call.buyer?.id ?? undefined);
+  };
+
+  const handleText = (call: CallRow) => {
+    const buyer = callBuyerToBuyer(call);
+    if (buyer) {
+      setSmsBuyer(buyer); setSmsInitialTo(null); setSmsInitialFrom(null);
+    } else {
+      // Unknown caller: text them back from the exact DID they dialed.
+      setSmsBuyer(null);
+      setSmsInitialTo(externalNumber(call) || null);
+      setSmsInitialFrom(ownedNumber(call) || null);
+    }
+    setShowSms(true);
+  };
+
+  const handleEmail = (call: CallRow) => {
+    const buyer = callBuyerToBuyer(call);
+    if (buyer && call.buyer?.email) { setEmailBuyer(buyer); setShowEmail(true); }
   };
 
   const rangeParams = useMemo(() => {
@@ -230,7 +295,7 @@ export default function CallsPage() {
           <Card className="hidden lg:block h-fit">
             <CardHeader><CardTitle>Call detail</CardTitle></CardHeader>
             <CardContent>
-              <CallDetailContent call={selectedCall} onCallBack={handleCallBack} recent={selectedRecent} />
+              <CallDetailContent call={selectedCall} onCallBack={handleCallBack} onText={handleText} onEmail={handleEmail} recent={selectedRecent} />
             </CardContent>
           </Card>
         </div>
@@ -239,9 +304,22 @@ export default function CallsPage() {
       <Sheet open={detailOpen} onOpenChange={setDetailOpen}>
         <SheetContent side="bottom" className="lg:hidden max-h-[85vh] overflow-y-auto">
           <SheetHeader><SheetTitle>Call detail</SheetTitle></SheetHeader>
-          <div className="mt-4"><CallDetailContent call={selectedCall} onCallBack={handleCallBack} recent={selectedRecent} /></div>
+          <div className="mt-4"><CallDetailContent call={selectedCall} onCallBack={handleCallBack} onText={handleText} onEmail={handleEmail} recent={selectedRecent} /></div>
         </SheetContent>
       </Sheet>
+
+      <SendSmsModal
+        open={showSms}
+        onOpenChange={setShowSms}
+        buyer={smsBuyer}
+        initialTo={smsInitialTo}
+        initialFrom={smsInitialFrom}
+      />
+      <SendEmailModal
+        open={showEmail}
+        onOpenChange={setShowEmail}
+        buyer={emailBuyer}
+      />
     </MainLayout>
   );
 }
