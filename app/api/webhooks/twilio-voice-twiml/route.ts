@@ -28,6 +28,12 @@ function callbackUrl(): string {
   return `${baseUrl()}/api/webhooks/twilio-voice-twiml`
 }
 
+// TwiML doc Twilio plays to the lone agent while the prospect leg is being dialed
+// into the room — a ringback tone instead of the default conference hold music.
+function ringbackUrl(): string {
+  return `${baseUrl()}/api/webhooks/twilio-voice-ringback`
+}
+
 function xml(body: string, status = 200): NextResponse {
   return new NextResponse(body, { status, headers: { "Content-Type": "text/xml" } })
 }
@@ -103,6 +109,9 @@ export async function POST(request: NextRequest) {
     provider: "twilio",
     webrtc: true,
     conference_name: room,
+    // The Calls page filters/sorts by started_at (matches the Telnyx path). Without
+    // it every Twilio row is NULL and gets excluded by the "Today" date filter.
+    started_at: new Date().toISOString(),
   })
   if (insertErr) {
     console.error("[twilio-voice-twiml] call-log insert failed (non-fatal)", { orgId, error: insertErr })
@@ -136,6 +145,10 @@ export async function POST(request: NextRequest) {
     {
       startConferenceOnEnter: true,
       endConferenceOnExit: true,
+      // Ringback while the prospect is dialed in — the agent hears ringing, not the
+      // default conference hold music, until the prospect joins the room.
+      waitUrl: ringbackUrl(),
+      waitMethod: "GET",
       record: "record-from-start",
       recordingStatusCallback: refCallbackUrl(baseUrl(), "/api/webhooks/twilio-recording", agentCallSid),
       recordingStatusCallbackEvent: ["completed"],

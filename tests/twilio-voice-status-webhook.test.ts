@@ -126,6 +126,25 @@ describe("twilio voice status webhook", () => {
     expect(h.state.updates.hangup_cause).toBe("no-answer")
   })
 
+  test("terminal update on a row with started_at=null backfills started_at", async () => {
+    h.state.row = { id: "c1", answered_at: null, started_at: null }
+    await POST(req({ CallSid: "CH1", ParentCallSid: "CA1", CallStatus: "completed", CallDuration: "42" }))
+    expect(typeof h.state.updates.started_at).toBe("string")
+    expect(Number.isNaN(Date.parse(h.state.updates.started_at))).toBe(false)
+  })
+
+  test("terminal update does NOT overwrite an existing started_at", async () => {
+    h.state.row = { id: "c1", answered_at: null, started_at: "2020-01-01T00:00:00Z" }
+    await POST(req({ CallSid: "CH1", ParentCallSid: "CA1", CallStatus: "no-answer" }))
+    expect(h.state.updates.started_at).toBeUndefined()
+  })
+
+  test("non-terminal update never sets started_at (even when null)", async () => {
+    h.state.row = { id: "c1", answered_at: null, started_at: null }
+    await POST(req({ CallSid: "CH1", ParentCallSid: "CA1", CallStatus: "ringing" }))
+    expect(h.state.updates.started_at).toBeUndefined()
+  })
+
   test("unknown sid → 204, no update", async () => {
     h.state.row = null
     const res = await POST(req({ CallSid: "CH1", ParentCallSid: "CA-unknown", CallStatus: "completed", CallDuration: "5" }))

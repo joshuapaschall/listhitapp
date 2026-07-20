@@ -179,6 +179,9 @@ describe("twilio voice incoming webhook (conference model)", () => {
         agent_answered: false,
       }),
     );
+    // started_at stamped so the row survives the Calls page "Today" filter.
+    expect(typeof h.state.inserted[0].started_at).toBe("string");
+    expect(Number.isNaN(Date.parse(h.state.inserted[0].started_at))).toBe(false);
   });
 
   test("rings every online browser (one agent leg each, counter = 2)", async () => {
@@ -202,6 +205,9 @@ describe("twilio voice incoming webhook (conference model)", () => {
     expect(xml).not.toContain("<Conference");
     expect(h.createMock).not.toHaveBeenCalled();
     expect(h.state.inserted.length).toBe(1);
+    // Voicemail rows are logged too — started_at stamped so they show in the log.
+    expect(typeof h.state.inserted[0].started_at).toBe("string");
+    expect(Number.isNaN(Date.parse(h.state.inserted[0].started_at))).toBe(false);
   });
 
   test("no online browsers + greeting configured → <Play> greeting + <Record>", async () => {

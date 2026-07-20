@@ -70,6 +70,10 @@ async function insertInboundRow(
     status: "ringing",
     provider: "twilio",
     webrtc: true,
+    // The Calls page filters/sorts by started_at (matches the Telnyx path). Both the
+    // conference and the no-answer/voicemail paths insert through here, so stamping
+    // it once keeps every inbound Twilio call (voicemails included) in the log.
+    started_at: new Date().toISOString(),
     ...extra,
   })
   if (error) console.error("[twilio-voice-incoming] call-log insert failed (non-fatal)", { orgId, error })
