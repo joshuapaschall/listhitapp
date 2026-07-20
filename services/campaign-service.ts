@@ -254,10 +254,7 @@ export class CampaignService {
 
     let query = supabase
       .from("campaigns")
-      .select(
-        "*, campaign_recipients(id,status,error,sent_at,delivered_at,opened_at,clicked_at,bounced_at,complained_at,unsubscribed_at,provider_id,from_number,buyer_id,buyers(fname,lname,full_name))",
-        { count: "exact" },
-      )
+      .select("*", { count: "exact" })
       .order("created_at", { ascending: false })
 
     if (filters.channel) {
@@ -278,16 +275,36 @@ export class CampaignService {
       throw error
     }
 
+    // Recipient counts come from a batched SQL aggregate, NOT an embedded recipient
+    // relation: PostgREST caps embedded rows at 1000, which silently truncated every
+    // count for campaigns over 1000 recipients. The RPC is a plain STABLE sql
+    // function so the browser client's RLS keeps it org-scoped.
+    const campaignIds = (data || []).map((c: any) => c.id)
+    let rollupMap = new Map<string, any>()
+    if (campaignIds.length) {
+      const { data: rollups, error: rollupErr } = await supabase.rpc("campaign_list_rollups", {
+        p_campaign_ids: campaignIds,
+      })
+      if (rollupErr) {
+        console.error("Error loading campaign rollups:", rollupErr)
+      } else {
+        rollupMap = new Map((rollups || []).map((r: any) => [r.campaign_id, r]))
+      }
+    }
+
     const campaignsWithCounts = (data || []).map((c: any) => {
-      const recs = c.campaign_recipients || []
-      const sentCount = recs.filter((r: any) => r.sent_at).length
-      const deliveredCount = recs.filter((r: any) => r.delivered_at).length
-      const clickedCount = recs.filter((r: any) => r.clicked_at).length
-      const errorCount = recs.filter((r: any) => r.status === "error" || r.error).length
-      const openedCount = recs.filter((r: any) => r.opened_at).length
-      const bouncedCount = recs.filter((r: any) => r.bounced_at).length
-      const unsubCount = recs.filter((r: any) => r.unsubscribed_at).length
-      return { ...c, sentCount, deliveredCount, clickedCount, errorCount, openedCount, bouncedCount, unsubCount }
+      const r = rollupMap.get(c.id)
+      return {
+        ...c,
+        recipientCount: Number(r?.recipients ?? 0),
+        sentCount: Number(r?.sent ?? 0),
+        deliveredCount: Number(r?.delivered ?? 0),
+        clickedCount: Number(r?.clicked ?? 0),
+        openedCount: Number(r?.opened ?? 0),
+        errorCount: Number(r?.errors ?? 0),
+        bouncedCount: Number(r?.bounced ?? 0),
+        unsubCount: Number(r?.unsubscribed ?? 0),
+      }
     })
 
     return { campaigns: campaignsWithCounts, totalCount: count || 0 }

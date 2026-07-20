@@ -118,7 +118,7 @@ export default function CampaignsPage() {
         return new Date(b.sent_at || 0).getTime() - new Date(a.sent_at || 0).getTime()
       }
       if (sortBy === "recipients") {
-        return (b.campaign_recipients?.length || 0) - (a.campaign_recipients?.length || 0)
+        return (b.recipientCount || 0) - (a.recipientCount || 0)
       }
       return 0
     })
@@ -285,7 +285,7 @@ export default function CampaignsPage() {
               <TableBody>
                 {filteredCampaigns.map((campaign: CampaignRow) => {
                   const uiStatus = normalizedStatus(campaign.status)
-                  const recipientsCount = campaign.campaign_recipients?.length || 0
+                  const recipientsCount = campaign.recipientCount || 0
                   const opens = recipientsCount ? Math.round(((campaign.openedCount || 0) / recipientsCount) * 100) : 0
                   const delivered = recipientsCount ? Math.round(((campaign.deliveredCount || 0) / recipientsCount) * 100) : 0
                   const clicks = recipientsCount ? Math.round(((campaign.clickedCount || 0) / recipientsCount) * 100) : 0
