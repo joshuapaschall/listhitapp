@@ -292,8 +292,25 @@ export class CampaignService {
       }
     }
 
+    // Queue status (remaining work + when the next parked recipient unlocks, across
+    // both sms + email queues) and the global email-reputation freeze flag. These
+    // let the list explain WHY a campaign is still "Sending": SMS parked for TCPA
+    // quiet hours, or email halted by the SES reputation guard. RPC errors are
+    // non-fatal — progress just reads 0 / not-frozen.
+    const [queueRes, frozenRes] = await Promise.all([
+      campaignIds.length
+        ? supabase.rpc("campaign_queue_status", { p_campaign_ids: campaignIds })
+        : Promise.resolve({ data: [], error: null } as any),
+      supabase.rpc("email_reputation_frozen"),
+    ])
+    if (queueRes.error) console.error("Error loading campaign queue status:", queueRes.error)
+    if (frozenRes.error) console.error("Error loading email reputation state:", frozenRes.error)
+    const queueMap = new Map<string, any>((queueRes.data || []).map((q: any) => [q.campaign_id, q]))
+    const emailFrozen = frozenRes.data === true
+
     const campaignsWithCounts = (data || []).map((c: any) => {
       const r = rollupMap.get(c.id)
+      const q = queueMap.get(c.id)
       return {
         ...c,
         recipientCount: Number(r?.recipients ?? 0),
@@ -304,6 +321,10 @@ export class CampaignService {
         errorCount: Number(r?.errors ?? 0),
         bouncedCount: Number(r?.bounced ?? 0),
         unsubCount: Number(r?.unsubscribed ?? 0),
+        queuePending: Number(q?.pending ?? 0),
+        queueProcessing: Number(q?.processing ?? 0),
+        queueEarliestNext: q?.earliest_next ?? null,
+        emailReputationFrozen: c.channel === "email" ? emailFrozen : false,
       }
     })
 
