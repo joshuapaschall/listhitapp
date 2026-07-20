@@ -1,4 +1,4 @@
-import { AlertCircle, AlertTriangle, CheckCircle2, Clock, Loader2 } from "lucide-react"
+import { AlertCircle, AlertTriangle, CheckCircle2, Clock, Loader2, PauseCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 // Status values the backend may set on the `campaigns` table. Keep in sync with:
@@ -18,6 +18,7 @@ type KnownStatus =
   | "error"
   | "completed_with_errors"
   | "paused_by_safety"
+  | "paused"
 
 type CampaignStatusBadgeProps = {
   status: KnownStatus | string | null | undefined
@@ -67,6 +68,11 @@ const statusConfig: Record<KnownStatus, { label: string; className: string; icon
     label: "Paused (safety)",
     className: "bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300",
     icon: <AlertTriangle className="size-3" />,
+  },
+  paused: {
+    label: "Paused",
+    className: "bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300",
+    icon: <PauseCircle className="size-3" />,
   },
 }
 
