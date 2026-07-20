@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { Search } from "lucide-react";
@@ -15,6 +15,9 @@ import {
   listAutosentMessages,
   listFilteredThreads,
   restoreFilteredThread,
+  type ThreadCursor,
+  type ThreadPage,
+  type AutosentPage,
   type ThreadWithBuyer,
   type AutosentMessage,
 } from "@/services/message-service";
@@ -36,31 +39,47 @@ export default function ListPane({ onSelect, selectedId }: ListPaneProps) {
   const parentRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
-  /* ---------- data ---------- */
-  const { data } = useQuery({
+  /* ---------- data (keyset-paginated, one page per scroll) ---------- */
+  const {
+    data,
+    isLoading,
+    isError,
+    refetch,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: ["message-threads", tab],
-    queryFn: async () => {
+    initialPageParam: null as ThreadCursor | null,
+    queryFn: ({ pageParam }) => {
       switch (tab) {
         case "unread":
-          return listInboxThreads({ unread: true });
+          return listInboxThreads({ unread: true, cursor: pageParam });
         case "starred":
-          return listInboxThreads({ starred: true });
+          return listInboxThreads({ starred: true, cursor: pageParam });
         case "sent":
-          return listSentThreads({ auto: false });
+          return listSentThreads({ cursor: pageParam });
         case "autosent":
-          return listAutosentMessages();
+          return listAutosentMessages({ cursor: pageParam });
         case "filtered":
-          return listFilteredThreads();
+          return listFilteredThreads({ cursor: pageParam });
         default:
-          return listInboxThreads();
+          return listInboxThreads({ cursor: pageParam });
       }
     },
+    getNextPageParam: (lastPage: ThreadPage | AutosentPage) => lastPage.nextCursor ?? undefined,
   });
 
+  const rows = useMemo(
+    () => (data?.pages.flatMap((p) => p.rows) ?? []) as (ThreadWithBuyer | AutosentMessage)[],
+    [data],
+  );
+
+  // NOTE: search currently matches loaded pages only; server-side search is a follow-up.
   const filtered = useMemo(() => {
-    if (!data) return [];
     const term = search.toLowerCase();
-    return (data as (ThreadWithBuyer | AutosentMessage)[]).filter((t) => {
+    if (!term) return rows;
+    return rows.filter((t) => {
       const buyer = (t as any).buyers;
       const name = buyer
         ? buyer.full_name || `${buyer.fname || ""} ${buyer.lname || ""}`.trim()
@@ -68,7 +87,7 @@ export default function ListPane({ onSelect, selectedId }: ListPaneProps) {
       const phone = (t as any).phone_number || (t as any).message_threads?.phone_number || "";
       return name.toLowerCase().includes(term) || phone.toLowerCase().includes(term);
     });
-  }, [data, search]);
+  }, [rows, search]);
 
   /* ---------- virtual list ---------- */
   const rowVirtualizer = useVirtualizer({
@@ -76,6 +95,16 @@ export default function ListPane({ onSelect, selectedId }: ListPaneProps) {
     getScrollElement: () => parentRef.current,
     estimateSize: () => 64,
   });
+
+  /* ---------- load the next page as the user nears the end ---------- */
+  useEffect(() => {
+    const items = rowVirtualizer.getVirtualItems();
+    const last = items[items.length - 1];
+    if (!last) return;
+    if (last.index >= filtered.length - 10 && hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [rowVirtualizer.getVirtualItems(), filtered.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const handleRestore = async (threadId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -144,53 +173,81 @@ export default function ListPane({ onSelect, selectedId }: ListPaneProps) {
 
       {/* Thread rows */}
       <div ref={parentRef} className="flex-1 overflow-y-auto">
-        <div style={{ height: rowVirtualizer.getTotalSize() }}>
-          {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-            const item = filtered[virtualRow.index] as any;
-            const key = tab === "autosent" ? (item as AutosentMessage).id : (item as ThreadWithBuyer).id;
-            return (
-              <div
-                key={key}
-                data-index={virtualRow.index}
-                ref={rowVirtualizer.measureElement}
-              >
-                {tab === "autosent" ? (
-                  <AutosentRow
-                    message={item as AutosentMessage}
-                    selected={selectedId === (item as AutosentMessage).message_threads?.id}
-                    onSelect={onSelect}
-                  />
-                ) : tab === "filtered" ? (
-                  <div>
-                    <ConversationRow
-                      thread={item as ThreadWithBuyer}
-                      selected={selectedId === (item as ThreadWithBuyer).id}
-                      onSelect={onSelect}
-                    />
-                    <div className="flex items-center justify-between gap-2 px-3 pb-2 -mt-1">
-                      <span className="inline-flex max-w-[60%] truncate rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand">
-                        {(item as ThreadWithBuyer).filtered_keyword || "Filtered"}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={(e) => handleRestore((item as ThreadWithBuyer).id, e)}
-                        className="rounded-md px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-                      >
-                        Restore
-                      </button>
-                    </div>
+        {isLoading ? (
+          <div className="space-y-2 p-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="h-16 animate-pulse rounded-md bg-muted" />
+            ))}
+          </div>
+        ) : isError ? (
+          <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center">
+            <p className="text-sm text-muted-foreground">Couldn&apos;t load messages.</p>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              className="rounded-md px-3 py-1 text-sm font-medium text-foreground hover:bg-muted"
+            >
+              Retry
+            </button>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex h-full items-center justify-center p-4 text-center">
+            <p className="text-sm text-muted-foreground">No messages here yet.</p>
+          </div>
+        ) : (
+          <>
+            <div style={{ height: rowVirtualizer.getTotalSize() }}>
+              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                const item = filtered[virtualRow.index] as any;
+                const key = tab === "autosent" ? (item as AutosentMessage).id : (item as ThreadWithBuyer).id;
+                return (
+                  <div
+                    key={key}
+                    data-index={virtualRow.index}
+                    ref={rowVirtualizer.measureElement}
+                  >
+                    {tab === "autosent" ? (
+                      <AutosentRow
+                        message={item as AutosentMessage}
+                        selected={selectedId === (item as AutosentMessage).message_threads?.id}
+                        onSelect={onSelect}
+                      />
+                    ) : tab === "filtered" ? (
+                      <div>
+                        <ConversationRow
+                          thread={item as ThreadWithBuyer}
+                          selected={selectedId === (item as ThreadWithBuyer).id}
+                          onSelect={onSelect}
+                        />
+                        <div className="flex items-center justify-between gap-2 px-3 pb-2 -mt-1">
+                          <span className="inline-flex max-w-[60%] truncate rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand">
+                            {(item as ThreadWithBuyer).filtered_keyword || "Filtered"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => handleRestore((item as ThreadWithBuyer).id, e)}
+                            className="rounded-md px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                          >
+                            Restore
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <ConversationRow
+                        thread={item as ThreadWithBuyer}
+                        selected={selectedId === (item as ThreadWithBuyer).id}
+                        onSelect={onSelect}
+                      />
+                    )}
                   </div>
-                ) : (
-                  <ConversationRow
-                    thread={item as ThreadWithBuyer}
-                    selected={selectedId === (item as ThreadWithBuyer).id}
-                    onSelect={onSelect}
-                  />
-                )}
-              </div>
-            );
-          })}
-        </div>
+                );
+              })}
+            </div>
+            {isFetchingNextPage && (
+              <div className="py-3 text-center text-xs text-muted-foreground">Loading more…</div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
