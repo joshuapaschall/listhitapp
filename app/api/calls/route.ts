@@ -8,6 +8,7 @@ import { getWebRTCSipUri } from "@/lib/voice/webrtc-sip"
 import { getCallControlAppId } from "@/lib/voice-env"
 import { listPurchasedNumbersForOrigin, type FromNumber } from "@/lib/telnyx/numbers"
 import { resolveOutboundFrom } from "@/lib/sender/sticky-sender"
+import { resolveOrgIdForUser } from "@/lib/auth/org-context"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatPhoneE164 } from "@/lib/dedup-utils"
 
@@ -31,6 +32,8 @@ export async function POST(req: Request) {
     if (!user?.id) {
       return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 })
     }
+
+    const orgId = await resolveOrgIdForUser(user.id)
 
     const body = (await req.json().catch(() => ({}))) as {
       to?: string
@@ -75,6 +78,7 @@ export async function POST(req: Request) {
         buyerId,
         threadId: null,
         explicitFrom: null,
+        orgId,
       })
       from = matchAppAssigned(sticky)
     }
