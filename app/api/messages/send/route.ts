@@ -136,6 +136,7 @@ export async function POST(request: NextRequest) {
     buyerId,
     threadId: thread?.id,
     explicitFrom: overrideFrom,
+    orgId,
   })
 
   if (!replyFrom) {

@@ -20,11 +20,12 @@ interface RecordArgs {
   from: string
 }
 
-// Validate that a candidate number is one this org actually owns/operates.
-// Mirrors the inline check in app/api/messages/send/route.ts: enabled
-// inbound_numbers (by E.164) OR voice_numbers (by national digits or E.164).
+// Validate that a candidate number is one THIS ORG actually owns/operates.
+// Org-scoped: mirrors the inline check in app/api/messages/send/route.ts but
+// never validates a number against another tenant's inventory.
 async function isOwnedNumber(
   client: SupabaseClient,
+  orgId: string,
   digits: string | null,
   e164: string | null,
 ): Promise<boolean> {
@@ -32,6 +33,7 @@ async function isOwnedNumber(
     const { data: inbound, error } = await client
       .from("inbound_numbers")
       .select("e164")
+      .eq("org_id", orgId)
       .eq("enabled", true)
       .in("e164", [e164])
     if (!error && inbound && inbound.length) return true
@@ -44,6 +46,7 @@ async function isOwnedNumber(
     const { data: voice, error } = await client
       .from("voice_numbers")
       .select("phone_number")
+      .eq("org_id", orgId)
       .in("phone_number", matchValues)
     if (!error && voice && voice.length) return true
   }
@@ -70,11 +73,13 @@ export async function resolveOutboundFrom({
   sendingMarketId,
   orgId,
 }: ResolveArgs): Promise<string | null> {
-  // 1. Explicit pick — honored only if the org owns it.
-  if (explicitFrom) {
+  // 1. Explicit pick — honored only if we know the org AND the org owns it.
+  //    SECURITY: with no orgId we cannot prove ownership, so we do NOT honor
+  //    the explicit pick (fail closed) and fall through to sticky resolution.
+  if (explicitFrom && orgId) {
     const digits = normalizePhone(explicitFrom)
     const e164 = formatPhoneE164(explicitFrom)
-    if (digits && (await isOwnedNumber(client, digits, e164)) && e164) {
+    if (digits && e164 && (await isOwnedNumber(client, orgId, digits, e164))) {
       return e164
     }
   }

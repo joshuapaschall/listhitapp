@@ -165,4 +165,69 @@ describe("resolveOutboundFrom sticky precedence", () => {
     // The pool resolver hits supabaseAdmin.from("inbound_numbers"); it must NOT run.
     expect(h.state.calls.some((c) => c.table === "inbound_numbers")).toBe(false)
   })
+
+  test("explicitFrom is only honored when org-scoped ownership matches", async () => {
+    // The env fallback must not mask the fail-closed "should be null" cases.
+    const savedDid = process.env.DEFAULT_OUTBOUND_DID
+    delete process.env.DEFAULT_OUTBOUND_DID
+    try {
+      // voice_numbers returns a row ONLY when queried with the matching org_id.
+      const makeClient = (): any => ({
+        from: (table: string) => {
+          const b: any = { __org: undefined as string | undefined }
+          b.select = () => b
+          b.eq = (col: string, val: any) => {
+            if (col === "org_id") b.__org = val
+            return b
+          }
+          b.in = () =>
+            Promise.resolve(
+              table === "voice_numbers" && b.__org === "org-1"
+                ? { data: [{ phone_number: "+14045551234" }], error: null }
+                : { data: [], error: null },
+            )
+          b.order = () => b
+          b.limit = () => b
+          b.maybeSingle = () => Promise.resolve({ data: null, error: null })
+          return b
+        },
+      })
+
+      const { resolveOutboundFrom } = await import("@/lib/sender/sticky-sender")
+
+      // Correct org → honored.
+      const ok = await resolveOutboundFrom({
+        client: makeClient(),
+        buyerId: null,
+        threadId: null,
+        explicitFrom: "+14045551234",
+        orgId: "org-1",
+      })
+      expect(ok).toBe("+14045551234")
+
+      // Wrong org → NOT honored (ownership query returns no rows), falls through
+      // to the env default (unset in test) → null.
+      const wrong = await resolveOutboundFrom({
+        client: makeClient(),
+        buyerId: null,
+        threadId: null,
+        explicitFrom: "+14045551234",
+        orgId: "org-2",
+      })
+      expect(wrong).toBeNull()
+
+      // No org → fail closed, explicit pick ignored entirely → null.
+      const noOrg = await resolveOutboundFrom({
+        client: makeClient(),
+        buyerId: null,
+        threadId: null,
+        explicitFrom: "+14045551234",
+        orgId: null,
+      })
+      expect(noOrg).toBeNull()
+    } finally {
+      if (savedDid === undefined) delete process.env.DEFAULT_OUTBOUND_DID
+      else process.env.DEFAULT_OUTBOUND_DID = savedDid
+    }
+  })
 })
