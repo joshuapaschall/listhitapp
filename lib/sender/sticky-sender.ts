@@ -18,6 +18,7 @@ interface RecordArgs {
   buyerId?: string | null
   threadId?: string | null
   from: string
+  orgId?: string | null
 }
 
 // Validate that a candidate number is one this org actually owns/operates.
@@ -137,12 +138,16 @@ export async function recordStickyFrom({
   buyerId,
   threadId,
   from,
+  orgId,
 }: RecordArgs): Promise<void> {
   if (buyerId) {
     try {
       await client
         .from("buyer_sms_senders")
-        .upsert({ buyer_id: buyerId, from_number: from }, { onConflict: "buyer_id" })
+        .upsert(
+          { buyer_id: buyerId, from_number: from, org_id: orgId ?? null },
+          { onConflict: "buyer_id" },
+        )
     } catch (err) {
       console.error("recordStickyFrom: buyer_sms_senders upsert failed", err)
     }

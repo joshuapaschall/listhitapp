@@ -40,6 +40,10 @@ type QueueSmsCampaignPayload = {
   campaignId: string
   mediaUrls?: string[]
   recipients: SmsQueueRecipient[]
+  // When provided, stamp queued rows with the campaign's org. Optional so the
+  // (out-of-scope) caller can start passing it without a lockstep change; until
+  // then org_id is omitted and the column default applies (unchanged behavior).
+  orgId?: string
 }
 
 type SmsQueuePayload = {
@@ -261,6 +265,7 @@ async function sendSingleCampaignSms({
         phone_number: normalizePhone(formatted),
         campaign_id: campaignId ?? null,
         updated_at: new Date().toISOString(),
+        org_id: orgId,
       },
       { onConflict: "buyer_id,phone_number" },
     )
@@ -278,6 +283,7 @@ async function sendSingleCampaignSms({
       provider_id: data.id,
       is_bulk: true,
       media_urls: finalMediaUrls?.length ? finalMediaUrls : null,
+      org_id: orgId,
     })
   }
 
@@ -289,6 +295,7 @@ async function sendSingleCampaignSms({
       buyerId,
       threadId: thread?.id ?? null,
       from: sentFrom,
+      orgId,
     })
   }
 
@@ -299,6 +306,7 @@ export async function queueSmsCampaign({
   campaignId,
   mediaUrls,
   recipients,
+  orgId,
 }: QueueSmsCampaignPayload) {
   const supabase = requireAdmin()
   if (!recipients.length) return []
@@ -318,6 +326,9 @@ export async function queueSmsCampaign({
     status: "pending",
     scheduled_for: new Date(scheduledStart + idx * spacingMs).toISOString(),
     max_attempts: SMS_QUEUE_MAX_ATTEMPTS,
+    // Undefined when the caller doesn't pass orgId → key omitted → column default
+    // applies (no explicit NULL, which would fail the NOT NULL column today).
+    org_id: orgId,
   }))
 
   const queuedRows: any[] = []

@@ -296,6 +296,7 @@ export async function POST(request: NextRequest) {
       buyerId,
       threadId: activeThread.id,
       from: replyFrom,
+      orgId,
     })
 
     return new Response(JSON.stringify({ sid: data.id }), { status: 200 })
