@@ -134,10 +134,9 @@ describe("sendCampaignSMS sticky sender", () => {
     const body = JSON.parse(fetchMock.mock.calls[0][1].body as string)
     expect(body.messaging_profile_id).toBe("MP123")
     expect(mappings.length).toBe(1)
-    // recordStickyFrom OMITS org_id when the org is unknown (this test invokes
-    // the sender without an orgId), so the column default applies — no explicit
-    // null, which would violate the NOT NULL column.
-    expect(mappings[0]).toEqual({ buyer_id: "b2", from_number: "+1444" })
+    // org_id is now stamped on the sticky upsert; null here because this test
+    // invokes the sender without an orgId (recordStickyFrom uses orgId ?? null).
+    expect(mappings[0]).toEqual({ buyer_id: "b2", from_number: "+1444", org_id: null })
   })
 
   test("includes media URLs when provided", async () => {
