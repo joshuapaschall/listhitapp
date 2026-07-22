@@ -180,18 +180,18 @@ const createSupabaseClient = () => ({
       }
     }
     if (table === "inbound_numbers") {
-      return {
-        select: () => ({
-          eq: () => ({
-            in: async (_col: string, values: string[]) => ({
-              data: inboundDidRows
-                .filter((num) => values.includes(num))
-                .map((num) => ({ e164: num })),
-              error: null,
-            }),
-          }),
+      // Chainable: the ownership check calls .select().eq("org_id").eq("enabled").in(...)
+      const builder: any = {
+        select: () => builder,
+        eq: () => builder,
+        in: async (_col: string, values: string[]) => ({
+          data: inboundDidRows
+            .filter((num) => values.includes(num))
+            .map((num) => ({ e164: num })),
+          error: null,
         }),
       }
+      return builder
     }
     if (table === "voice_numbers") {
       return {

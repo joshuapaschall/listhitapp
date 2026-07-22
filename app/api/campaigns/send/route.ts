@@ -683,6 +683,7 @@ export async function POST(request: NextRequest) {
         campaignId,
         mediaUrls,
         recipients: queuedRecipients,
+        orgId: campaign.org_id,
       })
 
       const queuedRecipientIds = Array.from(new Set(queuedRecipients.map((recipient) => recipient.recipientId)))
