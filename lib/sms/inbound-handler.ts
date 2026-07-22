@@ -143,13 +143,6 @@ export async function handleInboundSms(event: InboundSmsEvent): Promise<NextResp
     const inboundOrgId =
       (buyerId ? buyerOrgById.get(buyerId) ?? null : null) ?? anonOrgId
 
-    if (!inboundOrgId) {
-      console.warn("⚠️ inbound org unresolved — row will fall to the column default", {
-        to,
-        buyerId,
-      })
-    }
-
     const { data: thread, error: threadErr } = buyerId
       ? await supabaseAdmin
           .from("message_threads")
@@ -162,8 +155,7 @@ export async function handleInboundSms(event: InboundSmsEvent): Promise<NextResp
               updated_at: new Date().toISOString(),
               deleted_at: null,
               preferred_from_number: preferredDid,
-              // Omit when unknown → column default applies (never explicit null).
-              ...(inboundOrgId ? { org_id: inboundOrgId } : {}),
+              org_id: inboundOrgId,
             },
             { onConflict: "buyer_id,phone_number" }
           )
@@ -186,7 +178,7 @@ export async function handleInboundSms(event: InboundSmsEvent): Promise<NextResp
       provider_id: sid,
       is_bulk: false,
       media_urls: mediaUrls.length ? mediaUrls : null,
-      ...(inboundOrgId ? { org_id: inboundOrgId } : {}),
+      org_id: inboundOrgId,
     })
 
     if (msgErr) {
@@ -351,8 +343,6 @@ export async function handleInboundSms(event: InboundSmsEvent): Promise<NextResp
           const providerId = json?.data?.id as string | undefined
 
           if (helpReplyThread) {
-            const helpTelnyxOrgId =
-              buyerOrgById.get(helpReplyThread.buyerId) ?? anonOrgId
             const { error: helpMsgErr } = await supabaseAdmin.from("messages").insert({
               thread_id: helpReplyThread.id,
               buyer_id: helpReplyThread.buyerId,
@@ -362,7 +352,7 @@ export async function handleInboundSms(event: InboundSmsEvent): Promise<NextResp
               body: replyText,
               provider_id: providerId,
               is_bulk: false,
-              ...(helpTelnyxOrgId ? { org_id: helpTelnyxOrgId } : {}),
+              org_id: buyerOrgById.get(helpReplyThread.buyerId) ?? anonOrgId,
             })
 
             if (helpMsgErr) {
