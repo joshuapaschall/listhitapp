@@ -150,13 +150,7 @@ export async function recordStickyFrom({
       await client
         .from("buyer_sms_senders")
         .upsert(
-          {
-            buyer_id: buyerId,
-            from_number: from,
-            // Omit when unknown so the column default applies. An explicit null
-            // would violate the NOT NULL column and silently break sticky writes.
-            ...(orgId ? { org_id: orgId } : {}),
-          },
+          { buyer_id: buyerId, from_number: from, org_id: orgId ?? null },
           { onConflict: "buyer_id" },
         )
     } catch (err) {
