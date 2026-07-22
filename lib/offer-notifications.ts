@@ -4,7 +4,7 @@ import { TELNYX_API_URL, telnyxHeaders } from "@/lib/telnyx"
 import { FROM_EMAIL, resend } from "@/lib/resend"
 import { insertNotification } from "@/lib/notifications"
 import type { Buyer, Property, OfferWithRelations } from "@/lib/supabase"
-import { resolveFromNumber } from "@/lib/showing-notifications"
+import { resolveFromNumber, resolveBuyerOrgId } from "@/lib/showing-notifications"
 import { assertServer } from "@/utils/assert-server"
 
 assertServer()
@@ -17,6 +17,7 @@ async function sendOfferSms(offer: OfferWithRelations, buyer: Buyer, property: P
   if (!to || !normalizedTo) return
 
   const from = await resolveFromNumber(buyer.id)
+  const orgId = await resolveBuyerOrgId(buyer.id)
   if (!from) return
 
   try {
@@ -56,6 +57,7 @@ async function sendOfferSms(offer: OfferWithRelations, buyer: Buyer, property: P
           preferred_from_number: from,
           unread: false,
           updated_at: new Date().toISOString(),
+          ...(orgId ? { org_id: orgId } : {}),
         })
         .select("id")
         .single()
@@ -77,6 +79,7 @@ async function sendOfferSms(offer: OfferWithRelations, buyer: Buyer, property: P
       body: messageBody,
       provider_id: providerId,
       is_bulk: false,
+      ...(orgId ? { org_id: orgId } : {}),
     })
   } catch (error) {
     console.error(`[offer-sms] Offer SMS notification failed for offer ${offer.id} (${property?.address || "unknown property"}):`, error)

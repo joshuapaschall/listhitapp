@@ -50,6 +50,33 @@ export async function resolveFromNumber(buyerId: string): Promise<string | null>
   return null
 }
 
+/**
+ * Resolve the owning org for a buyer. Notification paths receive only a Buyer
+ * object, which carries no org_id, so we read the authoritative value from the
+ * buyers table. Returns null when unknown — callers must OMIT the key in that
+ * case so the column default applies (an explicit null violates NOT NULL).
+ */
+export async function resolveBuyerOrgId(buyerId: string): Promise<string | null> {
+  const { data, error } = await supabaseAdmin
+    .from("buyers")
+    .select("org_id")
+    .eq("id", buyerId)
+    .maybeSingle()
+
+  if (error) {
+    console.error("[notifications] resolveBuyerOrgId failed", { buyerId, error })
+    return null
+  }
+
+  const orgId = (data as { org_id?: string | null } | null)?.org_id ?? null
+  if (!orgId) {
+    console.warn("⚠️ notification org unresolved — row will fall to the column default", {
+      buyerId,
+    })
+  }
+  return orgId
+}
+
 async function sendShowingSms(showing: Showing, buyer: Buyer, property: Property | null | undefined, messageBody: string) {
   log(`[showing-sms] sendShowingSms START for showing ${showing.id}`, {
     buyerId: buyer?.id,
@@ -79,6 +106,7 @@ async function sendShowingSms(showing: Showing, buyer: Buyer, property: Property
   }
 
   const from = await resolveFromNumber(buyer.id)
+  const orgId = await resolveBuyerOrgId(buyer.id)
   if (!from) {
     console.warn(`[showing-sms] BAIL: no sender DID resolved for buyer ${buyer.id}`)
     return
@@ -134,6 +162,7 @@ async function sendShowingSms(showing: Showing, buyer: Buyer, property: Property
           preferred_from_number: from,
           unread: false,
           updated_at: new Date().toISOString(),
+          ...(orgId ? { org_id: orgId } : {}),
         })
         .select("id")
         .single()
@@ -160,6 +189,7 @@ async function sendShowingSms(showing: Showing, buyer: Buyer, property: Property
       body: messageBody,
       provider_id: providerId,
       is_bulk: false,
+      ...(orgId ? { org_id: orgId } : {}),
     })
     if (msgError) {
       console.error(`[showing-sms] Failed to insert message row:`, msgError)
