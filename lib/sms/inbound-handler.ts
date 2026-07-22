@@ -138,6 +138,11 @@ export async function handleInboundSms(event: InboundSmsEvent): Promise<NextResp
       }
     }
 
+    // Org for the inbound thread + message: the buyer's org when known, else the
+    // org that owns the receiving DID (the anon path already stamps its own).
+    const inboundOrgId =
+      (buyerId ? buyerOrgById.get(buyerId) ?? null : null) ?? anonOrgId
+
     const { data: thread, error: threadErr } = buyerId
       ? await supabaseAdmin
           .from("message_threads")
@@ -150,6 +155,7 @@ export async function handleInboundSms(event: InboundSmsEvent): Promise<NextResp
               updated_at: new Date().toISOString(),
               deleted_at: null,
               preferred_from_number: preferredDid,
+              org_id: inboundOrgId,
             },
             { onConflict: "buyer_id,phone_number" }
           )
@@ -172,6 +178,7 @@ export async function handleInboundSms(event: InboundSmsEvent): Promise<NextResp
       provider_id: sid,
       is_bulk: false,
       media_urls: mediaUrls.length ? mediaUrls : null,
+      org_id: inboundOrgId,
     })
 
     if (msgErr) {
@@ -345,6 +352,7 @@ export async function handleInboundSms(event: InboundSmsEvent): Promise<NextResp
               body: replyText,
               provider_id: providerId,
               is_bulk: false,
+              org_id: buyerOrgById.get(helpReplyThread.buyerId) ?? anonOrgId,
             })
 
             if (helpMsgErr) {
@@ -387,6 +395,7 @@ export async function handleInboundSms(event: InboundSmsEvent): Promise<NextResp
                 body: replyText,
                 provider_id: result.id,
                 is_bulk: false,
+                org_id: helpOrgId,
               })
 
               if (helpMsgErr) {
