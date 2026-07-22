@@ -108,6 +108,7 @@ export async function sendCampaignSMS({ buyerId, to, body, mediaUrls, dryRun, ca
               phone_number: normalizePhone(formatted),
               campaign_id: campaignId ?? null,
               updated_at: new Date().toISOString(),
+              org_id: orgId,
             },
             { onConflict: "buyer_id,phone_number" },
           )
@@ -125,6 +126,7 @@ export async function sendCampaignSMS({ buyerId, to, body, mediaUrls, dryRun, ca
             provider_id: data.id,
             is_bulk: true,
             media_urls: finalMediaUrls?.length ? finalMediaUrls : null,
+            org_id: orgId,
           })
         }
 
@@ -136,6 +138,7 @@ export async function sendCampaignSMS({ buyerId, to, body, mediaUrls, dryRun, ca
             buyerId,
             threadId: thread?.id ?? null,
             from: sentFrom,
+            orgId,
           })
         }
       }
