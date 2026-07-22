@@ -40,9 +40,8 @@ type QueueSmsCampaignPayload = {
   campaignId: string
   mediaUrls?: string[]
   recipients: SmsQueueRecipient[]
-  // When provided, stamp queued rows with the campaign's org. Optional so the
-  // (out-of-scope) caller can start passing it without a lockstep change; until
-  // then org_id is omitted and the column default applies (unchanged behavior).
+  // Stamps queued rows with the campaign's org. Optional only for legacy/test
+  // callers; the production caller (app/api/campaigns/send/route.ts) passes it.
   orgId?: string
 }
 
@@ -326,9 +325,9 @@ export async function queueSmsCampaign({
     status: "pending",
     scheduled_for: new Date(scheduledStart + idx * spacingMs).toISOString(),
     max_attempts: SMS_QUEUE_MAX_ATTEMPTS,
-    // Undefined when the caller doesn't pass orgId → key omitted → column default
-    // applies (no explicit NULL, which would fail the NOT NULL column today).
-    org_id: orgId,
+    // Omit when unknown → column default applies. Never an explicit null, which
+    // would violate the NOT NULL column.
+    ...(orgId ? { org_id: orgId } : {}),
   }))
 
   const queuedRows: any[] = []
