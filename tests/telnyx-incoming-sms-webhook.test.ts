@@ -132,14 +132,28 @@ vi.mock("../lib/supabase", () => {
           }),
           select: () => ({
             eq: (_col: string, phone: string) => ({
-              is: () => ({
-                limit: () => ({
-                  maybeSingle: async () => ({
-                    data: threads.find(t => !t.buyer_id && t.phone_number === phone) || null,
-                    error: null
+              // upsertAnonThread always org-scopes its lookup, so the chain is
+              // .eq(phone_number).is(buyer_id).eq(org_id).limit().maybeSingle()
+              is: () => {
+                const finish = (orgId?: string) => ({
+                  limit: () => ({
+                    maybeSingle: async () => ({
+                      data:
+                        threads.find(
+                          t =>
+                            !t.buyer_id &&
+                            t.phone_number === phone &&
+                            (orgId === undefined || t.org_id === orgId),
+                        ) || null,
+                      error: null,
+                    })
                   })
                 })
-              })
+                return {
+                  ...finish(),
+                  eq: (_orgCol: string, orgId: string) => finish(orgId),
+                }
+              }
             })
           }),
           update: (data: any) => ({
@@ -200,6 +214,13 @@ describe("Telnyx incoming SMS webhook", () => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://cdn"
     process.env.TELNYX_API_KEY = "KEY"
     process.env.SUPABASE_SERVICE_ROLE_KEY = "SKEY"
+    // upsertAnonThread fails closed with no resolvable org; the webhook is
+    // sessionless, so DEFAULT_ORG_ID is the production fallback it relies on.
+    process.env.DEFAULT_ORG_ID = "00000000-0000-4000-8000-000000000001"
+  })
+
+  afterEach(() => {
+    delete process.env.DEFAULT_ORG_ID
   })
 
   test("marks buyer as opted out on STOP", async () => {
