@@ -86,10 +86,14 @@ vi.mock("@/lib/supabase", () => {
               filters[column] = value
               return query
             },
-            // resolveOrgIdForUser / apply-template target: org_id looked up by profile id.
+            // resolveOrgIdForUser / apply-template target: org_id looked up by
+            // profile id. requireOrgAdmin also reads the caller's role here —
+            // it deliberately uses supabaseAdmin, not the RLS-scoped client.
             maybeSingle: async () => {
               const org = state.profileOrgById[filters.id]
-              return { data: org ? { org_id: org } : null, error: null }
+              if (!org) return { data: null, error: null }
+              const role = filters.id === state.currentUser?.id ? state.callerRole : "user"
+              return { data: { id: filters.id, role, org_id: org }, error: null }
             },
             // GET list: profiles are org-scoped via .eq("org_id", orgId).
             order: async () => {
