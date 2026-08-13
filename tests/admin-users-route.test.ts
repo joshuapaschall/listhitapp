@@ -19,7 +19,9 @@ const state = vi.hoisted(() => ({
   profileUpserts: [] as any[],
   permissionUpserts: [] as any[][],
   createUserCalls: [] as any[],
-  resetEmails: [] as string[],
+  generateLinkCalls: [] as any[],
+  // auth.admin.listUsers is project-wide; the route must filter it to the org.
+  authUsers: [] as { id: string; last_sign_in_at: string | null }[],
 }))
 
 function callerPermissionRows() {
@@ -71,13 +73,36 @@ vi.mock("@/lib/supabase", () => {
           return { data: { user }, error: null }
         }),
         deleteUser: vi.fn(async () => ({ error: null })),
-        resetPasswordForEmail: vi.fn(async (email: string) => {
-          state.resetEmails.push(email)
-          return { error: null }
+        // generateLink creates the auth user AND returns the invite token.
+        generateLink: vi.fn(async (params: any) => {
+          state.generateLinkCalls.push(params)
+          return {
+            data: {
+              user: { id: `u${state.generateLinkCalls.length}`, email: params.email },
+              properties: { hashed_token: "hashed-token-123" },
+            },
+            error: null,
+          }
         }),
+        listUsers: vi.fn(async () => ({
+          data: { users: state.authUsers },
+          error: null,
+        })),
       },
     },
     from: (table: string) => {
+      if (table === "organizations") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: { name: "Org A", business_name: null },
+                error: null,
+              }),
+            }),
+          }),
+        }
+      }
       if (table === "profiles") {
         const makeSelect = () => {
           const filters: Record<string, any> = {}
@@ -164,7 +189,8 @@ describe("admin users routes", () => {
     state.profileUpserts = []
     state.permissionUpserts = []
     state.createUserCalls = []
-    state.resetEmails = []
+    state.generateLinkCalls = []
+    state.authUsers = []
   })
 
   describe("GET /api/admin/users", () => {
@@ -193,6 +219,11 @@ describe("admin users routes", () => {
         { user_id: "u1", permission_key: "buyers.view", granted: true },
         { user_id: "u1", permission_key: "buyers.delete", granted: false },
       ]
+      state.authUsers = [
+        { id: "u1", last_sign_in_at: "2026-02-01T00:00:00.000Z" },
+        // Belongs to another org entirely — listUsers is project-wide.
+        { id: "outsider", last_sign_in_at: "2026-03-01T00:00:00.000Z" },
+      ]
 
       const res = await getUsers()
       expect(res.status).toBe(200)
@@ -204,7 +235,11 @@ describe("admin users routes", () => {
         fullName: "Alice Agent",
         role: "user",
         permissions: ["buyers.view"],
+        lastSignInAt: "2026-02-01T00:00:00.000Z",
+        mustChangePassword: false,
+        invitedAt: null,
       })
+      expect(body.users.map((u: any) => u.id)).not.toContain("outsider")
     })
 
     test("excludes profiles belonging to another org", async () => {
@@ -276,7 +311,7 @@ describe("admin users routes", () => {
       return POST(jsonRequest("http://test/api/admin/create-user", body))
     }
 
-    test("no longer requires a password in the body and never returns one", async () => {
+    test("defaults to the invite flow and never returns a password", async () => {
       asAdmin()
       const res = await createUser({
         email: "newbie@example.com",
@@ -289,23 +324,39 @@ describe("admin users routes", () => {
       expect(body.user).toBeTruthy()
       expect(body.password).toBeUndefined()
 
-      // Auth user created with a server-side throwaway password + confirmed email
-      expect(state.createUserCalls).toHaveLength(1)
-      expect(state.createUserCalls[0].email).toBe("newbie@example.com")
-      expect(state.createUserCalls[0].password).toBeTruthy()
-      expect(state.createUserCalls[0].email_confirm).toBe(true)
+      // No method in the body means invite: generateLink creates the user and
+      // mints the token. No throwaway password is ever generated.
+      expect(state.generateLinkCalls).toHaveLength(1)
+      expect(state.generateLinkCalls[0]).toMatchObject({
+        type: "invite",
+        email: "newbie@example.com",
+      })
+      expect(state.createUserCalls).toHaveLength(0)
 
-      // Profile gets role + display name, and a set-password email is sent
+      // Profile gets role, display name, and an org.
       expect(state.profileUpserts.at(-1)).toMatchObject({
         role: "user",
         display_name: "New Bie",
+        org_id: "org-A",
       })
-      expect(state.resetEmails).toContain("newbie@example.com")
     })
 
-    test("is denied without users.manage", async () => {
+    test("reports emailSent:false with the link when Resend is not configured", async () => {
+      asAdmin()
+      const res = await createUser({ email: "newbie@example.com", role: "user" })
+      const body = await res.json()
+
+      // RESEND_API_KEY is unset in tests, so the real sender reports a failure
+      // rather than a false success — and hands back the link.
+      expect(body.emailSent).toBe(false)
+      expect(body.inviteUrl).toContain("/set-password?token_hash=hashed-token-123&type=invite")
+      expect(body.emailError).toBe("RESEND_API_KEY not configured")
+    })
+
+    test("is denied for a non-admin caller", async () => {
       const res = await createUser({ email: "x@example.com", role: "user" })
       expect(res.status).toBe(403)
+      expect(state.generateLinkCalls).toHaveLength(0)
       expect(state.createUserCalls).toHaveLength(0)
     })
   })

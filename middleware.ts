@@ -108,6 +108,10 @@ export async function middleware(req: NextRequest) {
     "/signup",
     "/login",
     "/auth/callback",
+    // Invitees land here WITHOUT a session — the invite token is verified
+    // client-side. Without this prefix the invite link redirects to /login and
+    // the entire invite flow is dead on arrival.
+    "/set-password",
     "/api/",
     "/unsubscribe",
     "/r/", // public short-link redirects (defense-in-depth even on main domain)

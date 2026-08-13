@@ -11,6 +11,45 @@ type ProfileRow = {
   display_name: string | null
   role: string | null
   created_at: string | null
+  must_change_password: boolean | null
+  invited_at: string | null
+}
+
+const LIST_USERS_PER_PAGE = 1000
+const LIST_USERS_MAX_PAGES = 5
+
+/**
+ * auth.admin.listUsers is project-wide, so the result is filtered down to the
+ * org's own profile ids before anything is returned. A failure here degrades to
+ * "unknown sign-in state" rather than failing the whole page.
+ */
+async function lastSignInByUserId(profileIds: string[]): Promise<Map<string, string | null>> {
+  const allowed = new Set(profileIds)
+  const map = new Map<string, string | null>()
+  if (!allowed.size) return map
+
+  try {
+    for (let page = 1; page <= LIST_USERS_MAX_PAGES; page++) {
+      const { data, error } = await supabaseAdmin.auth.admin.listUsers({
+        page,
+        perPage: LIST_USERS_PER_PAGE,
+      })
+      if (error) throw error
+
+      const users = data?.users ?? []
+      for (const authUser of users) {
+        if (allowed.has(authUser.id)) {
+          map.set(authUser.id, authUser.last_sign_in_at ?? null)
+        }
+      }
+      if (users.length < LIST_USERS_PER_PAGE) break
+    }
+  } catch (error) {
+    console.error("[admin/users] Failed to read sign-in state", error)
+    return new Map()
+  }
+
+  return map
 }
 
 type PermissionRow = {
@@ -34,7 +73,7 @@ export async function GET() {
   // cross-org permission data is never returned.
   const profilesResult = await supabaseAdmin
     .from("profiles")
-    .select("id, email, display_name, role, created_at")
+    .select("id, email, display_name, role, created_at, must_change_password, invited_at")
     .eq("org_id", orgId)
     .order("created_at", { ascending: true })
 
@@ -64,6 +103,8 @@ export async function GET() {
     grantedByUser.set(row.user_id, list)
   }
 
+  const lastSignIn = await lastSignInByUserId(profileIds)
+
   const users = ((profilesResult.data ?? []) as ProfileRow[]).map((profile) => ({
     id: profile.id,
     email: profile.email ?? null,
@@ -72,6 +113,9 @@ export async function GET() {
     role: profile.role ?? "user",
     createdAt: profile.created_at ?? null,
     permissions: grantedByUser.get(profile.id) ?? [],
+    mustChangePassword: profile.must_change_password === true,
+    invitedAt: profile.invited_at ?? null,
+    lastSignInAt: lastSignIn.get(profile.id) ?? null,
   }))
 
   return NextResponse.json({ users })
