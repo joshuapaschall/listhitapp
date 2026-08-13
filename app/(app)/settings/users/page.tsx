@@ -4,9 +4,15 @@ import { useEffect, useMemo, useState } from "react"
 import { formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
 import {
+  Check,
   ChevronRight,
+  Copy,
+  Eye,
+  EyeOff,
+  KeyRound,
   Loader2,
   Mail,
+  RefreshCw,
   Search,
   ShieldCheck,
   Trash2,
@@ -16,6 +22,11 @@ import {
 
 import { PermissionGate } from "@/components/auth/PermissionGate"
 import { useSession } from "@/hooks/use-session"
+import {
+  MIN_PASSWORD_LENGTH,
+  generatePassword,
+  validatePassword,
+} from "@/lib/auth/password-policy"
 import {
   PERMISSION_CATALOG,
   PERMISSION_GROUPS,
@@ -42,6 +53,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -58,6 +70,7 @@ import {
 } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Table,
   TableBody,
@@ -81,6 +94,9 @@ type ApiUser = {
   role: string
   createdAt: string | null
   permissions: string[]
+  mustChangePassword: boolean
+  invitedAt: string | null
+  lastSignInAt: string | null
 }
 
 const TOTAL_PERMISSIONS = PERMISSION_KEYS.length
@@ -110,8 +126,12 @@ function matchTemplate(permissions: string[]): PermissionTemplateId | null {
   return null
 }
 
+function isAdminRole(role: string): boolean {
+  return role === "admin" || role === "owner"
+}
+
 function accessSummary(user: ApiUser): { label: string; preset: boolean } {
-  if (user.role === "admin") return { label: "Full access", preset: true }
+  if (isAdminRole(user.role)) return { label: "Full access", preset: true }
   const matched = matchTemplate(user.permissions)
   if (matched) {
     const template = PERMISSION_TEMPLATES.find((entry) => entry.id === matched)
@@ -212,6 +232,7 @@ function UsersManager() {
             <TableRow className="hover:bg-transparent">
               <TableHead className="pl-6">Member</TableHead>
               <TableHead>Role</TableHead>
+              <TableHead>Status</TableHead>
               <TableHead>Access</TableHead>
               <TableHead>Joined</TableHead>
               <TableHead className="w-10" />
@@ -222,7 +243,7 @@ function UsersManager() {
               <SkeletonRows />
             ) : filteredUsers.length === 0 ? (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={5} className="p-0">
+                <TableCell colSpan={6} className="p-0">
                   <EmptyState
                     hasUsers={users.length > 0}
                     onInvite={() => setInviteOpen(true)}
@@ -292,6 +313,9 @@ function UserRow({ user, onOpen }: { user: ApiUser; onOpen: () => void }) {
         <RoleBadge role={user.role} />
       </TableCell>
       <TableCell>
+        <StatusBadge user={user} />
+      </TableCell>
+      <TableCell>
         <span
           className={cn(
             "text-sm",
@@ -314,6 +338,13 @@ function UserRow({ user, onOpen }: { user: ApiUser; onOpen: () => void }) {
 }
 
 function RoleBadge({ role }: { role: string }) {
+  if (role === "owner") {
+    return (
+      <Badge className="border-transparent bg-violet-600 text-white hover:bg-violet-600/90">
+        Owner
+      </Badge>
+    )
+  }
   if (role === "admin") {
     return (
       <Badge className="border-transparent bg-primary text-primary-foreground hover:bg-primary/90">
@@ -326,6 +357,35 @@ function RoleBadge({ role }: { role: string }) {
       User
     </Badge>
   )
+}
+
+/**
+ * Never claims "Active" for someone who has not signed in. An em-dash is the
+ * honest answer when we genuinely don't know.
+ */
+function StatusBadge({ user }: { user: ApiUser }) {
+  if (user.lastSignInAt == null && user.invitedAt != null) {
+    return (
+      <Badge variant="outline" className="border-amber-300 text-amber-700">
+        Invited
+      </Badge>
+    )
+  }
+  if (user.mustChangePassword) {
+    return (
+      <Badge variant="outline" className="border-amber-300 text-amber-700">
+        Password change pending
+      </Badge>
+    )
+  }
+  if (user.lastSignInAt != null) {
+    return (
+      <Badge variant="outline" className="border-emerald-300 text-emerald-700">
+        Active
+      </Badge>
+    )
+  }
+  return <span className="text-sm text-muted-foreground">—</span>
 }
 
 function SkeletonRows() {
@@ -344,6 +404,9 @@ function SkeletonRows() {
           </TableCell>
           <TableCell>
             <Skeleton className="h-5 w-14 rounded-full" />
+          </TableCell>
+          <TableCell>
+            <Skeleton className="h-5 w-20 rounded-full" />
           </TableCell>
           <TableCell>
             <Skeleton className="h-4 w-24" />
@@ -396,6 +459,153 @@ function EmptyState({
 }
 
 /* ------------------------------------------------------------------ */
+/* Shared password + link controls                                     */
+/* ------------------------------------------------------------------ */
+
+function CopyButton({ value, label }: { value: string; label: string }) {
+  const [copied, setCopied] = useState(false)
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      toast.error("Couldn't copy — select the text and copy it manually")
+    }
+  }
+
+  return (
+    <Button type="button" variant="outline" size="icon" onClick={handleCopy} aria-label={label}>
+      {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+    </Button>
+  )
+}
+
+function PasswordField({
+  id,
+  value,
+  onChange,
+  disabled,
+}: {
+  id: string
+  value: string
+  onChange: (next: string) => void
+  disabled?: boolean
+}) {
+  const [visible, setVisible] = useState(false)
+
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>Password</Label>
+      <div className="flex gap-2">
+        <Input
+          id={id}
+          type={visible ? "text" : "password"}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          autoComplete="new-password"
+          disabled={disabled}
+          className="font-mono"
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={() => setVisible((prev) => !prev)}
+          disabled={disabled}
+          aria-label={visible ? "Hide password" : "Show password"}
+        >
+          {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </Button>
+        <CopyButton value={value} label="Copy password" />
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            onChange(generatePassword())
+            setVisible(true)
+          }}
+          disabled={disabled}
+        >
+          <RefreshCw className="h-4 w-4" />
+          Generate
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground">At least {MIN_PASSWORD_LENGTH} characters</p>
+    </div>
+  )
+}
+
+function RequireChangeCheckbox({
+  id,
+  checked,
+  onChange,
+  disabled,
+}: {
+  id: string
+  checked: boolean
+  onChange: (next: boolean) => void
+  disabled?: boolean
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <Checkbox
+        id={id}
+        checked={checked}
+        onCheckedChange={(value) => onChange(value === true)}
+        disabled={disabled}
+      />
+      <Label htmlFor={id} className="text-sm font-normal">
+        Require them to change it at first sign-in
+      </Label>
+    </div>
+  )
+}
+
+/**
+ * Shown when the account was created but the email never went out. The admin
+ * gets the raw link to hand over — the alternative is a success toast for mail
+ * that does not exist.
+ */
+function LinkFallbackDialog({
+  state,
+  onOpenChange,
+}: {
+  state: { title: string; url: string; error?: string } | null
+  onOpenChange: (open: boolean) => void
+}) {
+  return (
+    <Dialog open={!!state} onOpenChange={(next) => (next ? undefined : onOpenChange(false))}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{state?.title}</DialogTitle>
+          <DialogDescription>
+            Send this link to them yourself. It can only be used once.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          {state?.error ? (
+            <p className="rounded-md bg-muted p-3 font-mono text-xs text-muted-foreground">
+              {state.error}
+            </p>
+          ) : null}
+          <div className="flex gap-2">
+            <Input readOnly value={state?.url ?? ""} className="font-mono text-xs" />
+            <CopyButton value={state?.url ?? ""} label="Copy link" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Done
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/* ------------------------------------------------------------------ */
 /* Invite dialog                                                       */
 /* ------------------------------------------------------------------ */
 
@@ -408,15 +618,28 @@ function InviteDialog({
   onOpenChange: (open: boolean) => void
   onInvited: () => void | Promise<void>
 }) {
+  const [mode, setMode] = useState<"invite" | "password">("invite")
   const [email, setEmail] = useState("")
   const [fullName, setFullName] = useState("")
   const [role, setRole] = useState("user")
+  const [password, setPassword] = useState("")
+  const [requireChange, setRequireChange] = useState(true)
+  const [templateId, setTemplateId] = useState<PermissionTemplateId>("custom")
   const [submitting, setSubmitting] = useState(false)
+  const [fallback, setFallback] = useState<{
+    title: string
+    url: string
+    error?: string
+  } | null>(null)
 
   function reset() {
+    setMode("invite")
     setEmail("")
     setFullName("")
     setRole("user")
+    setPassword("")
+    setRequireChange(true)
+    setTemplateId("custom")
   }
 
   async function handleSubmit() {
@@ -424,93 +647,189 @@ function InviteDialog({
       toast.error("Email is required")
       return
     }
+    if (mode === "password") {
+      // Checked here too so a length mistake doesn't cost a round trip.
+      const passwordError = validatePassword(password)
+      if (passwordError) {
+        toast.error(passwordError)
+        return
+      }
+    }
+
     setSubmitting(true)
     try {
       const res = await fetch("/api/admin/create-user", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), fullName: fullName.trim(), role }),
+        body: JSON.stringify({
+          email: email.trim(),
+          fullName: fullName.trim(),
+          role,
+          method: mode,
+          templateId,
+          ...(mode === "password"
+            ? { password, requirePasswordChange: requireChange }
+            : {}),
+        }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data?.error || "Failed to send invite")
-      toast.success(`Invite sent to ${email.trim()}`)
+      if (!res.ok) throw new Error(data?.error || "Failed to create user")
+
+      const createdEmail = email.trim()
       reset()
       onOpenChange(false)
       await onInvited()
+
+      if (data.emailSent === false) {
+        if (data.inviteUrl) {
+          setFallback({
+            title: "User created, but the email couldn't be sent",
+            url: data.inviteUrl,
+            error: data.emailError,
+          })
+        } else {
+          toast.warning(
+            `${createdEmail} was created, but the notification email didn't send.`,
+            { description: data.emailError },
+          )
+        }
+        return
+      }
+
+      toast.success(
+        mode === "invite" ? `Invite sent to ${createdEmail}` : `Account created for ${createdEmail}`,
+      )
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to send invite")
+      toast.error(error instanceof Error ? error.message : "Failed to create user")
     } finally {
       setSubmitting(false)
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : (reset(), onOpenChange(false)))}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Invite a teammate</DialogTitle>
-          <DialogDescription>
-            We&apos;ll email them a secure link to set their own password — no password to share.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div className="space-y-2">
-            <Label htmlFor="invite-email">Email</Label>
-            <Input
-              id="invite-email"
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="teammate@company.com"
-              autoFocus
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="invite-name">Full name</Label>
-            <Input
-              id="invite-name"
-              value={fullName}
-              onChange={(event) => setFullName(event.target.value)}
-              placeholder="Jordan Rivera"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="invite-role">Role</Label>
-            <Select value={role} onValueChange={setRole}>
-              <SelectTrigger id="invite-role">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="user">User</SelectItem>
-                <SelectItem value="admin">Admin</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              Admins have unrestricted access. Users start with no permissions until you grant
-              them.
-            </p>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
-            Cancel
-          </Button>
-          <Button variant="brand" onClick={handleSubmit} disabled={submitting}>
-            {submitting ? (
+    <>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => (next ? onOpenChange(true) : (reset(), onOpenChange(false)))}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add a teammate</DialogTitle>
+            <DialogDescription>
+              {mode === "invite"
+                ? "We'll email them a secure link to set their own password — no password to share."
+                : "You set the password and share it with them directly."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <Tabs value={mode} onValueChange={(value) => setMode(value as "invite" | "password")}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="invite">Send invite email</TabsTrigger>
+              <TabsTrigger value="password">Set a password</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="invite-email">Email</Label>
+              <Input
+                id="invite-email"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="teammate@company.com"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="invite-name">Full name</Label>
+              <Input
+                id="invite-name"
+                value={fullName}
+                onChange={(event) => setFullName(event.target.value)}
+                placeholder="Jordan Rivera"
+              />
+            </div>
+            {mode === "password" ? (
               <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Sending…
+                <PasswordField
+                  id="invite-password"
+                  value={password}
+                  onChange={setPassword}
+                  disabled={submitting}
+                />
+                <RequireChangeCheckbox
+                  id="invite-require-change"
+                  checked={requireChange}
+                  onChange={setRequireChange}
+                  disabled={submitting}
+                />
               </>
-            ) : (
-              <>
-                <Mail className="h-4 w-4" />
-                Send invite
-              </>
-            )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            ) : null}
+            <div className="space-y-2">
+              <Label htmlFor="invite-role">Role</Label>
+              <Select value={role} onValueChange={setRole}>
+                <SelectTrigger id="invite-role">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="user">User</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Admins have unrestricted access. Users start with no permissions until you grant
+                them.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="invite-template">Starting permissions</Label>
+              <Select
+                value={templateId}
+                onValueChange={(value) => setTemplateId(value as PermissionTemplateId)}
+              >
+                <SelectTrigger id="invite-template">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PERMISSION_TEMPLATES.map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button variant="brand" onClick={handleSubmit} disabled={submitting}>
+              {submitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {mode === "invite" ? "Sending…" : "Creating…"}
+                </>
+              ) : mode === "invite" ? (
+                <>
+                  <Mail className="h-4 w-4" />
+                  Send invite
+                </>
+              ) : (
+                <>
+                  <UserPlus className="h-4 w-4" />
+                  Create user
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <LinkFallbackDialog state={fallback} onOpenChange={() => setFallback(null)} />
+    </>
   )
 }
 
@@ -534,15 +853,23 @@ function PermissionEditorSheet({
   const [applyingTemplate, setApplyingTemplate] = useState<PermissionTemplateId | null>(null)
   const [pendingKeys, setPendingKeys] = useState<Set<string>>(() => new Set())
   const [removeOpen, setRemoveOpen] = useState(false)
+  const [setPasswordOpen, setSetPasswordOpen] = useState(false)
+  const [sendingReset, setSendingReset] = useState(false)
+  const [fallback, setFallback] = useState<{
+    title: string
+    url: string
+    error?: string
+  } | null>(null)
 
   const isSelf = !!user && user.id === currentUserId
-  const isAdmin = user?.role === "admin"
+  const isAdmin = user?.role === "admin" || user?.role === "owner"
+  const isOwner = user?.role === "owner"
   const activeTemplate = user ? matchTemplate(user.permissions) : null
 
   async function handleRoleChange(role: string) {
     if (!user) return
-    if (isSelf && role !== "admin") {
-      toast.error("You can't change your own admin role")
+    if (isSelf && role === "user") {
+      toast.error("You can't demote your own account")
       return
     }
     const previousRole = user.role
@@ -555,7 +882,8 @@ function PermissionEditorSheet({
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data?.error || "Failed to update role")
-      toast.success(`Role updated to ${role === "admin" ? "Admin" : "User"}`)
+      const label = role === "admin" ? "Admin" : role === "owner" ? "Owner" : "User"
+      toast.success(`Role updated to ${label}`)
     } catch (error) {
       onPatchUser(user.id, { role: previousRole })
       toast.error(error instanceof Error ? error.message : "Failed to update role")
@@ -616,6 +944,7 @@ function PermissionEditorSheet({
 
   async function handleSendReset() {
     if (!user?.email) return
+    setSendingReset(true)
     try {
       const res = await fetch("/api/admin/send-reset", {
         method: "POST",
@@ -624,9 +953,20 @@ function PermissionEditorSheet({
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data?.error || "Failed to send reset")
+
+      if (data.emailSent === false && data.resetUrl) {
+        setFallback({
+          title: "Reset link created, but the email couldn't be sent",
+          url: data.resetUrl,
+          error: data.emailError,
+        })
+        return
+      }
       toast.success(`Password reset sent to ${user.email}`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to send reset")
+    } finally {
+      setSendingReset(false)
     }
   }
 
@@ -669,7 +1009,7 @@ function PermissionEditorSheet({
                   <p className="truncate text-sm text-muted-foreground">{user.email ?? "—"}</p>
                 </div>
                 <div className="w-32 shrink-0">
-                  {isSelf ? (
+                  {isSelf || isOwner ? (
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -679,6 +1019,7 @@ function PermissionEditorSheet({
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
+                                <SelectItem value="owner">Owner</SelectItem>
                                 <SelectItem value="admin">Admin</SelectItem>
                                 <SelectItem value="user">User</SelectItem>
                               </SelectContent>
@@ -686,7 +1027,9 @@ function PermissionEditorSheet({
                           </div>
                         </TooltipTrigger>
                         <TooltipContent>
-                          You can&apos;t change your own admin role
+                          {isOwner
+                            ? "Owner role can only be changed in the database."
+                            : "You can't change your own admin role"}
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
@@ -698,6 +1041,7 @@ function PermissionEditorSheet({
                       <SelectContent>
                         <SelectItem value="user">User</SelectItem>
                         <SelectItem value="admin">Admin</SelectItem>
+                        <SelectItem value="owner">Owner</SelectItem>
                       </SelectContent>
                     </Select>
                   )}
@@ -780,10 +1124,22 @@ function PermissionEditorSheet({
                   variant="outline"
                   className="flex-1"
                   onClick={handleSendReset}
-                  disabled={!user.email}
+                  disabled={!user.email || sendingReset}
                 >
-                  <Mail className="h-4 w-4" />
+                  {sendingReset ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Mail className="h-4 w-4" />
+                  )}
                   Send password reset
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setSetPasswordOpen(true)}
+                >
+                  <KeyRound className="h-4 w-4" />
+                  Set password
                 </Button>
                 {isSelf ? (
                   <TooltipProvider>
@@ -821,10 +1177,126 @@ function PermissionEditorSheet({
               destructive
               onConfirm={handleRemove}
             />
+
+            <SetPasswordDialog
+              open={setPasswordOpen}
+              onOpenChange={setSetPasswordOpen}
+              user={user}
+              onSaved={(mustChangePassword) =>
+                onPatchUser(user.id, { mustChangePassword })
+              }
+            />
+
+            <LinkFallbackDialog state={fallback} onOpenChange={() => setFallback(null)} />
           </>
         )}
       </SheetContent>
     </Sheet>
+  )
+}
+
+/**
+ * Admin sets another user's password. The value lives only in local state for
+ * the life of the dialog — it is never stored, echoed by the API, or shown again
+ * after the dialog closes.
+ */
+function SetPasswordDialog({
+  open,
+  onOpenChange,
+  user,
+  onSaved,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  user: ApiUser
+  onSaved: (mustChangePassword: boolean) => void
+}) {
+  const [password, setPassword] = useState("")
+  const [requireChange, setRequireChange] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+
+  function reset() {
+    setPassword("")
+    setRequireChange(true)
+  }
+
+  async function handleSubmit() {
+    const passwordError = validatePassword(password)
+    if (passwordError) {
+      toast.error(passwordError)
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      const res = await fetch("/api/admin/set-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.id,
+          password,
+          requirePasswordChange: requireChange,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || "Failed to set password")
+      toast.success(`Password updated for ${nameOf(user)}`)
+      onSaved(requireChange)
+      reset()
+      onOpenChange(false)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to set password")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => (next ? onOpenChange(true) : (reset(), onOpenChange(false)))}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Set a password for {nameOf(user)}</DialogTitle>
+          <DialogDescription>
+            Share it with them directly. It won&apos;t be shown again after you close this.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <PasswordField
+            id="set-password-value"
+            value={password}
+            onChange={setPassword}
+            disabled={submitting}
+          />
+          <RequireChangeCheckbox
+            id="set-password-require-change"
+            checked={requireChange}
+            onChange={setRequireChange}
+            disabled={submitting}
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button variant="brand" onClick={handleSubmit} disabled={submitting}>
+            {submitting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Saving…
+              </>
+            ) : (
+              <>
+                <KeyRound className="h-4 w-4" />
+                Set password
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

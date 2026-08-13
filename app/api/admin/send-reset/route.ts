@@ -4,6 +4,7 @@ import { cookies } from "next/headers"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { supabaseAdmin } from "@/lib/supabase"
 import { requireOrgAdmin } from "@/lib/auth/admin-guard"
+import { APP_URL, resolveOrgName, sendPasswordResetEmail } from "@/lib/email/account-emails"
 
 export async function POST(request: NextRequest) {
   const cookieStore = cookies()
@@ -22,15 +23,31 @@ export async function POST(request: NextRequest) {
     .eq("email", email)
     .eq("org_id", ctx.orgId)
     .maybeSingle()
-  if (!target) return NextResponse.json({ error: "Not found" }, { status: 404 })
+  if (!target) return NextResponse.json({ error: "User not found." }, { status: 404 })
 
-  // FIXME(PR B): auth.admin has no resetPasswordForEmail — replaced by generateLink + Resend.
-  try {
-    const { error } = await (supabaseAdmin.auth.admin as any).resetPasswordForEmail(email)
-    if (error) return apiError(error, 400)
-  } catch (err) {
-    return apiError(err, 500)
+  // generateLink returns the token without sending anything; we own the email.
+  const { data, error } = await supabaseAdmin.auth.admin.generateLink({
+    type: "recovery",
+    email,
+    options: { redirectTo: `${APP_URL}/set-password` },
+  })
+  if (error) return apiError(error, 400)
+
+  const hashedToken = data.properties?.hashed_token
+  if (!hashedToken) {
+    console.error("[admin/send-reset] generateLink returned no hashed_token", { email })
+    return NextResponse.json({ error: "Could not generate a reset link." }, { status: 500 })
   }
 
-  return NextResponse.json({ success: true })
+  const resetUrl = `${APP_URL}/set-password?token_hash=${encodeURIComponent(hashedToken)}&type=recovery`
+  const orgName = await resolveOrgName(ctx.orgId)
+  const result = await sendPasswordResetEmail({ to: email, resetUrl, orgName })
+
+  return NextResponse.json({
+    ok: true,
+    emailSent: result.sent,
+    // A recovery token is an account-takeover credential. It ships only when the
+    // email failed and an admin has to hand-deliver it — never in a success body.
+    ...(result.sent ? {} : { resetUrl, emailError: result.error }),
+  })
 }

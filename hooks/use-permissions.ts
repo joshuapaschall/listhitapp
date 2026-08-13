@@ -12,11 +12,13 @@ type PermissionRow = {
 
 type ProfileRow = {
   role: string | null
+  must_change_password: boolean | null
 }
 
 type PermissionsData = {
   role: string
   granted: PermissionKey[]
+  mustChangePassword: boolean
 }
 
 export function usePermissions() {
@@ -31,10 +33,16 @@ export function usePermissions() {
   const query = useQuery<PermissionsData>({
     queryKey: ["permissions", userId],
     enabled,
-    staleTime: 5 * 60 * 1000,
+    // Short enough that a permission an admin just changed converges quickly,
+    // long enough that the <Can> blocks on a page still share one fetch.
+    staleTime: 60 * 1000,
     queryFn: async () => {
       const [profileResult, permissionsResult] = await Promise.all([
-        supabase.from("profiles").select("role").eq("id", userId!).maybeSingle<ProfileRow>(),
+        supabase
+          .from("profiles")
+          .select("role, must_change_password")
+          .eq("id", userId!)
+          .maybeSingle<ProfileRow>(),
         supabase
           .from("permissions")
           .select("permission_key")
@@ -49,12 +57,17 @@ export function usePermissions() {
         }
       }
 
-      return { role: profileResult.data?.role ?? "user", granted: grantedKeys }
+      return {
+        role: profileResult.data?.role ?? "user",
+        granted: grantedKeys,
+        mustChangePassword: profileResult.data?.must_change_password === true,
+      }
     },
   })
 
   const role = query.data?.role ?? "user"
   const isAdmin = role === "admin" || role === "owner"
+  const mustChangePassword = query.data?.mustChangePassword ?? false
 
   const granted = useMemo(
     () => new Set<PermissionKey>(query.data?.granted ?? []),
@@ -80,7 +93,8 @@ export function usePermissions() {
       role,
       can,
       isAdmin,
+      mustChangePassword,
     }),
-    [can, isAdmin, loading, role],
+    [can, isAdmin, loading, mustChangePassword, role],
   )
 }
