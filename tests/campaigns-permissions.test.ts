@@ -9,6 +9,7 @@ const state = vi.hoisted(() => ({
   callerRole: "user",
   permissions: [] as any[],
   campaigns: [] as any[],
+  markets: [] as any[],
   deleted: [] as { table: string; column: string; value: any }[],
   fetchMock: vi.fn(),
   smsMock: vi.fn(),
@@ -100,6 +101,23 @@ function createRouteClient() {
         }
       }
 
+      if (table === "markets") {
+        // A test send resolves the campaign-purpose market pool the real send
+        // would use. Without a market, resolveSendingMarketId throws and the
+        // route reports 400 — which has nothing to do with the permission gate
+        // these tests are checking.
+        return {
+          select: () => {
+            const query: any = {
+              eq: () => query,
+              then: (resolve: any) =>
+                resolve({ data: state.markets, error: null }),
+            }
+            return query
+          },
+        }
+      }
+
       if (table === "campaign_recipients" || table === "email_campaign_queue" || table === "sms_campaign_queue") {
         return {
           delete: () => createDeleteQuery(table),
@@ -131,6 +149,8 @@ describe("campaign permission gates", () => {
     state.callerRole = "user"
     state.permissions = []
     state.campaigns = []
+    // Exactly one campaign-purpose market, so resolveSendingMarketId picks it.
+    state.markets = [{ id: "market-1" }]
     state.deleted = []
     state.fetchMock.mockReset().mockResolvedValue({
       ok: true,

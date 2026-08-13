@@ -13,6 +13,52 @@ vi.stubGlobal("fetch", fetchMock)
 vi.mock("@/lib/supabase", () => {
   return {
     supabase: {
+      // listCampaigns reads its metrics from SQL aggregates, not from embedded
+      // recipient rows (PostgREST caps those at 1000). These mirror the real
+      // functions in scripts/db/ so the counts the service reports are the
+      // counts the database would actually return.
+      rpc: async (fn: string, args: any = {}) => {
+        switch (fn) {
+          case "campaign_list_rollups": {
+            const ids: string[] = args.p_campaign_ids ?? []
+            const rows = new Map<string, any>()
+            for (const r of recipients) {
+              if (!ids.includes(r.campaign_id)) continue
+              const row = rows.get(r.campaign_id) ?? {
+                campaign_id: r.campaign_id,
+                recipients: 0,
+                sent: 0,
+                delivered: 0,
+                clicked: 0,
+                opened: 0,
+                errors: 0,
+                bounced: 0,
+                unsubscribed: 0,
+              }
+              row.recipients += 1
+              // Counted off the timestamp columns, exactly as the SQL does —
+              // a row with status "sent" but no sent_at is not a send.
+              if (r.sent_at != null) row.sent += 1
+              if (r.delivered_at != null) row.delivered += 1
+              if (r.clicked_at != null) row.clicked += 1
+              if (r.opened_at != null) row.opened += 1
+              if (r.status === "error" || r.error != null) row.errors += 1
+              if (r.bounced_at != null) row.bounced += 1
+              if (r.unsubscribed_at != null) row.unsubscribed += 1
+              rows.set(r.campaign_id, row)
+            }
+            return { data: [...rows.values()], error: null }
+          }
+          // No queue rows are seeded in this suite, so the real function would
+          // group over an empty set and return nothing.
+          case "campaign_queue_status":
+            return { data: [], error: null }
+          case "email_reputation_frozen":
+            return { data: false, error: null }
+          default:
+            throw new Error(`Unexpected rpc ${fn}`)
+        }
+      },
       from: (table: string) => {
         switch (table) {
           case "campaigns":
@@ -281,6 +327,14 @@ describe("CampaignService", () => {
     expect(page1.campaigns.length).toBe(10)
     expect(page1.campaigns[0]).toHaveProperty("sentCount")
     expect(page1.campaigns[0]).toHaveProperty("errorCount")
+
+    // The counts come from the rollup RPC, not from embedded recipient rows —
+    // assert they actually arrive rather than just that the keys exist.
+    for (const campaign of page1.campaigns) {
+      const recipient = recipients.find((r) => r.campaign_id === campaign.id) as any
+      expect(campaign.recipientCount).toBe(1)
+      expect(campaign.errorCount).toBe(recipient.status === "error" ? 1 : 0)
+    }
 
     const page2 = await CampaignService.listCampaigns(2)
     expect(page2.campaigns.length).toBe(10)
