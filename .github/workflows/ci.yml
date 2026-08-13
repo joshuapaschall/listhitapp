@@ -70,18 +70,19 @@ jobs:
           SITE_URL: https://placeholder.example.com
         run: pnpm run build
 
-      - name: Test (warn-only)
+      - name: Test (BLOCKS on failure)
         id: test
-        continue-on-error: true
         run: |
-          set +e
-          pnpm test 2>&1 | tee /tmp/test-output.txt
-          EXIT_CODE=$?
+          # pipefail is required: without it $? reports tee's status, not
+          # vitest's, and a failing suite reads as a pass.
+          set -o pipefail
+          EXIT_CODE=0
+          pnpm test 2>&1 | tee /tmp/test-output.txt || EXIT_CODE=$?
           echo "## Test results" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           grep -E "Test Files|^ *Tests " /tmp/test-output.txt | head -2 >> $GITHUB_STEP_SUMMARY || echo "Could not parse test summary" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           if [ "$EXIT_CODE" -ne 0 ]; then
-            echo "::warning::Tests failed but build passed — not blocking. See test summary above."
+            echo "::error::Tests failed. See the test summary above."
           fi
-          exit 0
+          exit "$EXIT_CODE"
