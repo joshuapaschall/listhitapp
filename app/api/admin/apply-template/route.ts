@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { supabaseAdmin } from "@/lib/supabase"
-import { requirePermission } from "@/lib/permissions/server"
-import { resolveOrgIdForUser } from "@/lib/auth/org-context"
+import { requireOrgAdmin, requireSameOrgTarget } from "@/lib/auth/admin-guard"
 import { PERMISSION_KEYS } from "@/lib/permissions/keys"
 import {
   grantsForTemplate,
@@ -16,8 +15,10 @@ const TEMPLATE_IDS = new Set<string>(PERMISSION_TEMPLATES.map((template) => temp
 export async function POST(request: NextRequest) {
   const cookieStore = cookies()
   const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
-  const denied = await requirePermission(supabase, "users.manage")
-  if (denied) return denied
+
+  const guard = await requireOrgAdmin(supabase)
+  if ("denied" in guard) return guard.denied
+  const { ctx } = guard
 
   const { userId, templateId } = await request.json()
   if (!userId || !templateId) {
@@ -27,28 +28,32 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid template" }, { status: 400 })
   }
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  const orgId = await resolveOrgIdForUser(user.id)
-  if (!orgId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  const { data: target } = await supabaseAdmin
-    .from("profiles")
-    .select("org_id")
-    .eq("id", userId)
-    .maybeSingle()
-  if (!target) return NextResponse.json({ error: "Not found" }, { status: 404 })
-  if (target.org_id !== orgId) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  const targetResult = await requireSameOrgTarget(userId, ctx)
+  if ("denied" in targetResult) return targetResult.denied
 
   const grants = new Set(grantsForTemplate(templateId as PermissionTemplateId))
+  if (userId === ctx.userId && !grants.has("users.manage")) {
+    return NextResponse.json(
+      { error: "That preset would remove your own user-management access." },
+      { status: 400 },
+    )
+  }
+
+  // Every key is written with an explicit granted true|false so revocation is
+  // recorded rather than implied by row absence.
   const rows = PERMISSION_KEYS.map((permissionKey) => ({
     user_id: userId,
     permission_key: permissionKey,
     granted: grants.has(permissionKey),
   }))
 
-  const { error } = await supabaseAdmin.from("permissions").upsert(rows)
+  // See update-permission: the PK is `id`, so the unique constraint on
+  // (user_id, permission_key) must be named or the upsert becomes an insert.
+  const { error } = await supabaseAdmin
+    .from("permissions")
+    .upsert(rows, { onConflict: "user_id,permission_key" })
   if (error) {
-    console.error("[admin/apply-template] Failed to apply template", error)
+    console.error("[admin/apply-template] Failed to apply template", { userId, templateId, error })
     return NextResponse.json({ error: "Update failed" }, { status: 500 })
   }
 

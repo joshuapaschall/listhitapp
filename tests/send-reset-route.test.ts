@@ -23,7 +23,9 @@ function profilesQuery() {
     maybeSingle: async () => {
       if (filters.id !== undefined) {
         const org = orgByUserId[filters.id]
-        return { data: org ? { org_id: org } : null, error: null }
+        // requireOrgAdmin reads the caller's role through supabaseAdmin (not the
+        // RLS-scoped client), so the id lookup has to carry `role` as well.
+        return { data: org ? { role: "admin", org_id: org } : null, error: null }
       }
       if (filters.email !== undefined) {
         const org = orgByEmail[filters.email]
