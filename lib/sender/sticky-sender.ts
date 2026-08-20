@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { formatPhoneE164, normalizePhone } from "@/lib/dedup-utils"
 import { pickPoolFromNumber } from "./campaign-from-pool"
+import { resolveDefaultOrgId } from "@/lib/auth/default-org"
 
 interface ResolveArgs {
   client: SupabaseClient
@@ -146,6 +147,15 @@ export async function recordStickyFrom({
   orgId,
 }: RecordArgs): Promise<void> {
   if (buyerId) {
+    // buyer_sms_senders no longer carries a column default for org_id, so fall
+    // back to the validated env org. Omit (never explicit null) if even that is
+    // unresolved — the NOT NULL violation is the intended loud failure.
+    const effectiveOrgId = orgId ?? resolveDefaultOrgId()
+    if (!effectiveOrgId) {
+      console.error("recordStickyFrom: org unresolved — buyer_sms_senders upsert will fail", {
+        buyerId,
+      })
+    }
     try {
       await client
         .from("buyer_sms_senders")
@@ -153,9 +163,7 @@ export async function recordStickyFrom({
           {
             buyer_id: buyerId,
             from_number: from,
-            // Omit when unknown so the column default applies. An explicit null
-            // would violate the NOT NULL column and silently break sticky writes.
-            ...(orgId ? { org_id: orgId } : {}),
+            ...(effectiveOrgId ? { org_id: effectiveOrgId } : {}),
           },
           { onConflict: "buyer_id" },
         )

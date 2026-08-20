@@ -6,6 +6,7 @@ import { insertNotification } from "@/lib/notifications"
 import type { Buyer, Property, Showing } from "@/lib/supabase"
 import { assertServer } from "@/utils/assert-server"
 import { createLogger } from "@/lib/logger"
+import { resolveDefaultOrgId } from "@/lib/auth/default-org"
 
 const log = createLogger("showing-notifications")
 
@@ -53,8 +54,10 @@ export async function resolveFromNumber(buyerId: string): Promise<string | null>
 /**
  * Resolve the owning org for a buyer. Notification paths receive only a Buyer
  * object, which carries no org_id, so we read the authoritative value from the
- * buyers table. Returns null when unknown — callers must OMIT the key in that
- * case so the column default applies (an explicit null violates NOT NULL).
+ * buyers table, falling back to the validated DEFAULT_ORG_ID. Returns null only
+ * when neither resolves — callers must OMIT the key in that case (an explicit
+ * null violates NOT NULL), which now fails loudly on the tables whose GWH
+ * column default has been dropped.
  */
 export async function resolveBuyerOrgId(buyerId: string): Promise<string | null> {
   const { data, error } = await supabaseAdmin
@@ -68,11 +71,9 @@ export async function resolveBuyerOrgId(buyerId: string): Promise<string | null>
     return null
   }
 
-  const orgId = (data as { org_id?: string | null } | null)?.org_id ?? null
+  const orgId = (data as { org_id?: string | null } | null)?.org_id ?? resolveDefaultOrgId()
   if (!orgId) {
-    console.warn("⚠️ notification org unresolved — row will fall to the column default", {
-      buyerId,
-    })
+    console.error("❌ notification org unresolved and no valid DEFAULT_ORG_ID", { buyerId })
   }
   return orgId
 }

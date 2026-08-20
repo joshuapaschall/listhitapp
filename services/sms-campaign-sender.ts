@@ -14,6 +14,7 @@ import { resolveSendingMarketId } from "@/lib/campaigns/resolve-sending-market"
 import { NoSendingPoolError } from "@/lib/sender/campaign-from-pool"
 import { ensurePublicMediaUrls } from "@/utils/mms.server"
 import { resolveSmsProvider } from "@/lib/providers/sms"
+import { resolveDefaultOrgId } from "@/lib/auth/default-org"
 
 const log = createLogger("sms-campaign-sender")
 
@@ -41,8 +42,8 @@ type QueueSmsCampaignPayload = {
   mediaUrls?: string[]
   recipients: SmsQueueRecipient[]
   // When provided, stamp queued rows with the campaign's org. Optional so the
-  // (out-of-scope) caller can start passing it without a lockstep change; until
-  // then org_id is omitted and the column default applies (unchanged behavior).
+  // (out-of-scope) caller can start passing it without a lockstep change; when
+  // absent we fall back to the validated DEFAULT_ORG_ID.
   orgId?: string
 }
 
@@ -311,6 +312,14 @@ export async function queueSmsCampaign({
   const supabase = requireAdmin()
   if (!recipients.length) return []
 
+  // sms_campaign_queue no longer carries a column default for org_id — fall back
+  // to the validated env org so a caller that hasn't been threaded through yet
+  // still queues instead of throwing mid-campaign.
+  const effectiveOrgId = orgId ?? resolveDefaultOrgId()
+  if (!effectiveOrgId) {
+    console.error("queueSmsCampaign: org unresolved — queue insert will fail", { campaignId })
+  }
+
   const spacingMs = Math.ceil(60000 / SMS_CAMPAIGN_MPM)
   const scheduledStart = Date.now()
   const rows = recipients.map((recipient, idx) => ({
@@ -326,9 +335,9 @@ export async function queueSmsCampaign({
     status: "pending",
     scheduled_for: new Date(scheduledStart + idx * spacingMs).toISOString(),
     max_attempts: SMS_QUEUE_MAX_ATTEMPTS,
-    // Omit when unknown → column default applies. Never an explicit null, which
-    // would violate the NOT NULL column.
-    ...(orgId ? { org_id: orgId } : {}),
+    // Omit when unknown — never an explicit null. With the default dropped this
+    // raises NOT NULL, which is the intended loud failure.
+    ...(effectiveOrgId ? { org_id: effectiveOrgId } : {}),
   }))
 
   const queuedRows: any[] = []
