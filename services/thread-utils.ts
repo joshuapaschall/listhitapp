@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase"
+import { resolveDefaultOrgId } from "@/lib/auth/default-org"
 
 export async function upsertAnonThread(
   phone_number: string,
@@ -17,7 +18,9 @@ export async function upsertAnonThread(
   // The anon-thread unique index is (org_id, phone_number) WHERE buyer_id IS NULL,
   // so every read and write here must be org-scoped. supabaseAdmin bypasses RLS,
   // which makes an unscoped lookup a cross-tenant read — never allow one.
-  const effectiveOrgId = orgId ?? process.env.DEFAULT_ORG_ID ?? null
+  // Validated fallback only — a non-UUID DEFAULT_ORG_ID resolves to null here so
+  // the guard below fires, instead of sending garbage into a uuid column.
+  const effectiveOrgId = orgId ?? resolveDefaultOrgId()
   if (!effectiveOrgId) {
     console.error("[thread-utils] upsertAnonThread: no org resolved — refusing to touch message_threads", {
       phone_number,

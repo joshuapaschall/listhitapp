@@ -2,13 +2,7 @@ import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { cookies } from "next/headers"
 
 import { supabaseAdmin } from "@/lib/supabase"
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-function resolveDefaultOrgId() {
-  const envOrg = process.env.DEFAULT_ORG_ID
-  return envOrg && UUID_RE.test(envOrg) ? envOrg : null
-}
+import { resolveDefaultOrgId } from "@/lib/auth/default-org"
 
 export async function resolveOrgIdForUser(userId: string): Promise<string | null> {
   try {

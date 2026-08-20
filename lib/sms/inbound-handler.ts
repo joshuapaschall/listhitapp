@@ -13,6 +13,7 @@ import { ensurePublicMediaUrls } from "@/utils/mms.server"
 import { normalizePhone, formatPhoneE164 } from "@/lib/dedup-utils"
 import { TELNYX_API_URL, telnyxHeaders } from "@/lib/telnyx"
 import { upsertAnonThread } from "@/services/thread-utils"
+import { resolveDefaultOrgId } from "@/lib/auth/default-org"
 import { classifyInboundSms } from "@/lib/sms/opt-keywords"
 import { matchNegativeKeyword } from "@/lib/sms/negative-keywords"
 import { suppressBuyerSms } from "@/lib/sms/suppress"
@@ -139,12 +140,17 @@ export async function handleInboundSms(event: InboundSmsEvent): Promise<NextResp
     }
 
     // Org for the inbound thread + message: the buyer's org when known, else the
-    // org that owns the receiving DID (the anon path already stamps its own).
+    // org that owns the receiving DID (the anon path already stamps its own),
+    // else the validated env default. The column default is being dropped on
+    // these tables, so an unresolved org is now a hard NOT NULL failure — the
+    // env fallback is what keeps inbound SMS landing instead of 500-ing.
     const inboundOrgId =
-      (buyerId ? buyerOrgById.get(buyerId) ?? null : null) ?? anonOrgId
+      (buyerId ? buyerOrgById.get(buyerId) ?? null : null) ??
+      anonOrgId ??
+      resolveDefaultOrgId()
 
     if (!inboundOrgId) {
-      console.warn("⚠️ inbound org unresolved — row will fall to the column default", {
+      console.error("❌ inbound org unresolved and no valid DEFAULT_ORG_ID — insert will fail", {
         to,
         buyerId,
       })
@@ -162,7 +168,9 @@ export async function handleInboundSms(event: InboundSmsEvent): Promise<NextResp
               updated_at: new Date().toISOString(),
               deleted_at: null,
               preferred_from_number: preferredDid,
-              // Omit when unknown → column default applies (never explicit null).
+              // Omit when unknown (never explicit null). With the GWH default
+              // dropped this raises NOT NULL — intentionally loud, not silent
+              // cross-tenant commingling.
               ...(inboundOrgId ? { org_id: inboundOrgId } : {}),
             },
             { onConflict: "buyer_id,phone_number" }
