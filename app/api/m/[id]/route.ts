@@ -35,12 +35,22 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
 
     const buffer = Buffer.from(await data.arrayBuffer())
 
+    const contentType = record.content_type || "application/octet-stream"
+    const headers: Record<string, string> = {
+      "Content-Type": contentType,
+      "Cache-Control": "public, max-age=31536000, immutable",
+      // Never let the browser sniff a stored blob into something executable.
+      "X-Content-Type-Options": "nosniff",
+    }
+    // Only media the carrier/recipient is meant to view inline renders inline;
+    // everything else (PDFs included) downloads instead of rendering in-origin.
+    if (!/^(image|video|audio)\//i.test(contentType)) {
+      headers["Content-Disposition"] = "attachment"
+    }
+
     return new Response(buffer, {
       status: 200,
-      headers: {
-        "Content-Type": record.content_type || "application/octet-stream",
-        "Cache-Control": "public, max-age=31536000, immutable",
-      },
+      headers,
     })
   } catch (err: any) {
     console.error("Error in /api/m route", err)

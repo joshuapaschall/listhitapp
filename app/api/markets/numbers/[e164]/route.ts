@@ -5,6 +5,7 @@ import { requireOrgContext, validatePatchBody } from "../../_shared";
 export async function PATCH(request: Request, { params }: { params: { e164: string } }) {
   const { user, orgId, supabase } = await requireOrgContext();
   if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  if (!orgId) return NextResponse.json({ ok: false, error: "No organization" }, { status: 403 });
   const denied = await requirePermission(supabase, "settings.markets");
   if (denied) return denied;
   const body = await request.json();

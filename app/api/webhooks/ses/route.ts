@@ -374,6 +374,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid SNS message" }, { status: 400 })
   }
 
+  // The x-amz-sns-topic-arn header is unsigned. TopicArn inside the body IS part
+  // of the signed string-to-sign, so this is the check that actually binds the
+  // payload to our topic — and it has to run before we fetch any SubscribeURL.
+  if (expectedTopicArn && snsMessage.TopicArn !== expectedTopicArn) {
+    log("warn", "SNS message TopicArn does not match AWS_SNS_TOPIC_ARN", {
+      topicArn: snsMessage.TopicArn,
+      messageId: snsMessage.MessageId,
+    })
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  }
+
   const signatureValid = await verifySnsSignature(snsMessage)
   if (!signatureValid) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 403 })

@@ -28,31 +28,59 @@ vi.mock("@noble/hashes/sha512", () => {
 
 import { verifyTelnyxRequest } from "../lib/telnyx"
 
+/** Signs `${ts}|${raw}` the way Telnyx does and sets TELNYX_PUBLIC_KEY to match. */
+function signedRequest(raw: string, ts: string) {
+  const { publicKey, privateKey } = generateKeyPairSync("ed25519")
+  const pubRaw = publicKey.export({ format: "der", type: "spki" }).slice(-32)
+  process.env.TELNYX_PUBLIC_KEY = pubRaw.toString("base64")
+  const sig = sign(null, Buffer.from(`${ts}|${raw}`), privateKey).toString("base64")
+  return new NextRequest("http://test", {
+    method: "POST",
+    headers: {
+      "telnyx-signature-ed25519": sig,
+      "telnyx-timestamp": ts,
+    },
+  })
+}
+
+const nowSeconds = () => Math.floor(Date.now() / 1000)
+
 describe("verifyTelnyxRequest", () => {
-  test("returns true for valid signature", () => {
-    const { publicKey, privateKey } = generateKeyPairSync("ed25519")
-    const pubRaw = publicKey.export({ format: "der", type: "spki" }).slice(-32)
-    process.env.TELNYX_PUBLIC_KEY = pubRaw.toString("base64")
-    const raw = "hi"
-    const ts = "123"
-    const msg = Buffer.from(`${ts}|${raw}`)
-    const sig = sign(null, msg, privateKey).toString("base64")
-    const req = new NextRequest("http://test", {
-      method: "POST",
-      headers: {
-        "telnyx-signature-ed25519": sig,
-        "telnyx-timestamp": ts,
-      },
-    })
-    const result = verifyTelnyxRequest(req, raw)
-    expect(result).toBe(true)
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    delete process.env.SKIP_TELNYX_SIG
   })
 
-  test("bypasses check when SKIP_TELNYX_SIG=1", () => {
-    process.env.SKIP_TELNYX_SIG = "1"
+  test("returns true for valid signature", () => {
+    const raw = "hi"
+    const req = signedRequest(raw, String(nowSeconds()))
+    expect(verifyTelnyxRequest(req, raw)).toBe(true)
+  })
+
+  test("rejects a correctly signed request with a stale timestamp", () => {
+    const raw = "hi"
+    // 10 minutes old — outside the 300s replay window.
+    const req = signedRequest(raw, String(nowSeconds() - 600))
+    expect(verifyTelnyxRequest(req, raw)).toBe(false)
+  })
+
+  test("rejects a non-numeric timestamp", () => {
+    const raw = "hi"
+    const req = signedRequest(raw, "not-a-number")
+    expect(verifyTelnyxRequest(req, raw)).toBe(false)
+  })
+
+  test("bypasses check when SKIP_TELNYX_SIG=1 outside production", () => {
+    vi.stubEnv("NODE_ENV", "development")
+    vi.stubEnv("SKIP_TELNYX_SIG", "1")
     const req = new NextRequest("http://test", { method: "POST" })
-    const result = verifyTelnyxRequest(req, "")
-    expect(result).toBe(true)
-    delete process.env.SKIP_TELNYX_SIG
+    expect(verifyTelnyxRequest(req, "")).toBe(true)
+  })
+
+  test("ignores SKIP_TELNYX_SIG=1 in production", () => {
+    vi.stubEnv("NODE_ENV", "production")
+    vi.stubEnv("SKIP_TELNYX_SIG", "1")
+    const req = new NextRequest("http://test", { method: "POST" })
+    expect(verifyTelnyxRequest(req, "")).toBe(false)
   })
 })

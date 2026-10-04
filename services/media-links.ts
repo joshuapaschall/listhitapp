@@ -14,6 +14,7 @@ function getBaseUrl() {
 export async function createShortMediaLink(
   storagePath: string,
   contentType: string,
+  orgId: string,
 ): Promise<string> {
   if (!supabaseAdmin) {
     throw new Error("supabaseAdmin is not initialized")
@@ -27,6 +28,7 @@ export async function createShortMediaLink(
       id,
       storage_path: storagePath,
       content_type: contentType,
+      org_id: orgId,
     })
 
   if (error) {
