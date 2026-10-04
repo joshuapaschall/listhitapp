@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireOrgContext } from "@/lib/auth/org-context"
 import { requirePermission } from "@/lib/permissions/server"
+import { isPlatformAdmin } from "@/lib/auth/platform-admin"
 import { supabaseAdmin } from "@/lib/supabase/admin"
 import {
   createGuardOverride,
@@ -16,8 +17,9 @@ const log = createLogger("api:email-guard-override")
 
 // Latest reputation snapshot state + active override, for the Email Domains page.
 export async function GET() {
-  const { user, supabase } = await requireOrgContext()
+  const { user, orgId, supabase } = await requireOrgContext()
   if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 })
+  if (!orgId) return NextResponse.json({ ok: false, error: "No organization" }, { status: 403 })
   const denied = await requirePermission(supabase, "settings.email_domains")
   if (denied) return denied
 
@@ -41,10 +43,15 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const { user, supabase } = await requireOrgContext()
+  const { user, orgId, supabase } = await requireOrgContext()
   if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 })
+  if (!orgId) return NextResponse.json({ ok: false, error: "No organization" }, { status: 403 })
   const denied = await requirePermission(supabase, "settings.email_domains")
   if (denied) return denied
+  // Account-wide blast radius: this resumes sending for every tenant at once.
+  if (!isPlatformAdmin(user.id)) {
+    return NextResponse.json({ ok: false, error: "Platform admin only" }, { status: 403 })
+  }
 
   const body = await request.json().catch(() => ({}))
   const hours = Number(body?.hours) || 2
@@ -80,10 +87,14 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE() {
-  const { user, supabase } = await requireOrgContext()
+  const { user, orgId, supabase } = await requireOrgContext()
   if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 })
+  if (!orgId) return NextResponse.json({ ok: false, error: "No organization" }, { status: 403 })
   const denied = await requirePermission(supabase, "settings.email_domains")
   if (denied) return denied
+  if (!isPlatformAdmin(user.id)) {
+    return NextResponse.json({ ok: false, error: "Platform admin only" }, { status: 403 })
+  }
   await clearGuardOverride()
   return NextResponse.json({ ok: true })
 }

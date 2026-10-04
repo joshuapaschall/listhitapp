@@ -2,7 +2,6 @@ import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { cookies } from "next/headers"
 
 import { supabaseAdmin } from "@/lib/supabase"
-import { resolveDefaultOrgId } from "@/lib/auth/default-org"
 
 export async function resolveOrgIdForUser(userId: string): Promise<string | null> {
   try {
@@ -15,12 +14,14 @@ export async function resolveOrgIdForUser(userId: string): Promise<string | null
     if (error) throw error
     if (profile?.org_id) return profile.org_id
   } catch (error) {
-    console.warn("[org-context] Falling back after profiles.org_id lookup failed", error)
+    console.warn("[org-context] profiles.org_id lookup failed", { userId }, error)
+    return null
   }
 
-  // No org on the profile — fall back to the env-controlled default ONLY. Never
-  // borrow an org from a data table (that could assign a user to another tenant).
-  return resolveDefaultOrgId()
+  // No org on the profile. Interactive requests fail closed — never fall back to
+  // an env-controlled default, which would drop the user into another tenant.
+  console.warn("[org-context] no org_id on profile; failing closed", { userId })
+  return null
 }
 
 export async function requireOrgContext() {

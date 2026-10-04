@@ -9,6 +9,7 @@ import { getCallControlAppId } from "@/lib/voice-env"
 import { listPurchasedNumbersForOrigin, type FromNumber } from "@/lib/telnyx/numbers"
 import { resolveOutboundFrom } from "@/lib/sender/sticky-sender"
 import { resolveOrgIdForUser } from "@/lib/auth/org-context"
+import { requirePermission } from "@/lib/permissions/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatPhoneE164 } from "@/lib/dedup-utils"
 
@@ -33,7 +34,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 })
     }
 
+    const denied = await requirePermission(supabase, "calls.make_receive")
+    if (denied) return denied
+
     const orgId = await resolveOrgIdForUser(user.id)
+    if (!orgId) {
+      return NextResponse.json({ ok: false, error: "No organization" }, { status: 403 })
+    }
 
     const body = (await req.json().catch(() => ({}))) as {
       to?: string

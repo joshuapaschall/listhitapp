@@ -4,8 +4,9 @@ import { createShortLink } from "@/services/shortlink-service"
 
 export async function POST(request: NextRequest) {
   // Creating short links requires an authenticated session.
-  const { user } = await requireOrgContext()
+  const { user, orgId } = await requireOrgContext()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!orgId) return NextResponse.json({ error: "No organization" }, { status: 403 })
 
   try {
     const body = await request.json()

@@ -26,6 +26,9 @@ describe("sync voice numbers route", () => {
       },
     }
     process.env.VOICE_SYNC_SECRET_KEY = "tok"
+    // Cron auth now only accepts CRON_SECRET; without it assertCronAuth reports
+    // "Server misconfigured" (500) instead of the 401 these cases assert.
+    process.env.CRON_SECRET = "cron"
     process.env.SUPABASE_SERVICE_ROLE_KEY = "svc"
     process.env.NEXT_PUBLIC_SUPABASE_URL = "http://local"
     process.env.TELNYX_API_KEY = "key"

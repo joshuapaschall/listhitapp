@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { hasValidCronToken } from "@/lib/cron-auth";
+
 const REQUIRED_ENVS = [
   "SITE_URL",
   "CRON_SECRET",
@@ -21,19 +23,23 @@ const getEnvStatus = (): EnvStatus => {
   }, {} as EnvStatus);
 };
 
-export const GET = () => {
+export const GET = (req: Request) => {
   const env = getEnvStatus();
   const isOk = Object.values(env).every(Boolean);
-  const commit = process.env.VERCEL_GIT_COMMIT_SHA ?? null;
+  const status = isOk ? 200 : 500;
+
+  // Unauthenticated callers get liveness only. The env map and build sha tell an
+  // attacker which integrations are wired up, so they need the cron token.
+  if (!hasValidCronToken(req)) {
+    return NextResponse.json({ ok: isOk }, { status });
+  }
 
   return NextResponse.json(
     {
       ok: isOk,
-      commit,
+      commit: process.env.VERCEL_GIT_COMMIT_SHA ?? null,
       env,
     },
-    {
-      status: isOk ? 200 : 500,
-    }
+    { status }
   );
 };

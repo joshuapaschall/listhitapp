@@ -9,16 +9,18 @@ import { DEFAULT_VOICE_ID, POLLY_VOICES } from "@/lib/voice/polly-voices";
 const GREETING_BUCKET = "voicemail-greetings";
 
 export async function GET() {
-  const { user, supabase } = await requireOrgContext();
+  const { user, orgId, supabase } = await requireOrgContext();
   if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  if (!orgId) return NextResponse.json({ ok: false, error: "No organization" }, { status: 403 });
   const denied = await requirePermission(supabase, "settings.markets");
   if (denied) return denied;
   return NextResponse.json({ ok: true, voices: POLLY_VOICES, defaultVoiceId: DEFAULT_VOICE_ID });
 }
 
 export async function POST(request: Request) {
-  const { user, supabase } = await requireOrgContext();
+  const { user, orgId, supabase } = await requireOrgContext();
   if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  if (!orgId) return NextResponse.json({ ok: false, error: "No organization" }, { status: 403 });
   const denied = await requirePermission(supabase, "settings.markets");
   if (denied) return denied;
   const contentType = request.headers.get("content-type") ?? "";
