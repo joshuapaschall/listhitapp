@@ -3,6 +3,7 @@ export const revalidate = 0;
 
 import { NextRequest, NextResponse } from "next/server";
 import { requireOrgContext } from "@/lib/auth/org-context";
+import { requireTelnyxPinnedOrg } from "@/lib/auth/telnyx-guard"
 import { TELNYX_API_URL, telnyxHeaders } from "@/lib/telnyx";
 
 // Types based on Telnyx API documentation
@@ -122,6 +123,8 @@ export async function GET(request: NextRequest) {
     const { user, orgId } = await requireOrgContext();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     if (!orgId) return NextResponse.json({ error: "Missing org" }, { status: 400 });
+    const notPinned = requireTelnyxPinnedOrg(orgId);
+    if (notPinned) return notPinned;
 
     const searchParams = request.nextUrl.searchParams;
     

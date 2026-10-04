@@ -72,18 +72,22 @@ vi.mock("../lib/supabase", () => {
     from: (table: string) => {
       if (table === "buyers") {
         return {
+          // Org-scoped first: .select().eq("org_id", org).or(clause)
           select: () => ({
-            or: (expr: string) => ({
-              then: async (resolve: any) => {
-                const nums = expr.split(",").map((s) => s.split(".eq.")[1])
-                const result = buyers.filter(
-                  (b) =>
-                    nums.includes(b.phone_norm) ||
-                    nums.includes(b.phone2_norm) ||
-                    nums.includes(b.phone3_norm),
-                )
-                resolve({ data: result, error: null })
-              },
+            eq: (_orgCol: string, orgId: string) => ({
+              or: (expr: string) => ({
+                then: async (resolve: any) => {
+                  const nums = expr.split(",").map((s) => s.split(".eq.")[1])
+                  const result = buyers.filter(
+                    (b) =>
+                      b.org_id === orgId &&
+                      (nums.includes(b.phone_norm) ||
+                        nums.includes(b.phone2_norm) ||
+                        nums.includes(b.phone3_norm)),
+                  )
+                  resolve({ data: result, error: null })
+                },
+              }),
             }),
           }),
           update: (data: any) => ({
@@ -99,10 +103,18 @@ vi.mock("../lib/supabase", () => {
         }
       }
       if (table === "inbound_numbers") {
+        // Twilio has no pinned-org fallback: the receiving DID is the only
+        // tenant signal, so the seeded number has to resolve to an org or the
+        // handler drops the message.
         return {
           select: () => ({
-            eq: () => ({
-              eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }),
+            eq: (_col: string, e164: string) => ({
+              eq: () => ({
+                maybeSingle: async () => ({
+                  data: e164 === INBOUND_DID ? { org_id: TWILIO_ORG } : null,
+                  error: null,
+                }),
+              }),
             }),
           }),
         }
@@ -212,10 +224,13 @@ function twilioReq(fields: Record<string, string>) {
   })
 }
 
+const TWILIO_ORG = "00000000-0000-4000-8000-000000000002"
+const INBOUND_DID = "+18885551234"
+
 describe("Twilio incoming SMS webhook", () => {
   beforeEach(() => {
     buyers = [
-      { id: "b1", phone: "2223334444", phone2: null, phone3: null, phone_norm: "2223334444", can_receive_sms: true },
+      { id: "b1", phone: "2223334444", phone2: null, phone3: null, phone_norm: "2223334444", can_receive_sms: true, org_id: TWILIO_ORG },
     ]
     messages = []
     threads = []

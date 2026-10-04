@@ -1,9 +1,9 @@
 import { apiError } from "@/lib/api-error"
-import { cookies } from "next/headers"
 import { NextRequest, NextResponse } from "next/server"
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 
 import { requirePermission } from "@/lib/permissions/server"
+import { requireOrgContext } from "@/lib/auth/org-context"
+import { requireTelnyxPinnedOrg } from "@/lib/auth/telnyx-guard"
 import { TELNYX_API_URL, telnyxHeaders } from "@/lib/telnyx"
 
 export async function POST(
@@ -11,10 +11,13 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    const cookieStore = cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+    const { user, orgId, supabase } = await requireOrgContext()
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!orgId) return NextResponse.json({ error: "No organization" }, { status: 403 })
     const denied = await requirePermission(supabase, "calls.make_receive")
     if (denied) return denied
+    const notPinned = requireTelnyxPinnedOrg(orgId)
+    if (notPinned) return notPinned
 
     const { to } = await request.json()
     const callControlId = params.id

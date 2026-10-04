@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyTelnyxRequest } from "@/lib/telnyx";
 import { formatPhoneE164 } from "@/lib/call-validation";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { resolveOrgIdByDid } from "@/lib/inbound-numbers";
 import { getWebRTCSipUri } from "@/lib/voice/webrtc-sip";
 import { bridgeCall, startRecording, playAudioUrl } from "@/lib/voice/call-control";
 import { getRoutingConfig } from "@/lib/voice/routing";
@@ -175,24 +176,6 @@ function decodeClientState(s?: string | null) {
   }
 }
 
-async function resolveOrgFromDid(e164?: string | null) {
-  if (!e164) return null;
-
-  const { data, error } = await supabaseAdmin
-    .from("inbound_numbers")
-    .select("org_id")
-    .eq("e164", e164)
-    .eq("enabled", true)
-    .maybeSingle();
-
-  if (error) {
-    console.error("Failed to resolve org for inbound number", error);
-    return null;
-  }
-
-  return data?.org_id ?? null;
-}
-
 async function pickAvailableAgent(): Promise<{ id: string, sip_username: string } | null> {
   return null;
 }
@@ -316,7 +299,7 @@ export async function POST(req: NextRequest) {
         // Stamp the owning org so the org-scoped lookup can see this row under RLS.
         // Null-safe: if we can't resolve it, leave it null (mirrors calls/record).
         const orgDid = direction === "incoming" ? toRaw : String(payload?.from ?? "");
-        const callOrgId = await resolveOrgFromDid(orgDid);
+        const callOrgId = await resolveOrgIdByDid(orgDid);
         if (callControlId) {
           await supabaseAdmin.from("calls").upsert(
             {

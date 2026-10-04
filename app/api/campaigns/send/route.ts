@@ -15,7 +15,7 @@ import { fetchAllRows } from "@/lib/supabase-fetch-all"
 import { resolveAudienceIds } from "@/lib/campaigns/resolve-audience-ids"
 import { formatPhoneE164, normalizeEmail } from "@/lib/dedup-utils"
 import * as smsCampaignSender from "@/services/sms-campaign-sender"
-import { requireOrgContext, resolveOrgIdForUser } from "@/lib/auth/org-context"
+import { resolveOrgIdForUser } from "@/lib/auth/org-context"
 import { resolveCampaignSender, SenderNotVerifiedError } from "@/lib/email-sender-resolver"
 import { isValidEmailSyntax } from "@/lib/email/validate-syntax"
 import { insertNotification } from "@/lib/notifications"
@@ -115,6 +115,15 @@ export async function POST(request: NextRequest) {
     campaignQuery = campaignQuery.eq("org_id", orgId)
   }
   const { data: campaign, error } = await campaignQuery.maybeSingle()
+
+  if (campaign && orgId && campaign.org_id && campaign.org_id !== orgId) {
+    console.error("campaigns/send cross-org campaign access refused", {
+      campaignId,
+      sessionOrgId: orgId,
+      campaignOrgId: campaign.org_id,
+    })
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  }
 
   if (error || !campaign) {
     console.error("Campaign lookup failed", error)
@@ -498,9 +507,7 @@ export async function POST(request: NextRequest) {
 
     let sender
     try {
-      const { orgId: sessionOrgId } = await requireOrgContext()
-      const orgId = sessionOrgId ?? await resolveOrgIdForUser(campaign.user_id)
-      sender = await resolveCampaignSender(orgId, {
+      sender = await resolveCampaignSender(campaign.org_id, {
         fromEmail: campaign.from_email,
         fromName: campaign.from_name,
       })

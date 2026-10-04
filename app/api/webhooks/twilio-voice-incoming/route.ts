@@ -3,6 +3,7 @@ import twilio from "twilio"
 
 import { assertServer } from "@/utils/assert-server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { resolveOrgIdByDid } from "@/lib/inbound-numbers"
 import { formatPhoneE164 } from "@/lib/dedup-utils"
 import { getOrgTwilio } from "@/lib/org-twilio/service"
 import { resolveVoiceProviderName, parseTelnyxPinnedOrgIds } from "@/lib/providers/voice/routing"
@@ -105,13 +106,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Resolve the org from the inbound DID.
-  const { data: didRow } = await supabaseAdmin
-    .from("inbound_numbers")
-    .select("org_id")
-    .eq("e164", to)
-    .eq("enabled", true)
-    .maybeSingle()
-  const orgId = didRow?.org_id ?? null
+  const orgId = await resolveOrgIdByDid(to)
   if (!orgId) {
     console.warn("[twilio-voice-incoming] no org for inbound DID — refusing", { to })
     return sayHangup("This number is not available. Goodbye.")

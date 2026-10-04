@@ -140,6 +140,7 @@ export async function POST(request: NextRequest) {
     id: userId,
     email,
     role,
+    full_name: displayName,
     display_name: displayName,
     org_id: ctx.orgId,
     must_change_password:

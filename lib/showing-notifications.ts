@@ -6,7 +6,6 @@ import { insertNotification } from "@/lib/notifications"
 import type { Buyer, Property, Showing } from "@/lib/supabase"
 import { assertServer } from "@/utils/assert-server"
 import { createLogger } from "@/lib/logger"
-import { resolveDefaultOrgId } from "@/lib/auth/default-org"
 
 const log = createLogger("showing-notifications")
 
@@ -54,10 +53,8 @@ export async function resolveFromNumber(buyerId: string): Promise<string | null>
 /**
  * Resolve the owning org for a buyer. Notification paths receive only a Buyer
  * object, which carries no org_id, so we read the authoritative value from the
- * buyers table, falling back to the validated DEFAULT_ORG_ID. Returns null only
- * when neither resolves — callers must OMIT the key in that case (an explicit
- * null violates NOT NULL), which now fails loudly on the tables whose GWH
- * column default has been dropped.
+ * buyers table. There is no fallback: an org-less buyer returns null and the
+ * caller skips the notification rather than sending it into another tenant.
  */
 export async function resolveBuyerOrgId(buyerId: string): Promise<string | null> {
   const { data, error } = await supabaseAdmin
@@ -71,9 +68,9 @@ export async function resolveBuyerOrgId(buyerId: string): Promise<string | null>
     return null
   }
 
-  const orgId = (data as { org_id?: string | null } | null)?.org_id ?? resolveDefaultOrgId()
+  const orgId = (data as { org_id?: string | null } | null)?.org_id ?? null
   if (!orgId) {
-    console.error("❌ notification org unresolved and no valid DEFAULT_ORG_ID", { buyerId })
+    console.warn("[notifications] buyer has no org — skipping notification", { buyerId })
   }
   return orgId
 }

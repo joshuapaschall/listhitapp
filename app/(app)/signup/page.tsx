@@ -22,6 +22,8 @@ function isValidEmail(value: string) {
 
 export default function SignupPage() {
   const supabase = useMemo(() => supabaseBrowser(), [])
+  const [fullName, setFullName] = useState("")
+  const [companyName, setCompanyName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
@@ -35,6 +37,12 @@ export default function SignupPage() {
   const [isResending, setIsResending] = useState(false)
 
   const validate = () => {
+    if (!fullName.trim()) {
+      return "Please enter your name."
+    }
+    if (!companyName.trim()) {
+      return "Please enter your company name."
+    }
     if (!isValidEmail(email)) {
       return "Please enter a valid email address."
     }
@@ -72,6 +80,12 @@ export default function SignupPage() {
         emailRedirectTo: `${
           process.env.NEXT_PUBLIC_SITE_URL || "https://app.listhit.io"
         }/auth/callback`,
+        // Carried through confirmation so /onboarding/create-org can prefill.
+        data: {
+          full_name: fullName.trim(),
+          display_name: fullName.trim(),
+          company_name: companyName.trim(),
+        },
       },
     })
 
@@ -103,7 +117,11 @@ export default function SignupPage() {
     const { error: resendError } = await supabase.auth.resend({
       type: "signup",
       email,
-      options: { emailRedirectTo: "https://app.listhit.io/auth/callback" },
+      options: {
+        emailRedirectTo: `${
+          process.env.NEXT_PUBLIC_SITE_URL || "https://app.listhit.io"
+        }/auth/callback`,
+      },
     })
 
     if (resendError) {
@@ -129,6 +147,28 @@ export default function SignupPage() {
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={handleSubmit}>
+              <div className="space-y-2 text-left">
+                <Label htmlFor="fullName">Your name</Label>
+                <Input
+                  id="fullName"
+                  value={fullName}
+                  onChange={(event) => setFullName(event.target.value)}
+                  autoComplete="name"
+                  required
+                  disabled={isSubmitting}
+                />
+              </div>
+              <div className="space-y-2 text-left">
+                <Label htmlFor="companyName">Company name</Label>
+                <Input
+                  id="companyName"
+                  value={companyName}
+                  onChange={(event) => setCompanyName(event.target.value)}
+                  autoComplete="organization"
+                  required
+                  disabled={isSubmitting}
+                />
+              </div>
               <div className="space-y-2 text-left">
                 <Label htmlFor="email">Email</Label>
                 <Input

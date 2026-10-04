@@ -8,6 +8,8 @@ vi.mock("@supabase/supabase-js", () => ({
   createClient: () => supabase,
 }))
 
+const PINNED_ORG = "00000000-0000-4000-8000-000000000001"
+
 describe("sync voice numbers route", () => {
   beforeEach(() => {
     upserts = []
@@ -33,6 +35,8 @@ describe("sync voice numbers route", () => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = "http://local"
     process.env.TELNYX_API_KEY = "key"
     process.env.TELNYX_MESSAGING_PROFILE_ID = "mp1"
+    // Synced numbers are stamped with the single pinned owner org.
+    process.env.TELNYX_PINNED_ORG_IDS = PINNED_ORG
   })
 
   test("GET triggers a sync (aliases POST) and requires auth", async () => {
@@ -61,6 +65,22 @@ describe("sync voice numbers route", () => {
     const data = await res.json()
     expect(fetchMock).toHaveBeenCalled()
     expect(upserts.length).toBe(1)
+    expect(upserts[0][0]).toEqual(expect.objectContaining({ phone_number: "+1555", org_id: PINNED_ORG }))
     expect(data).toEqual({ status: "success", synced: 1 })
+  })
+
+  test("refuses to sync when the pinned org is ambiguous", async () => {
+    process.env.TELNYX_PINNED_ORG_IDS = `${PINNED_ORG},00000000-0000-4000-8000-000000000002`
+    const { POST } = await import("../app/api/sync/voice-numbers/route")
+    const req = new NextRequest("http://test", {
+      method: "POST",
+      headers: { Authorization: "Bearer tok" },
+    })
+    const res = await POST(req)
+    expect(res.status).toBe(500)
+    await expect(res.json()).resolves.toEqual({
+      error: "TELNYX_PINNED_ORG_IDS must contain exactly one org",
+    })
+    expect(upserts.length).toBe(0)
   })
 })

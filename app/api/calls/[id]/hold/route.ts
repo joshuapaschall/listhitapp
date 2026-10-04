@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireOrgContext } from "@/lib/auth/org-context"
+import { requireTelnyxPinnedOrg } from "@/lib/auth/telnyx-guard"
 import { playAudioUrl, stopPlayback } from "@/lib/voice/call-control"
 
 export const runtime = "nodejs"
@@ -40,6 +41,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const { user, orgId, supabase } = await requireOrgContext()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   if (!orgId) return NextResponse.json({ error: "Missing org" }, { status: 400 })
+  const notPinned = requireTelnyxPinnedOrg(orgId)
+  if (notPinned) return notPinned
 
   const passedId = params.id
   const body = await req.json().catch(() => ({} as any))

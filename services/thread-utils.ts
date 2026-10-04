@@ -1,10 +1,9 @@
 import { supabaseAdmin } from "@/lib/supabase"
-import { resolveDefaultOrgId } from "@/lib/auth/default-org"
 
 export async function upsertAnonThread(
   phone_number: string,
-  preferredFrom?: string | null,
-  orgId?: string | null,
+  preferredFrom: string | null | undefined,
+  orgId: string,
 ) {
   const updateFields: Record<string, any> = {
     unread: true,
@@ -17,20 +16,8 @@ export async function upsertAnonThread(
 
   // The anon-thread unique index is (org_id, phone_number) WHERE buyer_id IS NULL,
   // so every read and write here must be org-scoped. supabaseAdmin bypasses RLS,
-  // which makes an unscoped lookup a cross-tenant read — never allow one.
-  // Validated fallback only — a non-UUID DEFAULT_ORG_ID resolves to null here so
-  // the guard below fires, instead of sending garbage into a uuid column.
-  const effectiveOrgId = orgId ?? resolveDefaultOrgId()
-  if (!effectiveOrgId) {
-    console.error("[thread-utils] upsertAnonThread: no org resolved — refusing to touch message_threads", {
-      phone_number,
-    })
-    return {
-      data: null,
-      error: { message: "upsertAnonThread: unresolved org", code: "ORG_UNRESOLVED" } as any,
-    }
-  }
-
+  // which makes an unscoped lookup a cross-tenant read — never allow one. The org
+  // is now required: callers resolve it from the inbound DID before they get here.
   // Find an existing anon thread for this number, always scoped to the org.
   const selectExisting = async () => {
     return await supabaseAdmin
@@ -38,7 +25,7 @@ export async function upsertAnonThread(
       .select("*")
       .eq("phone_number", phone_number)
       .is("buyer_id", null)
-      .eq("org_id", effectiveOrgId)
+      .eq("org_id", orgId)
       .limit(1)
       .maybeSingle()
   }
@@ -62,7 +49,7 @@ export async function upsertAnonThread(
     unread: true,
     updated_at: new Date().toISOString(),
     deleted_at: null,
-    org_id: effectiveOrgId,
+    org_id: orgId,
   }
   if (preferredFrom !== undefined) {
     insertFields.preferred_from_number = preferredFrom

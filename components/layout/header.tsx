@@ -82,7 +82,7 @@ export function Header({ toggleSidebar }: HeaderProps) {
       return response.ok ? ((await response.json()) as CurrentProfile) : null
     },
   })
-  const profileName = profile?.display_name || profile?.full_name || null
+  const profileName = profile?.full_name || profile?.display_name || null
   const userEmail = profile?.email ?? user?.email ?? null
   const initials = getUserInitials(profileName, userEmail)
 

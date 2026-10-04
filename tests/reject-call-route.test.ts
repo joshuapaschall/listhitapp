@@ -46,6 +46,21 @@ vi.mock("@supabase/auth-helpers-nextjs", () => ({
   }),
 }))
 
+// requireOrgContext resolves the org through supabaseAdmin, and the route is
+// Telnyx-only, so the org has to be the pinned one.
+vi.mock("@/lib/supabase", () => ({
+  supabaseAdmin: {
+    from: (table: string) => {
+      if (table !== "profiles") throw new Error(`Unexpected admin table ${table}`)
+      return {
+        select: () => ({
+          eq: () => ({ maybeSingle: async () => ({ data: { org_id: "org-A" }, error: null }) }),
+        }),
+      }
+    },
+  },
+}))
+
 const fetchMock = vi.fn()
 // @ts-ignore
 
@@ -58,6 +73,11 @@ describe("reject call route", () => {
     authState.callerRole = "user"
     authState.permissions = [{ user_id: "user-1", permission_key: "calls.make_receive", granted: true }]
     process.env.TELNYX_API_KEY = "KEY"
+    process.env.TELNYX_PINNED_ORG_IDS = "org-A"
+  })
+
+  afterEach(() => {
+    delete process.env.TELNYX_PINNED_ORG_IDS
   })
 
   test("requires calls.make_receive", async () => {

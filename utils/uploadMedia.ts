@@ -58,6 +58,27 @@ export async function uploadMediaFile(
   return result.url
 }
 
+// Storage keys are validated server-side by /api/media-links against
+// /^(incoming|outgoing)\/[A-Za-z0-9._-]+$/, so the extension has to be
+// alphanumeric. A file named "My Document" (no dot, a space) used to produce
+// "My Document" as the extension and get the link rejected.
+export function safeExtension(fileName: string, mimeType?: string): string {
+  const sanitize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 10)
+
+  if (fileName.includes(".")) {
+    const fromName = sanitize(fileName.slice(fileName.lastIndexOf(".") + 1))
+    if (fromName) return fromName
+  }
+
+  const subtype = mimeType?.split(";")[0]?.split("/")[1]
+  if (subtype) {
+    const fromMime = sanitize(subtype)
+    if (fromMime) return fromMime
+  }
+
+  return "bin"
+}
+
 export async function uploadMediaFileWithMeta(
   file: File,
   direction: "incoming" | "outgoing" = "outgoing",
@@ -76,7 +97,7 @@ export async function uploadMediaFileWithMeta(
     }
   }
 
-  const ext = workingFile.name.split(".").pop() || "bin"
+  const ext = safeExtension(workingFile.name, workingFile.type)
   const key = `${direction}/${Date.now()}_${crypto.randomUUID()}.${ext}`
 
   const { data, error } = await supabase.storage

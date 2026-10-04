@@ -6,6 +6,8 @@ import { NextResponse } from "next/server"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 
 import { requirePermission } from "@/lib/permissions/server"
+import { resolveOrgIdForUser } from "@/lib/auth/org-context"
+import { requireTelnyxPinnedOrg } from "@/lib/auth/telnyx-guard"
 import {
   createWebRTCToken,
   ensureUserTelephonyCredential,
@@ -28,6 +30,13 @@ export async function POST() {
 
     const denied = await requirePermission(supabase, "calls.make_receive")
     if (denied) return denied
+
+    const orgId = await resolveOrgIdForUser(user.id)
+    if (!orgId) {
+      return NextResponse.json({ ok: false, error: "No organization" }, { status: 403 })
+    }
+    const notPinned = requireTelnyxPinnedOrg(orgId)
+    if (notPinned) return notPinned
 
     const credential = await ensureUserTelephonyCredential(user.id)
     const { token } = await createWebRTCToken(credential.id)

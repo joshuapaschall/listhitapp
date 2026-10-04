@@ -100,7 +100,16 @@ type ApiUser = {
 }
 
 const TOTAL_PERMISSIONS = PERMISSION_KEYS.length
-const TEMPLATE_CHIPS = PERMISSION_TEMPLATES // admin · manager · agent · viewer · custom
+
+// The five access levels, in the order they appear in the drawer. One click sets
+// a role AND a permission set, so the two can never drift apart.
+const ACCESS_LEVELS = [
+  { id: "admin", label: "Admin", blurb: "Everything" },
+  { id: "manager", label: "Manager", blurb: "No user admin" },
+  { id: "agent", label: "Agent", blurb: "Work leads" },
+  { id: "viewer", label: "Viewer", blurb: "Read only" },
+  { id: "custom", label: "Custom", blurb: "Pick below" },
+] as const satisfies readonly { id: PermissionTemplateId; label: string; blurb: string }[]
 
 function initialsOf(user: ApiUser): string {
   const source = user.fullName?.trim() || user.email?.trim() || "?"
@@ -850,7 +859,7 @@ function PermissionEditorSheet({
   onPatchUser: (userId: string, patch: Partial<ApiUser>) => void
   onRemoveUser: (userId: string) => void
 }) {
-  const [applyingTemplate, setApplyingTemplate] = useState<PermissionTemplateId | null>(null)
+  const [applyingLevel, setApplyingLevel] = useState<PermissionTemplateId | null>(null)
   const [pendingKeys, setPendingKeys] = useState<Set<string>>(() => new Set())
   const [removeOpen, setRemoveOpen] = useState(false)
   const [setPasswordOpen, setSetPasswordOpen] = useState(false)
@@ -864,53 +873,41 @@ function PermissionEditorSheet({
   const isSelf = !!user && user.id === currentUserId
   const isAdmin = user?.role === "admin" || user?.role === "owner"
   const isOwner = user?.role === "owner"
-  const activeTemplate = user ? matchTemplate(user.permissions) : null
+  // Admin is a role, not a permission set, so it wins over any grant match.
+  const activeLevel: PermissionTemplateId = user
+    ? user.role === "admin"
+      ? "admin"
+      : matchTemplate(user.permissions) ?? "custom"
+    : "custom"
 
-  async function handleRoleChange(role: string) {
-    if (!user) return
-    if (isSelf && role === "user") {
-      toast.error("You can't demote your own account")
-      return
-    }
+  async function handleSetLevel(level: PermissionTemplateId) {
+    if (!user || applyingLevel) return
+    setApplyingLevel(level)
+
     const previousRole = user.role
-    onPatchUser(user.id, { role })
-    try {
-      const res = await fetch("/api/admin/update-role", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id, role }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data?.error || "Failed to update role")
-      const label = role === "admin" ? "Admin" : role === "owner" ? "Owner" : "User"
-      toast.success(`Role updated to ${label}`)
-    } catch (error) {
-      onPatchUser(user.id, { role: previousRole })
-      toast.error(error instanceof Error ? error.message : "Failed to update role")
-    }
-  }
-
-  async function handleApplyTemplate(templateId: PermissionTemplateId) {
-    if (!user || applyingTemplate) return
-    setApplyingTemplate(templateId)
-    const nextPermissions = grantsForTemplate(templateId)
     const previousPermissions = user.permissions
-    onPatchUser(user.id, { permissions: nextPermissions })
+    // Custom only moves the role — the existing grants are what makes it custom.
+    const nextPermissions = level === "custom" ? previousPermissions : grantsForTemplate(level)
+    const nextRole = level === "admin" ? "admin" : "user"
+    onPatchUser(user.id, { role: nextRole, permissions: nextPermissions })
+
     try {
-      const res = await fetch("/api/admin/apply-template", {
+      const res = await fetch("/api/admin/set-access-level", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id, templateId }),
+        body: JSON.stringify({ userId: user.id, level }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data?.error || "Failed to apply preset")
-      const template = PERMISSION_TEMPLATES.find((entry) => entry.id === templateId)
-      toast.success(`Applied ${template?.label ?? "preset"} preset`)
+      if (!res.ok) throw new Error(data?.error || "Failed to set access level")
+      // Trust the server's answer over the optimistic guess.
+      onPatchUser(user.id, { role: data.role, permissions: data.permissions })
+      const label = ACCESS_LEVELS.find((entry) => entry.id === level)?.label ?? level
+      toast.success(`Access set to ${label}`)
     } catch (error) {
-      onPatchUser(user.id, { permissions: previousPermissions })
-      toast.error(error instanceof Error ? error.message : "Failed to apply preset")
+      onPatchUser(user.id, { role: previousRole, permissions: previousPermissions })
+      toast.error(error instanceof Error ? error.message : "Failed to set access level")
     } finally {
-      setApplyingTemplate(null)
+      setApplyingLevel(null)
     }
   }
 
@@ -1008,42 +1005,21 @@ function PermissionEditorSheet({
                   <SheetTitle className="truncate">{nameOf(user)}</SheetTitle>
                   <p className="truncate text-sm text-muted-foreground">{user.email ?? "—"}</p>
                 </div>
-                <div className="w-32 shrink-0">
-                  {isSelf || isOwner ? (
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div>
-                            <Select value={user.role} disabled>
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="owner">Owner</SelectItem>
-                                <SelectItem value="admin">Admin</SelectItem>
-                                <SelectItem value="user">User</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {isOwner
-                            ? "Owner role can only be changed in the database."
-                            : "You can't change your own admin role"}
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
+                <div className="shrink-0">
+                  {isOwner ? (
+                    <Badge className="border-transparent bg-violet-600 text-white hover:bg-violet-600/90">
+                      Owner
+                    </Badge>
+                  ) : isAdmin ? (
+                    <Badge className="border-transparent bg-primary text-primary-foreground hover:bg-primary/90">
+                      Admin
+                    </Badge>
                   ) : (
-                    <Select value={user.role} onValueChange={handleRoleChange}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="user">User</SelectItem>
-                        <SelectItem value="admin">Admin</SelectItem>
-                        <SelectItem value="owner">Owner</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Badge variant="outline" className="border-slate-200 text-slate-600">
+                      {`User · ${
+                        ACCESS_LEVELS.find((entry) => entry.id === activeLevel)?.label ?? "Custom"
+                      }`}
+                    </Badge>
                   )}
                 </div>
               </div>
@@ -1051,38 +1027,65 @@ function PermissionEditorSheet({
 
             {/* Scrollable body */}
             <div className="flex-1 space-y-6 overflow-y-auto px-6 py-6">
-              {/* Template presets */}
-              <div className="space-y-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground">Presets</h3>
-                  <p className="text-xs text-muted-foreground">
-                    Apply a starting point, then fine-tune below.
-                  </p>
+              {/* Access level — the owner has no level to set. */}
+              {isOwner ? (
+                <div className="flex items-start gap-3 rounded-lg border border-border bg-muted p-4">
+                  <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-medium text-foreground">
+                      Owners have full access
+                    </p>
+                    <p className="text-xs text-foreground">
+                      Ownership transfer isn&apos;t available yet.
+                    </p>
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {TEMPLATE_CHIPS.map((template) => {
-                    const active = activeTemplate === template.id
-                    const busy = applyingTemplate === template.id
-                    return (
-                      <button
-                        key={template.id}
-                        type="button"
-                        disabled={isAdmin || !!applyingTemplate}
-                        onClick={() => handleApplyTemplate(template.id)}
-                        className={cn(
-                          "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-                          active
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : "border-slate-200 bg-background text-slate-600 hover:border-foreground/30 hover:bg-muted hover:text-foreground",
-                        )}
-                      >
-                        {busy && <Loader2 className="h-3 w-3 animate-spin" />}
-                        {template.label}
-                      </button>
-                    )
-                  })}
+              ) : (
+                <div className="space-y-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground">Access level</h3>
+                    <p className="text-xs text-muted-foreground">
+                      One click sets their role and permissions together.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                    {ACCESS_LEVELS.map((level) => {
+                      const active = activeLevel === level.id
+                      const busy = applyingLevel === level.id
+                      return (
+                        <button
+                          key={level.id}
+                          type="button"
+                          disabled={isSelf || !!applyingLevel}
+                          onClick={() => handleSetLevel(level.id)}
+                          className={cn(
+                            "flex flex-col items-start gap-0.5 rounded-lg border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+                            active
+                              ? "border-2 border-primary bg-primary/5"
+                              : "border-slate-200 bg-background hover:border-foreground/30 hover:bg-muted",
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "inline-flex items-center gap-1.5 text-sm font-medium",
+                              active ? "text-primary" : "text-foreground",
+                            )}
+                          >
+                            {busy && <Loader2 className="h-3 w-3 animate-spin" />}
+                            {level.label}
+                          </span>
+                          <span className="text-xs text-muted-foreground">{level.blurb}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {isSelf && (
+                    <p className="text-xs text-muted-foreground">
+                      You can&apos;t change your own access level.
+                    </p>
+                  )}
                 </div>
-              </div>
+              )}
 
               {/* Admin banner */}
               {isAdmin && (

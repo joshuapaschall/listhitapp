@@ -13,7 +13,8 @@ import { ensurePublicMediaUrls } from "@/utils/mms.server"
 import { normalizePhone, formatPhoneE164 } from "@/lib/dedup-utils"
 import { TELNYX_API_URL, telnyxHeaders } from "@/lib/telnyx"
 import { upsertAnonThread } from "@/services/thread-utils"
-import { resolveDefaultOrgId } from "@/lib/auth/default-org"
+import { resolveOrgIdByDid } from "@/lib/inbound-numbers"
+import { getPrimaryPinnedTelnyxOrgId } from "@/lib/providers/sms/routing"
 import { classifyInboundSms } from "@/lib/sms/opt-keywords"
 import { matchNegativeKeyword } from "@/lib/sms/negative-keywords"
 import { suppressBuyerSms } from "@/lib/sms/suppress"
@@ -80,9 +81,25 @@ export async function handleInboundSms(event: InboundSmsEvent): Promise<NextResp
   const intent = classifyInboundSms(text)
   const isStop = intent === "stop"
 
+  // Tenant first. The receiving DID is the only org signal an inbound webhook
+  // carries; Telnyx only ever serves the pinned owner org, so that is its sole
+  // fallback. Without an org we drop the message rather than let one phone
+  // number fan a thread (and a STOP) out across every tenant that holds it.
+  const inboundDidE164 = to ? formatPhoneE164(to) : null
+  const didOrgId = await resolveOrgIdByDid(inboundDidE164)
+  const orgId = didOrgId ?? (event.provider === "telnyx" ? getPrimaryPinnedTelnyxOrgId() : null)
+  if (!orgId) {
+    console.error("[inbound-sms] no org for inbound DID — dropping", {
+      provider: event.provider,
+      to,
+    })
+    return NextResponse.json({ received: true, dropped: "unknown_did" }, { status: 200 })
+  }
+
   const { data: buyers, error: buyerErr } = await supabaseAdmin
     .from("buyers")
     .select("id, can_receive_sms, blocked_at, org_id")
+    .eq("org_id", orgId)
     .or(orClause)
 
   if (buyerErr) {
@@ -98,23 +115,6 @@ export async function handleInboundSms(event: InboundSmsEvent): Promise<NextResp
 
   const buyerIds = buyers?.map((b) => b.id) ?? []
   const targetIds = buyerIds.length ? buyerIds : [null]
-  const buyerOrgById = new Map<string, string | null>(
-    (buyers ?? []).map((b) => [b.id, (b as any).org_id ?? null]),
-  )
-
-  // For an anonymous thread (no buyer match) resolve the owning org from the inbound
-  // DID (the number that was texted) so the thread is org-scoped. Null if unresolved.
-  const inboundDidE164 = to ? formatPhoneE164(to) : null
-  let anonOrgId: string | null = null
-  if (!buyerIds.length && inboundDidE164) {
-    const { data: didRow } = await supabaseAdmin
-      .from("inbound_numbers")
-      .select("org_id")
-      .eq("e164", inboundDidE164)
-      .eq("enabled", true)
-      .maybeSingle()
-    anonOrgId = didRow?.org_id ?? null
-  }
 
   let helpReplyThread: { id: string; buyerId: string } | null = null
 
@@ -139,23 +139,6 @@ export async function handleInboundSms(event: InboundSmsEvent): Promise<NextResp
       }
     }
 
-    // Org for the inbound thread + message: the buyer's org when known, else the
-    // org that owns the receiving DID (the anon path already stamps its own),
-    // else the validated env default. The column default is being dropped on
-    // these tables, so an unresolved org is now a hard NOT NULL failure — the
-    // env fallback is what keeps inbound SMS landing instead of 500-ing.
-    const inboundOrgId =
-      (buyerId ? buyerOrgById.get(buyerId) ?? null : null) ??
-      anonOrgId ??
-      resolveDefaultOrgId()
-
-    if (!inboundOrgId) {
-      console.error("❌ inbound org unresolved and no valid DEFAULT_ORG_ID — insert will fail", {
-        to,
-        buyerId,
-      })
-    }
-
     const { data: thread, error: threadErr } = buyerId
       ? await supabaseAdmin
           .from("message_threads")
@@ -168,16 +151,13 @@ export async function handleInboundSms(event: InboundSmsEvent): Promise<NextResp
               updated_at: new Date().toISOString(),
               deleted_at: null,
               preferred_from_number: preferredDid,
-              // Omit when unknown (never explicit null). With the GWH default
-              // dropped this raises NOT NULL — intentionally loud, not silent
-              // cross-tenant commingling.
-              ...(inboundOrgId ? { org_id: inboundOrgId } : {}),
+              org_id: orgId,
             },
             { onConflict: "buyer_id,phone_number" }
           )
           .select("id")
           .single()
-      : await upsertAnonThread(fromDigits, preferredDid, anonOrgId)
+      : await upsertAnonThread(fromDigits, preferredDid, orgId)
 
     if (threadErr || !thread) {
       console.error("❌ Thread upsert error", threadErr)
@@ -194,7 +174,7 @@ export async function handleInboundSms(event: InboundSmsEvent): Promise<NextResp
       provider_id: sid,
       is_bulk: false,
       media_urls: mediaUrls.length ? mediaUrls : null,
-      ...(inboundOrgId ? { org_id: inboundOrgId } : {}),
+      org_id: orgId,
     })
 
     if (msgErr) {
@@ -213,47 +193,44 @@ export async function handleInboundSms(event: InboundSmsEvent): Promise<NextResp
     // Real buyers only (skip anon threads). Non-blocking: never fail the webhook.
     if (buyerId) {
       try {
-        const orgId = buyerOrgById.get(buyerId) ?? null
-        if (orgId) {
-          const { data: threadState } = await supabaseAdmin
-            .from("message_threads")
-            .select("filtered_at, filter_overridden")
-            .eq("id", thread.id)
-            .maybeSingle()
-          const overridden = threadState?.filter_overridden === true
-          const nowIso = new Date().toISOString()
+        const { data: threadState } = await supabaseAdmin
+          .from("message_threads")
+          .select("filtered_at, filter_overridden")
+          .eq("id", thread.id)
+          .maybeSingle()
+        const overridden = threadState?.filter_overridden === true
+        const nowIso = new Date().toISOString()
 
-          if (isStop) {
-            // STOP is owned by the carrier classifier; here we just tuck the
-            // thread into Filtered. No keyword matching for STOP messages.
+        if (isStop) {
+          // STOP is owned by the carrier classifier; here we just tuck the
+          // thread into Filtered. No keyword matching for STOP messages.
+          if (!overridden) {
+            await supabaseAdmin
+              .from("message_threads")
+              .update({ filtered_at: nowIso, filtered_keyword_id: null })
+              .eq("id", thread.id)
+          }
+        } else {
+          const match = await matchNegativeKeyword(supabaseAdmin, orgId, text)
+          if (match) {
             if (!overridden) {
               await supabaseAdmin
                 .from("message_threads")
-                .update({ filtered_at: nowIso, filtered_keyword_id: null })
+                .update({ filtered_at: nowIso, filtered_keyword_id: match.keywordId })
                 .eq("id", thread.id)
             }
-          } else {
-            const match = await matchNegativeKeyword(supabaseAdmin, orgId, text)
-            if (match) {
-              if (!overridden) {
-                await supabaseAdmin
-                  .from("message_threads")
-                  .update({ filtered_at: nowIso, filtered_keyword_id: match.keywordId })
-                  .eq("id", thread.id)
-              }
-              if (match.action === "dnc") {
-                // SMS channel only — the reply arrived by SMS.
-                await suppressBuyerSms(buyerId, `keyword:"${match.keyword}"`)
-                await recordDncPhone(supabaseAdmin, orgId, from, "keyword", `keyword:"${match.keyword}"`)
-              }
-            } else if (threadState?.filtered_at && !overridden) {
-              // Auto-resurface: they messaged again with no matching keyword.
-              // The thread upsert already set unread: true, so it returns as unread.
-              await supabaseAdmin
-                .from("message_threads")
-                .update({ filtered_at: null, filtered_keyword_id: null })
-                .eq("id", thread.id)
+            if (match.action === "dnc") {
+              // SMS channel only — the reply arrived by SMS.
+              await suppressBuyerSms(buyerId, `keyword:"${match.keyword}"`)
+              await recordDncPhone(supabaseAdmin, orgId, from, "keyword", `keyword:"${match.keyword}"`)
             }
+          } else if (threadState?.filtered_at && !overridden) {
+            // Auto-resurface: they messaged again with no matching keyword.
+            // The thread upsert already set unread: true, so it returns as unread.
+            await supabaseAdmin
+              .from("message_threads")
+              .update({ filtered_at: null, filtered_keyword_id: null })
+              .eq("id", thread.id)
           }
         }
       } catch (filterErr) {
@@ -291,10 +268,7 @@ export async function handleInboundSms(event: InboundSmsEvent): Promise<NextResp
     try {
       for (const stopBuyerId of buyerIds) {
         await suppressBuyerSms(stopBuyerId, "stop_reply")
-        const stopOrgId = buyerOrgById.get(stopBuyerId) ?? null
-        if (stopOrgId) {
-          await recordDncPhone(supabaseAdmin, stopOrgId, from, "stop", "stop_reply")
-        }
+        await recordDncPhone(supabaseAdmin, orgId, from, "stop", "stop_reply")
       }
     } catch (stopErr) {
       console.error("[inbound-sms] STOP DNC recording failed (non-blocking)", stopErr)
@@ -359,8 +333,6 @@ export async function handleInboundSms(event: InboundSmsEvent): Promise<NextResp
           const providerId = json?.data?.id as string | undefined
 
           if (helpReplyThread) {
-            const helpTelnyxOrgId =
-              buyerOrgById.get(helpReplyThread.buyerId) ?? anonOrgId
             const { error: helpMsgErr } = await supabaseAdmin.from("messages").insert({
               thread_id: helpReplyThread.id,
               buyer_id: helpReplyThread.buyerId,
@@ -370,7 +342,7 @@ export async function handleInboundSms(event: InboundSmsEvent): Promise<NextResp
               body: replyText,
               provider_id: providerId,
               is_bulk: false,
-              ...(helpTelnyxOrgId ? { org_id: helpTelnyxOrgId } : {}),
+              org_id: orgId,
             })
 
             if (helpMsgErr) {
@@ -378,47 +350,33 @@ export async function handleInboundSms(event: InboundSmsEvent): Promise<NextResp
             }
           }
         } else {
-          // Twilio arm — resolve the org from the inbound DID (the number the
-          // buyer texted, seeded into inbound_numbers by T5b) and send through the
-          // provider abstraction (its Messaging Service is the sender).
-          const { data: didRow } = await supabaseAdmin
-            .from("inbound_numbers")
-            .select("org_id")
-            .eq("e164", fromNumber)
-            .eq("enabled", true)
-            .maybeSingle()
-          const helpOrgId = didRow?.org_id ?? null
-          if (!helpOrgId) {
-            console.warn("⚠️ HELP auto-reply skipped: no org resolved for inbound DID", {
-              fromNumber,
-            })
-          } else {
-            // Dynamic import mirrors the file's lazy-import style (suppress) and
-            // avoids any module-cycle risk with the provider layer.
-            const { resolveSmsProvider } = await import("@/lib/providers/sms")
-            const provider = await resolveSmsProvider(helpOrgId)
-            const result = await provider.sendMessage({
-              from: fromNumber,
-              to: toNumber,
-              text: replyText,
+          // Twilio arm — the org already came from the inbound DID above; send
+          // through the provider abstraction (its Messaging Service is the sender).
+          // Dynamic import mirrors the file's lazy-import style (suppress) and
+          // avoids any module-cycle risk with the provider layer.
+          const { resolveSmsProvider } = await import("@/lib/providers/sms")
+          const provider = await resolveSmsProvider(orgId)
+          const result = await provider.sendMessage({
+            from: fromNumber,
+            to: toNumber,
+            text: replyText,
+          })
+
+          if (helpReplyThread) {
+            const { error: helpMsgErr } = await supabaseAdmin.from("messages").insert({
+              thread_id: helpReplyThread.id,
+              buyer_id: helpReplyThread.buyerId,
+              direction: "outbound",
+              from_number: fromNumber,
+              to_number: toNumber,
+              body: replyText,
+              provider_id: result.id,
+              is_bulk: false,
+              org_id: orgId,
             })
 
-            if (helpReplyThread) {
-              const { error: helpMsgErr } = await supabaseAdmin.from("messages").insert({
-                thread_id: helpReplyThread.id,
-                buyer_id: helpReplyThread.buyerId,
-                direction: "outbound",
-                from_number: fromNumber,
-                to_number: toNumber,
-                body: replyText,
-                provider_id: result.id,
-                is_bulk: false,
-                org_id: helpOrgId,
-              })
-
-              if (helpMsgErr) {
-                console.error("❌ Failed to record HELP auto-reply", helpMsgErr)
-              }
+            if (helpMsgErr) {
+              console.error("❌ Failed to record HELP auto-reply", helpMsgErr)
             }
           }
         }

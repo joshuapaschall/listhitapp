@@ -8,6 +8,7 @@ import { CallProvider } from "@/components/voice/CallProvider"
 import { NotificationsProvider } from "@/hooks/use-notifications"
 import { NowProvider } from "@/hooks/use-now"
 import PasswordChangeGuard from "@/components/auth/PasswordChangeGuard"
+import OrgRequiredGuard from "@/components/auth/OrgRequiredGuard"
 import useRealtimeNotifications from "@/hooks/use-realtime-notifications"
 import { SessionProvider } from "@/hooks/use-session"
 
@@ -46,7 +47,11 @@ export default function ClientProviders({
               {/* Inside SessionProvider, outside CallProvider: a user who still
                   owes us a password should not provision telephony first. */}
               <PasswordChangeGuard>
-                <CallProvider>{children}</CallProvider>
+                {/* Nested inside, so a pending password change wins over
+                    onboarding and telephony waits for both. */}
+                <OrgRequiredGuard>
+                  <CallProvider>{children}</CallProvider>
+                </OrgRequiredGuard>
               </PasswordChangeGuard>
               <Toaster richColors position="top-right" />
             </NowProvider>

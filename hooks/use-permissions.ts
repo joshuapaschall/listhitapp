@@ -13,12 +13,17 @@ type PermissionRow = {
 type ProfileRow = {
   role: string | null
   must_change_password: boolean | null
+  org_id: string | null
 }
 
 type PermissionsData = {
   role: string
   granted: PermissionKey[]
   mustChangePassword: boolean
+  // null = the profile row itself hasn't been read yet, which is different from
+  // "read it, and there is no org". Only the latter may trigger onboarding.
+  orgId: string | null
+  profileLoaded: boolean
 }
 
 export function usePermissions() {
@@ -40,7 +45,7 @@ export function usePermissions() {
       const [profileResult, permissionsResult] = await Promise.all([
         supabase
           .from("profiles")
-          .select("role, must_change_password")
+          .select("role, must_change_password, org_id")
           .eq("id", userId!)
           .maybeSingle<ProfileRow>(),
         supabase
@@ -61,6 +66,8 @@ export function usePermissions() {
         role: profileResult.data?.role ?? "user",
         granted: grantedKeys,
         mustChangePassword: profileResult.data?.must_change_password === true,
+        orgId: profileResult.data?.org_id ?? null,
+        profileLoaded: Boolean(profileResult.data),
       }
     },
   })
@@ -68,6 +75,10 @@ export function usePermissions() {
   const role = query.data?.role ?? "user"
   const isAdmin = role === "admin" || role === "owner"
   const mustChangePassword = query.data?.mustChangePassword ?? false
+  // Unknown until a profile row is actually in hand, so a guard reading this
+  // mid-flight never redirects a user who does have an org.
+  const profileLoaded = query.data?.profileLoaded === true
+  const hasOrg = profileLoaded && Boolean(query.data?.orgId)
 
   const granted = useMemo(
     () => new Set<PermissionKey>(query.data?.granted ?? []),
@@ -94,7 +105,9 @@ export function usePermissions() {
       can,
       isAdmin,
       mustChangePassword,
+      hasOrg,
+      profileLoaded,
     }),
-    [can, isAdmin, loading, mustChangePassword, role],
+    [can, hasOrg, isAdmin, loading, mustChangePassword, profileLoaded, role],
   )
 }

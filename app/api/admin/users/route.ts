@@ -8,6 +8,7 @@ import { resolveOrgIdForUser } from "@/lib/auth/org-context"
 type ProfileRow = {
   id: string
   email: string | null
+  full_name: string | null
   display_name: string | null
   role: string | null
   created_at: string | null
@@ -73,7 +74,7 @@ export async function GET() {
   // cross-org permission data is never returned.
   const profilesResult = await supabaseAdmin
     .from("profiles")
-    .select("id, email, display_name, role, created_at, must_change_password, invited_at")
+    .select("id, email, full_name, display_name, role, created_at, must_change_password, invited_at")
     .eq("org_id", orgId)
     .order("created_at", { ascending: true })
 
@@ -108,7 +109,7 @@ export async function GET() {
   const users = ((profilesResult.data ?? []) as ProfileRow[]).map((profile) => ({
     id: profile.id,
     email: profile.email ?? null,
-    fullName: profile.display_name ?? null,
+    fullName: profile.full_name || profile.display_name || null,
     displayName: profile.display_name ?? null,
     role: profile.role ?? "user",
     createdAt: profile.created_at ?? null,

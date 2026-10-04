@@ -6,6 +6,8 @@ global.fetch = fetchMock
 
 const buyers: any[] = []
 const consents: any[] = []
+const siteEvents: any[] = []
+const PINNED_ORG = "00000000-0000-4000-8000-000000000001"
 let idSeq = 1
 
 const supabaseAdmin = {
@@ -27,9 +29,11 @@ const supabaseAdmin = {
       }
     }
     if (table === "buyer_consents") return { insert: async (data: any) => { consents.push(data); return { data, error: null } } }
+    // The lead analytics write is no longer conditional — the org is always known.
+    if (table === "site_events") return { insert: async (data: any) => { siteEvents.push(data); return { data, error: null } } }
     // resolveSiteByHost queries site_domains/sites to scope the lead to an org.
-    // georgiawholesalehomes.com is treated as a static/legacy origin, so no site
-    // need resolve — return no match and the route falls back to the default org.
+    // georgiawholesalehomes.com is a static/legacy origin, so no site resolves
+    // and the route falls back to the single pinned Telnyx owner org.
     if (table === "site_domains" || table === "sites") {
       const q: any = { select: () => q, eq: () => q, maybeSingle: async () => ({ data: null, error: null }) }
       return q
@@ -60,6 +64,7 @@ describe("public buyers signup", () => {
   beforeEach(() => {
     buyers.length = 0
     consents.length = 0
+    siteEvents.length = 0
     idSeq = 1
     fetchMock.mockReset().mockImplementation(async (url: string) => {
       if (url.includes("number_lookup")) return new Response(JSON.stringify({ data: { carrier: { type: "mobile", name: "x" } } }), { status: 200 })
@@ -70,6 +75,13 @@ describe("public buyers signup", () => {
     process.env.TELNYX_MESSAGING_PROFILE_ID = "mp"
     process.env.DEFAULT_OUTBOUND_DID = "+15550001111"
     process.env.DEBOUNCE_API_KEY = "d"
+    // Static origins now resolve their org from the single pinned owner org
+    // instead of PUBLIC_SIGNUP_DEFAULT_ORG_ID.
+    process.env.TELNYX_PINNED_ORG_IDS = PINNED_ORG
+  })
+
+  afterEach(() => {
+    delete process.env.TELNYX_PINNED_ORG_IDS
   })
 
   test("new buyer uses canonical tags", async () => {
