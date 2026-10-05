@@ -14,6 +14,7 @@ let nextInsertBehavior: {
   // For bulk insert (.select() without .single())
   bulk?: () => Promise<{ data: FakeRow[] | null; error: unknown }>
 } = {}
+const TEST_ORG = "00000000-0000-4000-8000-00000000000a"
 let insertCount = 0
 let bulkInsertCount = 0
 
@@ -85,7 +86,7 @@ describe("createShortLink", () => {
       error: null,
     })
 
-    const result = await createShortLink({ targetUrl: "https://example.com/target" })
+    const result = await createShortLink({ targetUrl: "https://example.com/target", orgId: TEST_ORG })
     expect(result).toEqual({
       id: "row-1",
       slug: "Abc23xy",
@@ -114,7 +115,7 @@ describe("createShortLink", () => {
         error: null,
       }
     }
-    const result = await createShortLink({ targetUrl: "https://x.test" })
+    const result = await createShortLink({ targetUrl: "https://x.test", orgId: TEST_ORG })
     expect(result.slug).toBe("ABCxyz9")
     expect(calls).toBe(3)
   })
@@ -127,7 +128,7 @@ describe("createShortLink", () => {
       return { data: null, error: { code: "23505", message: "dup" } }
     }
     await expect(
-      createShortLink({ targetUrl: "https://x.test", slug: "MYSLUG1" }),
+      createShortLink({ targetUrl: "https://x.test", slug: "MYSLUG1", orgId: TEST_ORG }),
     ).rejects.toMatchObject({ code: "23505" })
     expect(calls).toBe(1)
   })
@@ -145,8 +146,8 @@ describe("createShortLinksBulk", () => {
     })
 
     const results = await createShortLinksBulk([
-      { targetUrl: "https://a.test" },
-      { targetUrl: "https://b.test" },
+      { targetUrl: "https://a.test", orgId: TEST_ORG },
+      { targetUrl: "https://b.test", orgId: TEST_ORG },
     ])
     expect(results).toHaveLength(2)
     expect(results[0]?.slug).toBe("AAAA111")
@@ -178,8 +179,8 @@ describe("createShortLinksBulk", () => {
     }
 
     const results = await createShortLinksBulk([
-      { targetUrl: "https://t1.test" },
-      { targetUrl: "https://t2.test" },
+      { targetUrl: "https://t1.test", orgId: TEST_ORG },
+      { targetUrl: "https://t2.test", orgId: TEST_ORG },
     ])
     expect(bulkAttempts).toBe(3)
     expect(results).toHaveLength(2)
@@ -199,7 +200,7 @@ describe("createShortLinksBulk", () => {
       error: { code: "23502", message: "not null violation" },
     })
 
-    const results = await createShortLinksBulk([{ targetUrl: "https://fail.test" }])
+    const results = await createShortLinksBulk([{ targetUrl: "https://fail.test", orgId: TEST_ORG }])
     expect(results).toEqual([null])
   })
 })

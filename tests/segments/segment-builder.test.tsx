@@ -1,5 +1,6 @@
 /** @jest-environment jsdom */
 import { render, screen, fireEvent } from "@testing-library/react"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import ConditionRow from "../../components/segments/condition-row"
 import type { AttributeCondition, BehavioralCondition } from "../../lib/segments/types"
 
@@ -50,15 +51,22 @@ async function openByValue(text: string) {
 
 const optionTexts = (options: HTMLElement[]) => options.map((o) => o.textContent?.trim() ?? "")
 
+// TagSelector invalidates the ["tags"] query after creating a tag, so it needs a
+// QueryClient in context even when the test never creates one.
 function renderRow(condition: AttributeCondition | BehavioralCondition, opts: { channel?: "email" | "sms" | "both"; allowThisCampaign?: boolean } = {}) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
   return render(
-    <ConditionRow
-      condition={condition}
-      channel={opts.channel ?? "email"}
-      allowThisCampaign={opts.allowThisCampaign}
-      onChange={noop}
-      onRemove={noop}
-    />,
+    <QueryClientProvider client={queryClient}>
+      <ConditionRow
+        condition={condition}
+        channel={opts.channel ?? "email"}
+        allowThisCampaign={opts.allowThisCampaign}
+        onChange={noop}
+        onRemove={noop}
+      />
+    </QueryClientProvider>,
   )
 }
 

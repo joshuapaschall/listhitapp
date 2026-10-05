@@ -117,12 +117,19 @@ export async function sendOfferStatusNotification(offer: OfferWithRelations, new
   const offerPrice = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(offer.offer_price || 0)
   const offerType = offer.offer_type === "cash" ? "Cash" : "Financing"
 
-  await insertNotification({
-    type: `offer_${newStatus}`,
-    title: `Offer ${newStatus}: ${address}`,
-    body: `${buyer?.full_name || "A buyer"} — ${offerPrice}`,
-    metadata: { offer_id: offer.id, buyer_id: offer.buyer_id, property_id: offer.property_id },
-  })
+  if (!offer.org_id) {
+    console.warn("[offer-notifications] offer has no org — notification skipped", {
+      offerId: offer.id,
+    })
+  } else {
+    await insertNotification({
+      type: `offer_${newStatus}`,
+      title: `Offer ${newStatus}: ${address}`,
+      orgId: offer.org_id,
+      body: `${buyer?.full_name || "A buyer"} — ${offerPrice}`,
+      metadata: { offer_id: offer.id, buyer_id: offer.buyer_id, property_id: offer.property_id },
+    })
+  }
 
   if (!buyer) return
 

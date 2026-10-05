@@ -131,7 +131,7 @@ async function pauseSmsCampaignForSafety(
   const supabase = requireAdmin()
   const { data: campaign } = await supabase
     .from("campaigns")
-    .select("status")
+    .select("status, org_id")
     .eq("id", campaignId)
     .maybeSingle()
 
@@ -153,9 +153,17 @@ async function pauseSmsCampaignForSafety(
     .eq("campaign_id", campaignId)
     .in("status", ["pending", "processing"])
 
+  if (!campaign?.org_id) {
+    console.warn("[sms-campaign-sender] campaign has no org — safety-pause notification skipped", {
+      campaignId,
+    })
+    return
+  }
+
   await insertNotification({
     type: "campaign_paused_safety",
     title: "SMS campaign paused for safety",
+    orgId: campaign.org_id,
     body: `Auto-paused: ${verdict.reason} rate exceeded the SMS safety threshold.`,
     metadata: {
       campaignId,

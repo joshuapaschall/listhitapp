@@ -5,6 +5,7 @@ import { verifyTelnyxRequest } from "@/lib/telnyx";
 import { formatPhoneE164 } from "@/lib/call-validation";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { resolveOrgIdByDid } from "@/lib/inbound-numbers";
+import { getPrimaryPinnedTelnyxOrgId } from "@/lib/providers/sms/routing";
 import { getWebRTCSipUri } from "@/lib/voice/webrtc-sip";
 import { bridgeCall, startRecording, playAudioUrl } from "@/lib/voice/call-control";
 import { getRoutingConfig } from "@/lib/voice/routing";
@@ -297,11 +298,19 @@ export async function POST(req: NextRequest) {
           callerBlockedAt = (b as any)?.blocked_at ?? null;
         }
         // Stamp the owning org so the org-scoped lookup can see this row under RLS.
-        // Null-safe: if we can't resolve it, leave it null (mirrors calls/record).
+        // Telnyx only ever serves the pinned owner org, so that is the fallback
+        // when the DID isn't in inbound_numbers. calls.org_id has no service-role
+        // default any more, so an unresolved org means we skip rather than write
+        // a NULL-tenant row.
         const orgDid = direction === "incoming" ? toRaw : String(payload?.from ?? "");
-        const callOrgId = await resolveOrgIdByDid(orgDid);
-        if (callControlId) {
-          await supabaseAdmin.from("calls").upsert(
+        const callOrgId = (await resolveOrgIdByDid(orgDid)) ?? getPrimaryPinnedTelnyxOrgId();
+        if (!callOrgId) {
+          console.error("[telnyx-voice] no org for call — skipping calls upsert", {
+            callControlId,
+            orgDid,
+          });
+        } else if (callControlId) {
+          const { error: callUpsertError } = await supabaseAdmin.from("calls").upsert(
             {
               call_sid: callControlId,
               direction: direction === "incoming" ? "inbound" : "outbound",
@@ -315,6 +324,9 @@ export async function POST(req: NextRequest) {
             },
             { onConflict: "call_sid" }
           );
+          if (callUpsertError) {
+            console.error("[telnyx-voice] calls upsert failed", callUpsertError);
+          }
         }
       } catch (e) {
         console.error("[telnyx-voice] call log insert failed", e);

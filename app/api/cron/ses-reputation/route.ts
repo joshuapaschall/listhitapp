@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { assertCronAuth } from "@/lib/cron-auth"
 import { evaluateAccountState, type AccountState } from "@/lib/email/deliverability-guard"
 import { insertNotification } from "@/lib/notifications"
+import { getPrimaryPinnedTelnyxOrgId } from "@/lib/providers/sms/routing"
 import { getSesAccountHealth } from "@/lib/ses-account"
 import { isGuardOverrideActive } from "@/lib/email/guard-override"
 import { supabaseAdmin } from "@/lib/supabase/admin"
@@ -124,7 +125,18 @@ export async function POST(request: NextRequest) {
 
     if (insertError) throw insertError
 
-    if (verdict.state === "frozen" && previousState !== "frozen") {
+    // SES reputation is an ACCOUNT-level signal, not a per-tenant one: AWS
+    // reports it for the whole sending account. Until Phase 2 gives each org its
+    // own sending identity there is no per-org reputation to attribute, so the
+    // alert goes to the platform operator's org.
+    const operatorOrgId = getPrimaryPinnedTelnyxOrgId()
+    if (!operatorOrgId) {
+      console.error(
+        "[ses-reputation] no platform operator org (TELNYX_PINNED_ORG_IDS must name exactly one) — reputation notifications skipped",
+      )
+    }
+
+    if (operatorOrgId && verdict.state === "frozen" && previousState !== "frozen") {
       const overridden = await isGuardOverrideActive()
       if (!overridden) {
         await pauseAllEmailSending()
@@ -132,6 +144,7 @@ export async function POST(request: NextRequest) {
       await insertNotification({
         type: "account_sending_frozen",
         title: overridden ? "Reputation still high (override active)" : "Email sending frozen",
+        orgId: operatorOrgId,
         body: overridden
           ? `Bounce/complaint rate still above safe levels (${verdict.reason}), but a manual override is keeping sending on. Clean your list — the override expires soon.`
           : `Account reputation guard tripped (${verdict.reason}). All campaigns paused.`,
@@ -143,10 +156,11 @@ export async function POST(request: NextRequest) {
           overrideActive: overridden,
         },
       })
-    } else if (verdict.state === "warn" && previousState === "healthy") {
+    } else if (operatorOrgId && verdict.state === "warn" && previousState === "healthy") {
       await insertNotification({
         type: "account_reputation_warn",
         title: "Email reputation warning",
+        orgId: operatorOrgId,
         body: `Approaching limits (${verdict.reason}).`,
         metadata: {
           reason: verdict.reason,

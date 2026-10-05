@@ -241,12 +241,19 @@ export async function sendShowingConfirmation(showing: Showing, buyer?: Buyer | 
     timeZone: tz,
   })
 
-  await insertNotification({
-    type: "showing_scheduled",
-    title: `Showing scheduled: ${property?.address || "Unknown property"}`,
-    body: `${buyer?.full_name || "A buyer"} — ${formattedDateTime}`,
-    metadata: { showing_id: showing.id, buyer_id: showing.buyer_id, property_id: showing.property_id },
-  })
+  if (!showing.org_id) {
+    console.warn("[showing-notifications] showing has no org — notification skipped", {
+      showingId: showing.id,
+    })
+  } else {
+    await insertNotification({
+      type: "showing_scheduled",
+      title: `Showing scheduled: ${property?.address || "Unknown property"}`,
+      orgId: showing.org_id,
+      body: `${buyer?.full_name || "A buyer"} — ${formattedDateTime}`,
+      metadata: { showing_id: showing.id, buyer_id: showing.buyer_id, property_id: showing.property_id },
+    })
+  }
 
   if (buyer) {
     await sendShowingSms(
@@ -272,12 +279,19 @@ export async function sendShowingReminder(showing: Showing, buyer?: Buyer | null
     timeZone: tz,
   })
 
-  await insertNotification({
-    type: "showing_reminder",
-    title: `Showing reminder: ${property?.address || "Unknown property"}`,
-    body: `${buyer?.full_name || "A buyer"} — ${formattedDateTime}`,
-    metadata: { showing_id: showing.id, buyer_id: showing.buyer_id, property_id: showing.property_id },
-  })
+  if (!showing.org_id) {
+    console.warn("[showing-notifications] showing has no org — notification skipped", {
+      showingId: showing.id,
+    })
+  } else {
+    await insertNotification({
+      type: "showing_reminder",
+      title: `Showing reminder: ${property?.address || "Unknown property"}`,
+      orgId: showing.org_id,
+      body: `${buyer?.full_name || "A buyer"} — ${formattedDateTime}`,
+      metadata: { showing_id: showing.id, buyer_id: showing.buyer_id, property_id: showing.property_id },
+    })
+  }
 
   if (buyer) {
     await sendShowingSms(

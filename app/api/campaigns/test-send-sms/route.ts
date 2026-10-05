@@ -60,6 +60,7 @@ export async function POST(request: Request) {
       try {
         const link = await createShortLink({
           targetUrl: url,
+          orgId,
           campaignId,
           createdBy: user.id,
           tags: ["test", `campaign:${campaignId}`],

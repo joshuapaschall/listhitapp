@@ -33,6 +33,26 @@ export async function getGmailClient(userId: string) {
 
 const supabase = supabaseAdmin
 
+/**
+ * The owning org for a Gmail-connected user.
+ *
+ * Deliberately NOT lib/auth/org-context.ts: that pulls in next/headers, and
+ * scripts/gmail-sync.ts imports this module outside a request context.
+ */
+async function orgIdForUser(userId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("org_id")
+    .eq("id", userId)
+    .maybeSingle()
+
+  if (error) {
+    console.error("[gmail-api] org lookup failed", { userId, error })
+    return null
+  }
+  return data?.org_id ?? null
+}
+
 function mapFolderToLabelId(folder: string): string | null {
   if (folder === "allMail" || folder === "ALL_MAIL") return null
   const upper = folder.toUpperCase()
@@ -81,6 +101,9 @@ export async function listThreads(
   resultSizeEstimate: number
 }> {
   const gmail = await getGmailClient(userId)
+  // Resolved once per call: gmail_threads / email_threads lose their GWH org_id
+  // default, so every row this function writes has to name its tenant.
+  const orgId = await orgIdForUser(userId)
   const isAllMail = folder === "allMail" || folder === "ALL_MAIL"
   const normalized = isAllMail ? null : (mapFolderToLabelId(folder) || null)
 
@@ -116,9 +139,17 @@ export async function listThreads(
         starred: labels.has("STARRED"),
         unread: labels.has("UNREAD"),
         updated_at: new Date().toISOString(),
+        ...(orgId ? { org_id: orgId } : {}),
       }
     })
-    await supabase.from("gmail_threads").upsert(rows)
+    if (!orgId) {
+      console.warn("[gmail-api] no org for user — skipping gmail_threads upsert", { userId })
+    } else {
+      const { error: threadsError } = await supabase.from("gmail_threads").upsert(rows)
+      if (threadsError) {
+        console.error("[gmail-api] gmail_threads upsert failed", { userId, error: threadsError })
+      }
+    }
 
     const addressSet = new Set<string>()
     const threadMeta: Record<string, { subject: string | null; snippet: string | null; starred: boolean; unread: boolean; emails: string[] }> = {}
@@ -151,10 +182,13 @@ export async function listThreads(
     })
 
     let buyerMap: Record<string, string> = {}
-    if (addressSet.size) {
+    // Org-scoped: matching an address against every tenant's buyers would file
+    // this user's threads against another org's buyer.
+    if (addressSet.size && orgId) {
       const { data } = await supabase
         .from("buyers")
         .select("id,email_norm")
+        .eq("org_id", orgId)
         .in("email_norm", Array.from(addressSet))
       buyerMap = Object.fromEntries((data || []).map((b: any) => [b.email_norm, b.id]))
     }
@@ -173,12 +207,16 @@ export async function listThreads(
             starred: meta.starred,
             unread: meta.unread,
             updated_at: new Date().toISOString(),
+            ...(orgId ? { org_id: orgId } : {}),
           })
         }
       }
     }
-    if (emailRows.length) {
-      await supabase.from("email_threads").upsert(emailRows)
+    if (emailRows.length && orgId) {
+      const { error: emailThreadsError } = await supabase.from("email_threads").upsert(emailRows)
+      if (emailThreadsError) {
+        console.error("[gmail-api] email_threads upsert failed", { userId, error: emailThreadsError })
+      }
     }
 
     threads = threads.map((t, i) => ({ ...t, starred: rows[i].starred, unread: rows[i].unread }))
@@ -208,14 +246,23 @@ export async function getThread(
     }
     const starred = labels.has("STARRED")
     const unread = labels.has("UNREAD")
-    await supabase.from("gmail_threads").upsert({
-      id: data.id,
-      snippet: data.snippet || null,
-      history_id: data.historyId || null,
-      starred,
-      unread,
-      updated_at: new Date().toISOString(),
-    })
+    const orgId = await orgIdForUser(userId)
+    if (!orgId) {
+      console.warn("[gmail-api] no org for user — skipping gmail_threads upsert", { userId })
+    } else {
+      const { error: upsertError } = await supabase.from("gmail_threads").upsert({
+        id: data.id,
+        org_id: orgId,
+        snippet: data.snippet || null,
+        history_id: data.historyId || null,
+        starred,
+        unread,
+        updated_at: new Date().toISOString(),
+      })
+      if (upsertError) {
+        console.error("[gmail-api] gmail_threads upsert failed", { userId, error: upsertError })
+      }
+    }
     return { ...data, starred, unread }
   }
   return data

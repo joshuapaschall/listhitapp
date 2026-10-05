@@ -25,6 +25,7 @@ export async function POST(request: NextRequest) {
     const result = await createShortLink({
       targetUrl: originalURL,
       slug: customSlug || undefined,
+      orgId,
     })
 
     // Maintain back-compat response shape with the old Short.io-backed endpoint.

@@ -183,6 +183,7 @@ export async function DELETE(_: NextRequest, context: RouteContext) {
   await insertNotification({
     type: "offer_deleted",
     title: "Offer deleted",
+    orgId,
     metadata: { offer_id: id, buyer_id: offer?.buyer_id, property_id: offer?.property_id },
   })
 

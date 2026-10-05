@@ -201,6 +201,7 @@ export interface PropertyBuyer {
 
 export interface Offer {
   id: string
+  org_id?: string | null
   buyer_id?: string | null
   property_id?: string | null
   offer_type?: string | null
@@ -265,6 +266,7 @@ export interface OfferWithRelations extends Offer {
 
 export interface Showing {
   id: string
+  org_id?: string | null
   property_id?: string | null
   buyer_id?: string | null
   scheduled_at?: string

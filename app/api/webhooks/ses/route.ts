@@ -197,11 +197,59 @@ async function confirmSubscription(subscribeUrl?: string) {
   }
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * Which tenant does this SES event belong to? The tag is authoritative (we set
+ * it when sending), then we walk back through the rows the event references.
+ * email_events.org_id has no service-role default, so an unresolved org means
+ * we skip the insert rather than write a NULL-tenant row.
+ */
+async function resolveEventOrgId(ctx: {
+  orgIdTag?: string
+  recipientId?: string
+  campaignId?: string
+  buyerId?: string
+}): Promise<string | null> {
+  if (ctx.orgIdTag && UUID_RE.test(ctx.orgIdTag)) return ctx.orgIdTag
+  if (!supabase) return null
+
+  if (ctx.recipientId) {
+    const { data } = await supabase
+      .from("campaign_recipients")
+      .select("org_id")
+      .eq("id", ctx.recipientId)
+      .maybeSingle()
+    if (data?.org_id) return data.org_id
+  }
+
+  if (ctx.campaignId) {
+    const { data } = await supabase
+      .from("campaigns")
+      .select("org_id")
+      .eq("id", ctx.campaignId)
+      .maybeSingle()
+    if (data?.org_id) return data.org_id
+  }
+
+  if (ctx.buyerId) {
+    const { data } = await supabase
+      .from("buyers")
+      .select("org_id")
+      .eq("id", ctx.buyerId)
+      .maybeSingle()
+    if (data?.org_id) return data.org_id
+  }
+
+  return null
+}
+
 async function storeEmailEvent(input: {
   messageId?: string
   snsMessageId?: string
   eventType: string
   payload: any
+  orgId: string | null
   campaignId?: string
   recipientId?: string
   buyerId?: string
@@ -209,7 +257,19 @@ async function storeEmailEvent(input: {
   eventTs?: string | null
 }) {
   if (!supabase) return
-  await supabase
+  if (!input.orgId) {
+    log("warn", "[ses] email_event org unresolved — skipped", {
+      messageId: input.messageId,
+      snsMessageId: input.snsMessageId,
+      eventType: input.eventType,
+      campaignId: input.campaignId,
+      recipientId: input.recipientId,
+      buyerId: input.buyerId,
+    })
+    return
+  }
+
+  const { error } = await supabase
     .from("email_events")
     .upsert(
       {
@@ -217,6 +277,7 @@ async function storeEmailEvent(input: {
         sns_message_id: input.snsMessageId || null,
         message_id: input.messageId || null,
         event_type: input.eventType || null,
+        org_id: input.orgId,
         campaign_id: input.campaignId || null,
         recipient_id: input.recipientId || null,
         buyer_id: input.buyerId || null,
@@ -226,6 +287,14 @@ async function storeEmailEvent(input: {
       },
       { onConflict: "sns_message_id", ignoreDuplicates: true },
     )
+
+  if (error) {
+    log("warn", "Failed to store email event", {
+      snsMessageId: input.snsMessageId,
+      eventType: input.eventType,
+      error,
+    })
+  }
 }
 
 async function updateRecipient(
@@ -412,14 +481,23 @@ export async function POST(req: NextRequest) {
   const recipientId = extractTagValue(tags, "recipient_id")
   const buyerIdTag = extractTagValue(tags, "buyer_id")
   const campaignId = extractTagValue(tags, "campaign_id")
+  const orgIdTag = extractTagValue(tags, "org_id")
   const clickUrl = (payload as any)?.click?.url ?? (payload as any)?.click?.link ?? null
   const skipClickUpdate = evt === "click" && typeof clickUrl === "string" && clickUrl.includes("/api/unsubscribe")
+
+  const eventOrgId = await resolveEventOrgId({
+    orgIdTag,
+    recipientId,
+    campaignId,
+    buyerId: buyerIdTag,
+  })
 
   await storeEmailEvent({
     messageId,
     snsMessageId: snsMessage.MessageId,
     eventType: evt,
     payload,
+    orgId: eventOrgId,
     campaignId,
     recipientId,
     buyerId: buyerIdTag,

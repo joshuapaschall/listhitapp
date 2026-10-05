@@ -111,6 +111,44 @@ export async function importBuyersFromCsv(
     if (t.name) tagMap[t.name.toLowerCase()] = t.name
   })
 
+  // Tags in the CSV (or picked as extras) that the org has never seen used to be
+  // dropped on the floor, because a name not in the vocabulary failed the
+  // tagMap lookup. Create them first instead, so the import keeps them. org_id
+  // and color come from the column defaults.
+  const incomingTagNames = new Set<string>()
+  const collectTagName = (raw: unknown) => {
+    if (typeof raw !== "string") return
+    const name = raw.trim()
+    if (!name) return
+    if (tagMap[name.toLowerCase()]) return
+    incomingTagNames.add(name)
+  }
+  const csvTagField = mapping.tags
+  if (csvTagField && csvTagField !== "none") {
+    for (const row of csvRows) {
+      for (const name of parseArray(row[csvTagField])) collectTagName(name)
+    }
+  }
+  for (const name of extraTags) collectTagName(name)
+
+  if (incomingTagNames.size) {
+    const names = Array.from(incomingTagNames)
+    const { data: createdTags, error: tagInsertError } = await supabase
+      .from("tags")
+      .insert(names.map((name) => ({ name })))
+      .select("name")
+
+    // 23505 = another import created the same tag first. Harmless: the names
+    // are added to the map below either way.
+    if (tagInsertError && (tagInsertError as { code?: string }).code !== "23505") {
+      console.error("[import] failed to create new tags", tagInsertError)
+    }
+
+    for (const name of createdTags?.map((t: { name: string }) => t.name) ?? names) {
+      tagMap[name.toLowerCase()] = name
+    }
+  }
+
   const buyersToInsert = csvRows.map((row: any, index: number) => {
     const obj: Record<string, any> = {}
 

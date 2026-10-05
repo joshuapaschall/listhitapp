@@ -48,9 +48,11 @@ describe("short links route", () => {
       path: "abc1234",
       idString: "row-1",
     })
+    // short_links.org_id has no service-role default; the route names the org.
     expect(createMock).toHaveBeenCalledWith({
       targetUrl: "https://example.com",
       slug: undefined,
+      orgId: "org1",
     })
   })
 
