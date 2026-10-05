@@ -42,6 +42,7 @@ export async function GET(request: Request) {
       const { data, error } = await supabase
         .from("tags")
         .select("name")
+        .eq("org_id", orgId)
         .order("name", { ascending: true })
         .limit(OPTION_LIMIT)
       if (error) throw error

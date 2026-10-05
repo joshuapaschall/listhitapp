@@ -46,6 +46,12 @@ export interface CreateShortLinkInput {
   tags?: string[]
   /** Optional auto-expiry timestamp. */
   expiresAt?: Date | string | null
+  /**
+   * Owning org. Required on the server: this module uses the service-role
+   * client, for which short_links.org_id has no default. Omit it in the browser
+   * — there the session client picks the org up from auth_org_id().
+   */
+  orgId?: string
 }
 
 export interface CreatedShortLink {
@@ -58,6 +64,17 @@ export interface CreatedShortLink {
 }
 
 /**
+ * short_links.org_id has no column default for the service role, so a server-side
+ * create must name its org or the insert lands with a NULL tenant. In the browser
+ * the session client fills it from auth_org_id(), so orgId stays optional there.
+ */
+function requireOrgIdOnServer(input: CreateShortLinkInput): string | undefined {
+  if (typeof window !== "undefined") return input.orgId
+  if (!input.orgId) throw new Error("orgId required")
+  return input.orgId
+}
+
+/**
  * Create a single short link. Auto-retries up to 5 times on slug collision when no
  * custom slug is provided. If a custom slug is provided and collides, throws immediately.
  */
@@ -66,6 +83,7 @@ export async function createShortLink(
 ): Promise<CreatedShortLink> {
   const domain = (input.domain || getDefaultDomain()).toLowerCase()
   const customSlugProvided = Boolean(input.slug)
+  const orgId = requireOrgIdOnServer(input)
   let lastError: unknown = null
 
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -83,6 +101,7 @@ export async function createShortLink(
         input.expiresAt instanceof Date
           ? input.expiresAt.toISOString()
           : input.expiresAt ?? null,
+      ...(orgId ? { org_id: orgId } : {}),
     }
 
     const { data, error } = await supabase
@@ -134,11 +153,12 @@ export async function createShortLinksBulk(
 ): Promise<Array<CreatedShortLink | null>> {
   if (inputs.length === 0) return []
 
+  const orgIds = inputs.map((input) => requireOrgIdOnServer(input))
   const defaultDomain = getDefaultDomain()
 
   // Try bulk insert with whole-batch retry on collision
   for (let attempt = 0; attempt < 3; attempt++) {
-    const rows = inputs.map((input) => ({
+    const rows = inputs.map((input, index) => ({
       slug: input.slug || generateRawSlug(),
       domain: (input.domain || defaultDomain).toLowerCase(),
       target_url: input.targetUrl,
@@ -151,6 +171,7 @@ export async function createShortLinksBulk(
         input.expiresAt instanceof Date
           ? input.expiresAt.toISOString()
           : input.expiresAt ?? null,
+      ...(orgIds[index] ? { org_id: orgIds[index] } : {}),
     }))
 
     const { data, error } = await supabase
@@ -210,16 +231,19 @@ export async function createShortLinksBulk(
  */
 export async function replaceUrlsWithShortLinks(
   html: string,
-  opts: { anchorHrefOnly?: boolean; campaignId?: string } = {},
+  // orgId is required: this runs server-side on the service-role client, so
+  // every link it creates has to name its tenant.
+  opts: { orgId: string; anchorHrefOnly?: boolean; campaignId?: string },
 ): Promise<{ html: string; key: string | null }> {
   if (opts.anchorHrefOnly) {
-    return replaceAnchorHrefsWithShortLinks(html, opts.campaignId)
+    return replaceAnchorHrefsWithShortLinks(html, opts.orgId, opts.campaignId)
   }
-  return replaceAllUrlsWithShortLinks(html, opts.campaignId)
+  return replaceAllUrlsWithShortLinks(html, opts.orgId, opts.campaignId)
 }
 
 async function replaceAnchorHrefsWithShortLinks(
   html: string,
+  orgId: string,
   campaignId?: string,
 ): Promise<{ html: string; key: string | null }> {
   const anchorRegex = buildAnchorHrefRegex()
@@ -236,6 +260,7 @@ async function replaceAnchorHrefsWithShortLinks(
     try {
       const result = await createShortLink({
         targetUrl: url,
+        orgId,
         campaignId: campaignId ?? null,
         tags: campaignId ? [`campaign:${campaignId}`] : [],
       })
@@ -258,6 +283,7 @@ async function replaceAnchorHrefsWithShortLinks(
 
 async function replaceAllUrlsWithShortLinks(
   html: string,
+  orgId: string,
   campaignId?: string,
 ): Promise<{ html: string; key: string | null }> {
   const regex = /(https?:\/\/[^\s"'>]+)/g
@@ -269,6 +295,7 @@ async function replaceAllUrlsWithShortLinks(
     try {
       const result = await createShortLink({
         targetUrl: url,
+        orgId,
         campaignId: campaignId ?? null,
         tags: campaignId ? [`campaign:${campaignId}`] : [],
       })

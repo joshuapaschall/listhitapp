@@ -52,6 +52,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       await insertNotification({
         type,
         title: `Showing ${updates.status}: ${updated.properties?.address || "Unknown property"}`,
+        orgId,
         body: `${updated.buyers?.full_name || "A buyer"}`,
         metadata: { showing_id: updated.id, buyer_id: updated.buyer_id, property_id: updated.property_id },
       })
@@ -83,6 +84,7 @@ export async function DELETE(_: NextRequest, context: RouteContext) {
   await insertNotification({
     type: "showing_deleted",
     title: "Showing deleted",
+    orgId,
     metadata: { showing_id: id, buyer_id: showing?.buyer_id, property_id: showing?.property_id },
   })
 

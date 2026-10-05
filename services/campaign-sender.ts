@@ -137,6 +137,9 @@ export interface EmailQueuePayload {
   contact?: EmailContactPayload
   contacts?: EmailContactPayload[]
   campaignId?: string
+  // Required. These rows are written with the service-role client, for which
+  // email_campaign_content / email_campaign_queue have no org_id default.
+  orgId: string
   fromEmail?: string
   fromName?: string
   replyTo?: string
@@ -278,6 +281,7 @@ export async function queueEmailCampaign(
       .upsert(
         {
           campaign_id: payload.campaignId,
+          org_id: payload.orgId,
           subject: payload.subject ?? "",
           html: stampedHtml,
           updated_at: new Date().toISOString(),
@@ -294,6 +298,7 @@ export async function queueEmailCampaign(
   const baseTime = scheduledFor.getTime()
   const rows = contacts.map((contact, idx) => ({
     campaign_id: payload.campaignId ?? null,
+    org_id: payload.orgId,
     recipient_id: contact.recipientId ?? null,
     buyer_id: contact.buyerId ?? null,
     to_email: contact.email,
@@ -430,7 +435,7 @@ async function pauseCampaignForSafety(
   const supabase = requireAdmin()
   const { data: campaign } = await supabase
     .from("campaigns")
-    .select("status")
+    .select("status, org_id")
     .eq("id", campaignId)
     .maybeSingle()
 
@@ -452,9 +457,17 @@ async function pauseCampaignForSafety(
     .eq("campaign_id", campaignId)
     .in("status", ["pending", "processing"])
 
+  if (!campaign?.org_id) {
+    console.warn("[campaign-sender] campaign has no org — safety-pause notification skipped", {
+      campaignId,
+    })
+    return
+  }
+
   await insertNotification({
     type: "campaign_paused_safety",
     title: "Campaign paused for safety",
+    orgId: campaign.org_id,
     body: `Auto-paused: ${verdict.reason} rate exceeded the safety threshold.`,
     metadata: {
       campaignId,
@@ -622,7 +635,10 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
       if (!emailShortlinksDisabled()) {
         try {
           const { replaceUrlsWithShortLinks } = await import("./shortlink-service")
-          const replaced = await replaceUrlsWithShortLinks(rawHtml, { anchorHrefOnly: true })
+          const replaced = await replaceUrlsWithShortLinks(rawHtml, {
+            orgId: (job as { org_id?: string | null }).org_id ?? payload.orgId,
+            anchorHrefOnly: true,
+          })
           rawHtml = replaced.html
         } catch (err) {
           console.error("Short.io replacement failed", err)
@@ -656,6 +672,9 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
         campaign_id: payload.campaignId,
         recipient_id: contact.recipientId,
         buyer_id: contact.buyerId,
+        // Threaded from the queue row so /api/webhooks/ses can stamp the event
+        // with its org without walking back through the recipient.
+        org_id: (job as { org_id?: string | null }).org_id ?? payload.orgId,
       }
       const providerId = await sendWithBackoff(
         contact.email,

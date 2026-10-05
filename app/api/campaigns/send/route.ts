@@ -368,6 +368,7 @@ export async function POST(request: NextRequest) {
       const pairMetadata: PairMeta[] = []
       const bulkInputs: Array<{
         targetUrl: string
+        orgId: string
         campaignId: string
         campaignRecipientId: string
         createdBy?: string | null
@@ -389,6 +390,7 @@ export async function POST(request: NextRequest) {
           })
           bulkInputs.push({
             targetUrl: url,
+            orgId: campaign.org_id,
             campaignId,
             campaignRecipientId: r.id,
             createdBy: campaign.user_id ?? campaign.created_by ?? null,
@@ -490,6 +492,7 @@ export async function POST(request: NextRequest) {
       await insertNotification({
         type: "email_hygiene",
         title: "Recipients filtered before send",
+        orgId: campaign.org_id,
         body: `${removedInvalid.length} invalid, ${removedDuplicates} duplicate addresses skipped.`,
         metadata: {
           campaignId: campaign.id,
@@ -538,6 +541,7 @@ export async function POST(request: NextRequest) {
       await queueEmailCampaign(
         {
           campaignId: campaign.id,
+          orgId: campaign.org_id,
           subject: campaign.subject || "",
           html,
           contacts: emailContacts,

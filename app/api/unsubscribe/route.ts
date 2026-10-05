@@ -63,7 +63,7 @@ async function handleUnsubscribe(req: NextRequest, method: "GET" | "POST") {
 
   const now = new Date().toISOString()
 
-  const { error } = await supabaseAdmin
+  const { data: suppressedBuyer, error } = await supabaseAdmin
     .from("buyers")
     .update({
       can_receive_email: false,
@@ -73,16 +73,27 @@ async function handleUnsubscribe(req: NextRequest, method: "GET" | "POST") {
     })
     .eq("id", buyerId)
     .eq("email", email)
+    .select("org_id")
+    .maybeSingle()
 
   if (error) {
     console.error("Failed to suppress buyer", { buyerId, email, error })
     return redirectToUnsubscribe(req, { error: "server", email })
   }
 
+  // email_events has no service-role org default. The buyer we just suppressed
+  // is the primary source; the campaign recipient is the fallback.
+  let eventOrgId: string | null = suppressedBuyer?.org_id ?? null
+
   if (recipientId) {
-    let query = supabaseAdmin.from("campaign_recipients").update({ unsubscribed_at: now }).eq("id", recipientId)
+    let query = supabaseAdmin
+      .from("campaign_recipients")
+      .update({ unsubscribed_at: now })
+      .eq("id", recipientId)
     if (campaignId) query = query.eq("campaign_id", campaignId)
-    const { error: campaignError } = await query
+    const { data: updatedRecipient, error: campaignError } = await query
+      .select("org_id")
+      .maybeSingle()
     if (campaignError) {
       console.error("Failed to update campaign recipient unsubscribe", {
         campaignId,
@@ -90,28 +101,40 @@ async function handleUnsubscribe(req: NextRequest, method: "GET" | "POST") {
         error: campaignError,
       })
     }
+    if (!eventOrgId && updatedRecipient?.org_id) eventOrgId = updatedRecipient.org_id
   }
 
-  const { error: eventError } = await supabaseAdmin.from("email_events").insert({
-    event_type: "unsubscribe",
-    campaign_id: campaignId || null,
-    recipient_id: recipientId || null,
-    buyer_id: buyerId,
-    payload: {
-      email,
-      campaignId,
-      recipientId,
-      method,
-      source: "unsubscribe-api",
-    },
-  })
-  if (eventError) {
-    console.error("Failed to insert unsubscribe email event", {
+  // The unsubscribe itself has already landed above — an unresolved org only
+  // costs us the analytics row, so skip it rather than fail the request.
+  if (!eventOrgId) {
+    console.warn("[unsubscribe] email_event org unresolved — skipped", {
       buyerId,
       campaignId,
       recipientId,
-      error: eventError,
     })
+  } else {
+    const { error: eventError } = await supabaseAdmin.from("email_events").insert({
+      event_type: "unsubscribe",
+      org_id: eventOrgId,
+      campaign_id: campaignId || null,
+      recipient_id: recipientId || null,
+      buyer_id: buyerId,
+      payload: {
+        email,
+        campaignId,
+        recipientId,
+        method,
+        source: "unsubscribe-api",
+      },
+    })
+    if (eventError) {
+      console.error("Failed to insert unsubscribe email event", {
+        buyerId,
+        campaignId,
+        recipientId,
+        error: eventError,
+      })
+    }
   }
 
   return redirectToUnsubscribe(req, { done: true, email })

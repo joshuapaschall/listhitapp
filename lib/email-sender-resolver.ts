@@ -54,11 +54,15 @@ function getDomainPart(email: string) {
   return domain || undefined
 }
 
-async function getVerifiedDomain(domainPart: string) {
+// Org-scoped on purpose. Without the org filter any tenant could pass
+// from_email=anything@<another org's verified domain> and the campaign would go
+// out spoofing them, because the requested address is echoed straight back.
+async function getVerifiedDomain(domainPart: string, orgId: string) {
   const { data, error } = await supabaseAdmin
     .from("email_domains")
     .select("id,domain,status")
     .eq("domain", domainPart)
+    .eq("org_id", orgId)
     .maybeSingle<EmailDomainRow>()
 
   if (error) {
@@ -130,7 +134,13 @@ export async function resolveCampaignSender(
   if (requestedFromEmail) {
     const domainPart = getDomainPart(requestedFromEmail)
 
-    if (!domainPart || !(await getVerifiedDomain(domainPart))) {
+    if (!orgId) {
+      throw new SenderNotVerifiedError("No organization context for sender.")
+    }
+
+    // Same message for "unverified" and "verified by somebody else" — the caller
+    // has no business learning that another org owns the domain.
+    if (!domainPart || !(await getVerifiedDomain(domainPart, orgId))) {
       throw new SenderNotVerifiedError(
         `The sender domain "${domainPart || requestedFromEmail}" isn't verified. Verify it under Settings → Sending Domains before sending.`,
       )

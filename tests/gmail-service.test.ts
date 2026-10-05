@@ -1,14 +1,20 @@
 let listThreadsFn: any
 let sendEmailFn: any
-let upsertMock = vi.fn()
+// The service now checks the upsert error, so the mock must resolve a result.
+let upsertMock = vi.fn(async () => ({ data: null, error: null }))
 let listMock = vi.fn()
 let sendMock = vi.fn()
 let modifyMock = vi.fn()
 let updateMock = vi.fn(() => ({ eq: vi.fn(async () => ({})) }))
-let selectMock = vi.fn(() => ({ in: vi.fn(async () => ({ data: [] })) }))
+let selectMock = vi.fn(() => ({
+  eq: vi.fn(() => ({ in: vi.fn(async () => ({ data: [] })) })),
+  in: vi.fn(async () => ({ data: [] })),
+}))
 let tokenSelect: any
 let tokenUpdate: any
 let tokenRow: any
+
+const TEST_ORG = "00000000-0000-4000-8000-00000000000a"
 
 vi.mock("googleapis", () => {
   return {
@@ -44,6 +50,14 @@ vi.mock("@/lib/supabase", () => ({
         }))
         return { select: tokenSelect, update: tokenUpdate }
       }
+      if (table === "profiles") {
+        // orgIdForUser: gmail_threads / email_threads rows now carry an org.
+        return {
+          select: () => ({
+            eq: () => ({ maybeSingle: async () => ({ data: { org_id: TEST_ORG }, error: null }) }),
+          }),
+        }
+      }
       return { upsert: upsertMock, update: updateMock, select: selectMock }
     },
   },
@@ -58,6 +72,7 @@ describe("gmail-service", () => {
     listMock.mockReset()
     sendMock.mockReset()
     upsertMock.mockReset()
+    upsertMock.mockResolvedValue({ data: null, error: null })
     selectMock.mockReset()
     tokenRow = {
       user_id: "u1",
@@ -84,6 +99,10 @@ describe("gmail-service", () => {
       labelIds: ["INBOX"],
     })
     expect(upsertMock).toHaveBeenCalled()
+    // Every gmail_threads row carries its tenant — the GWH column default is gone.
+    expect(upsertMock.mock.calls[0][0]).toEqual([
+      expect.objectContaining({ id: "t1", org_id: TEST_ORG }),
+    ])
     expect(tokenSelect).toHaveBeenCalled()
   })
 

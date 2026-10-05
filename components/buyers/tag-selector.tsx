@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/command"
 import { Badge } from "@/components/ui/badge"
 import { supabase } from "@/lib/supabase"
+import { toast } from "sonner"
+import { useQueryClient } from "@tanstack/react-query"
 
 interface Tag {
   id: string
@@ -37,6 +39,7 @@ export default function TagSelector({
   disabled = false,
   allowCreate = true,
 }: TagSelectorProps) {
+  const queryClient = useQueryClient()
   const [inputValue, setInputValue] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [tags, setTags] = useState<Tag[]>([])
@@ -69,6 +72,9 @@ export default function TagSelector({
 
   const createTag = async (name: string) => {
     try {
+      // org_id and color come from the column defaults — org_id resolves to the
+      // caller's org via auth_org_id(), which is what makes this work for every
+      // tenant rather than only the one the old hard-coded default named.
       const { data, error } = await supabase
         .from("tags")
         .insert([{ name: name.trim() }])
@@ -78,9 +84,11 @@ export default function TagSelector({
         setTags([...tags, data[0]])
         onChange([...value, data[0].name])
         setInputValue("")
+        queryClient.invalidateQueries({ queryKey: ["tags"] })
       }
     } catch (err) {
       console.error("Error creating tag:", err)
+      toast.error("Couldn't create tag")
     }
   }
 
