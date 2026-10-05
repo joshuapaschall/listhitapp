@@ -2,6 +2,7 @@ import { apiError } from "@/lib/api-error"
 import { NextRequest, NextResponse } from "next/server"
 import { requirePermission } from "@/lib/permissions/server"
 import { requireOrgContext } from "@/lib/auth/org-context"
+import { ensureTagsExist } from "@/lib/tags/ensure"
 import { supabaseAdmin } from "@/lib/supabase"
 import { normalizePhone, hasContactInfo } from "@/lib/dedup-utils"
 import { suppressBuyerSms } from "@/lib/sms/suppress"
@@ -31,10 +32,30 @@ export async function POST(req: NextRequest) {
       }
 
       if (buyers.length) {
+        // One vocabulary top-up for the whole import, then map each row's tags
+        // to the canonical casing.
+        const allTagNames = buyers.flatMap((buyer: Record<string, any>) =>
+          Array.isArray(buyer?.tags) ? (buyer.tags as string[]) : [],
+        )
+        const canonicalByLower = new Map<string, string>()
+        if (allTagNames.length) {
+          const canonical = await ensureTagsExist(orgId, allTagNames)
+          for (const name of canonical) canonicalByLower.set(name.toLowerCase(), name)
+        }
+
         // Strip any client-supplied org_id and stamp the server-resolved org on every row.
         const rows = buyers
           .map((buyer: Record<string, any>) => {
             const { org_id: _ignoredOrgId, ...rest } = buyer ?? {}
+            if (Array.isArray(rest.tags)) {
+              rest.tags = (rest.tags as string[])
+                .map((name) =>
+                  typeof name === "string"
+                    ? canonicalByLower.get(name.trim().toLowerCase()) ?? name.trim()
+                    : name,
+                )
+                .filter(Boolean)
+            }
             return { ...rest, org_id: orgId }
           })
           .filter((row) => hasContactInfo(row as any))

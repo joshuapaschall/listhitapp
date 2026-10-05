@@ -36,6 +36,7 @@ import {
   clearAllGroupsForBuyers,
 } from "@/lib/group-service"
 import { bulkUpdateBuyerTags, getBuyerTagCounts, type BuyerTagCount } from "@/lib/tag-service"
+import { useOrgTags } from "@/hooks/use-org-tags"
 import MainLayout from "@/components/layout/main-layout"
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
@@ -201,17 +202,6 @@ const fetchBuyers = async (
   }
 }
 
-const fetchTags = async (): Promise<Tag[]> => {
-  log("fetchTags", "Fetching tags...")
-
-  const { data, error } = await supabase.from("tags").select("*").order("name")
-  if (error) {
-    log("error", "Failed to fetch tags", { error })
-    throw error
-  }
-  log("fetchTags", "Fetched tags:", data?.length)
-  return data || []
-}
 
 // Fetch all buyer IDs matching current filters
 const fetchBuyerIds = async (
@@ -369,15 +359,26 @@ function BuyersPageContent() {
     isLoading: tagsLoading,
     error: tagsError,
     isError: isTagsError,
-  } = useQuery({
-    queryKey: ["tags"],
-    queryFn: fetchTags,
-    staleTime: 30 * 60 * 1000, // 30 minutes
-    gcTime: 60 * 60 * 1000, // 1 hour
-    retry: 1,
-    retryDelay: 1000,
-    enabled: !permissionsLoading && canViewBuyers,
-  })
+  } = useOrgTags()
+
+  // A tag renamed, merged or deleted in Settings → Tags leaves a stale name in
+  // these filters, which would silently resolve to zero buyers. Drop them once
+  // the vocabulary has loaded.
+  useEffect(() => {
+    if (tagsLoading || isTagsError || !tags.length) return
+    const live = new Set(tags.map((tag) => tag.name))
+    setFilters((prev) => {
+      const selectedTags = (prev.selectedTags || []).filter((name) => live.has(name))
+      const excludeTags = (prev.excludeTags || []).filter((name) => live.has(name))
+      if (
+        selectedTags.length === (prev.selectedTags || []).length &&
+        excludeTags.length === (prev.excludeTags || []).length
+      ) {
+        return prev
+      }
+      return { ...prev, selectedTags, excludeTags }
+    })
+  }, [tags, tagsLoading, isTagsError])
 
   // React Query for buyer counts by group
   const { data: buyerCounts = {}, isLoading: countsLoading } = useQuery({

@@ -18,7 +18,8 @@ describe("permission keys and templates", () => {
   test("permission catalog covers every key exactly once", () => {
     const catalogKeys = PERMISSION_CATALOG.map((entry) => entry.key)
 
-    expect(catalogKeys).toHaveLength(25)
+    // 25 + settings.tags
+    expect(catalogKeys).toHaveLength(26)
     expect(catalogKeys).toHaveLength(PERMISSION_KEYS.length)
     expect(new Set(catalogKeys).size).toBe(PERMISSION_KEYS.length)
     expect(catalogKeys).toEqual([...PERMISSION_KEYS])

@@ -68,8 +68,11 @@ function applyBuyerFilters(query: any, filters: FilterState, quickFilters: strin
   }
 
   if (filters.excludeTags && filters.excludeTags.length > 0) {
+    // Same escaping as lib/segments/resolver.ts toPgArrayLiteral: a tag name
+    // containing a quote or backslash would otherwise break out of the array
+    // literal.
     const exclude = `{${filters.excludeTags
-      .map((tag) => `"${tag}"`)
+      .map((tag) => `"${String(tag).replace(/(["\\])/g, "\\$1")}"`)
       .join(",")}}`
     query = query.not("tags", "ov", exclude)
   }

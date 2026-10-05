@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { requirePermission } from "@/lib/permissions/server"
+import { requireOrgContext } from "@/lib/auth/org-context"
+import { ensureTagsExist } from "@/lib/tags/ensure"
 
 // Columns the Add/Edit Buyer modals legitimately write (derived from
 // components/buyers/edit-buyer-modal.tsx updateData and add-buyer-modal.tsx
@@ -62,8 +64,9 @@ const BUYER_PATCH_ALLOWED_FIELDS = [
 ] as const
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
-  const cookieStore = cookies()
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+  const { user, orgId, supabase } = await requireOrgContext()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!orgId) return NextResponse.json({ error: "Organization context required" }, { status: 400 })
   const denied = await requirePermission(supabase, "buyers.edit")
   if (denied) return denied
 
@@ -79,6 +82,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     )
     if (Object.keys(sanitized).length === 0) {
       return NextResponse.json({ error: "no editable fields in payload" }, { status: 400 })
+    }
+
+    // Store canonical casing and create anything new, so an edit can't introduce
+    // a tag name that is missing from the org's vocabulary.
+    if (Array.isArray(sanitized.tags)) {
+      sanitized.tags = await ensureTagsExist(orgId, sanitized.tags as string[])
     }
 
     const { data, error } = await supabase

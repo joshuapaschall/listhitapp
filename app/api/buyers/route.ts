@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requirePermission } from "@/lib/permissions/server"
 import { requireOrgContext } from "@/lib/auth/org-context"
 import { hasContactInfo } from "@/lib/dedup-utils"
+import { ensureTagsExist } from "@/lib/tags/ensure"
 
 export async function POST(req: NextRequest) {
   const { user, orgId, supabase } = await requireOrgContext()
@@ -25,6 +26,12 @@ export async function POST(req: NextRequest) {
         { error: "A buyer must have at least one email or phone number." },
         { status: 400 },
       )
+    }
+
+    // Keep the vocabulary complete and store the canonical casing, so a buyer
+    // never carries a tag the pickers and Settings → Tags can't see.
+    if (Array.isArray(rest.tags)) {
+      rest.tags = await ensureTagsExist(orgId, rest.tags as string[])
     }
 
     const { data, error } = await supabase
