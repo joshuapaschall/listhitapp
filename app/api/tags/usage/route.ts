@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { requireOrgContext } from "@/lib/auth/org-context"
 import { requirePermission } from "@/lib/permissions/server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { fetchAllPages } from "@/lib/tags/paging"
 
 export const dynamic = "force-dynamic"
 
@@ -17,12 +18,15 @@ export async function GET() {
   const denied = await requirePermission(supabase, "settings.tags")
   if (denied) return denied
 
-  const { data, error } = await supabaseAdmin.rpc("tag_usage", { p_org_id: orgId })
+  // The RPC already ORDER BYs name, so ranging over it is stable.
+  const { rows, error } = await fetchAllPages((from, to) =>
+    supabaseAdmin.rpc("tag_usage", { p_org_id: orgId }).range(from, to),
+  )
 
   if (error) {
     console.error("[tags/usage] rpc failed", { orgId, error })
     return NextResponse.json({ error: "Failed to load tags" }, { status: 500 })
   }
 
-  return NextResponse.json({ tags: data ?? [] })
+  return NextResponse.json({ tags: rows })
 }

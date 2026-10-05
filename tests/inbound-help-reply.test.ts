@@ -9,6 +9,18 @@ const h = vi.hoisted(() => {
     messages: [] as any[],
     inboundOrg: "org-x" as string | null,
     inboundQueries: 0,
+    // getOrgIdentity backs the HELP reply text now.
+    organization: {
+      name: "Org X",
+      business_name: "Org X Holdings",
+      address_line1: "1 Main St",
+      address_line2: null,
+      city: "Atlanta",
+      state: "GA",
+      zip: "30301",
+      phone: "+14045551212",
+      website_url: null,
+    } as any,
   }
   const client = {
     from: (table: string) => {
@@ -24,6 +36,13 @@ const h = vi.hoisted(() => {
                   error: null,
                 }),
             }),
+          }),
+        }
+      }
+      if (table === "organizations") {
+        return {
+          select: () => ({
+            eq: () => ({ maybeSingle: async () => ({ data: state.organization, error: null }) }),
           }),
         }
       }

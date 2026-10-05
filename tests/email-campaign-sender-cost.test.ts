@@ -7,7 +7,6 @@ process.env.SES_COST_PER_EMAIL_USD = "0.1234"
 process.env.EMAIL_SEND_DELAY_MS = "0"
 process.env.EMAIL_RETRY_BACKOFF_MS = "0"
 // CAN-SPAM: campaign sends now hard-require a physical address (see services/campaign-sender.ts).
-process.env.EMAIL_PHYSICAL_ADDRESS = "Test Co, 1 Test St, Testville, GA"
 
 vi.mock("../lib/ses", () => ({
   sendSesEmail: sendSesEmailMock,
@@ -74,6 +73,27 @@ vi.mock("../lib/supabase", () => ({
         if (table === "campaign_recipients" && options?.head) return createCountQuery(0)
         if (table === "email_campaign_queue" && options?.head) return createCountQuery(0)
         if (table === "email_campaign_content") return { in: async () => ({ data: [{ campaign_id: "campaign-1", subject: "Hi", html: "Hello" }], error: null }) }
+        if (table === "organizations") {
+          // The CAN-SPAM footer address is per-org now.
+          return {
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: {
+                  name: "Test Co",
+                  business_name: "Test Co",
+                  address_line1: "1 Test St",
+                  address_line2: null,
+                  city: "Testville",
+                  state: "GA",
+                  zip: "30301",
+                  phone: null,
+                  website_url: null,
+                },
+                error: null,
+              }),
+            }),
+          }
+        }
         if (table === "campaigns") {
           return {
             in: async () => ({ data: [{ id: "campaign-1", user_id: "user-1" }], error: null }),
@@ -100,6 +120,9 @@ describe("processEmailQueue SES cost stamping", () => {
     updateCalls.length = 0
     claimedJobs = [{
       id: "job-1",
+      // email_campaign_queue.org_id is NOT NULL and the footer address is
+      // resolved from it.
+      org_id: "org-1",
       campaign_id: "campaign-1",
       recipient_id: "recipient-1",
       attempts: 0,

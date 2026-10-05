@@ -15,6 +15,8 @@ import { TELNYX_API_URL, telnyxHeaders } from "@/lib/telnyx"
 import { upsertAnonThread } from "@/services/thread-utils"
 import { resolveOrgIdByDid } from "@/lib/inbound-numbers"
 import { getPrimaryPinnedTelnyxOrgId } from "@/lib/providers/sms/routing"
+import { getOrgIdentity } from "@/lib/org-identity.server"
+import type { OrgIdentity } from "@/lib/org-identity"
 import { classifyInboundSms } from "@/lib/sms/opt-keywords"
 import { matchNegativeKeyword } from "@/lib/sms/negative-keywords"
 import { suppressBuyerSms } from "@/lib/sms/suppress"
@@ -27,6 +29,24 @@ export interface InboundSmsEvent {
   text: string // trimmed body ("" if none)
   rawMediaUrls: string[] // provider media URLs, unmirrored
   providerId: string | undefined // Telnyx payload.id / Twilio MessageSid → messages.provider_id
+}
+
+const HELP_FALLBACK = "Msg & data rates may apply. Reply STOP to opt out."
+const HELP_MAX_LENGTH = 160
+const HELP_COMPANY_MAX = 40
+
+export function buildHelpReply(identity: OrgIdentity | null): string {
+  if (!identity) return HELP_FALLBACK
+
+  const companyName = identity.companyName.slice(0, HELP_COMPANY_MAX)
+  const contact = identity.phone || identity.websiteUrl
+  const reply = `${companyName}: Msg & data rates may apply. Reply STOP to opt out.${
+    contact ? ` Help: ${contact}` : ""
+  }`
+
+  // A long name plus a long URL can still overflow one segment; truncate rather
+  // than let the carrier split or reject it.
+  return reply.length > HELP_MAX_LENGTH ? reply.slice(0, HELP_MAX_LENGTH) : reply
 }
 
 export async function handleInboundSms(event: InboundSmsEvent): Promise<NextResponse> {
@@ -295,9 +315,9 @@ export async function handleInboundSms(event: InboundSmsEvent): Promise<NextResp
   }
 
   if (intent === "help") {
-    const replyText =
-      process.env.SMS_HELP_AUTO_REPLY ||
-      "ListHit notifications. Msg & data rates may apply. Reply STOP to cancel. Contact: support@listhit.io"
+    // HELP is a carrier-compliance reply, so it must name the business the buyer
+    // actually opted in to — not the platform. One SMS segment max.
+    const replyText = buildHelpReply(await getOrgIdentity(orgId))
     const fromNumber = to ? formatPhoneE164(to) : null
     const toNumber = formatPhoneE164(from)
 

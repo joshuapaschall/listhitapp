@@ -11,7 +11,23 @@ const H = vi.hoisted(() => {
       this.name = "SenderNotVerifiedError"
     }
   }
-  const state = { orgId: "org-1" as string | null, campaignRow: null as any }
+  const COMPLETE_ORG = {
+    name: "Org One",
+    business_name: "Org One LLC",
+    address_line1: "1 Main St",
+    address_line2: null,
+    city: "Atlanta",
+    state: "GA",
+    zip: "30301",
+    phone: "+14045551212",
+    website_url: null,
+  }
+  const state = {
+    orgId: "org-1" as string | null,
+    campaignRow: null as any,
+    // CAN-SPAM: the footer address now comes from the org, not an env var.
+    organizationRow: { ...COMPLETE_ORG } as any,
+  }
   const eqCalls: Array<[string, any]> = []
   const mutations: string[] = []
   const sendSesEmailMock = vi.fn()
@@ -42,6 +58,7 @@ const H = vi.hoisted(() => {
         if (table === "profiles") {
           return { data: { full_name: "Test User", display_name: null, phone: "" }, error: null }
         }
+        if (table === "organizations") return { data: state.organizationRow, error: null }
         return { data: null, error: null }
       },
     }
@@ -50,6 +67,7 @@ const H = vi.hoisted(() => {
 
   return {
     SenderNotVerifiedError,
+    COMPLETE_ORG,
     state,
     eqCalls,
     mutations,
@@ -103,6 +121,7 @@ function post(body: any) {
 beforeEach(() => {
   H.state.orgId = "org-1"
   H.state.campaignRow = { ...validCampaign }
+  H.state.organizationRow = { ...H.COMPLETE_ORG }
   H.eqCalls.length = 0
   H.mutations.length = 0
   H.sendSesEmailMock.mockReset()
@@ -137,10 +156,22 @@ describe("POST /api/campaigns/test-send", () => {
     expect(H.sendSesEmailMock).not.toHaveBeenCalled()
   })
 
-  test("missing EMAIL_PHYSICAL_ADDRESS → 500 and no send", async () => {
-    delete process.env.EMAIL_PHYSICAL_ADDRESS
+  test("incomplete org address → 400 missing_business_address and no send", async () => {
+    // CAN-SPAM requires the SENDER's postal address, so a test send is gated on
+    // the org having one — not on a platform-wide env var.
+    H.state.organizationRow = { ...H.COMPLETE_ORG, zip: "" }
     const res = await post({ campaignId: "camp-1", to: "me@example.com" })
-    expect(res.status).toBe(500)
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.code).toBe("missing_business_address")
+    expect(body.error).toContain("Settings → Organization")
+    expect(H.sendSesEmailMock).not.toHaveBeenCalled()
+  })
+
+  test("a missing organization row → 400 and no send", async () => {
+    H.state.organizationRow = null
+    const res = await post({ campaignId: "camp-1", to: "me@example.com" })
+    expect(res.status).toBe(400)
     expect(H.sendSesEmailMock).not.toHaveBeenCalled()
   })
 

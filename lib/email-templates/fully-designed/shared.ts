@@ -6,7 +6,7 @@ import {
   createSpacerBlock,
 } from "@templatical/types"
 import type { TemplateContent } from "@templatical/types"
-import { DEFAULT_BRAND } from "../brand"
+import { DEFAULT_BRAND, type BrandConfig } from "../brand"
 import { PLACEHOLDER_IMAGE } from "../types"
 
 export const NAVY = DEFAULT_BRAND.colors.navy
@@ -21,10 +21,10 @@ export const withPreheader = (c: TemplateContent, text: string): TemplateContent
   return c
 }
 
-export const logoBlock = () => {
+export const logoBlock = (brand: BrandConfig = DEFAULT_BRAND) => {
   const b = createImageBlock({
     src: PLACEHOLDER_IMAGE,
-    alt: `${DEFAULT_BRAND.companyName} logo`,
+    alt: `${brand.companyName} logo`,
     width: 160,
   })
   b.styles = {
@@ -34,9 +34,9 @@ export const logoBlock = () => {
   return b
 }
 
-export const brandedFooter = () => {
+export const brandedFooter = (brand: BrandConfig = DEFAULT_BRAND) => {
   const socialEntries = (["facebook", "instagram", "youtube"] as const)
-    .map((platform) => ({ platform, url: DEFAULT_BRAND.socials[platform] }))
+    .map((platform) => ({ platform, url: brand.socials[platform] }))
     .filter((e): e is { platform: typeof e.platform; url: string } => Boolean(e.url))
 
   return [
@@ -55,7 +55,8 @@ export const brandedFooter = () => {
         ]
       : []),
     createParagraphBlock({
-      content: `<p style="color:${DEFAULT_BRAND.colors.muted};font-size:12px;text-align:center;line-height:1.6;margin:0">${DEFAULT_BRAND.companyName}<br/>${DEFAULT_BRAND.tagline}<br/>${DEFAULT_BRAND.address}</p>`,
+      // Colors stay on the design palette; the name and address are the org's.
+      content: `<p style="color:${DEFAULT_BRAND.colors.muted};font-size:12px;text-align:center;line-height:1.6;margin:0">${brand.companyName}<br/>${brand.tagline}<br/>${brand.address}</p>`,
     }),
     createSpacerBlock({ height: 16 }),
   ]

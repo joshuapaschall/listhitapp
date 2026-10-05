@@ -8,6 +8,7 @@ import { buildCampaignEmail } from "@/lib/email/build-campaign-email"
 import { evaluateCampaignSafety, type CampaignSafetyVerdict } from "@/lib/email/deliverability-guard"
 import { isGuardOverrideActive } from "@/lib/email/guard-override"
 import { insertNotification } from "@/lib/notifications"
+import { getOrgIdentity } from "@/lib/org-identity.server"
 
 const log = createLogger("campaign-sender")
 
@@ -33,7 +34,6 @@ const EMAIL_QUEUE_BASE_BACKOFF_MS = Number(process.env.EMAIL_QUEUE_BASE_BACKOFF_
 const EMAIL_QUEUE_JITTER_MS = Number(process.env.EMAIL_QUEUE_JITTER_MS || 500)
 const SITE_URL =
   process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_BASE_URL || process.env.DISPOTOOL_BASE_URL
-const EMAIL_PHYSICAL_ADDRESS = process.env.EMAIL_PHYSICAL_ADDRESS?.trim() || ""
 
 const DEFAULT_SES_COST_PER_EMAIL_USD = 0.0001
 const parsedSesCostPerEmailUsd = Number(process.env.SES_COST_PER_EMAIL_USD ?? "0.0001")
@@ -78,30 +78,12 @@ export async function stampBusinessAddressForCampaign(html: string, campaignId?:
   // stamp the sender's current org, which is not necessarily the campaign's.
   const orgId = campaign.org_id
 
-  const { data: organization, error: organizationError } = await supabase
-    .from("organizations")
-    .select("name,business_name,address_line1,address_line2,city,state,zip")
-    .eq("id", orgId)
-    .maybeSingle()
+  // One formatter for identity everywhere — the builder preview, the stamped
+  // footer and the delivered email must agree.
+  const identity = await getOrgIdentity(orgId)
+  if (!identity || !identity.hasCompleteAddress) return html
 
-  if (organizationError || !organization) {
-    if (organizationError) console.error("Failed to load organization for email footer stamping", organizationError)
-    return html
-  }
-
-  const locality = compactParts([organization.city, organization.state, organization.zip]).join(", ")
-  const addressLines = compactParts([
-    organization.address_line1,
-    organization.address_line2,
-    locality,
-  ])
-
-  if (!addressLines.length) return html
-
-  const stampedAddress = compactParts([
-    organization.business_name ?? organization.name,
-    ...addressLines,
-  ])
+  const stampedAddress = compactParts([identity.companyName, ...identity.addressLines])
     .map(escapeHtml)
     .join("<br/>")
 
@@ -518,6 +500,8 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
     return { processed: 0, sent: 0 }
   }
 
+  // org_id -> identity for this processEmailQueue run (null = looked up, absent).
+  const identityByOrgId = new Map<string, Awaited<ReturnType<typeof getOrgIdentity>>>()
   const pausedCampaignIds = new Set<string>()
   const campaignIds = Array.from(
     new Set(
@@ -657,8 +641,18 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
         campaignId: payload.campaignId,
         recipientId: contact.recipientId,
       })
-      if (!EMAIL_PHYSICAL_ADDRESS) {
-        throw new Error("EMAIL_PHYSICAL_ADDRESS is not configured — required for CAN-SPAM compliance")
+      // CAN-SPAM requires the SENDER's postal address, so it comes from the
+      // job's own org — never a platform-wide env value. Cached per run because
+      // a batch is usually all one org.
+      const footerOrgId = (job as { org_id?: string | null }).org_id ?? payload.orgId
+      let footerIdentity = identityByOrgId.get(footerOrgId)
+      if (footerIdentity === undefined) {
+        footerIdentity = await getOrgIdentity(footerOrgId)
+        identityByOrgId.set(footerOrgId, footerIdentity)
+      }
+      if (!footerIdentity?.hasCompleteAddress) {
+        // Non-retryable: no amount of retrying adds an address to the org.
+        throw new Error("missing_business_address")
       }
       const { subject, html, text } = buildCampaignEmail({
         rawSubject,
@@ -666,7 +660,7 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
         buyer,
         senderContext,
         unsubscribeUrl,
-        physicalAddress: EMAIL_PHYSICAL_ADDRESS,
+        physicalAddress: footerIdentity.addressSingleLine,
       })
       const tags = {
         campaign_id: payload.campaignId,
@@ -720,7 +714,9 @@ export async function processEmailQueue(limit = 5, opts: { leaseSeconds?: number
       })
       const errorDetails = err?.message || String(err)
       const nowIso = new Date().toISOString()
-      const retryable = isRetryableError(err)
+      const retryable =
+        errorDetails === "missing_business_address" ? false   // org has no address — retrying cannot add one
+        : isRetryableError(err)
       const updates: Record<string, any> = {
         attempts: attemptNumber,
         locked_at: null,

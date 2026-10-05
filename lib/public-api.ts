@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 
-export const ALLOWED_ORIGINS = [
-  "https://georgiawholesalehomes.com",
-  "https://www.georgiawholesalehomes.com",
-  "http://localhost:3000",
-  "http://localhost:3001",
-]
+import { ALLOWED_ORIGINS } from "./public-api/origins"
+
+export { ALLOWED_ORIGINS }
 
 const WINDOW_MS = 60_000
 const DEFAULT_LIMIT = 5

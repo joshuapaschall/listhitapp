@@ -10,6 +10,8 @@ import { stampBusinessAddressForCampaign } from "@/services/campaign-sender"
 import { getUserMergeContext, splitName } from "@/lib/user-context"
 import { buildUnsubscribeUrl } from "@/lib/unsubscribe"
 import { buildCampaignEmail } from "@/lib/email/build-campaign-email"
+import { getOrgIdentity } from "@/lib/org-identity.server"
+import { INCOMPLETE_ADDRESS_MESSAGE } from "@/lib/org-identity"
 import { sendSesEmail } from "@/lib/ses"
 
 export const runtime = "nodejs"
@@ -81,13 +83,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Failed to resolve email sender" }, { status: 500 })
     }
 
-    const physicalAddress = process.env.EMAIL_PHYSICAL_ADDRESS?.trim() || ""
-    if (!physicalAddress) {
+    // Same CAN-SPAM gate as a real send: a test must not be the one email that
+    // goes out without the sender's address.
+    const identity = await getOrgIdentity(campaign.org_id)
+    if (!identity?.hasCompleteAddress) {
       return NextResponse.json(
-        { ok: false, error: "EMAIL_PHYSICAL_ADDRESS is not configured — required for CAN-SPAM compliance" },
-        { status: 500 },
+        { ok: false, error: INCOMPLETE_ADDRESS_MESSAGE, code: "missing_business_address" },
+        { status: 400 },
       )
     }
+    const physicalAddress = identity.addressSingleLine
 
     const SITE_URL = process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL
     if (!SITE_URL) {

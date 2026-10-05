@@ -11,6 +11,8 @@
 
 import { supabaseAdmin } from "@/lib/supabase"
 
+import { fetchAllPages } from "./paging"
+
 export async function ensureTagsExist(orgId: string, names: string[]): Promise<string[]> {
   // Trim, drop empties, de-duplicate case-insensitively, keep input order.
   const wanted: string[] = []
@@ -26,10 +28,15 @@ export async function ensureTagsExist(orgId: string, names: string[]): Promise<s
   }
   if (!wanted.length) return []
 
-  const { data: existing, error } = await supabaseAdmin
-    .from("tags")
-    .select("name")
-    .eq("org_id", orgId)
+  const { rows: existing, error } = await fetchAllPages<{ name: string | null }>(
+    (from, to) =>
+      supabaseAdmin
+        .from("tags")
+        .select("name")
+        .eq("org_id", orgId)
+        .order("name")
+        .range(from, to),
+  )
 
   if (error) {
     console.error("[tags/ensure] failed to load org tags", { orgId, error })
@@ -59,10 +66,15 @@ export async function ensureTagsExist(orgId: string, names: string[]): Promise<s
         throw insertError
       }
 
-      const { data: afterRace } = await supabaseAdmin
-        .from("tags")
-        .select("name")
-        .eq("org_id", orgId)
+      const { rows: afterRace } = await fetchAllPages<{ name: string | null }>(
+        (from, to) =>
+          supabaseAdmin
+            .from("tags")
+            .select("name")
+            .eq("org_id", orgId)
+            .order("name")
+            .range(from, to),
+      )
       for (const row of afterRace ?? []) {
         const name = (row as { name: string | null }).name
         if (name) canonical.set(name.toLowerCase(), name)

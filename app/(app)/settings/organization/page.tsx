@@ -1,6 +1,7 @@
 "use client"
 
 import { FormEvent, useEffect, useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -9,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { usePermissions } from "@/hooks/use-permissions"
+import { ORGANIZATION_QUERY_KEY } from "@/hooks/use-org-identity"
 
 type Organization = {
   id: string
@@ -64,6 +66,7 @@ function formFromOrganization(organization: Organization): OrganizationForm {
 }
 
 export default function OrganizationSettingsPage() {
+  const queryClient = useQueryClient()
   const { loading: permissionsLoading, can } = usePermissions()
   const hasAccess = can("settings.organization")
   const [organization, setOrganization] = useState<Organization | null>(null)
@@ -119,6 +122,9 @@ export default function OrganizationSettingsPage() {
       const updatedOrganization = (await response.json()) as Organization
       setOrganization(updatedOrganization)
       setForm(formFromOrganization(updatedOrganization))
+      // Email template previews read the org identity from this key, so a
+      // renamed business shows up in the footer without a reload.
+      await queryClient.invalidateQueries({ queryKey: ORGANIZATION_QUERY_KEY })
       toast.success("Organization saved")
     } catch (error) {
       console.error("Organization save failed", error)
