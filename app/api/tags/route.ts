@@ -4,6 +4,7 @@ import { requireOrgContext } from "@/lib/auth/org-context"
 import { hasPermission } from "@/lib/permissions/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { ensureTagsExist } from "@/lib/tags/ensure"
+import { fetchAllPages } from "@/lib/tags/paging"
 
 export const dynamic = "force-dynamic"
 
@@ -24,18 +25,21 @@ export async function GET() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
-  const { data, error } = await supabase
-    .from("tags")
-    .select("id,name,color,is_protected")
-    .eq("org_id", orgId)
-    .order("name")
+  const { rows, error } = await fetchAllPages((from, to) =>
+    supabase
+      .from("tags")
+      .select("id,name,color,is_protected")
+      .eq("org_id", orgId)
+      .order("name")
+      .range(from, to),
+  )
 
   if (error) {
     console.error("[tags] list failed", { orgId, error })
     return NextResponse.json({ error: "Failed to load tags" }, { status: 500 })
   }
 
-  return NextResponse.json({ tags: data ?? [] })
+  return NextResponse.json({ tags: rows })
 }
 
 // Create a tag (or hand back the existing one, in its own casing).

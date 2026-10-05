@@ -1,6 +1,8 @@
 "use client"
 
 import { useState } from "react"
+import { brandFromIdentity } from "@/lib/email-templates/brand"
+import { useOrgIdentity } from "@/hooks/use-org-identity"
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
@@ -31,6 +33,8 @@ interface Props {
 export default function EmailTemplateBuilder({ slug, mode, id, initialName = "", initialDesign = null }: Props) {
   const router = useRouter()
   const queryClient = useQueryClient()
+  // The template's footer and logo alt text carry the tenant's own name.
+  const { data: orgIdentity } = useOrgIdentity()
   const hasInitialDesign = !!initialDesign && Array.isArray(initialDesign.blocks) && initialDesign.blocks.length > 0
 
   const [name, setName] = useState(initialName)
@@ -56,7 +60,7 @@ export default function EmailTemplateBuilder({ slug, mode, id, initialName = "",
     } else if (r.kind === "saved") {
       content = r.record.design_json as TemplateContent
     } else {
-      content = r.def.build()
+      content = r.def.build(brandFromIdentity(orgIdentity ?? null))
     }
     setEditorSeed(content)
     setEditorInstance(null)

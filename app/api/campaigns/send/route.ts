@@ -16,6 +16,8 @@ import { resolveAudienceIds } from "@/lib/campaigns/resolve-audience-ids"
 import { formatPhoneE164, normalizeEmail } from "@/lib/dedup-utils"
 import * as smsCampaignSender from "@/services/sms-campaign-sender"
 import { resolveOrgIdForUser } from "@/lib/auth/org-context"
+import { getOrgIdentity } from "@/lib/org-identity.server"
+import { INCOMPLETE_ADDRESS_MESSAGE } from "@/lib/org-identity"
 import { resolveCampaignSender, SenderNotVerifiedError } from "@/lib/email-sender-resolver"
 import { isValidEmailSyntax } from "@/lib/email/validate-syntax"
 import { insertNotification } from "@/lib/notifications"
@@ -436,6 +438,17 @@ export async function POST(request: NextRequest) {
   }
 
   if (campaign.channel === "email") {
+    // CAN-SPAM gate, BEFORE anything is queued. Failing here is a clear 400 the
+    // user can act on; failing per-job later would half-send a campaign and
+    // bury the reason in queue rows.
+    const sendingIdentity = await getOrgIdentity(campaign.org_id)
+    if (!sendingIdentity?.hasCompleteAddress) {
+      return NextResponse.json(
+        { error: INCOMPLETE_ADDRESS_MESSAGE, code: "missing_business_address" },
+        { status: 400 },
+      )
+    }
+
     let emailContacts: EmailContactPayload[] = (recipients || [])
       .map((row: any) => {
         const buyer: any = (row as any).buyers || {}

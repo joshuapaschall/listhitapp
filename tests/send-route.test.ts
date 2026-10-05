@@ -5,6 +5,18 @@ import { POST } from "../app/api/campaigns/send/route"
 // hoisted vi.mock factory can reference the stable client object.
 const h = vi.hoisted(() => {
   const state: any = {
+    // Complete by default; a test can blank a field to exercise the gate.
+    organization: {
+      name: "Org One",
+      business_name: "Org One LLC",
+      address_line1: "1 Main St",
+      address_line2: null,
+      city: "Atlanta",
+      state: "GA",
+      zip: "30301",
+      phone: "+14045551212",
+      website_url: null,
+    } as any,
     campaigns: [] as any[],
     recipients: [] as any[],
     buyers: [] as any[],
@@ -133,6 +145,14 @@ const h = vi.hoisted(() => {
       if (table === "buyer_sms_senders") {
         return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) }
       }
+      if (table === "organizations") {
+        // The email branch now gates on the org having a CAN-SPAM address.
+        return {
+          select: () => ({
+            eq: () => ({ maybeSingle: async () => ({ data: state.organization, error: null }) }),
+          }),
+        }
+      }
       throw new Error(`Unexpected table ${table}`)
     },
     auth: { getUser: async () => ({ data: { user: null }, error: null }) },
@@ -257,8 +277,8 @@ describe("send route templates", () => {
   })
 
   test("queues email with the raw subject/html (rendering deferred)", async () => {
-    h.state.campaigns.push({ id: "c2", channel: "email", subject: "Hey {{first_name}}", message: "Dear {{last_name}}", buyer_ids: ["b2"] })
-    h.state.buyers.push({ id: "b2", fname: "Jane", lname: "Smith", email: "a@test.com", can_receive_email: true, deleted_at: null, email_suppressed: false })
+    h.state.campaigns.push({ id: "c2", org_id: "org-1", channel: "email", subject: "Hey {{first_name}}", message: "Dear {{last_name}}", buyer_ids: ["b2"] })
+    h.state.buyers.push({ id: "b2", org_id: "org-1", fname: "Jane", lname: "Smith", email: "a@test.com", can_receive_email: true, deleted_at: null, email_suppressed: false })
     const res = await POST(req("c2"))
     expect(res.status).toBe(200)
     expect(emailSender.queueEmailCampaign).toHaveBeenCalledWith(
@@ -302,14 +322,14 @@ describe("send route templates", () => {
   })
 
   test("returns 400 when no recipients", async () => {
-    h.state.campaigns.push({ id: "c6", channel: "email", message: "Hi", buyer_ids: ["b6"] })
+    h.state.campaigns.push({ id: "c6", org_id: "org-1", channel: "email", message: "Hi", buyer_ids: ["b6"] })
     const res = await POST(req("c6"))
     expect(res.status).toBe(400)
   })
 
   test("returns 200 when recipients exist", async () => {
-    h.state.campaigns.push({ id: "c7", channel: "email", message: "Hello", buyer_ids: ["b7"] })
-    h.state.buyers.push({ id: "b7", email: "a@test.com", can_receive_email: true, deleted_at: null, email_suppressed: false })
+    h.state.campaigns.push({ id: "c7", org_id: "org-1", channel: "email", message: "Hello", buyer_ids: ["b7"] })
+    h.state.buyers.push({ id: "b7", org_id: "org-1", email: "a@test.com", can_receive_email: true, deleted_at: null, email_suppressed: false })
     const res = await POST(req("c7"))
     expect(res.status).toBe(200)
     const body = await res.json()
@@ -349,7 +369,7 @@ describe("send route templates", () => {
   })
 
   test("email still excludes email-suppressed buyers", async () => {
-    h.state.campaigns.push({ id: "c10", channel: "email", message: "Hello", buyer_ids: ["be1"] })
+    h.state.campaigns.push({ id: "c10", org_id: "org-1", channel: "email", message: "Hello", buyer_ids: ["be1"] })
     h.state.buyers.push({ id: "be1", email: "z@test.com", can_receive_email: true, deleted_at: null, email_suppressed: true })
     const res = await POST(req("c10"))
     expect(res.status).toBe(400) // no eligible recipients

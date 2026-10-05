@@ -1,6 +1,8 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
+import { brandFromIdentity } from "@/lib/email-templates/brand"
+import { useOrgIdentity } from "@/hooks/use-org-identity"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { ArrowLeft, CheckCircle2, Circle, TestTube2 } from "lucide-react"
@@ -68,6 +70,8 @@ function CardRow({ id, title, summary, valid, ctaText, expandedCard, setExpanded
 export default function CampaignComposeView({ initialCampaign }: { initialCampaign: any }) {
   const router = useRouter()
   const searchParams = useSearchParams()
+  // The template's footer and logo alt text carry the tenant's own name.
+  const { data: orgIdentity } = useOrgIdentity()
   const [campaign, setCampaign] = useState<any>(initialCampaign)
   const [expandedCard, setExpandedCard] = useState<"to"|"from"|"subject"|"sendTime"|"content"|"property"|null>(null)
   const [autosaveState, setAutosaveState] = useState<"idle"|"saving"|"saved"|"failed">("idle")
@@ -299,7 +303,7 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
       content = r.record.design_json as TemplateContent
       if (r.record.subject && !campaign.subject?.trim()) update({ subject: r.record.subject })
     } else {
-      content = r.def.build()
+      content = r.def.build(brandFromIdentity(orgIdentity ?? null))
       if (r.def.defaultSubject && !campaign.subject?.trim()) update({ subject: r.def.defaultSubject })
     }
     setEditorSeed(content)

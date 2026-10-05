@@ -1,9 +1,6 @@
-export const ALLOWED_ORIGINS = [
-  "https://georgiawholesalehomes.com",
-  "https://www.georgiawholesalehomes.com",
-  "http://localhost:3000",
-  "http://localhost:3001",
-]
+import { ALLOWED_ORIGINS } from "./origins"
+
+export { ALLOWED_ORIGINS }
 
 export function isOriginAllowed(origin: string | null): boolean {
   if (!origin) return false

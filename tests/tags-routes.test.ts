@@ -24,10 +24,15 @@ vi.mock("@/lib/auth/org-context", () => ({
     supabase: {
       from: (table: string) => {
         if (table !== "tags") throw new Error(`Unexpected session table ${table}`)
+        // GET /api/tags pages: .select().eq().order().range()
         const q: any = {
           select: () => q,
           eq: () => q,
-          order: async () => ({ data: state.tagRows, error: null }),
+          order: () => q,
+          range: async (from: number) => ({
+            data: from === 0 ? state.tagRows : [],
+            error: null,
+          }),
         }
         return q
       },
@@ -50,10 +55,19 @@ vi.mock("@/lib/tags/ensure", () => ({
 
 vi.mock("@/lib/supabase", () => ({
   supabaseAdmin: {
-    rpc: async (fn: string, args: any) => {
+    rpc: (fn: string, args: any) => {
       state.rpcCalls.push({ fn, args })
-      if (state.rpcError) return { data: null, error: state.rpcError }
-      return { data: fn === "tag_usage" ? state.usageRows : null, error: null }
+      const result = state.rpcError
+        ? { data: null, error: state.rpcError }
+        : { data: fn === "tag_usage" ? state.usageRows : null, error: null }
+      // tag_usage is paged with .range(); everything else is awaited directly.
+      return {
+        range: async (from: number) => ({
+          data: state.rpcError ? null : from === 0 ? state.usageRows : [],
+          error: state.rpcError,
+        }),
+        then: (resolve: any) => resolve(result),
+      }
     },
     from: (table: string) => {
       if (table !== "tags") throw new Error(`Unexpected admin table ${table}`)

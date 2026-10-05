@@ -8,12 +8,11 @@ import { lookupNumber, isLineAcceptable } from "@/lib/number-lookup"
 import { ALLOWED_ORIGINS, corsHeaders, errorResponse, isRateLimited, originHost, isTenantSubdomainOrigin } from "@/lib/public-api"
 import { getPrimaryPinnedTelnyxOrgId, isOrgTelnyxPinnedEnv } from "@/lib/providers/sms/routing"
 import { ensureTagsExist } from "@/lib/tags/ensure"
+import { getOrgIdentity } from "@/lib/org-identity.server"
 import { resolveSiteByHost } from "@/lib/site-builder/resolve-site"
 import { resolveFromNumber } from "@/lib/showing-notifications"
 import { supabaseAdmin } from "@/lib/supabase/admin"
 import { TELNYX_API_URL, telnyxHeaders } from "@/lib/telnyx"
-
-const WELCOME_TEXT = "Welcome to Georgia Wholesale Homes. We'll text you off-market deals — investment properties at 30-50% under retail. Reply STOP to opt out. HELP for info."
 
 function welcomeText(brand: string) {
   return `Welcome to ${brand}. We'll text you off-market deals before they hit the market. Reply STOP to opt out, HELP for info.`
@@ -76,7 +75,10 @@ export async function POST(request: NextRequest) {
   if (!orgId) {
     return NextResponse.json({ ok: false, error_code: "origin_not_allowed", message: "Origin not allowed" }, { status: 403, headers: corsHeaders(origin) })
   }
-  const brandName: string = site?.name || "our team"
+  // The builder site's name wins; otherwise the org's own business name. Never
+  // a hard-coded brand — a non-owner tenant's leads must not be welcomed by GWH.
+  const brandName: string =
+    site?.name || (await getOrgIdentity(orgId))?.companyName || "our team"
 
   const ip = (request.headers.get("x-forwarded-for") || "unknown").split(",")[0].trim()
   if (isRateLimited(ip, "buyers-signup", 5)) return errorResponse(429, origin, "rate_limited", "Too many signup requests")
@@ -283,7 +285,7 @@ export async function POST(request: NextRequest) {
     // tenant lead from that number would cross orgs, so we only auto-send the
     // welcome SMS on the legacy/static path (no resolved builder site). Tenant
     // welcome SMS will be enabled once sending is org-scoped (later phase).
-    const welcomeMessage = site ? welcomeText(brandName) : WELCOME_TEXT
+    const welcomeMessage = welcomeText(brandName)
     if (sendSms && !site && isOrgTelnyxPinnedEnv(orgId)) {
       // Awaited (not deferred): App Router route handlers have no waitUntil. A
       // Telnyx failure must never fail the signup, so it is fully guarded.

@@ -16,10 +16,25 @@ const bodySchema = z.object({
   visitor_id: z.string().max(64).optional(),
 })
 
+/**
+ * A published site on a CUSTOM domain is neither a static origin nor a tenant
+ * subdomain, so the static checks alone rejected its analytics beacon. Fall back
+ * to resolving the host against site_domains/sites.
+ */
+async function resolveAllowedSite(origin: string) {
+  if (!origin) return null
+  const host = originHost(origin)
+  if (!host) return null
+  return resolveSiteByHost(host).catch(() => null)
+}
+
 export async function OPTIONS(request: NextRequest) {
   const origin = request.headers.get("origin") || ""
   if (!ALLOWED_ORIGINS.includes(origin) && !isTenantSubdomainOrigin(origin)) {
-    return NextResponse.json({ ok: false }, { status: 403 })
+    const site = await resolveAllowedSite(origin)
+    if (!site) {
+      return NextResponse.json({ ok: false }, { status: 403 })
+    }
   }
   return new NextResponse(null, { status: 204, headers: corsHeaders(origin) })
 }
@@ -30,12 +45,12 @@ export async function POST(request: NextRequest) {
   // Allow only published builder sites (tenant subdomain / active custom domain)
   // or a statically-allowed origin. The pageview lands in the owning org.
   const isStatic = ALLOWED_ORIGINS.includes(origin)
-  if (!isStatic && !isTenantSubdomainOrigin(origin)) {
+  // Resolve the site first: a custom domain is the only signal that an
+  // otherwise-unknown origin belongs to a published tenant site.
+  const site = await resolveAllowedSite(origin)
+  if (!isStatic && !isTenantSubdomainOrigin(origin) && !site) {
     return new NextResponse(null, { status: 403, headers: corsHeaders(origin) })
   }
-
-  const host = originHost(origin)
-  const site = host ? await resolveSiteByHost(host).catch(() => null) : null
   if (!site && !isStatic) {
     return new NextResponse(null, { status: 403, headers: corsHeaders(origin) })
   }

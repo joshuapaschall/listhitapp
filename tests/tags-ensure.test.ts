@@ -16,13 +16,19 @@ vi.mock("@/lib/supabase", () => ({
     from: (table: string) => {
       if (table !== "tags") throw new Error(`Unexpected table ${table}`)
       return {
+        // The vocabulary load is paged now: .select().eq().order().range()
         select: () => ({
-          eq: async () => {
-            state.selectCount += 1
-            const rows =
-              state.selectCount > 1 && state.afterRace ? state.afterRace : state.existing
-            return { data: rows, error: null }
-          },
+          eq: () => ({
+            order: () => ({
+              range: async (from: number) => {
+                if (from === 0) state.selectCount += 1
+                const rows =
+                  state.selectCount > 1 && state.afterRace ? state.afterRace : state.existing
+                // One page only — these fixtures are far under 1,000 rows.
+                return { data: from === 0 ? rows : [], error: null }
+              },
+            }),
+          }),
         }),
         insert: (rows: any[]) => {
           state.inserts.push(rows)

@@ -2,6 +2,7 @@ import "server-only"
 
 import { createLogger } from "@/lib/logger"
 import { supabaseAdmin } from "@/lib/supabase/admin"
+import { isOrgTelnyxPinnedEnv } from "@/lib/providers/sms/routing"
 
 type SenderSource = "campaign" | "org_default" | "env"
 
@@ -169,15 +170,23 @@ export async function resolveCampaignSender(
     }
   }
 
-  const envFromEmail = normalizeEmail(process.env.AWS_SES_FROM_EMAIL)
-  if (envFromEmail) {
-    return {
-      fromEmail: envFromEmail,
-      fromName: normalizeOptional(process.env.AWS_SES_FROM_NAME),
-      replyTo: undefined,
-      source: "env",
+  // The env sender is the platform operator's own address. Letting another
+  // tenant fall back to it would send their campaign from the operator's domain
+  // — their buyers would see the wrong company in the From line.
+  if (isOrgTelnyxPinnedEnv(orgId)) {
+    const envFromEmail = normalizeEmail(process.env.AWS_SES_FROM_EMAIL)
+    if (envFromEmail) {
+      return {
+        fromEmail: envFromEmail,
+        fromName: normalizeOptional(process.env.AWS_SES_FROM_NAME),
+        replyTo: undefined,
+        source: "env",
+      }
     }
+    throw new SenderNotVerifiedError("No verified sender is configured.")
   }
 
-  throw new SenderNotVerifiedError("No verified sender is configured.")
+  throw new SenderNotVerifiedError(
+    "Add and verify a sending domain in Settings → Email Domains before sending email.",
+  )
 }

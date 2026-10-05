@@ -1,5 +1,7 @@
 import type { TemplateContent } from "@templatical/editor"
 
+import type { BrandConfig } from "./brand"
+
 export type EmailTemplateBucket = "basic" | "fully-designed"
 
 export type EmailTemplateCategory =
@@ -22,7 +24,8 @@ export interface EmailTemplateDef {
   wireframeVariant?: string
   previewImage?: string
   defaultSubject?: string
-  build: () => TemplateContent
+  // Optional so a caller with no org context still renders a sensible preview.
+  build: (brand?: BrandConfig) => TemplateContent
 }
 
 const EMAIL_ASSET_ORIGIN = (

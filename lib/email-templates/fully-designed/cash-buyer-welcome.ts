@@ -25,14 +25,14 @@ const def: EmailTemplateDef = {
   category: "Welcome",
   previewImage: "/email-templates/previews/cash-buyer-welcome.svg",
   defaultSubject: "Welcome aboard, {{first_name}} — here is how our list works",
-  build: () => {
+  build: (brand = DEFAULT_BRAND) => {
     const c = createDefaultTemplateContent(BODY, {
       width: 600,
       backgroundColor: CREAM,
     })
 
     c.blocks = [
-      logoBlock(),
+      logoBlock(brand),
       createTitleBlock({
         content: `<span style="font-family:${HEAD}">Welcome aboard, {{first_name}}</span>`,
         level: 1,
@@ -40,7 +40,7 @@ const def: EmailTemplateDef = {
         color: NAVY,
       }),
       createParagraphBlock({
-        content: `<p>Thanks for joining ${DEFAULT_BRAND.companyName}. You are now on our active cash buyer list and will receive deal alerts with clear numbers, timelines, and walkthrough instructions.</p>`,
+        content: `<p>Thanks for joining ${brand.companyName}. You are now on our active cash buyer list and will receive deal alerts with clear numbers, timelines, and walkthrough instructions.</p>`,
       }),
       createTitleBlock({ content: "What we send", level: 3, color: NAVY }),
       createParagraphBlock({
@@ -76,7 +76,7 @@ const def: EmailTemplateDef = {
         content:
           "<p>Questions before your first deal? Reply to this email and {{my_first_name}} {{my_last_name}} will help you get dialed in.</p>",
       }),
-      ...brandedFooter(),
+      ...brandedFooter(brand),
     ]
 
     return withPreheader(c, "Welcome — here's how our deal flow works.")
