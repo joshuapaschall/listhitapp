@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useMemo, useState } from "react"
 import { X, Check, Loader2 } from "lucide-react"
 import {
   Command,
@@ -12,16 +12,8 @@ import {
   CommandList,
 } from "@/components/ui/command"
 import { Badge } from "@/components/ui/badge"
-import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
-import { useQueryClient } from "@tanstack/react-query"
-
-interface Tag {
-  id: string
-  name: string
-  color?: string
-  is_protected?: boolean
-}
+import { useOrgTags, useInvalidateTagViews, type OrgTag } from "@/hooks/use-org-tags"
 
 interface TagSelectorProps {
   value: string[]
@@ -39,60 +31,53 @@ export default function TagSelector({
   disabled = false,
   allowCreate = true,
 }: TagSelectorProps) {
-  const queryClient = useQueryClient()
+  // One shared read of the org vocabulary; filtering is client-side so typing
+  // doesn't round-trip and a rename elsewhere shows up after one invalidation.
+  const { data: allTags, isLoading } = useOrgTags()
+  const invalidateTagViews = useInvalidateTagViews()
   const [inputValue, setInputValue] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const [tags, setTags] = useState<Tag[]>([])
   const [open, setOpen] = useState(false)
-
-  useEffect(() => {
-    if (open) fetchTags()
-  }, [open])
+  const [isCreating, setIsCreating] = useState(false)
 
   const finalPlaceholder = allowCreate ? placeholder : "Search tags..."
 
-  const fetchTags = async (searchTerm = "") => {
-    setIsLoading(true)
-    try {
-      let query = supabase.from("tags").select("id, name, color, is_protected")
-
-      if (searchTerm) {
-        query = query.ilike("name", `%${searchTerm}%`)
-      }
-
-      const { data, error } = await query.order("name")
-      if (error) throw error
-      setTags(data || [])
-    } catch (err) {
-      console.error("Error fetching tags:", err)
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  const tags = useMemo(() => {
+    const list = allTags ?? []
+    const term = inputValue.trim().toLowerCase()
+    if (!term) return list
+    return list.filter((tag) => tag.name.toLowerCase().includes(term))
+  }, [allTags, inputValue])
 
   const createTag = async (name: string) => {
+    if (isCreating) return
+    setIsCreating(true)
     try {
-      // org_id and color come from the column defaults — org_id resolves to the
-      // caller's org via auth_org_id(), which is what makes this work for every
-      // tenant rather than only the one the old hard-coded default named.
-      const { data, error } = await supabase
-        .from("tags")
-        .insert([{ name: name.trim() }])
-        .select()
-      if (error) throw error
-      if (data && data[0]) {
-        setTags([...tags, data[0]])
-        onChange([...value, data[0].name])
+      // The server owns tag creation. It matches case-insensitively and returns
+      // the CANONICAL name, so typing "atlanta closers" when "Atlanta Closers"
+      // exists selects the existing tag instead of making a near-duplicate.
+      const res = await fetch("/api/tags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim() }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body?.error || "Couldn't create tag")
+
+      const canonical = body?.tag?.name as string | undefined
+      if (canonical) {
+        if (!value.includes(canonical)) onChange([...value, canonical])
         setInputValue("")
-        queryClient.invalidateQueries({ queryKey: ["tags"] })
+        await invalidateTagViews()
       }
     } catch (err) {
       console.error("Error creating tag:", err)
-      toast.error("Couldn't create tag")
+      toast.error(err instanceof Error ? err.message : "Couldn't create tag")
+    } finally {
+      setIsCreating(false)
     }
   }
 
-  const toggleTag = (tag: Tag) => {
+  const toggleTag = (tag: OrgTag) => {
     const isSelected = value.includes(tag.name)
     if (isSelected) {
       onChange(value.filter((t) => t !== tag.name))
@@ -108,11 +93,10 @@ export default function TagSelector({
 
   const handleInputChange = (input: string) => {
     setInputValue(input)
-    if (input.length > 1) fetchTags(input)
   }
 
   const handleCreate = () => {
-    if (allowCreate && inputValue.trim()) createTag(inputValue)
+    if (allowCreate && !isCreating && inputValue.trim()) createTag(inputValue)
   }
 
   return (
@@ -151,13 +135,20 @@ export default function TagSelector({
                   <CommandEmpty>
                     {inputValue.trim() && allowCreate ? (
                       <div
-                        className="flex items-center justify-between p-2 cursor-pointer hover:bg-muted"
+                        aria-disabled={isCreating}
+                        className={`flex items-center justify-between p-2 ${
+                          isCreating ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:bg-muted"
+                        }`}
                         onClick={handleCreate}
                       >
                         <span>
                           Create &quot;{inputValue}&quot;
                         </span>
-                        <Badge variant="outline">Enter</Badge>
+                        {isCreating ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Badge variant="outline">Enter</Badge>
+                        )}
                       </div>
                     ) : (
                       <div className="p-2">No tags found</div>

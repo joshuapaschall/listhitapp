@@ -4,6 +4,7 @@ import { requireOrgContext } from "@/lib/auth/org-context"
 import { requirePermission } from "@/lib/permissions/server"
 import { geocodeAddress } from "@/lib/geocode"
 import { normalizeComps } from "@/lib/properties/comps"
+import { ensureTagsExist } from "@/lib/tags/ensure"
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,12 +30,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const canonicalTags = Array.isArray(body.tags) && body.tags.length
+      ? await ensureTagsExist(orgId, body.tags as string[])
+      : null
+
     const insertData = {
       ...body,
       latitude,
       longitude,
       video_link: body.video_link || null,
-      tags: body.tags?.length ? body.tags : null,
+      tags: canonicalTags?.length ? canonicalTags : null,
       comps: normalizeComps(body.comps),
       website_url: body.website_url || null,
       short_slug: body.short_slug || null,

@@ -98,16 +98,15 @@ export async function importBuyersFromCsv(
 ): Promise<{ inserted: number; updated: number; skipped: number }> {
   log("import", "Starting import with mapping:", mapping)
 
-  const { data: existingTags, error: tagFetchError } = await supabase
-    .from("tags")
-    .select("name")
-
-  if (tagFetchError) {
-    throw tagFetchError
+  // The org vocabulary, read through the shared API rather than the tags table.
+  const tagsRes = await fetch("/api/tags")
+  if (!tagsRes.ok) {
+    throw new Error("Failed to load tags")
   }
+  const existingTags = ((await tagsRes.json())?.tags ?? []) as Array<{ name: string }>
 
   const tagMap: Record<string, string> = {}
-  existingTags?.forEach((t: { name: string }) => {
+  existingTags.forEach((t) => {
     if (t.name) tagMap[t.name.toLowerCase()] = t.name
   })
 
@@ -132,20 +131,25 @@ export async function importBuyersFromCsv(
   for (const name of extraTags) collectTagName(name)
 
   if (incomingTagNames.size) {
+    // One server round-trip creates everything missing and hands back the
+    // canonical casing, so an import can't mint a near-duplicate of an existing
+    // tag that differs only in case.
     const names = Array.from(incomingTagNames)
-    const { data: createdTags, error: tagInsertError } = await supabase
-      .from("tags")
-      .insert(names.map((name) => ({ name })))
-      .select("name")
-
-    // 23505 = another import created the same tag first. Harmless: the names
-    // are added to the map below either way.
-    if (tagInsertError && (tagInsertError as { code?: string }).code !== "23505") {
-      console.error("[import] failed to create new tags", tagInsertError)
-    }
-
-    for (const name of createdTags?.map((t: { name: string }) => t.name) ?? names) {
-      tagMap[name.toLowerCase()] = name
+    try {
+      const res = await fetch("/api/tags/ensure", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ names }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body?.error || "Failed to create tags")
+      for (const name of (body?.names ?? names) as string[]) {
+        tagMap[name.toLowerCase()] = name
+      }
+    } catch (err) {
+      console.error("[import] failed to create new tags", err)
+      // Fall back to the typed names so the import still keeps them.
+      for (const name of names) tagMap[name.toLowerCase()] = name
     }
   }
 

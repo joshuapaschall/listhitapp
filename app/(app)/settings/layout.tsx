@@ -11,6 +11,7 @@ import {
   MessageSquare,
   Radio,
   ShieldBan,
+  Tag,
   User,
   Users,
   type LucideIcon,
@@ -90,6 +91,13 @@ const navSections: NavSection[] = [
   {
     label: "AUDIENCE",
     items: [
+      {
+        href: "/settings/tags",
+        label: "Tags",
+        description: "Your organization's tag list",
+        icon: Tag,
+        permission: "settings.tags",
+      },
       {
         href: "/settings/segments",
         label: "Segments",

@@ -151,6 +151,12 @@ export const PERMISSION_CATALOG = Object.freeze([
     description: "Manage SMS, email, and quick-reply templates.",
   },
   {
+    key: "settings.tags",
+    label: "Manage tags",
+    group: "Settings",
+    description: "Rename, recolor, merge, and delete your organization's tags.",
+  },
+  {
     key: "settings.integrations",
     label: "Manage integrations",
     group: "Settings",

@@ -8,6 +8,7 @@ import { NextResponse } from "next/server"
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 
 import { supabaseAdmin } from "@/lib/supabase"
+import { SYSTEM_TAGS } from "@/lib/tags/system-tags"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -70,6 +71,24 @@ export async function POST(request: Request) {
 
   if (orgErr || !org?.id) {
     console.error("[create-org] organization insert failed", { userId: user.id, error: orgErr })
+    return NextResponse.json({ error: "Could not create your workspace" }, { status: 500 })
+  }
+
+  // The system tags are names the application code hard-codes, so a brand-new
+  // org has to have them before anyone can use the app. Same rollback as the
+  // profile-claim failure below: an org without its vocabulary is worse than no
+  // org at all.
+  const { error: tagSeedErr } = await supabaseAdmin
+    .from("tags")
+    .insert(SYSTEM_TAGS.map((name) => ({ org_id: org.id, name, is_protected: true })))
+
+  if (tagSeedErr) {
+    console.error("[create-org] system tag seed failed — rolling back org", {
+      userId: user.id,
+      orgId: org.id,
+      error: tagSeedErr,
+    })
+    await supabaseAdmin.from("organizations").delete().eq("id", org.id)
     return NextResponse.json({ error: "Could not create your workspace" }, { status: 500 })
   }
 

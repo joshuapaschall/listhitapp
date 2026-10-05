@@ -17,6 +17,8 @@ const state = vi.hoisted(() => ({
   // How many rows the profile update claims. 0 models losing the race.
   profileUpdateRows: 1,
   orgInsertError: null as any,
+  tagInserts: [] as any[][],
+  tagInsertError: null as any,
 }))
 
 vi.mock("@supabase/auth-helpers-nextjs", () => ({
@@ -76,12 +78,22 @@ vi.mock("@/lib/supabase", () => ({
           }),
         }
       }
+      if (table === "tags") {
+        // A new org must get the system tags before anyone can use the app.
+        return {
+          insert: async (rows: any[]) => {
+            state.tagInserts.push(rows)
+            return { error: state.tagInsertError }
+          },
+        }
+      }
       throw new Error(`Unexpected table ${table}`)
     },
   },
 }))
 
 import { POST } from "../app/api/onboarding/create-org/route"
+import { SYSTEM_TAGS } from "@/lib/tags/system-tags"
 
 const req = (body: unknown) =>
   new NextRequest("http://test/api/onboarding/create-org", {
@@ -99,6 +111,8 @@ describe("POST /api/onboarding/create-org", () => {
     state.profileUpdates = []
     state.profileUpdateRows = 1
     state.orgInsertError = null
+    state.tagInserts = []
+    state.tagInsertError = null
   })
 
   test("401s with no session", async () => {
@@ -178,6 +192,32 @@ describe("POST /api/onboarding/create-org", () => {
     expect(state.orgInserts[0]).not.toHaveProperty("id")
     expect(state.profileUpdates[0].data.org_id).toBe("org-new")
     expect(state.profileUpdates[0].data.role).toBe("owner")
+  })
+
+  test("seeds the system tags for the new org", async () => {
+    await POST(req({ companyName: "Acme Wholesale", name: "Jane" }))
+
+    expect(state.tagInserts).toHaveLength(1)
+    const rows = state.tagInserts[0]
+    expect(rows).toHaveLength(SYSTEM_TAGS.length)
+    expect(rows.map((row: any) => row.name).sort()).toEqual([...SYSTEM_TAGS].sort())
+    // Protected means "code depends on this name" — all 20 qualify.
+    expect(rows.every((row: any) => row.is_protected === true)).toBe(true)
+    expect(rows.every((row: any) => row.org_id === "org-new")).toBe(true)
+  })
+
+  test("rolls the org back when the tag seed fails", async () => {
+    state.tagInsertError = { message: "boom" }
+    const err = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    const res = await POST(req({ companyName: "Acme Wholesale", name: "Jane" }))
+
+    expect(res.status).toBe(500)
+    expect(state.orgDeletes).toEqual(["org-new"])
+    // An org without its vocabulary is worse than no org, so the profile is
+    // never claimed either.
+    expect(state.profileUpdates).toHaveLength(0)
+    err.mockRestore()
   })
 
   test("rolls the org back when the profile claim affects 0 rows", async () => {

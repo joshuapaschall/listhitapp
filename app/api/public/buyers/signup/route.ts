@@ -7,6 +7,7 @@ import { validateEmailDebounce, isEmailAcceptable, WRITE_DIAGNOSTIC_TAGS } from 
 import { lookupNumber, isLineAcceptable } from "@/lib/number-lookup"
 import { ALLOWED_ORIGINS, corsHeaders, errorResponse, isRateLimited, originHost, isTenantSubdomainOrigin } from "@/lib/public-api"
 import { getPrimaryPinnedTelnyxOrgId, isOrgTelnyxPinnedEnv } from "@/lib/providers/sms/routing"
+import { ensureTagsExist } from "@/lib/tags/ensure"
 import { resolveSiteByHost } from "@/lib/site-builder/resolve-site"
 import { resolveFromNumber } from "@/lib/showing-notifications"
 import { supabaseAdmin } from "@/lib/supabase/admin"
@@ -156,6 +157,18 @@ export async function POST(request: NextRequest) {
       first_time_buyer: derived.first_time_buyer,
     }
     common.org_id = orgId
+
+    // The derived + persona tags are hard-coded names (lib/buyer-taxonomy.ts).
+    // Migration 20261005000002 seeds them into every org as system tags, but a
+    // website signup must never be the thing that introduces a name the
+    // vocabulary is missing — so canonicalize through the same gate everything
+    // else uses.
+    try {
+      common.tags = await ensureTagsExist(orgId, (common.tags as string[]) ?? [])
+    } catch (tagError) {
+      // Never fail a lead capture over the vocabulary; the names are still valid.
+      console.error("[public-buyers-signup] ensureTagsExist failed", tagError)
+    }
 
     let buyerId = ""
     let sendSms = true
