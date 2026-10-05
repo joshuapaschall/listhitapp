@@ -41,6 +41,40 @@ export function resolveProviderName(
   return "telnyx"
 }
 
+// Env-reading conveniences. Every other org is Twilio-only, so "pinned" is the
+// single switch that says "this request belongs to the Telnyx owner org".
+export function getPinnedTelnyxOrgIds(env: NodeJS.ProcessEnv = process.env): Set<string> {
+  return parseTelnyxPinnedOrgIds(env.TELNYX_PINNED_ORG_IDS)
+}
+
+export function isOrgTelnyxPinnedEnv(
+  orgId: string | null | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  if (!orgId) return false
+  return isOrgTelnyxPinned(orgId, getPinnedTelnyxOrgIds(env))
+}
+
+let warnedPrimaryPin = false
+
+// The one org that runs on Telnyx. Only meaningful when exactly one id is pinned:
+// with zero we have no owner org, with two we cannot say which one a Telnyx-only
+// webhook or sync belongs to, so both cases resolve to null and callers fail closed.
+export function getPrimaryPinnedTelnyxOrgId(env: NodeJS.ProcessEnv = process.env): string | null {
+  const pinned = getPinnedTelnyxOrgIds(env)
+  if (pinned.size === 1) return [...pinned][0]
+
+  if (!warnedPrimaryPin) {
+    warnedPrimaryPin = true
+    console.error(
+      `[sms-routing] TELNYX_PINNED_ORG_IDS must contain exactly one org id (found ${pinned.size}). ` +
+        "Telnyx-only paths (inbound without a known DID, voice-number sync, the public GWH " +
+        "endpoints) cannot resolve an owner org and will fail closed until this is fixed.",
+    )
+  }
+  return null
+}
+
 // Fails loudly in production if the owner pin is unset — invoked from the send path in T5.
 export function assertTelnyxPinConfigured(env: NodeJS.ProcessEnv = process.env): void {
   if (env.NODE_ENV === "production" && parseTelnyxPinnedOrgIds(env.TELNYX_PINNED_ORG_IDS).size === 0) {

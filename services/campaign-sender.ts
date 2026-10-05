@@ -1,5 +1,4 @@
 import { supabaseAdmin } from "@/lib/supabase"
-import { resolveOrgIdForUser } from "@/lib/auth/org-context"
 import { createLogger } from "@/lib/logger"
 import { getUserMergeContext, type UserMergeContext } from "@/lib/user-context"
 import { sendSesEmail } from "@/lib/ses"
@@ -66,17 +65,18 @@ export async function stampBusinessAddressForCampaign(html: string, campaignId?:
   const supabase = requireAdmin()
   const { data: campaign, error: campaignError } = await supabase
     .from("campaigns")
-    .select("user_id")
+    .select("org_id")
     .eq("id", campaignId)
     .maybeSingle()
 
-  if (campaignError || !campaign?.user_id) {
-    if (campaignError) console.error("Failed to load campaign owner for email footer stamping", campaignError)
+  if (campaignError || !campaign?.org_id) {
+    if (campaignError) console.error("Failed to load campaign org for email footer stamping", campaignError)
     return html
   }
 
-  const orgId = await resolveOrgIdForUser(campaign.user_id)
-  if (!orgId) return html
+  // The campaign row owns the tenancy. Going through the campaign's user would
+  // stamp the sender's current org, which is not necessarily the campaign's.
+  const orgId = campaign.org_id
 
   const { data: organization, error: organizationError } = await supabase
     .from("organizations")

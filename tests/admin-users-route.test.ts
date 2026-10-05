@@ -1,6 +1,4 @@
 import { NextRequest } from "next/server"
-import { PERMISSION_KEYS } from "../lib/permissions/keys"
-import { grantsForTemplate } from "../lib/permissions/templates"
 
 vi.mock("next/headers", () => ({
   cookies: () => ({ get: vi.fn(), set: vi.fn(), delete: vi.fn() }),
@@ -14,7 +12,7 @@ const state = vi.hoisted(() => ({
   // Admin client data + captured writes
   adminProfiles: [] as any[],
   adminPermissions: [] as any[],
-  // org_id by profile id — drives resolveOrgIdForUser + the apply-template target lookup.
+  // org_id by profile id — drives resolveOrgIdForUser + the admin target lookup.
   profileOrgById: {} as Record<string, string>,
   profileUpserts: [] as any[],
   permissionUpserts: [] as any[][],
@@ -111,7 +109,7 @@ vi.mock("@/lib/supabase", () => {
               filters[column] = value
               return query
             },
-            // resolveOrgIdForUser / apply-template target: org_id looked up by
+            // resolveOrgIdForUser / admin target: org_id looked up by
             // profile id. requireOrgAdmin also reads the caller's role here —
             // it deliberately uses supabaseAdmin, not the RLS-scoped client.
             maybeSingle: async () => {
@@ -184,7 +182,7 @@ describe("admin users routes", () => {
     state.callerPermissions = []
     state.adminProfiles = []
     state.adminPermissions = []
-    // Caller admin-1 and the default apply-template target u1 share org-A.
+    // Caller admin-1 and the default admin target u1 share org-A.
     state.profileOrgById = { "admin-1": "org-A", u1: "org-A" }
     state.profileUpserts = []
     state.permissionUpserts = []
@@ -264,46 +262,6 @@ describe("admin users routes", () => {
     })
   })
 
-  describe("POST /api/admin/apply-template", () => {
-    async function applyTemplate(body: Record<string, unknown>) {
-      const { POST } = await import("../app/api/admin/apply-template/route")
-      return POST(jsonRequest("http://test/api/admin/apply-template", body))
-    }
-
-    test("is denied without users.manage", async () => {
-      const res = await applyTemplate({ userId: "u1", templateId: "viewer" })
-      expect(res.status).toBe(403)
-      expect(state.permissionUpserts).toHaveLength(0)
-    })
-
-    test("applying viewer sets exactly the viewer grants true and all else false", async () => {
-      asAdmin()
-      const res = await applyTemplate({ userId: "u1", templateId: "viewer" })
-      expect(res.status).toBe(200)
-
-      const rows = state.permissionUpserts.at(-1)!
-      expect(rows).toHaveLength(PERMISSION_KEYS.length)
-
-      const viewerGrants = grantsForTemplate("viewer")
-      const grantedKeys = rows
-        .filter((row) => row.granted === true)
-        .map((row) => row.permission_key)
-        .sort()
-      expect(grantedKeys).toEqual([...viewerGrants].sort())
-
-      // Every other key is explicitly false
-      for (const row of rows) {
-        expect(row.granted).toBe(viewerGrants.includes(row.permission_key))
-        expect(row.user_id).toBe("u1")
-      }
-    })
-
-    test("rejects an unknown template id", async () => {
-      asAdmin()
-      const res = await applyTemplate({ userId: "u1", templateId: "superuser" })
-      expect(res.status).toBe(400)
-    })
-  })
 
   describe("POST /api/admin/create-user", () => {
     async function createUser(body: Record<string, unknown>) {

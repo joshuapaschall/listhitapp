@@ -110,6 +110,12 @@ describe("calling permission gates", () => {
     state.credentialMock.mockReset().mockResolvedValue({ id: "cred-1", username: "sip-user" })
     state.tokenMock.mockReset().mockResolvedValue({ token: "webrtc-token" })
     state.signedUrlMock.mockReset().mockResolvedValue({ data: { signedUrl: state.signedUrl }, error: null })
+    // Telnyx-only routes also require the caller's org to be the pinned one.
+    process.env.TELNYX_PINNED_ORG_IDS = "org-A"
+  })
+
+  afterEach(() => {
+    delete process.env.TELNYX_PINNED_ORG_IDS
   })
 
   function grant(permission: "calls.make_receive" | "calls.recordings") {

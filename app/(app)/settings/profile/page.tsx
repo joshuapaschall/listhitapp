@@ -22,21 +22,20 @@ type Profile = {
 }
 
 type ProfileForm = {
-  full_name: string
-  display_name: string
+  name: string
   phone: string
 }
 
 const emptyForm: ProfileForm = {
-  full_name: "",
-  display_name: "",
+  name: "",
   phone: "",
 }
 
 function formFromProfile(profile: Profile): ProfileForm {
   return {
-    full_name: profile.full_name ?? "",
-    display_name: profile.display_name ?? "",
+    // One field, two columns. full_name is canonical; display_name is kept in
+    // sync so every existing reader of either keeps working.
+    name: profile.full_name || profile.display_name || "",
     phone: profile.phone ?? "",
   }
 }
@@ -83,7 +82,11 @@ export default function ProfileSettingsPage() {
       const response = await fetch("/api/me", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          full_name: form.name,
+          display_name: form.name,
+          phone: form.phone,
+        }),
       })
 
       if (!response.ok) throw new Error("Failed to save profile")
@@ -107,7 +110,7 @@ export default function ProfileSettingsPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">My Profile</h1>
           <p className="text-sm text-muted-foreground">
-            Manage your name, display name, and phone number.
+            Manage your name and phone number.
           </p>
         </div>
 
@@ -128,21 +131,12 @@ export default function ProfileSettingsPage() {
               <form className="space-y-5" onSubmit={handleSubmit}>
                 <div className="grid gap-5 md:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="full_name">Full name</Label>
+                    <Label htmlFor="name">Name</Label>
                     <Input
-                      id="full_name"
-                      value={form.full_name}
-                      onChange={(event) => setForm((current) => ({ ...current, full_name: event.target.value }))}
+                      id="name"
+                      value={form.name}
+                      onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
                       placeholder="Jane Doe"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="display_name">Display name</Label>
-                    <Input
-                      id="display_name"
-                      value={form.display_name}
-                      onChange={(event) => setForm((current) => ({ ...current, display_name: event.target.value }))}
-                      placeholder="Jane"
                     />
                   </div>
                   <div className="space-y-2">

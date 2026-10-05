@@ -9,6 +9,7 @@ import { getCallControlAppId } from "@/lib/voice-env"
 import { listPurchasedNumbersForOrigin, type FromNumber } from "@/lib/telnyx/numbers"
 import { resolveOutboundFrom } from "@/lib/sender/sticky-sender"
 import { resolveOrgIdForUser } from "@/lib/auth/org-context"
+import { requireTelnyxPinnedOrg } from "@/lib/auth/telnyx-guard"
 import { requirePermission } from "@/lib/permissions/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatPhoneE164 } from "@/lib/dedup-utils"
@@ -41,6 +42,9 @@ export async function POST(req: Request) {
     if (!orgId) {
       return NextResponse.json({ ok: false, error: "No organization" }, { status: 403 })
     }
+
+    const notPinned = requireTelnyxPinnedOrg(orgId)
+    if (notPinned) return notPinned
 
     const body = (await req.json().catch(() => ({}))) as {
       to?: string

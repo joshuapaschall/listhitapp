@@ -65,19 +65,24 @@ vi.mock("../lib/supabase", () => {
     from: (table: string) => {
       if (table === "buyers") {
         return {
+          // The inbound handler now scopes the lookup to the resolved org before
+          // matching phone numbers: .select().eq("org_id", org).or(clause)
           select: () => ({
-            or: (expr: string) => ({
-              then: async (resolve: any) => {
-                const nums = expr
-                  .split(",")
-                  .map(s => s.split(".eq.")[1])
-                const result = buyers.filter(b =>
-                  nums.includes(b.phone_norm) ||
-                  nums.includes(b.phone2_norm) ||
-                  nums.includes(b.phone3_norm),
-                )
-                resolve({ data: result, error: null })
-              }
+            eq: (_orgCol: string, orgId: string) => ({
+              or: (expr: string) => ({
+                then: async (resolve: any) => {
+                  const nums = expr
+                    .split(",")
+                    .map(s => s.split(".eq.")[1])
+                  const result = buyers.filter(b =>
+                    b.org_id === orgId &&
+                    (nums.includes(b.phone_norm) ||
+                      nums.includes(b.phone2_norm) ||
+                      nums.includes(b.phone3_norm)),
+                  )
+                  resolve({ data: result, error: null })
+                }
+              })
             })
           }),
           update: (data: any) => ({
@@ -91,6 +96,15 @@ vi.mock("../lib/supabase", () => {
               return { error: null }
             }
           })
+        }
+      }
+      if (table === "inbound_numbers") {
+        // No seeded DID in these fixtures — the Telnyx arm falls back to the
+        // single pinned owner org, which is what production does.
+        return {
+          select: () => ({
+            eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
+          }),
         }
       }
       if (table === "dnc_phones") {
@@ -194,10 +208,12 @@ vi.mock("../lib/supabase", () => {
   return { supabase: client, supabaseAdmin: client }
 })
 
+const PINNED_ORG = "00000000-0000-4000-8000-000000000001"
+
 describe("Telnyx incoming SMS webhook", () => {
   beforeEach(() => {
     buyers = [
-      { id: "b1", phone: "2223334444", phone2: null, phone3: null, phone_norm: "2223334444", can_receive_sms: true }
+      { id: "b1", phone: "2223334444", phone2: null, phone3: null, phone_norm: "2223334444", can_receive_sms: true, org_id: PINNED_ORG }
     ]
     messages = []
     threads = []
@@ -214,13 +230,13 @@ describe("Telnyx incoming SMS webhook", () => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://cdn"
     process.env.TELNYX_API_KEY = "KEY"
     process.env.SUPABASE_SERVICE_ROLE_KEY = "SKEY"
-    // upsertAnonThread fails closed with no resolvable org; the webhook is
-    // sessionless, so DEFAULT_ORG_ID is the production fallback it relies on.
-    process.env.DEFAULT_ORG_ID = "00000000-0000-4000-8000-000000000001"
+    // Telnyx only ever serves the pinned owner org, so an inbound with no
+    // inbound_numbers match resolves its tenant from the pin.
+    process.env.TELNYX_PINNED_ORG_IDS = PINNED_ORG
   })
 
   afterEach(() => {
-    delete process.env.DEFAULT_ORG_ID
+    delete process.env.TELNYX_PINNED_ORG_IDS
   })
 
   test("marks buyer as opted out on STOP", async () => {
@@ -321,7 +337,7 @@ describe("Telnyx incoming SMS webhook", () => {
 
   test("matches buyer saved with +1 phone", async () => {
     buyers = [
-      { id: "b1", phone: "+12223334444", phone2: null, phone3: null, phone_norm: "12223334444", can_receive_sms: true }
+      { id: "b1", phone: "+12223334444", phone2: null, phone3: null, phone_norm: "12223334444", can_receive_sms: true, org_id: PINNED_ORG }
     ]
     const body = {
       data: {

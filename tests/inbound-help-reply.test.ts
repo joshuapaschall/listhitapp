@@ -13,7 +13,19 @@ const h = vi.hoisted(() => {
   const client = {
     from: (table: string) => {
       if (table === "buyers") {
-        return { select: () => ({ or: () => Promise.resolve({ data: state.buyers, error: null }) }) }
+        // Org-scoped: the handler resolves the tenant from the inbound DID
+        // before it looks for a matching buyer.
+        return {
+          select: () => ({
+            eq: (_col: string, orgId: string) => ({
+              or: () =>
+                Promise.resolve({
+                  data: state.buyers.filter((b) => b.org_id === orgId),
+                  error: null,
+                }),
+            }),
+          }),
+        }
       }
       if (table === "campaign_recipients") {
         return {
@@ -93,7 +105,9 @@ const helpEvent = (provider: "telnyx" | "twilio") => ({
 describe("provider-aware HELP auto-reply", () => {
   beforeEach(() => {
     h.state.buyers = [
-      { id: "b1", org_id: "org-1", can_receive_sms: true, blocked_at: null, phone_norm: "12223334444" },
+      // Same org as the inbound DID resolves to — the buyers lookup is now
+      // scoped to that org, so a buyer in any other tenant must not match.
+      { id: "b1", org_id: "org-x", can_receive_sms: true, blocked_at: null, phone_norm: "12223334444" },
     ]
     h.state.messages = []
     h.state.inboundOrg = "org-x"
@@ -137,15 +151,19 @@ describe("provider-aware HELP auto-reply", () => {
     expect(reply.provider_id).toBe("tw1")
   })
 
-  test("twilio HELP with no inbound_numbers match warns and skips (response unchanged)", async () => {
+  test("twilio HELP with no inbound_numbers match drops the whole inbound", async () => {
+    // Twilio has no pinned-org fallback. With no org for the receiving DID we
+    // cannot tell which tenant this belongs to, so nothing is written at all —
+    // not the inbound message, not a HELP reply.
     h.state.inboundOrg = null
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const err = vi.spyOn(console, "error").mockImplementation(() => {})
     const res = await handleInboundSms(helpEvent("twilio"))
-    expect(res.status).toBe(204)
+    expect(res.status).toBe(200)
+    await expect(res.json()).resolves.toEqual({ received: true, dropped: "unknown_did" })
     expect(h.resolveMock).not.toHaveBeenCalled()
     expect(h.sendMock).not.toHaveBeenCalled()
-    expect(h.state.messages.find((m) => m.direction === "outbound")).toBeUndefined()
-    warn.mockRestore()
+    expect(h.state.messages).toHaveLength(0)
+    err.mockRestore()
   })
 
   test("twilio HELP never 500s when sendMessage throws", async () => {

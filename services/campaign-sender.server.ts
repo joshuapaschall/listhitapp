@@ -27,9 +27,10 @@ interface SmsOptions {
   mediaUrls?: string[]
   dryRun?: boolean
   isTest?: boolean
-  // Org context for provider routing. Omit when there is genuinely no org in
-  // scope — resolveSmsProvider(undefined) falls back to Telnyx (safe default).
-  orgId?: string
+  // Org context for provider routing and every row this writes. Required: the
+  // only caller already 400s without an org, and message_threads / messages /
+  // buyer_sms_senders all need an explicit org_id now.
+  orgId: string
   // Campaign market whose number pool sends cold recipients. When set (with
   // orgId), resolveOutboundFrom rotates that pool and never uses the env DID.
   // Omitted by 1:1 / transactional callers, which keep the env fallback.

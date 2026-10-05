@@ -6,6 +6,7 @@ import { createClient } from "@supabase/supabase-js"
 import { TELNYX_API_URL, telnyxHeaders } from "@/lib/telnyx"
 import { getTelnyxApiKey } from "@/lib/voice-env"
 import { assertCronAuth } from "@/lib/cron-auth"
+import { getPrimaryPinnedTelnyxOrgId } from "@/lib/providers/sms/routing"
 
 async function fetchNumbers() {
   const messagingProfileId = process.env.TELNYX_MESSAGING_PROFILE_ID
@@ -34,8 +35,9 @@ async function fetchNumbers() {
   return numbers
 }
 
-async function upsertNumbers(numbers: any[], supabase: any) {
+async function upsertNumbers(numbers: any[], supabase: any, orgId: string) {
   const mapped = numbers.map((n) => ({
+    org_id: orgId,
     phone_number: n.phone_number,
     friendly_name: n.friendly_name || null,
     provider_id: n.id,
@@ -79,11 +81,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
+  // This sync only ever pulls the Telnyx account's numbers, which belong to the
+  // single pinned owner org. Without an unambiguous pin we cannot stamp org_id.
+  const pinnedOrgId = getPrimaryPinnedTelnyxOrgId()
+  if (!pinnedOrgId) {
+    return NextResponse.json(
+      { error: "TELNYX_PINNED_ORG_IDS must contain exactly one org" },
+      { status: 500 },
+    )
+  }
+
   const supabase = createClient(supabaseUrl, serviceKey)
 
   try {
     const numbers = await fetchNumbers()
-    await upsertNumbers(numbers, supabase)
+    await upsertNumbers(numbers, supabase, pinnedOrgId)
     return NextResponse.json({ status: "success", synced: numbers.length })
   } catch (err: any) {
     console.error("Failed to sync voice numbers", err)

@@ -2,6 +2,7 @@ import { apiError } from "@/lib/api-error"
 import { NextRequest, NextResponse } from "next/server"
 
 import { requireOrgContext } from "@/lib/auth/org-context"
+import { requireTelnyxPinnedOrg } from "@/lib/auth/telnyx-guard"
 import { TELNYX_API_URL, telnyxHeaders } from "@/lib/telnyx"
 import { getCallControlAppId } from "@/lib/voice-env"
 
@@ -11,6 +12,8 @@ export async function POST(request: NextRequest) {
     const { user, orgId } = await requireOrgContext()
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     if (!orgId) return NextResponse.json({ error: "Missing org" }, { status: 400 })
+    const notPinned = requireTelnyxPinnedOrg(orgId)
+    if (notPinned) return notPinned
 
     const { action, phoneNumber } = await request.json()
 

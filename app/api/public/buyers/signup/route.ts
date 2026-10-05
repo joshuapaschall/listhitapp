@@ -6,6 +6,7 @@ import { normalizeEmail, formatPhoneE164, normalizePhone, mergeUnique } from "@/
 import { validateEmailDebounce, isEmailAcceptable, WRITE_DIAGNOSTIC_TAGS } from "@/lib/debounce"
 import { lookupNumber, isLineAcceptable } from "@/lib/number-lookup"
 import { ALLOWED_ORIGINS, corsHeaders, errorResponse, isRateLimited, originHost, isTenantSubdomainOrigin } from "@/lib/public-api"
+import { getPrimaryPinnedTelnyxOrgId, isOrgTelnyxPinnedEnv } from "@/lib/providers/sms/routing"
 import { resolveSiteByHost } from "@/lib/site-builder/resolve-site"
 import { resolveFromNumber } from "@/lib/showing-notifications"
 import { supabaseAdmin } from "@/lib/supabase/admin"
@@ -67,7 +68,13 @@ export async function POST(request: NextRequest) {
   if (!site && !isStatic) {
     return NextResponse.json({ ok: false, error_code: "origin_not_allowed", message: "Origin not allowed" }, { status: 403 })
   }
-  const orgId: string | null = site?.org_id ?? (process.env.PUBLIC_SIGNUP_DEFAULT_ORG_ID || null)
+  // The builder site owns the lead. The static origins are the legacy GWH site
+  // and localhost, which belong to the pinned Telnyx owner org — the only case
+  // where an org is inferred rather than looked up.
+  const orgId: string | null = site?.org_id ?? (isStatic ? getPrimaryPinnedTelnyxOrgId() : null)
+  if (!orgId) {
+    return NextResponse.json({ ok: false, error_code: "origin_not_allowed", message: "Origin not allowed" }, { status: 403, headers: corsHeaders(origin) })
+  }
   const brandName: string = site?.name || "our team"
 
   const ip = (request.headers.get("x-forwarded-for") || "unknown").split(",")[0].trim()
@@ -92,9 +99,7 @@ export async function POST(request: NextRequest) {
     // buyers_org_email_norm_idx / buyers_org_phone_norm_idx are PER-ORG partial
     // unique indexes on (org_id, email_norm) / (org_id, phone_norm), so this
     // lookup is org-scoped: a lead is a duplicate only if it matches an existing
-    // row in the SAME org by phone_norm OR email_norm. When orgId can't be
-    // resolved (no host match and no PUBLIC_SIGNUP_DEFAULT_ORG_ID) we fall back
-    // to a global match, mirroring the insert's reliance on the column default.
+    // row in the SAME org by phone_norm OR email_norm.
     const orParts = [`phone_norm.eq.${phoneNorm}`]
     if (emailNorm) orParts.push(`email_norm.eq.${emailNorm}`)
     const orFilter = orParts.join(",")
@@ -104,7 +109,7 @@ export async function POST(request: NextRequest) {
         .from("buyers")
         .select(DEDUP_COLS)
         .or(orFilter)
-      if (orgId) q = q.eq("org_id", orgId)
+        .eq("org_id", orgId)
       const { data, error } = await q.limit(1).maybeSingle()
       if (error) console.error("[public-buyers-signup] dedup lookup error", error)
       return data
@@ -150,7 +155,7 @@ export async function POST(request: NextRequest) {
       owner_financing: derived.owner_financing,
       first_time_buyer: derived.first_time_buyer,
     }
-    if (orgId) common.org_id = orgId
+    common.org_id = orgId
 
     let buyerId = ""
     let sendSms = true
@@ -256,7 +261,7 @@ export async function POST(request: NextRequest) {
         source_url: payload.source_url || null,
         ip_address: ip,
         user_agent: request.headers.get("user-agent") || null,
-        ...(orgId ? { org_id: orgId } : {}),
+        org_id: orgId,
       })
     }
 
@@ -266,7 +271,7 @@ export async function POST(request: NextRequest) {
     // welcome SMS on the legacy/static path (no resolved builder site). Tenant
     // welcome SMS will be enabled once sending is org-scoped (later phase).
     const welcomeMessage = site ? welcomeText(brandName) : WELCOME_TEXT
-    if (sendSms && !site) {
+    if (sendSms && !site && isOrgTelnyxPinnedEnv(orgId)) {
       // Awaited (not deferred): App Router route handlers have no waitUntil. A
       // Telnyx failure must never fail the signup, so it is fully guarded.
       try {

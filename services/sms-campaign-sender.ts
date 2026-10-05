@@ -14,7 +14,6 @@ import { resolveSendingMarketId } from "@/lib/campaigns/resolve-sending-market"
 import { NoSendingPoolError } from "@/lib/sender/campaign-from-pool"
 import { ensurePublicMediaUrls } from "@/utils/mms.server"
 import { resolveSmsProvider } from "@/lib/providers/sms"
-import { resolveDefaultOrgId } from "@/lib/auth/default-org"
 
 const log = createLogger("sms-campaign-sender")
 
@@ -41,10 +40,9 @@ type QueueSmsCampaignPayload = {
   campaignId: string
   mediaUrls?: string[]
   recipients: SmsQueueRecipient[]
-  // When provided, stamp queued rows with the campaign's org. Optional so the
-  // (out-of-scope) caller can start passing it without a lockstep change; when
-  // absent we fall back to the validated DEFAULT_ORG_ID.
-  orgId?: string
+  // Stamped onto every queued row. Required: the queue row is the only org
+  // signal the worker has when it later picks the job up.
+  orgId: string
 }
 
 type SmsQueuePayload = {
@@ -212,8 +210,9 @@ async function sendSingleCampaignSms({
   body: string
   mediaUrls?: string[]
   campaignId?: string
-  // Org context for provider routing; derived from the org-scoped campaign row.
-  orgId?: string
+  // Org context for provider routing and every row this writes. Required — it
+  // comes from the queue row the job was claimed from.
+  orgId: string
   // Campaign market pool for cold recipients (with orgId). Sticky always wins.
   sendingMarketId?: string
 }): Promise<TelnyxSendResult> {
@@ -312,14 +311,6 @@ export async function queueSmsCampaign({
   const supabase = requireAdmin()
   if (!recipients.length) return []
 
-  // sms_campaign_queue no longer carries a column default for org_id — fall back
-  // to the validated env org so a caller that hasn't been threaded through yet
-  // still queues instead of throwing mid-campaign.
-  const effectiveOrgId = orgId ?? resolveDefaultOrgId()
-  if (!effectiveOrgId) {
-    console.error("queueSmsCampaign: org unresolved — queue insert will fail", { campaignId })
-  }
-
   const spacingMs = Math.ceil(60000 / SMS_CAMPAIGN_MPM)
   const scheduledStart = Date.now()
   const rows = recipients.map((recipient, idx) => ({
@@ -337,7 +328,7 @@ export async function queueSmsCampaign({
     max_attempts: SMS_QUEUE_MAX_ATTEMPTS,
     // Omit when unknown — never an explicit null. With the default dropped this
     // raises NOT NULL, which is the intended loud failure.
-    ...(effectiveOrgId ? { org_id: effectiveOrgId } : {}),
+    org_id: orgId,
   }))
 
   const queuedRows: any[] = []
@@ -417,9 +408,6 @@ export async function processSmsQueue(limit = 5, opts: { leaseSeconds?: number; 
     : { data: [] }
   const campaignUserIdMap = new Map(
     campaignRows?.map((row) => [row.id, row.user_id as string | null]) ?? [],
-  )
-  const campaignOrgIdMap = new Map(
-    campaignRows?.map((row) => [row.id, (row as any).org_id as string | null]) ?? [],
   )
 
   // Resolve each campaign's sending market ONCE. A campaign whose pool can't be
@@ -522,6 +510,14 @@ export async function processSmsQueue(limit = 5, opts: { leaseSeconds?: number; 
       if (buyerError) throw buyerError
       if (!buyer) throw new Error("Buyer not found for SMS job")
 
+      // The queue row carries its own org (claim_sms_queue_jobs returns SETOF
+      // sms_campaign_queue). Trust that over any campaign-level lookup: it is
+      // the org the recipient was actually queued under.
+      const jobOrgId = (job as { org_id?: string | null }).org_id ?? null
+      if (!jobOrgId) {
+        throw new Error("missing_org")
+      }
+
       const campaignKey = job.campaign_id || payload.campaignId || ""
       const senderContext = campaignMergeContextMap.get(campaignKey)
       const body = renderTemplate(payload.body, buyer, senderContext)
@@ -531,7 +527,7 @@ export async function processSmsQueue(limit = 5, opts: { leaseSeconds?: number; 
         body,
         mediaUrls: payload.mediaUrls,
         campaignId: payload.campaignId || job.campaign_id,
-        orgId: campaignOrgIdMap.get(campaignKey) ?? undefined,
+        orgId: jobOrgId,
         sendingMarketId: campaignSendingMarketMap.get(campaignKey),
       })
       const sentAt = new Date().toISOString()
@@ -576,14 +572,15 @@ export async function processSmsQueue(limit = 5, opts: { leaseSeconds?: number; 
       //  - bad recipient (invalid/landline) → suppress the buyer so future sends skip them
       //  - bad sender (pool number not on account) → disable that number so rotation stops using it
       const classification = classifySmsFailure(errorDetails)
-      const jobOrgId = campaignOrgIdMap.get(job.campaign_id || (job.payload as any)?.campaignId || "") ?? undefined
+      const failedJobOrgId = (job as { org_id?: string | null }).org_id ?? undefined
       if (classification.kind === "bad_recipient") {
         await suppressBuyerSms(job.buyer_id, classification.reason)
       } else if (classification.kind === "bad_sender" && classification.senderNumber) {
-        await disableSmsSender(jobOrgId, classification.senderNumber, classification.reason)
+        await disableSmsSender(failedJobOrgId, classification.senderNumber, classification.reason)
       }
       const retryable =
-        classification.kind === "bad_sender" ? true          // recipient is fine — retry gets a good pool number
+        errorDetails === "missing_org" ? false                // unqueueable row — retrying cannot add an org
+        : classification.kind === "bad_sender" ? true          // recipient is fine — retry gets a good pool number
         : classification.kind === "bad_recipient" ? false     // dead number — don't waste attempts
         : isRetryableError(err)
       const updates: Record<string, any> = {

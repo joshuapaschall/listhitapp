@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 
 import { corsHeaders, isOriginAllowed } from "@/lib/public-api/cors"
 import { resolveSiteByHost } from "@/lib/site-builder/resolve-site"
-import { originHost } from "@/lib/public-api"
+import { ALLOWED_ORIGINS, originHost } from "@/lib/public-api"
+import { getPrimaryPinnedTelnyxOrgId } from "@/lib/providers/sms/routing"
 import { supabaseAdmin } from "@/lib/supabase/admin"
 
 type PropertyRow = {
@@ -76,7 +77,13 @@ export async function GET(request: NextRequest) {
   try {
     const host = originHost(origin || "")
     const site = host ? await resolveSiteByHost(host) : null
-    const orgId = site?.org_id ?? (process.env.PUBLIC_PROPERTIES_DEFAULT_ORG_ID || null)
+    // The builder site owns the listings. The static origins (legacy GWH site +
+    // localhost) belong to the pinned Telnyx owner org; everything else has no
+    // org and therefore no properties to show.
+    const orgId = site?.org_id ?? (ALLOWED_ORIGINS.includes(allowedOrigin) ? getPrimaryPinnedTelnyxOrgId() : null)
+    if (!orgId) {
+      return NextResponse.json({ ok: true, count: 0, properties: [] }, { headers: corsHeaders(allowedOrigin) })
+    }
 
     const params = request.nextUrl.searchParams
     const limit = parseIntParam(params.get("limit"), 20, 1, 50)
@@ -99,10 +106,8 @@ export async function GET(request: NextRequest) {
       .eq("status", "available")
       .not("slug", "is", null)
 
-    if (orgId) {
-      countQuery = countQuery.eq("org_id", orgId)
-      dataQuery = dataQuery.eq("org_id", orgId)
-    }
+    countQuery = countQuery.eq("org_id", orgId)
+    dataQuery = dataQuery.eq("org_id", orgId)
     if (propertyType) {
       countQuery = countQuery.eq("property_type", propertyType)
       dataQuery = dataQuery.eq("property_type", propertyType)
