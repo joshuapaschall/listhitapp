@@ -228,8 +228,9 @@ const createSupabaseClient = () => ({
         }),
       }
     }
-    // resolveSmsProvider(orgId) reads org_twilio; org-1 has no row → Telnyx (safe default).
-    if (table === "org_twilio") {
+    // resolveSmsProvider(orgId) reads org_twilio + org_twilio_credentials via
+    // loadRoutingState. org-1 is the pinned owner org here, so it resolves to Telnyx.
+    if (table === "org_twilio" || table === "org_twilio_credentials") {
       return {
         select: () => ({
           eq: () => ({
@@ -262,8 +263,8 @@ vi.mock("@/lib/permissions/server", () => ({
   requirePermission: async () => null,
 }))
 
-// Delegating provider mock: default runs the real resolver (org-1 has no
-// org_twilio row → TelnyxSmsProvider, managesPacing:false) so existing cases are
+// Delegating provider mock: default runs the real resolver (org-1 is the pinned
+// owner org → TelnyxSmsProvider, managesPacing:false) so existing cases are
 // unchanged. A test can set h.providerOverride for the managesPacing:true case.
 const h = vi.hoisted(() => ({ providerOverride: null as any }))
 vi.mock("@/lib/providers/sms", async (importOriginal) => {
@@ -305,6 +306,13 @@ describe("messages send route", () => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://cdn"
     process.env.TELNYX_MESSAGING_PROFILE_ID = "MP"
     process.env.DEFAULT_OUTBOUND_DID = "+19998887777"
+    // These cases exercise the owner (Telnyx) path; tenant blocking is covered in
+    // tests/messages-send-blocked.test.ts.
+    process.env.TELNYX_PINNED_ORG_IDS = "org-1"
+  })
+
+  afterAll(() => {
+    delete process.env.TELNYX_PINNED_ORG_IDS
   })
 
   test("sends sms and records message", async () => {

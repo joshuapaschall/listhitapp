@@ -67,6 +67,8 @@ describe("pickPoolFromNumber", () => {
     expect(h.state.calls).toContainEqual({ table: "inbound_numbers", m: "eq", args: ["market_id", "mkt-1"] })
     expect(h.state.calls).toContainEqual({ table: "inbound_numbers", m: "eq", args: ["sms_enabled", true] })
     expect(h.state.calls).toContainEqual({ table: "inbound_numbers", m: "eq", args: ["enabled", true] })
+    // org-1 isn't the pinned owner, so the pool only draws its Twilio numbers.
+    expect(h.state.calls).toContainEqual({ table: "inbound_numbers", m: "eq", args: ["provider", "twilio"] })
     expect(h.state.calls).toContainEqual({
       table: "inbound_numbers",
       m: "order",
@@ -78,6 +80,24 @@ describe("pickPoolFromNumber", () => {
     expect(upd).toHaveLength(1)
     expect(upd[0].args[0]).toHaveProperty("last_sms_at")
     expect(h.state.calls).toContainEqual({ table: "inbound_numbers", m: "eq", args: ["e164", "+14045551234"] })
+  })
+
+  test("the pinned owner org's pool only draws Telnyx numbers", async () => {
+    const saved = process.env.TELNYX_PINNED_ORG_IDS
+    process.env.TELNYX_PINNED_ORG_IDS = "org-owner"
+    try {
+      h.state.selectResult = { data: { e164: "+14045551234", last_sms_at: null }, error: null }
+      await pickPoolFromNumber("org-owner", "mkt-1")
+      const providerFilters = h.state.calls.filter((c) => c.m === "eq" && c.args[0] === "provider")
+      // Both the LRU select and the last_sms_at stamp are provider-scoped.
+      expect(providerFilters).toEqual([
+        { table: "inbound_numbers", m: "eq", args: ["provider", "telnyx"] },
+        { table: "inbound_numbers", m: "eq", args: ["provider", "telnyx"] },
+      ])
+    } finally {
+      if (saved === undefined) delete process.env.TELNYX_PINNED_ORG_IDS
+      else process.env.TELNYX_PINNED_ORG_IDS = saved
+    }
   })
 
   test("empty pool → NoSendingPoolError, and no stamp is attempted", async () => {
@@ -135,6 +155,17 @@ describe("resolveSendingMarketId", () => {
 // ---------------------------------------------------------------------------
 
 describe("resolveOutboundFrom sticky precedence", () => {
+  // These cases exercise the pinned owner org's (Telnyx) path, whose sticky
+  // candidates are trusted as before. Twilio-org validation is covered below.
+  const savedPin = process.env.TELNYX_PINNED_ORG_IDS
+  beforeEach(() => {
+    process.env.TELNYX_PINNED_ORG_IDS = "org-1"
+  })
+  afterEach(() => {
+    if (savedPin === undefined) delete process.env.TELNYX_PINNED_ORG_IDS
+    else process.env.TELNYX_PINNED_ORG_IDS = savedPin
+  })
+
   test("a buyer_sms_senders sticky short-circuits before the pool", async () => {
     // A minimal client that returns a sticky from_number for buyer_sms_senders.
     const client: any = {
@@ -229,5 +260,89 @@ describe("resolveOutboundFrom sticky precedence", () => {
       if (savedDid === undefined) delete process.env.DEFAULT_OUTBOUND_DID
       else process.env.DEFAULT_OUTBOUND_DID = savedDid
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Twilio (non-pinned) orgs: a sticky number only counts when the org owns it on
+// Twilio, and DEFAULT_OUTBOUND_DID is never used.
+// ---------------------------------------------------------------------------
+
+describe("resolveOutboundFrom for a Twilio org", () => {
+  const savedPin = process.env.TELNYX_PINNED_ORG_IDS
+  const savedDid = process.env.DEFAULT_OUTBOUND_DID
+  beforeEach(() => {
+    process.env.TELNYX_PINNED_ORG_IDS = "org-owner"
+    process.env.DEFAULT_OUTBOUND_DID = "+14045550000"
+  })
+  afterEach(() => {
+    if (savedPin === undefined) delete process.env.TELNYX_PINNED_ORG_IDS
+    else process.env.TELNYX_PINNED_ORG_IDS = savedPin
+    if (savedDid === undefined) delete process.env.DEFAULT_OUTBOUND_DID
+    else process.env.DEFAULT_OUTBOUND_DID = savedDid
+  })
+
+  // buyer_sms_senders returns `sticky`; inbound_numbers returns a row only when
+  // filtered by org-twilio + provider "twilio" and `owned` is true.
+  const makeClient = (sticky: string, owned: boolean): any => {
+    const inboundFilters: Array<[string, any]> = []
+    const client = {
+      inboundFilters,
+      from: (table: string) => {
+        const filters: Record<string, any> = {}
+        const b: any = {}
+        b.select = () => b
+        b.order = () => b
+        b.limit = () => b
+        b.eq = (col: string, val: any) => {
+          filters[col] = val
+          if (table === "inbound_numbers") inboundFilters.push([col, val])
+          return b
+        }
+        b.in = () =>
+          Promise.resolve(
+            table === "inbound_numbers" && owned && filters.org_id === "org-twilio" && filters.provider === "twilio"
+              ? { data: [{ e164: sticky }], error: null }
+              : { data: [], error: null },
+          )
+        b.maybeSingle = () =>
+          Promise.resolve(
+            table === "buyer_sms_senders" ? { data: { from_number: sticky }, error: null } : { data: null, error: null },
+          )
+        return b
+      },
+    }
+    return client
+  }
+
+  test("an owned Twilio sticky number is used", async () => {
+    const { resolveOutboundFrom } = await import("@/lib/sender/sticky-sender")
+    const client = makeClient("+14045557777", true)
+    const result = await resolveOutboundFrom({ client, buyerId: "buyer-1", orgId: "org-twilio" })
+    expect(result).toBe("+14045557777")
+    expect(client.inboundFilters).toContainEqual(["provider", "twilio"])
+  })
+
+  test("a sticky number the org doesn't own on Twilio → null (no DEFAULT_OUTBOUND_DID)", async () => {
+    const { resolveOutboundFrom } = await import("@/lib/sender/sticky-sender")
+    const result = await resolveOutboundFrom({
+      client: makeClient("+14045557777", false),
+      buyerId: "buyer-1",
+      orgId: "org-twilio",
+    })
+    expect(result).toBeNull()
+  })
+
+  test("the pinned owner org still falls back to DEFAULT_OUTBOUND_DID", async () => {
+    const { resolveOutboundFrom } = await import("@/lib/sender/sticky-sender")
+    const client: any = {
+      from: () => {
+        const b: any = {}
+        for (const m of ["select", "eq", "order", "limit"]) b[m] = () => b
+        b.maybeSingle = () => Promise.resolve({ data: null, error: null })
+        return b
+      },
+    }
+    expect(await resolveOutboundFrom({ client, buyerId: "buyer-1", orgId: "org-owner" })).toBe("+14045550000")
   })
 })

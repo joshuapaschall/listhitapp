@@ -163,6 +163,11 @@ const h = vi.hoisted(() => {
 
 vi.mock("@/lib/supabase", () => ({ supabaseAdmin: h.client, supabase: h.client }))
 
+// SMS readiness gate (getSmsReadiness → loadRoutingState). org-1 is pinned as the
+// owner org in beforeEach, so its SMS campaigns pass the gate on the Telnyx rail;
+// any other org has no Twilio rows and is blocked.
+vi.mock("@/lib/providers/routing-state", () => ({ loadRoutingState: async () => null }))
+
 vi.mock("@/services/sms-campaign-sender", () => ({
   queueSmsCampaign: vi.fn(async () => ({})),
   processSmsQueue: vi.fn(async () => 0),
@@ -209,6 +214,7 @@ let emailSender: any
 
 describe("send route templates", () => {
   beforeEach(async () => {
+    process.env.TELNYX_PINNED_ORG_IDS = "org-1"
     h.state.campaigns = []
     h.state.recipients = []
     h.state.buyers = []
@@ -239,9 +245,18 @@ describe("send route templates", () => {
       body: JSON.stringify({ campaignId }),
     })
 
+  test("SMS campaign for a non-pinned org whose texting isn't live → 409 sms_not_ready, nothing queued", async () => {
+    h.state.campaigns.push({ id: "c-blocked", org_id: "org-tenant", channel: "sms", message: "Hi", buyer_ids: ["bt1"] })
+    h.state.buyers.push({ id: "bt1", org_id: "org-tenant", phone: "+15125550199", can_receive_sms: true, sms_suppressed: false, deleted_at: null, email_suppressed: false })
+    const res = await POST(req("c-blocked"))
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({ code: "sms_not_ready" })
+    expect(smsSender.queueSmsCampaign).not.toHaveBeenCalled()
+  })
+
   test("queues SMS with the raw template + recipients (rendering deferred)", async () => {
-    h.state.campaigns.push({ id: "c1", channel: "sms", message: "Hi {{first_name}}", buyer_ids: ["b1"] })
-    h.state.buyers.push({ id: "b1", fname: "John", lname: "Doe", phone: "+15125550111", can_receive_sms: true, sms_suppressed: false, deleted_at: null, email_suppressed: false })
+    h.state.campaigns.push({ id: "c1", org_id: "org-1", channel: "sms", message: "Hi {{first_name}}", buyer_ids: ["b1"] })
+    h.state.buyers.push({ id: "b1", org_id: "org-1", fname: "John", lname: "Doe", phone: "+15125550111", can_receive_sms: true, sms_suppressed: false, deleted_at: null, email_suppressed: false })
     const res = await POST(req("c1"))
     expect(res.status).toBe(200)
     expect(smsSender.queueSmsCampaign).toHaveBeenCalledWith(
@@ -259,10 +274,11 @@ describe("send route templates", () => {
     // twice (1000 + 500). Guards the #779 contract: fetchAllRows must chain
     // .order().range() and loop, not truncate at the first 1000-row page.
     const ids = Array.from({ length: 1500 }, (_, i) => `bp${String(i).padStart(4, "0")}`)
-    h.state.campaigns.push({ id: "cpage", channel: "sms", message: "Hi", buyer_ids: ids })
+    h.state.campaigns.push({ id: "cpage", org_id: "org-1", channel: "sms", message: "Hi", buyer_ids: ids })
     ids.forEach((id, i) =>
       h.state.buyers.push({
         id,
+        org_id: "org-1",
         phone: `+1512555${String(1000 + i).padStart(4, "0")}`,
         can_receive_sms: true,
         sms_suppressed: false,
@@ -292,8 +308,8 @@ describe("send route templates", () => {
   })
 
   test("replaces SMS URLs with per-recipient short links before queueing", async () => {
-    h.state.campaigns.push({ id: "c5", channel: "sms", message: "See https://example.com now", buyer_ids: ["b5"] })
-    h.state.buyers.push({ id: "b5", fname: "Alex", phone: "+15125550155", can_receive_sms: true, sms_suppressed: false, deleted_at: null, email_suppressed: false })
+    h.state.campaigns.push({ id: "c5", org_id: "org-1", channel: "sms", message: "See https://example.com now", buyer_ids: ["b5"] })
+    h.state.buyers.push({ id: "b5", org_id: "org-1", fname: "Alex", phone: "+15125550155", can_receive_sms: true, sms_suppressed: false, deleted_at: null, email_suppressed: false })
     const res = await POST(req("c5"))
     expect(res.status).toBe(200)
     const arg = (smsSender.queueSmsCampaign as any).mock.calls[0][0]
@@ -302,8 +318,8 @@ describe("send route templates", () => {
 
   test("queues the full SMS body without trimming", async () => {
     const msg = "x".repeat(170)
-    h.state.campaigns.push({ id: "c3", channel: "sms", message: msg, buyer_ids: ["b3"] })
-    h.state.buyers.push({ id: "b3", phone: "+15125550133", can_receive_sms: true, sms_suppressed: false, deleted_at: null, email_suppressed: false })
+    h.state.campaigns.push({ id: "c3", org_id: "org-1", channel: "sms", message: msg, buyer_ids: ["b3"] })
+    h.state.buyers.push({ id: "b3", org_id: "org-1", phone: "+15125550133", can_receive_sms: true, sms_suppressed: false, deleted_at: null, email_suppressed: false })
     const res = await POST(req("c3"))
     expect(res.status).toBe(200)
     expect(smsSender.queueSmsCampaign).toHaveBeenCalledWith(
@@ -314,8 +330,8 @@ describe("send route templates", () => {
   })
 
   test("skips hidden buyers (no recipients -> 400, queue untouched)", async () => {
-    h.state.campaigns.push({ id: "c4", channel: "sms", message: "Hi", buyer_ids: ["b4"] })
-    h.state.buyers.push({ id: "b4", phone: "+15125550144", can_receive_sms: true, deleted_at: "2024-01-01", email_suppressed: false })
+    h.state.campaigns.push({ id: "c4", org_id: "org-1", channel: "sms", message: "Hi", buyer_ids: ["b4"] })
+    h.state.buyers.push({ id: "b4", org_id: "org-1", phone: "+15125550144", can_receive_sms: true, deleted_at: "2024-01-01", email_suppressed: false })
     const res = await POST(req("c4"))
     expect(res.status).toBe(400)
     expect(smsSender.queueSmsCampaign).not.toHaveBeenCalled()
@@ -337,12 +353,12 @@ describe("send route templates", () => {
   })
 
   test("merges buyer_ids and group_ids into ONE batched queue call", async () => {
-    h.state.campaigns.push({ id: "c8", channel: "sms", message: "Hi", buyer_ids: ["b1"], group_ids: ["g1"] })
+    h.state.campaigns.push({ id: "c8", org_id: "org-1", channel: "sms", message: "Hi", buyer_ids: ["b1"], group_ids: ["g1"] })
     h.state.buyers.push(
-      { id: "b1", phone: "+15125550101", can_receive_sms: true, sms_suppressed: false, deleted_at: null, email_suppressed: false },
-      { id: "b2", phone: "+15125550102", can_receive_sms: true, sms_suppressed: false, deleted_at: null, email_suppressed: false },
+      { id: "b1", org_id: "org-1", phone: "+15125550101", can_receive_sms: true, sms_suppressed: false, deleted_at: null, email_suppressed: false },
+      { id: "b2", org_id: "org-1", phone: "+15125550102", can_receive_sms: true, sms_suppressed: false, deleted_at: null, email_suppressed: false },
     )
-    h.state.buyerGroups.push({ buyer_id: "b2", group_id: "g1" })
+    h.state.buyerGroups.push({ buyer_id: "b2", group_id: "g1", org_id: "org-1" })
     const res = await POST(req("c8"))
     expect(res.status).toBe(200)
 
@@ -353,12 +369,12 @@ describe("send route templates", () => {
   })
 
   test("SMS reaches an email-suppressed + SMS-opted-in buyer, never a STOP'd one", async () => {
-    h.state.campaigns.push({ id: "c9", channel: "sms", message: "Hi", buyer_ids: ["bs1", "bs2"] })
+    h.state.campaigns.push({ id: "c9", org_id: "org-1", channel: "sms", message: "Hi", buyer_ids: ["bs1", "bs2"] })
     h.state.buyers.push(
       // email hard-bounced (email_suppressed) but SMS-opted-in → must be reached
-      { id: "bs1", phone: "+15125559001", can_receive_sms: true, sms_suppressed: false, deleted_at: null, email_suppressed: true },
+      { id: "bs1", org_id: "org-1", phone: "+15125559001", can_receive_sms: true, sms_suppressed: false, deleted_at: null, email_suppressed: true },
       // STOP'd → must never be reached
-      { id: "bs2", phone: "+15125559002", can_receive_sms: false, sms_suppressed: false, deleted_at: null, email_suppressed: false },
+      { id: "bs2", org_id: "org-1", phone: "+15125559002", can_receive_sms: false, sms_suppressed: false, deleted_at: null, email_suppressed: false },
     )
     const res = await POST(req("c9"))
     expect(res.status).toBe(200)

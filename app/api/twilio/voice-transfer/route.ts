@@ -4,7 +4,7 @@ import { requireOrgContext } from "@/lib/auth/org-context"
 import { apiError } from "@/lib/api-error"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatPhoneE164 } from "@/lib/dedup-utils"
-import { getTwilioClient } from "@/lib/providers/twilio/client"
+import { getTwilioClientForOrg } from "@/lib/twilio/org-client"
 
 export const dynamic = "force-dynamic"
 
@@ -54,7 +54,8 @@ export async function POST(request: Request) {
     if (!targetSid) return apiError("Call not ready to transfer", 409)
 
     try {
-      await getTwilioClient()
+      const client = await getTwilioClientForOrg(orgId)
+      await client
         .calls(targetSid)
         .update({ twiml: `<Response><Dial>${target}</Dial></Response>` })
     } catch (err) {

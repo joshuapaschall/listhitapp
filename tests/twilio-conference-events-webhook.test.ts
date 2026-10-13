@@ -34,6 +34,20 @@ vi.mock("twilio", async (importOriginal) => {
   const d = actual.default;
   return { ...actual, default: { ...d, validateRequest: h.validateMock } };
 });
+
+// Phase 2A: every Twilio webhook verifies through verifyTwilioWebhook. The
+// existing validateMock still decides pass/fail; vw.orgId is the org proven by
+// the signing subaccount (null = parent account, no org claim).
+const vw = vi.hoisted(() => ({ orgId: null as string | null }))
+vi.mock("@/lib/twilio/verify-webhook", () => ({
+  verifyTwilioWebhook: async (input: any) =>
+    (h.validateMock as any)(input)
+      ? vw.orgId
+        ? { ok: true, accountSid: "ACsub", account: "subaccount", orgId: vw.orgId }
+        : { ok: true, accountSid: "ACparent", account: "parent", orgId: null }
+      : { ok: false, reason: "bad_signature" },
+}))
+
 vi.mock("@/lib/supabase", () => ({ supabase: h.client, supabaseAdmin: h.client }));
 
 const { POST } = await import("../app/api/webhooks/twilio-conference-events/route");
@@ -55,11 +69,11 @@ function req(fields: Record<string, string>, ref?: string) {
 describe("twilio conference events webhook", () => {
   beforeEach(() => {
     h.validateMock.mockReset().mockReturnValue(true);
+    vw.orgId = null;
     h.state.row = { id: "c1", ended_at: null };
     h.state.updates = null;
     h.state.updatedId = null;
     process.env.NEXT_PUBLIC_BASE_URL = "https://app.listhit.io";
-    process.env.LISTHIT_TWILIO_AUTH_TOKEN = "AUTH";
   });
 
   test("bad signature → 403", async () => {
@@ -67,6 +81,22 @@ describe("twilio conference events webhook", () => {
     const res = await POST(req({ StatusCallbackEvent: "conference-start", ConferenceSid: "CF1" }, "CA-agent"));
     expect(res.status).toBe(403);
     expect(h.state.updates).toBeNull();
+  });
+
+  test("verified subaccount org ≠ the call row's org → 403, no update", async () => {
+    vw.orgId = "org-A";
+    h.state.row = { id: "c1", ended_at: null, org_id: "org-B" };
+    const res = await POST(req({ StatusCallbackEvent: "conference-start", ConferenceSid: "CF1" }, "CA-agent"));
+    expect(res.status).toBe(403);
+    expect(h.state.updates).toBeNull();
+  });
+
+  test("verified subaccount org matching the call row's org → processed", async () => {
+    vw.orgId = "org-A";
+    h.state.row = { id: "c1", ended_at: null, org_id: "org-A" };
+    const res = await POST(req({ StatusCallbackEvent: "conference-start", ConferenceSid: "CF1" }, "CA-agent"));
+    expect(res.status).toBe(204);
+    expect(h.state.updates).toEqual({ conference_sid: "CF1" });
   });
 
   test("conference-start sets conference_sid", async () => {

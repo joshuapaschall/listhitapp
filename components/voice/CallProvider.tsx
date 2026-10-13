@@ -6,6 +6,7 @@ import { IncomingRingtone } from "@/components/voice/IncomingRingtone";
 import { Call, TelnyxRTC } from "@telnyx/webrtc";
 import { usePermissions } from "@/hooks/use-permissions";
 import { supabaseBrowser } from "@/lib/supabase-browser";
+import { toast } from "sonner";
 // Type-only import so the Twilio SDK is never bundled/evaluated on the server —
 // the engine module (and @twilio/voice-sdk) is dynamically imported client-side
 // only when an org is routed to Twilio voice.
@@ -13,7 +14,11 @@ import type { TwilioVoiceEngine } from "@/components/voice/engines/twilio-voice-
 
 type CallStatus = "idle" | "connecting" | "on-call" | "error";
 
-type VoiceProvider = "telnyx" | "twilio";
+// "blocked": a tenant whose calling isn't set up. A committed answer — no voice
+// SDK initializes and dialing shows a "not set up" toast; never Telnyx.
+type VoiceProvider = "telnyx" | "twilio" | "blocked";
+
+const VOICE_NOT_READY_MESSAGE = "Calling isn't set up for your account yet.";
 
 // Resolve the org's voice engine from GET /api/voice/provider, retrying on any
 // inconclusive response instead of failing open to a rail.
@@ -22,7 +27,7 @@ type VoiceProvider = "telnyx" | "twilio";
 // on first paint, so the route returns 401 (`requireOrgContext` → no user). A 401
 // does NOT throw, so treating a non-OK response as "not twilio" silently commits a
 // Twilio-voice org to the Telnyx dialer permanently (the effect ran once). Here we
-// only ever commit to an EXACT `"twilio"`/`"telnyx"` value returned on a 200; a
+// only ever commit to an EXACT `"twilio"`/`"telnyx"`/`"blocked"` value returned on a 200; a
 // 401/5xx/network error/garbage body is "not yet known" → retry with backoff.
 //
 // Exported (and parameterized on fetch/sleep/cancellation) so it can be unit-tested
@@ -45,7 +50,7 @@ export async function resolveVoiceProviderWithRetry(
       const res = await fetchImpl("/api/voice/provider", { cache: "no-store" });
       if (res.ok) {
         const json = (await res.json().catch(() => null)) as { provider?: string } | null;
-        if (json?.provider === "twilio" || json?.provider === "telnyx") {
+        if (json?.provider === "twilio" || json?.provider === "telnyx" || json?.provider === "blocked") {
           // The only thing we ever commit to: an exact provider on a 200.
           return json.provider;
         }
@@ -491,6 +496,10 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   }, [device]);
 
   const connectCall = useCallback(async (number: string, callerIdNumber?: string) => {
+    if (voiceProvider === "blocked") {
+      toast.error(VOICE_NOT_READY_MESSAGE);
+      return;
+    }
     if (voiceProvider === "twilio") {
       setCurrentContact({ number });
       await twilioEngineRef.current?.makeCall(number);
@@ -506,6 +515,10 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       // already gates on `device` being non-null.
       console.warn("[voice] provider not resolved yet; ignoring dial");
       return { ok: false, error: "Phone is still connecting" };
+    }
+    if (voiceProvider === "blocked") {
+      toast.error(VOICE_NOT_READY_MESSAGE);
+      return { ok: false, error: VOICE_NOT_READY_MESSAGE };
     }
     if (voiceProvider === "twilio") {
       // Caller ID is server-enforced by the TwiML webhook — fromNumber is ignored.
@@ -801,8 +814,12 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   }, [device, voiceProvider]);
 
   const openDialer = useCallback(() => {
+    if (voiceProvider === "blocked") {
+      toast.error(VOICE_NOT_READY_MESSAGE);
+      return;
+    }
     setDialerOpen(true);
-  }, []);
+  }, [voiceProvider]);
 
   // On the Twilio path, expose the engine (cast) as a non-null `device` sentinel
   // once registered, so the consumers' `!device` readiness gate works unchanged.

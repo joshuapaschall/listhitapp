@@ -36,8 +36,8 @@ vi.mock("@/lib/supabase", () => ({
   },
   supabase: {},
 }));
-vi.mock("@/lib/providers/twilio/client", () => ({
-  getTwilioClient: () => ({
+vi.mock("@/lib/twilio/org-client", () => ({
+  getTwilioClientForOrg: async (orgId: string) => ((h.state as any).clientOrgId = orgId, {
     calls: (sid: string) => {
       h.state.calledSid = sid;
       return {
@@ -98,6 +98,8 @@ describe("twilio voice-transfer route", () => {
     expect(res.status).toBe(200);
     expect(h.state.calledSid).toBe("CA-far");
     expect(h.state.updateOpts.twiml).toBe("<Response><Dial>+13335557777</Dial></Response>");
+    // The call lives in the session org's own subaccount.
+    expect((h.state as any).clientOrgId).toBe("org-1");
   });
 
   test("inbound → redirects the row's own call_sid (the caller)", async () => {

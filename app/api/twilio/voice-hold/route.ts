@@ -3,7 +3,7 @@ import { NextResponse } from "next/server"
 import { requireOrgContext } from "@/lib/auth/org-context"
 import { apiError } from "@/lib/api-error"
 import { supabaseAdmin } from "@/lib/supabase"
-import { getTwilioClient } from "@/lib/providers/twilio/client"
+import { getTwilioClientForOrg } from "@/lib/twilio/org-client"
 
 export const dynamic = "force-dynamic"
 
@@ -54,7 +54,8 @@ export async function POST(request: Request) {
     if (!participantSid) return apiError("Call party not available to hold", 409)
 
     try {
-      await getTwilioClient()
+      const client = await getTwilioClientForOrg(orgId)
+      await client
         .conferences(call.conference_sid)
         .participants(participantSid)
         .update({ hold })

@@ -24,6 +24,7 @@ import { insertNotification } from "@/lib/notifications"
 import { applyChannelEligibility } from "@/lib/segments/eligibility"
 import { resolveSegment } from "@/lib/segments/resolver"
 import type { SegmentDefinition } from "@/lib/segments/types"
+import { getSmsReadiness, SmsNotReadyError } from "@/lib/providers/sms"
 
 assertServer()
 
@@ -359,6 +360,16 @@ export async function POST(request: NextRequest) {
   // ============================================================
   type RecipientLinkEntry = { originalUrl: string; shortUrl: string; slug: string }
   const shortLinksByRecipient = new Map<string, RecipientLinkEntry[]>()
+
+  if (campaign.channel === "sms") {
+    // Texting-readiness gate, BEFORE short links or queueing (mirrors the email
+    // CAN-SPAM gate). A tenant whose Twilio rail isn't live gets a clear 409 here
+    // instead of a queue full of jobs that can only fail.
+    if ((await getSmsReadiness(campaign.org_id)) === "blocked") {
+      const notReady = new SmsNotReadyError()
+      return NextResponse.json({ error: notReady.message, code: notReady.code }, { status: notReady.status })
+    }
+  }
 
   if (campaign.channel === "sms" && !dryRun && campaign.shorten_links !== false) {
     const urlRegex = /(https?:\/\/[^\s"'>]+)/g

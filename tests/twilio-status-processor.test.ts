@@ -27,17 +27,15 @@ const h = vi.hoisted(() => {
 
 vi.mock("@/lib/supabase", () => ({ supabaseAdmin: h.client, supabase: h.client }))
 
-// Twilio client used only for the delivered cost/segment backfill. Default rejects
-// (simulating "not priced yet") so existing delivered cases stay deterministic;
-// backfill tests override per-call.
+// Twilio client used only for the delivered cost/segment backfill. The caller
+// (the status webhook) hands in a loader for the signing subaccount's client.
+// Default rejects (simulating "not priced yet"); backfill tests override per-call.
 const tw = vi.hoisted(() => ({
   fetchMsgMock: vi.fn(async () => {
     throw new Error("not priced yet")
   }),
 }))
-vi.mock("@/lib/providers/twilio/client", () => ({
-  getTwilioClient: () => ({ messages: () => ({ fetch: tw.fetchMsgMock }) }),
-}))
+const loadClient = vi.fn(async () => ({ messages: () => ({ fetch: tw.fetchMsgMock }) }) as any)
 
 import { processTwilioStatusEvent } from "@/lib/twilio-status-processor"
 
@@ -49,7 +47,7 @@ describe("processTwilioStatusEvent", () => {
   })
 
   test("delivered → sets delivered_at on the row matched by provider_id", async () => {
-    const res = await processTwilioStatusEvent({ messageSid: "SM1", messageStatus: "delivered" })
+    const res = await processTwilioStatusEvent({ messageSid: "SM1", messageStatus: "delivered", loadClient })
     expect(res.status).toBe(204)
     expect(h.state.updatedId).toBe("r1")
     expect(h.state.updates.status).toBe("delivered")
@@ -73,12 +71,12 @@ describe("processTwilioStatusEvent", () => {
 
   test("does not overwrite an existing delivered_at", async () => {
     h.state.row = { id: "r1", buyer_id: "b1", delivered_at: "2026-01-01T00:00:00Z", rejected_at: null }
-    await processTwilioStatusEvent({ messageSid: "SM1", messageStatus: "delivered" })
+    await processTwilioStatusEvent({ messageSid: "SM1", messageStatus: "delivered", loadClient })
     expect(h.state.updates.delivered_at).toBeUndefined()
   })
 
   test("intermediate status (sent) → status only, no terminal timestamps", async () => {
-    await processTwilioStatusEvent({ messageSid: "SM1", messageStatus: "sent" })
+    await processTwilioStatusEvent({ messageSid: "SM1", messageStatus: "sent", loadClient })
     expect(h.state.updates.status).toBe("sent")
     expect(h.state.updates.delivered_at).toBeUndefined()
     expect(h.state.updates.rejected_at).toBeUndefined()
@@ -99,7 +97,7 @@ describe("processTwilioStatusEvent", () => {
 
   test("delivered backfills actual_segments/actual_cost_usd from the message resource", async () => {
     tw.fetchMsgMock.mockResolvedValueOnce({ numSegments: "2", price: "-0.01500", priceUnit: "USD" })
-    const res = await processTwilioStatusEvent({ messageSid: "SM1", messageStatus: "delivered" })
+    const res = await processTwilioStatusEvent({ messageSid: "SM1", messageStatus: "delivered", loadClient })
     expect(res.status).toBe(204)
     expect(tw.fetchMsgMock).toHaveBeenCalled()
     expect(h.state.updates.actual_segments).toBe(2)
@@ -108,7 +106,7 @@ describe("processTwilioStatusEvent", () => {
 
   test("delivered with a fetch error still writes the status update (204)", async () => {
     tw.fetchMsgMock.mockRejectedValueOnce(new Error("boom"))
-    const res = await processTwilioStatusEvent({ messageSid: "SM1", messageStatus: "delivered" })
+    const res = await processTwilioStatusEvent({ messageSid: "SM1", messageStatus: "delivered", loadClient })
     expect(res.status).toBe(204)
     expect(h.state.updates.status).toBe("delivered")
     expect(h.state.updates.actual_cost_usd).toBeUndefined()
@@ -118,13 +116,21 @@ describe("processTwilioStatusEvent", () => {
   test("does not backfill when actual_cost_usd already present", async () => {
     h.state.row = { id: "r1", buyer_id: "b1", delivered_at: null, rejected_at: null, actual_cost_usd: 0.02 }
     tw.fetchMsgMock.mockClear()
-    await processTwilioStatusEvent({ messageSid: "SM1", messageStatus: "delivered" })
+    await processTwilioStatusEvent({ messageSid: "SM1", messageStatus: "delivered", loadClient })
+    expect(tw.fetchMsgMock).not.toHaveBeenCalled()
+  })
+
+  test("delivered without a client loader (no verified org) → status written, no fetch", async () => {
+    tw.fetchMsgMock.mockClear()
+    const res = await processTwilioStatusEvent({ messageSid: "SM1", messageStatus: "delivered" })
+    expect(res.status).toBe(204)
+    expect(h.state.updates.status).toBe("delivered")
     expect(tw.fetchMsgMock).not.toHaveBeenCalled()
   })
 
   test("non-delivered status does not fetch the message resource", async () => {
     tw.fetchMsgMock.mockClear()
-    await processTwilioStatusEvent({ messageSid: "SM1", messageStatus: "sent" })
+    await processTwilioStatusEvent({ messageSid: "SM1", messageStatus: "sent", loadClient })
     expect(tw.fetchMsgMock).not.toHaveBeenCalled()
   })
 })

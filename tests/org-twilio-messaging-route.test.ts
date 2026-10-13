@@ -1,6 +1,6 @@
 // Auth-gate tests for the org-twilio messaging route. No network calls — the
 // orchestrator is mocked; we assert the 401/400/403 gates and that a valid
-// owner POST delegates to provisionMessaging(orgId) once.
+// platform-admin POST delegates to provisionMessaging(orgId) once.
 
 const h = vi.hoisted(() => {
   const state = {
@@ -35,8 +35,8 @@ vi.mock("@/lib/org-twilio/service", () => ({
   getOrgTwilio: vi.fn(async () => null),
   upsertOrgTwilio: vi.fn(async () => null),
 }))
-vi.mock("@/lib/providers/twilio/client", () => ({
-  getTwilioClient: vi.fn(() => {
+vi.mock("@/lib/twilio/org-client", () => ({
+  getTwilioClientForOrg: vi.fn(async () => {
     throw new Error("no network")
   }),
 }))
@@ -44,13 +44,15 @@ vi.mock("@/lib/org-twilio/provision-messaging", () => ({
   provisionMessaging: h.provisionMock,
 }))
 
-import { POST } from "../app/api/org-twilio/messaging/route"
+import { GET, POST } from "../app/api/org-twilio/messaging/route"
 
 describe("org-twilio messaging route auth", () => {
   beforeEach(() => {
     h.state.authUser = { id: "user-1" }
     h.state.orgId = "org-1"
     h.state.role = "owner"
+    // Platform-admin only until Phase 2B: user-1 is on the allowlist.
+    process.env.PLATFORM_ADMIN_USER_IDS = "user-1"
     h.provisionMock.mockReset().mockResolvedValue({
       ok: true,
       messagingServiceSid: "MG123",
@@ -74,14 +76,15 @@ describe("org-twilio messaging route auth", () => {
     expect(h.provisionMock).not.toHaveBeenCalled()
   })
 
-  test("403 when the user is not owner/admin", async () => {
+  test("403 when the user is not a platform admin", async () => {
     h.state.role = "user"
+    process.env.PLATFORM_ADMIN_USER_IDS = "someone-else"
     const res = await POST()
     expect(res.status).toBe(403)
     expect(h.provisionMock).not.toHaveBeenCalled()
   })
 
-  test("owner POST provisions once and returns the result", async () => {
+  test("platform-admin POST provisions once and returns the result", async () => {
     const res = await POST()
     expect(res.status).toBe(200)
     expect(h.provisionMock).toHaveBeenCalledTimes(1)
@@ -90,11 +93,18 @@ describe("org-twilio messaging route auth", () => {
     expect(body).toMatchObject({ ok: true, messagingServiceSid: "MG123", campaignSid: "CM123" })
   })
 
-  test("admin role is allowed", async () => {
+  test("an org owner/admin who is not a platform admin is refused (no carrier filing)", async () => {
     h.state.role = "admin"
+    process.env.PLATFORM_ADMIN_USER_IDS = "someone-else"
     const res = await POST()
-    expect(res.status).toBe(200)
-    expect(h.provisionMock).toHaveBeenCalledTimes(1)
+    expect(res.status).toBe(403)
+    expect(h.provisionMock).not.toHaveBeenCalled()
+  })
+
+  test("GET is platform-admin only too", async () => {
+    process.env.PLATFORM_ADMIN_USER_IDS = "someone-else"
+    const res = await GET()
+    expect(res.status).toBe(403)
   })
 
   test("propagates a provisioning failure as 400", async () => {

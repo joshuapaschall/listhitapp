@@ -4,7 +4,7 @@ import { requireOrgContext } from "@/lib/auth/org-context"
 import { apiError } from "@/lib/api-error"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatPhoneE164 } from "@/lib/dedup-utils"
-import { getTwilioClient } from "@/lib/providers/twilio/client"
+import { getTwilioClientForOrg } from "@/lib/twilio/org-client"
 import { getOrgTwilio } from "@/lib/org-twilio/service"
 
 export const dynamic = "force-dynamic"
@@ -65,7 +65,8 @@ export async function POST(request: Request) {
     const farParty = call.direction === "outbound" ? call.far_leg_sid : call.call_sid
     if (!farParty) return apiError("Call party unavailable", 409)
 
-    const conf = getTwilioClient().conferences(call.conference_sid)
+    // The org's own subaccount client; the call lives in that subaccount.
+    const conf = (await getTwilioClientForOrg(orgId)).conferences(call.conference_sid)
 
     if (action === "start") {
       const target = formatPhoneE164(body?.to)

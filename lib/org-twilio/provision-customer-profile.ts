@@ -1,7 +1,8 @@
 import "server-only"
 
 import { supabaseAdmin } from "@/lib/supabase"
-import { getTwilioClient, getListHitPrimaryProfileSid } from "@/lib/providers/twilio/client"
+import { getListHitPrimaryProfileSid } from "@/lib/providers/twilio/client"
+import { getTwilioClientForOrg } from "@/lib/twilio/org-client"
 import { getOrgTwilio, upsertOrgTwilio, mergeProvisioningState } from "@/lib/org-twilio/service"
 import type { ProvisioningState } from "@/lib/org-twilio/types"
 import {
@@ -36,7 +37,9 @@ function resolveNotifyEmail(): string {
 function resolveStatusCallbackUrl(): string | undefined {
   const base = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || ""
   if (!base) return undefined
-  const token = process.env.LISTHIT_TWILIO_STATUS_CALLBACK_TOKEN || process.env.CRON_SECRET || ""
+  // Never fall back to CRON_SECRET: a cron secret must not sit in a URL handed to Twilio.
+  const token = process.env.LISTHIT_TWILIO_STATUS_CALLBACK_TOKEN || ""
+  if (!token) return undefined
   return `${base.replace(/\/$/, "")}/api/webhooks/twilio-trusthub?token=${encodeURIComponent(token)}`
 }
 
@@ -96,7 +99,7 @@ export async function provisionCustomerProfile(orgId: string): Promise<Provision
   const existing = await getOrgTwilio(orgId)
   const state: ProvisioningState = { ...(existing?.provisioning_state ?? {}) }
 
-  const client = getTwilioClient()
+  const client = await getTwilioClientForOrg(orgId)
   const legalName = inputs.legalBusinessName
   const notifyEmail = resolveNotifyEmail()
   const statusCallbackUrl = resolveStatusCallbackUrl()

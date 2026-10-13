@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 
 const h = vi.hoisted(() => {
   const state = {
-    row: { status: "in-progress" } as { status: string } | null,
+    row: { status: "in-progress" } as { status: string; org_id?: string } | null,
     updates: null as any,
     updatedSid: null as any,
     bucket: null as any,
@@ -50,7 +50,25 @@ vi.mock("twilio", async (importOriginal) => {
   const d = actual.default;
   return { ...actual, default: { ...d, validateRequest: h.validateMock } };
 });
+
+// Phase 2A: every Twilio webhook verifies through verifyTwilioWebhook. The
+// existing validateMock still decides pass/fail; vw.orgId is the org proven by
+// the signing subaccount (null = parent account, no org claim).
+const vw = vi.hoisted(() => ({ orgId: null as string | null }))
+vi.mock("@/lib/twilio/verify-webhook", () => ({
+  verifyTwilioWebhook: async (input: any) =>
+    (h.validateMock as any)(input)
+      ? vw.orgId
+        ? { ok: true, accountSid: "ACsub", account: "subaccount", orgId: vw.orgId }
+        : { ok: true, accountSid: "ACparent", account: "parent", orgId: null }
+      : { ok: false, reason: "bad_signature" },
+}))
+
 vi.mock("@/lib/supabase", () => ({ supabase: h.client, supabaseAdmin: h.client }));
+
+// Recording downloads authenticate as the account that signed the webhook.
+const auth = vi.hoisted(() => ({ basicMock: vi.fn() }));
+vi.mock("@/lib/twilio/org-client", () => ({ getTwilioBasicAuthForAccount: auth.basicMock }));
 
 const fetchMock = vi.fn();
 // @ts-ignore
@@ -86,6 +104,10 @@ const completed = {
 describe("twilio conversation recording webhook", () => {
   beforeEach(() => {
     h.validateMock.mockReset().mockReturnValue(true);
+    vw.orgId = null;
+    auth.basicMock
+      .mockReset()
+      .mockResolvedValue(`Basic ${Buffer.from(`${ACCOUNT}:${AUTH}`).toString("base64")}`);
     h.state.row = { status: "in-progress" };
     h.state.updates = null;
     h.state.updatedSid = null;
@@ -95,8 +117,6 @@ describe("twilio conversation recording webhook", () => {
     fetchMock.mockReset();
     fetchMock.mockResolvedValue({ ok: true, arrayBuffer: async () => new TextEncoder().encode("mp3").buffer });
     process.env.NEXT_PUBLIC_BASE_URL = "https://app.listhit.io";
-    process.env.LISTHIT_TWILIO_AUTH_TOKEN = AUTH;
-    process.env.LISTHIT_TWILIO_ACCOUNT_SID = ACCOUNT;
   });
 
   test("bad signature → 403, no upload / no update", async () => {
@@ -118,6 +138,9 @@ describe("twilio conversation recording webhook", () => {
       }),
     );
 
+    // The credentials come from the account that signed this webhook.
+    expect(auth.basicMock).toHaveBeenCalledWith("ACparent");
+
     expect(h.state.bucket).toBe("call-recordings");
     expect(h.state.uploadPath).toMatch(/^\d{4}\/\d{2}\/RE999\.mp3$/);
     expect(h.state.uploadOpts).toEqual({ contentType: "audio/mpeg", upsert: true });
@@ -132,6 +155,34 @@ describe("twilio conversation recording webhook", () => {
     );
     // Must NOT change status (a completed call keeps the status webhook's value).
     expect(h.state.updates.status).toBeUndefined();
+  });
+
+  test("subaccount webhook downloads with that subaccount's credentials", async () => {
+    vw.orgId = "org-A";
+    h.state.row = { status: "in-progress", org_id: "org-A" };
+    const res = await POST(req(completed));
+    expect(res.status).toBe(204);
+    expect(auth.basicMock).toHaveBeenCalledWith("ACsub");
+    expect(h.state.updates).toEqual(expect.objectContaining({ recording_state: "ready" }));
+  });
+
+  test("unknown recording account (no credentials) → no download, recording_state failed, 204", async () => {
+    auth.basicMock.mockResolvedValue(null);
+    const res = await POST(req(completed));
+    expect(res.status).toBe(204);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(h.state.uploadPath).toBeNull();
+    expect(h.state.updates).toEqual({ recording_state: "failed" });
+  });
+
+  test("verified subaccount org ≠ the call row's org → 403, no upload / no update", async () => {
+    vw.orgId = "org-A";
+    h.state.row = { status: "in-progress", org_id: "org-B" };
+    const res = await POST(req(completed));
+    expect(res.status).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(h.state.uploadPath).toBeNull();
+    expect(h.state.updates).toBeNull();
   });
 
   test("voicemail row → 204, no upload, no overwrite", async () => {

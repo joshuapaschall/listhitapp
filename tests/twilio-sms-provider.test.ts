@@ -1,8 +1,7 @@
 const h = vi.hoisted(() => ({ createMock: vi.fn() }))
 
-vi.mock("@/lib/providers/twilio/client", () => ({
-  getTwilioClient: () => ({ messages: { create: h.createMock } }),
-}))
+// The provider now receives the org's own subaccount client through its constructor.
+const client = () => ({ messages: { create: h.createMock } }) as any
 
 import { TwilioSmsProvider } from "@/lib/providers/sms/twilio-provider"
 import type { SmsProviderError } from "@/lib/providers/sms/types"
@@ -28,7 +27,7 @@ describe("TwilioSmsProvider", () => {
   })
 
   test("sends via the Messaging Service with a statusCallback and returns { id, from }", async () => {
-    const provider = new TwilioSmsProvider({ messagingServiceSid: MG })
+    const provider = new TwilioSmsProvider({ client: client(), messagingServiceSid: MG })
     const result = await provider.sendMessage({ to: "+15125550123", text: "hi" })
 
     expect(h.createMock).toHaveBeenCalledTimes(1)
@@ -43,7 +42,7 @@ describe("TwilioSmsProvider", () => {
   })
 
   test("includes mediaUrl only when media is present (Twilio's field name)", async () => {
-    const provider = new TwilioSmsProvider({ messagingServiceSid: MG })
+    const provider = new TwilioSmsProvider({ client: client(), messagingServiceSid: MG })
     await provider.sendMessage({ to: "+15125550123", text: "pic", mediaUrls: ["https://cdn/x.png"] })
     const arg = h.createMock.mock.calls[0][0]
     expect(arg.mediaUrl).toEqual(["https://cdn/x.png"])
@@ -53,7 +52,7 @@ describe("TwilioSmsProvider", () => {
   test("omits statusCallback when no base URL is configured", async () => {
     delete process.env.NEXT_PUBLIC_BASE_URL
     delete process.env.NEXT_PUBLIC_SITE_URL
-    const provider = new TwilioSmsProvider({ messagingServiceSid: MG })
+    const provider = new TwilioSmsProvider({ client: client(), messagingServiceSid: MG })
     await provider.sendMessage({ to: "+15125550123", text: "hi" })
     const arg = h.createMock.mock.calls[0][0]
     expect("statusCallback" in arg).toBe(false)
@@ -61,7 +60,7 @@ describe("TwilioSmsProvider", () => {
 
   test("normalizes errors with status and providerCode", async () => {
     h.createMock.mockRejectedValue({ message: "boom", status: 400, code: 21610 })
-    const provider = new TwilioSmsProvider({ messagingServiceSid: MG })
+    const provider = new TwilioSmsProvider({ client: client(), messagingServiceSid: MG })
     expect.assertions(3)
     try {
       await provider.sendMessage({ to: "+15125550123", text: "hi" })

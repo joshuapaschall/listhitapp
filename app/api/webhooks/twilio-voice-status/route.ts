@@ -5,7 +5,8 @@ import { assertServer } from "@/utils/assert-server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getVoicemailGreetingUrl } from "@/lib/voice/routing"
 import { appendVoicemailTwiml } from "@/lib/voice/twilio-voicemail"
-import { getTwilioClient } from "@/lib/providers/twilio/client"
+import { getTwilioClientForOrg } from "@/lib/twilio/org-client"
+import { verifyTwilioWebhook } from "@/lib/twilio/verify-webhook"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -17,7 +18,7 @@ function baseUrl(): string {
 }
 
 // Full public URL Twilio signed against — includes the FULL ?ref=…&role=… query, so
-// signature validation must match it exactly.
+// signature verification must match it exactly.
 function fullCallbackUrl(url: URL): string {
   return `${baseUrl()}${url.pathname}${url.search}`
 }
@@ -30,17 +31,27 @@ export async function POST(request: NextRequest) {
   const rawBody = await request.text()
   const params = Object.fromEntries(new URLSearchParams(rawBody).entries())
 
-  const authToken = process.env.LISTHIT_TWILIO_AUTH_TOKEN
-  if (!authToken) {
-    console.error("[twilio-voice-status] LISTHIT_TWILIO_AUTH_TOKEN is not set; rejecting webhook")
-    return new NextResponse("Forbidden", { status: 403 })
-  }
   const url = new URL(request.url)
   const ref = url.searchParams.get("ref")
   const role = url.searchParams.get("role")
-  const signature = request.headers.get("x-twilio-signature") || ""
-  if (!twilio.validateRequest(authToken, signature, fullCallbackUrl(url), params)) {
-    return new NextResponse("Invalid signature", { status: 403 })
+  const verified = await verifyTwilioWebhook({
+    signature: request.headers.get("x-twilio-signature") || "",
+    url: fullCallbackUrl(url),
+    params,
+  })
+  if (!verified.ok) {
+    console.warn("[twilio-voice-status] rejected webhook", { reason: verified.reason })
+    return new NextResponse("Forbidden", { status: 403 })
+  }
+
+  // The verified subaccount's org is the authority; a call row from another org
+  // is never touched.
+  const orgMismatch = (rowOrgId: string | null | undefined) => {
+    if (verified.orgId && rowOrgId && rowOrgId !== verified.orgId) {
+      console.warn("[twilio-webhook] org mismatch", { route: "twilio-voice-status" })
+      return true
+    }
+    return false
   }
 
   const callSid = params.CallSid
@@ -53,6 +64,13 @@ export async function POST(request: NextRequest) {
   // itself, so we never write the agent leg's own status onto the call row.
   if (role === "agent") {
     if (!ref || !callStatus) return new NextResponse("Missing params", { status: 400 })
+
+    const { data: refRow } = await supabaseAdmin
+      .from("calls")
+      .select("org_id")
+      .eq("call_sid", ref)
+      .maybeSingle()
+    if (orgMismatch(refRow?.org_id)) return new NextResponse("Forbidden", { status: 403 })
 
     // An agent answered → mark the call answered.
     if (callStatus === "in-progress") {
@@ -80,7 +98,7 @@ export async function POST(request: NextRequest) {
       if (result && result.remaining === 0 && result.answered === false) {
         const { data: crow } = await supabaseAdmin
           .from("calls")
-          .select("to_number, status")
+          .select("to_number, status, org_id")
           .eq("call_sid", ref)
           .maybeSingle()
         if (crow && crow.status !== "voicemail") {
@@ -91,7 +109,11 @@ export async function POST(request: NextRequest) {
             recordingStatusCallback: `${baseUrl()}/api/webhooks/twilio-voicemail-recording`,
           })
           try {
-            await getTwilioClient().calls(ref).update({ twiml: vr.toString() })
+            // Verified subaccount org; the call row's org only for parent-account calls.
+            const clientOrgId = verified.orgId ?? (verified.account === "parent" ? crow.org_id : null)
+            if (!clientOrgId) throw new Error("No org for the voicemail redirect")
+            const client = await getTwilioClientForOrg(clientOrgId)
+            await client.calls(ref).update({ twiml: vr.toString() })
           } catch (err) {
             console.error("[twilio-voice-status] voicemail redirect failed", { ref, error: String(err) })
           }
@@ -115,7 +137,7 @@ export async function POST(request: NextRequest) {
 
   const { data: existing } = await supabaseAdmin
     .from("calls")
-    .select("id, answered_at, started_at")
+    .select("id, org_id, answered_at, started_at")
     .eq("call_sid", matchSid)
     .maybeSingle()
 
@@ -123,6 +145,7 @@ export async function POST(request: NextRequest) {
     console.warn("[twilio-voice-status] no matching calls row", { matchSid, callStatus })
     return new NextResponse(null, { status: 204 })
   }
+  if (orgMismatch(existing.org_id)) return new NextResponse("Forbidden", { status: 403 })
 
   const now = new Date().toISOString()
   const updates: Record<string, any> = { status: callStatus }

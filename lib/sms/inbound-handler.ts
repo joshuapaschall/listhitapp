@@ -14,7 +14,7 @@ import { normalizePhone, formatPhoneE164 } from "@/lib/dedup-utils"
 import { TELNYX_API_URL, telnyxHeaders } from "@/lib/telnyx"
 import { upsertAnonThread } from "@/services/thread-utils"
 import { resolveOrgIdByDid } from "@/lib/inbound-numbers"
-import { getPrimaryPinnedTelnyxOrgId } from "@/lib/providers/sms/routing"
+import { getPrimaryPinnedTelnyxOrgId, isOrgTelnyxPinnedEnv } from "@/lib/providers/sms/routing"
 import { getOrgIdentity } from "@/lib/org-identity.server"
 import type { OrgIdentity } from "@/lib/org-identity"
 import { classifyInboundSms } from "@/lib/sms/opt-keywords"
@@ -29,6 +29,9 @@ export interface InboundSmsEvent {
   text: string // trimmed body ("" if none)
   rawMediaUrls: string[] // provider media URLs, unmirrored
   providerId: string | undefined // Telnyx payload.id / Twilio MessageSid → messages.provider_id
+  // Org proven by the webhook signature (a Twilio subaccount). The route has
+  // already rejected a DID that belongs to a different org.
+  verifiedOrgId?: string | null
 }
 
 const HELP_FALLBACK = "Msg & data rates may apply. Reply STOP to opt out."
@@ -107,7 +110,8 @@ export async function handleInboundSms(event: InboundSmsEvent): Promise<NextResp
   // number fan a thread (and a STOP) out across every tenant that holds it.
   const inboundDidE164 = to ? formatPhoneE164(to) : null
   const didOrgId = await resolveOrgIdByDid(inboundDidE164)
-  const orgId = didOrgId ?? (event.provider === "telnyx" ? getPrimaryPinnedTelnyxOrgId() : null)
+  const orgId =
+    didOrgId ?? event.verifiedOrgId ?? (event.provider === "telnyx" ? getPrimaryPinnedTelnyxOrgId() : null)
   if (!orgId) {
     console.error("[inbound-sms] no org for inbound DID — dropping", {
       provider: event.provider,
@@ -330,9 +334,9 @@ export async function handleInboundSms(event: InboundSmsEvent): Promise<NextResp
       // Provider-aware HELP auto-reply. Both arms stay inside one try/catch
       // (log-and-continue) so an inbound can never 500 on the HELP branch.
       try {
-        if (event.provider === "telnyx") {
-          // Telnyx arm — byte-identical to the original owner-rail path: raw
-          // Telnyx fetch using the owner's messaging profile.
+        if (isOrgTelnyxPinnedEnv(orgId)) {
+          // Telnyx arm — the pinned owner org only. Byte-identical to the original
+          // owner-rail path: raw Telnyx fetch using the owner's messaging profile.
           const response = await fetch(`${TELNYX_API_URL}/messages`, {
             method: "POST",
             headers: telnyxHeaders(),
@@ -370,33 +374,46 @@ export async function handleInboundSms(event: InboundSmsEvent): Promise<NextResp
             }
           }
         } else {
-          // Twilio arm — the org already came from the inbound DID above; send
+          // Tenant arm — the org already came from the inbound DID above; send
           // through the provider abstraction (its Messaging Service is the sender).
+          // A tenant whose texting isn't live is skipped, never sent via Telnyx.
           // Dynamic import mirrors the file's lazy-import style (suppress) and
           // avoids any module-cycle risk with the provider layer.
-          const { resolveSmsProvider } = await import("@/lib/providers/sms")
-          const provider = await resolveSmsProvider(orgId)
-          const result = await provider.sendMessage({
-            from: fromNumber,
-            to: toNumber,
-            text: replyText,
-          })
-
-          if (helpReplyThread) {
-            const { error: helpMsgErr } = await supabaseAdmin.from("messages").insert({
-              thread_id: helpReplyThread.id,
-              buyer_id: helpReplyThread.buyerId,
-              direction: "outbound",
-              from_number: fromNumber,
-              to_number: toNumber,
-              body: replyText,
-              provider_id: result.id,
-              is_bulk: false,
-              org_id: orgId,
+          const { resolveSmsProvider, SmsNotReadyError } = await import("@/lib/providers/sms")
+          let provider
+          try {
+            provider = await resolveSmsProvider(orgId)
+          } catch (err) {
+            if (err instanceof SmsNotReadyError) {
+              console.warn("[inbound-sms] HELP auto-reply skipped: texting not set up", { orgId })
+              provider = null
+            } else {
+              throw err
+            }
+          }
+          if (provider) {
+            const result = await provider.sendMessage({
+              from: fromNumber,
+              to: toNumber,
+              text: replyText,
             })
 
-            if (helpMsgErr) {
-              console.error("❌ Failed to record HELP auto-reply", helpMsgErr)
+            if (helpReplyThread) {
+              const { error: helpMsgErr } = await supabaseAdmin.from("messages").insert({
+                thread_id: helpReplyThread.id,
+                buyer_id: helpReplyThread.buyerId,
+                direction: "outbound",
+                from_number: fromNumber,
+                to_number: toNumber,
+                body: replyText,
+                provider_id: result.id,
+                is_bulk: false,
+                org_id: orgId,
+              })
+
+              if (helpMsgErr) {
+                console.error("❌ Failed to record HELP auto-reply", helpMsgErr)
+              }
             }
           }
         }

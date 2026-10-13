@@ -1,7 +1,8 @@
 // Drives handleInboundSms directly with HELP-intent events to exercise the
-// provider-aware HELP auto-reply: the Telnyx arm keeps the raw Telnyx fetch; the
-// Twilio arm resolves the org from inbound_numbers and sends via the provider
-// abstraction. Neither arm may ever 500.
+// provider-aware HELP auto-reply: the Telnyx arm (pinned owner org ONLY) keeps
+// the raw Telnyx fetch; every other org resolves its provider from the org and
+// sends via the provider abstraction, skipping when texting isn't set up.
+// Neither arm may ever 500.
 
 const h = vi.hoisted(() => {
   const state = {
@@ -89,11 +90,18 @@ const h = vi.hoisted(() => {
       throw new Error(`Unexpected table ${table}`)
     },
   }
-  return { state, client, resolveMock: vi.fn(), sendMock: vi.fn() }
+  class SmsNotReadyError extends Error {
+    readonly code = "sms_not_ready"
+    readonly status = 409
+  }
+  return { state, client, resolveMock: vi.fn(), sendMock: vi.fn(), SmsNotReadyError }
 })
 
 vi.mock("@/lib/supabase", () => ({ supabase: h.client, supabaseAdmin: h.client }))
-vi.mock("@/lib/providers/sms", () => ({ resolveSmsProvider: h.resolveMock }))
+vi.mock("@/lib/providers/sms", () => ({
+  resolveSmsProvider: h.resolveMock,
+  SmsNotReadyError: h.SmsNotReadyError,
+}))
 vi.mock("@/lib/telnyx", () => ({
   TELNYX_API_URL: "https://api.telnyx.com/v2",
   telnyxHeaders: () => ({ Authorization: "Bearer KEY" }),
@@ -143,10 +151,17 @@ describe("provider-aware HELP auto-reply", () => {
       text: async () => "",
     })
     process.env.TELNYX_MESSAGING_PROFILE_ID = "MP"
+    // org-x is a tenant by default; the Telnyx test pins it as the owner org.
+    process.env.TELNYX_PINNED_ORG_IDS = "org-owner"
     delete process.env.SMS_HELP_AUTO_REPLY
   })
 
-  test("telnyx HELP uses the raw Telnyx fetch, not the provider abstraction", async () => {
+  afterAll(() => {
+    delete process.env.TELNYX_PINNED_ORG_IDS
+  })
+
+  test("pinned owner org HELP uses the raw Telnyx fetch, not the provider abstraction", async () => {
+    process.env.TELNYX_PINNED_ORG_IDS = "org-x"
     const res = await handleInboundSms(helpEvent("telnyx"))
     expect(res.status).toBe(204)
     expect(fetchMock).toHaveBeenCalled()
@@ -183,6 +198,24 @@ describe("provider-aware HELP auto-reply", () => {
     expect(h.sendMock).not.toHaveBeenCalled()
     expect(h.state.messages).toHaveLength(0)
     err.mockRestore()
+  })
+
+  test("a telnyx-delivered HELP for a NON-pinned org never uses the raw Telnyx fetch", async () => {
+    const res = await handleInboundSms(helpEvent("telnyx"))
+    expect(res.status).toBe(204)
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(h.resolveMock).toHaveBeenCalledWith("org-x")
+  })
+
+  test("HELP for a tenant whose texting isn't set up is skipped, not thrown", async () => {
+    h.resolveMock.mockRejectedValueOnce(new h.SmsNotReadyError("not ready"))
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const res = await handleInboundSms(helpEvent("twilio"))
+    expect(res.status).toBe(204)
+    expect(h.sendMock).not.toHaveBeenCalled()
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(h.state.messages.find((m) => m.direction === "outbound")).toBeUndefined()
+    warn.mockRestore()
   })
 
   test("twilio HELP never 500s when sendMessage throws", async () => {

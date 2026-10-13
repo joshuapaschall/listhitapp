@@ -1,3 +1,5 @@
+import type { Twilio } from "twilio"
+
 import { supabaseAdmin } from "@/lib/supabase"
 import { createLogger } from "@/lib/logger"
 
@@ -24,6 +26,9 @@ export async function processTwilioStatusEvent(params: {
   messageSid: string
   messageStatus: string
   errorCode?: string | null
+  // Client for the account that owns the message (the verified subaccount).
+  // Without one the cost/segment backfill is skipped.
+  loadClient?: (() => Promise<Twilio>) | null
 }): Promise<Response> {
   const messageSid = params.messageSid
   const status = params.messageStatus
@@ -68,10 +73,10 @@ export async function processTwilioStatusEvent(params: {
   // backfill actual_segments/actual_cost_usd. Non-fatal — the status update is
   // still written on any fetch error. recipient_carrier is intentionally left
   // null: the Twilio message resource doesn't carry it.
-  if (status === "delivered" && !existing.actual_cost_usd) {
+  if (status === "delivered" && !existing.actual_cost_usd && params.loadClient) {
     try {
-      const { getTwilioClient } = await import("@/lib/providers/twilio/client")
-      const msg = await getTwilioClient().messages(messageSid).fetch()
+      const client = await params.loadClient()
+      const msg = await client.messages(messageSid).fetch()
       const segments = Number(msg.numSegments)
       if (Number.isFinite(segments) && segments > 0) updates.actual_segments = segments
       const price = msg.price != null ? Math.abs(Number(msg.price)) : NaN

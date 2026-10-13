@@ -12,7 +12,10 @@ const OTHER = "11111111-2222-3333-4444-555555555555"
 
 const liveTwilioRow: ProviderRoutingRow = {
   sms_provider: "twilio",
+  has_credentials: true,
+  subaccount_sid: "AC_sub",
   brand_status: "APPROVED",
+  campaign_status: "VERIFIED",
   messaging_service_sid: "MG123",
   campaign_sid: "CM123",
   phone_number: "+14705550123",
@@ -42,7 +45,7 @@ describe("isOrgTelnyxPinned", () => {
 })
 
 describe("isTwilioSmsLive", () => {
-  test("true only when brand APPROVED + MS + campaign + number all present", () => {
+  test("true only when credentials + subaccount + brand APPROVED + campaign VERIFIED + MS + campaign + number all present", () => {
     expect(isTwilioSmsLive(liveTwilioRow)).toBe(true)
   })
 
@@ -53,40 +56,58 @@ describe("isTwilioSmsLive", () => {
     expect(isTwilioSmsLive({ ...liveTwilioRow, messaging_service_sid: null })).toBe(false)
     expect(isTwilioSmsLive({ ...liveTwilioRow, campaign_sid: null })).toBe(false)
     expect(isTwilioSmsLive({ ...liveTwilioRow, phone_number: null })).toBe(false)
+    expect(isTwilioSmsLive({ ...liveTwilioRow, has_credentials: false })).toBe(false)
+    expect(isTwilioSmsLive({ ...liveTwilioRow, subaccount_sid: null })).toBe(false)
+    expect(isTwilioSmsLive({ ...liveTwilioRow, campaign_status: "IN_PROGRESS" })).toBe(false)
   })
 })
 
 describe("resolveProviderName", () => {
   const pinned = parseTelnyxPinnedOrgIds(GWH)
 
-  test("pinned org → telnyx even when opted into twilio and rail is live", () => {
+  test("pinned org → telnyx even with a fully live Twilio row", () => {
     expect(resolveProviderName(GWH, liveTwilioRow, pinned)).toBe("telnyx")
   })
 
-  test("non-pinned, twilio opt-in, rail live → twilio", () => {
+  test("non-pinned, fully live → twilio", () => {
     expect(resolveProviderName(OTHER, liveTwilioRow, pinned)).toBe("twilio")
   })
 
-  test("non-pinned, twilio opt-in, rail NOT live → telnyx", () => {
+  test("non-pinned, rail NOT live → blocked (never telnyx)", () => {
     expect(
       resolveProviderName(OTHER, { ...liveTwilioRow, campaign_sid: null }, pinned),
-    ).toBe("telnyx")
+    ).toBe("blocked")
     expect(
       resolveProviderName(OTHER, { ...liveTwilioRow, phone_number: null }, pinned),
-    ).toBe("telnyx")
+    ).toBe("blocked")
     expect(
       resolveProviderName(OTHER, { ...liveTwilioRow, brand_status: "PENDING" }, pinned),
-    ).toBe("telnyx")
+    ).toBe("blocked")
   })
 
-  test("non-pinned, sms_provider telnyx → telnyx", () => {
+  test("non-pinned, brand APPROVED but campaign IN_PROGRESS → blocked", () => {
+    expect(
+      resolveProviderName(OTHER, { ...liveTwilioRow, campaign_status: "IN_PROGRESS" }, pinned),
+    ).toBe("blocked")
+  })
+
+  test("non-pinned, live but has_credentials:false → blocked", () => {
+    expect(
+      resolveProviderName(OTHER, { ...liveTwilioRow, has_credentials: false }, pinned),
+    ).toBe("blocked")
+  })
+
+  test("non-pinned, sms_provider='telnyx' is ignored → blocked when not live, twilio when live", () => {
+    expect(
+      resolveProviderName(OTHER, { sms_provider: "telnyx" }, pinned),
+    ).toBe("blocked")
     expect(
       resolveProviderName(OTHER, { ...liveTwilioRow, sms_provider: "telnyx" }, pinned),
-    ).toBe("telnyx")
+    ).toBe("twilio")
   })
 
-  test("null row → telnyx default", () => {
-    expect(resolveProviderName(OTHER, null, pinned)).toBe("telnyx")
+  test("non-pinned with no row → blocked", () => {
+    expect(resolveProviderName(OTHER, null, pinned)).toBe("blocked")
   })
 })
 

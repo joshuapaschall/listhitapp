@@ -7,11 +7,17 @@ const h = vi.hoisted(() => {
     bucket: null as any,
     uploadPath: null as any,
     uploadOpts: null as any,
+    // The calls row the org-mismatch guard reads (only when the webhook is
+    // signed by a subaccount).
+    callRow: null as { org_id: string } | null,
   };
   const client = {
     from: (table: string) => {
       if (table === "calls") {
         return {
+          select: () => ({
+            eq: () => ({ maybeSingle: async () => ({ data: state.callRow, error: null }) }),
+          }),
           update: (u: any) => {
             state.updates = u;
             return {
@@ -46,7 +52,25 @@ vi.mock("twilio", async (importOriginal) => {
   const d = actual.default;
   return { ...actual, default: { ...d, validateRequest: h.validateMock } };
 });
+
+// Phase 2A: every Twilio webhook verifies through verifyTwilioWebhook. The
+// existing validateMock still decides pass/fail; vw.orgId is the org proven by
+// the signing subaccount (null = parent account, no org claim).
+const vw = vi.hoisted(() => ({ orgId: null as string | null }))
+vi.mock("@/lib/twilio/verify-webhook", () => ({
+  verifyTwilioWebhook: async (input: any) =>
+    (h.validateMock as any)(input)
+      ? vw.orgId
+        ? { ok: true, accountSid: "ACsub", account: "subaccount", orgId: vw.orgId }
+        : { ok: true, accountSid: "ACparent", account: "parent", orgId: null }
+      : { ok: false, reason: "bad_signature" },
+}))
+
 vi.mock("@/lib/supabase", () => ({ supabase: h.client, supabaseAdmin: h.client }));
+
+// Recording downloads authenticate as the account that signed the webhook.
+const auth = vi.hoisted(() => ({ basicMock: vi.fn() }));
+vi.mock("@/lib/twilio/org-client", () => ({ getTwilioBasicAuthForAccount: auth.basicMock }));
 
 const fetchMock = vi.fn();
 // @ts-ignore
@@ -79,6 +103,11 @@ const completed = {
 describe("twilio voicemail recording webhook", () => {
   beforeEach(() => {
     h.validateMock.mockReset().mockReturnValue(true);
+    vw.orgId = null;
+    h.state.callRow = null;
+    auth.basicMock
+      .mockReset()
+      .mockResolvedValue(`Basic ${Buffer.from(`${ACCOUNT}:${AUTH}`).toString("base64")}`);
     h.state.updates = null;
     h.state.updatedSid = null;
     h.state.bucket = null;
@@ -87,8 +116,6 @@ describe("twilio voicemail recording webhook", () => {
     fetchMock.mockReset();
     fetchMock.mockResolvedValue({ ok: true, arrayBuffer: async () => new TextEncoder().encode("mp3").buffer });
     process.env.NEXT_PUBLIC_BASE_URL = "https://app.listhit.io";
-    process.env.LISTHIT_TWILIO_AUTH_TOKEN = AUTH;
-    process.env.LISTHIT_TWILIO_ACCOUNT_SID = ACCOUNT;
   });
 
   test("bad signature → 403, no update / no upload", async () => {
@@ -111,6 +138,9 @@ describe("twilio voicemail recording webhook", () => {
       }),
     );
 
+    // The credentials come from the account that signed this webhook.
+    expect(auth.basicMock).toHaveBeenCalledWith("ACparent");
+
     // Uploaded to the voicemails bucket at YYYY/MM/<sid>.mp3.
     expect(h.state.bucket).toBe("voicemails");
     expect(h.state.uploadPath).toMatch(/^\d{4}\/\d{2}\/RE123\.mp3$/);
@@ -128,6 +158,34 @@ describe("twilio voicemail recording webhook", () => {
         recording_state: "ready",
       }),
     );
+  });
+
+  test("subaccount webhook for its own org's call → downloads with that subaccount's credentials", async () => {
+    vw.orgId = "org-A";
+    h.state.callRow = { org_id: "org-A" };
+    const res = await POST(req(completed));
+    expect(res.status).toBe(204);
+    expect(auth.basicMock).toHaveBeenCalledWith("ACsub");
+    expect(h.state.updates).toEqual(expect.objectContaining({ status: "voicemail", recording_state: "ready" }));
+  });
+
+  test("verified subaccount org ≠ the call row's org → 403, no download / no update", async () => {
+    vw.orgId = "org-A";
+    h.state.callRow = { org_id: "org-B" };
+    const res = await POST(req(completed));
+    expect(res.status).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(h.state.updates).toBeNull();
+    expect(h.state.uploadPath).toBeNull();
+  });
+
+  test("unknown recording account (no credentials) → no download, recording_state failed, 204", async () => {
+    auth.basicMock.mockResolvedValue(null);
+    const res = await POST(req(completed));
+    expect(res.status).toBe(204);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(h.state.uploadPath).toBeNull();
+    expect(h.state.updates).toEqual({ recording_state: "failed" });
   });
 
   test("duration 0 → marks missed, no upload", async () => {

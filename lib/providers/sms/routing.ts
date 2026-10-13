@@ -1,12 +1,26 @@
-export type SmsProviderName = "telnyx" | "twilio"
+// THE OWNER/TENANT RULE
+//   ListHit has exactly two kinds of org:
+//   1. The owner org (GWH), pinned through TELNYX_PINNED_ORG_IDS. It is the ONLY
+//      org that ever uses Telnyx, for SMS and voice.
+//   2. Every other org. These run on Twilio only, each in its own subaccount. A
+//      tenant that isn't fully live on Twilio is "blocked": it gets a clear "not
+//      set up yet" error and NEVER falls back to Telnyx, the parent Twilio
+//      account, DEFAULT_OUTBOUND_DID, or anything else.
+//   The org_twilio.sms_provider column is ignored for tenants — readiness alone
+//   decides.
+export type SmsProviderName = "telnyx" | "twilio" | "blocked"
 
-// Row shape the decision reads (subset of OrgTwilio). Kept local so this file has no deps.
+// Row shape the decision reads (org_twilio + presence of org_twilio_credentials).
+// Kept local so this file has no deps.
 export interface ProviderRoutingRow {
   sms_provider?: string | null
+  subaccount_sid?: string | null
   brand_status?: string | null
+  campaign_status?: string | null
   messaging_service_sid?: string | null
   campaign_sid?: string | null
   phone_number?: string | null
+  has_credentials?: boolean
 }
 
 export function parseTelnyxPinnedOrgIds(raw: string | undefined | null): Set<string> {
@@ -17,28 +31,30 @@ export function isOrgTelnyxPinned(orgId: string, pinned: Set<string>): boolean {
   return pinned.has(orgId)
 }
 
-// The Twilio SMS rail is only "live" when the brand is approved, a Messaging Service and
-// Campaign exist, and a sender number is attached.
+// The Twilio SMS rail is only "live" when the org has its own subaccount
+// credentials, an APPROVED brand, a VERIFIED campaign, a Messaging Service, and a
+// sender number.
 export function isTwilioSmsLive(row: ProviderRoutingRow | null | undefined): boolean {
   if (!row) return false
   return (
+    row.has_credentials === true &&
+    !!row.subaccount_sid &&
     row.brand_status === "APPROVED" &&
+    row.campaign_status === "VERIFIED" &&
     !!row.messaging_service_sid &&
     !!row.campaign_sid &&
     !!row.phone_number
   )
 }
 
-// First match wins: (1) owner/legacy pin → telnyx; (2) explicit opt-in AND live → twilio;
-// (3) safe default → telnyx.
+// Pinned owner → telnyx. Every other org → twilio when live, otherwise blocked.
 export function resolveProviderName(
   orgId: string,
   row: ProviderRoutingRow | null | undefined,
   pinned: Set<string>,
 ): SmsProviderName {
   if (isOrgTelnyxPinned(orgId, pinned)) return "telnyx"
-  if (row?.sms_provider === "twilio" && isTwilioSmsLive(row)) return "twilio"
-  return "telnyx"
+  return isTwilioSmsLive(row) ? "twilio" : "blocked"
 }
 
 // Env-reading conveniences. Every other org is Twilio-only, so "pinned" is the

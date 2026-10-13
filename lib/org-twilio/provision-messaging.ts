@@ -1,7 +1,7 @@
 import "server-only"
 
 import { supabaseAdmin } from "@/lib/supabase"
-import { getTwilioClient } from "@/lib/providers/twilio/client"
+import { getTwilioClientForOrg } from "@/lib/twilio/org-client"
 import { getOrgTwilio, upsertOrgTwilio, mergeProvisioningState } from "@/lib/org-twilio/service"
 import type { ProvisioningState } from "@/lib/org-twilio/types"
 import { buildCampaignAttributes, type CampaignInputs } from "@/lib/org-twilio/twilio-attributes"
@@ -76,7 +76,7 @@ export async function provisionMessaging(orgId: string): Promise<MessagingResult
     str(bv?.legal_business_name) || str(org?.business_name) || "ListHit Customer"
 
   const state: ProvisioningState = { ...(row.provisioning_state ?? {}) }
-  const client = getTwilioClient()
+  const client = await getTwilioClientForOrg(orgId)
   const inboundRequestUrl = resolveInboundRequestUrl()
 
   try {
@@ -128,7 +128,17 @@ export async function provisionMessaging(orgId: string): Promise<MessagingResult
       const e164 = formatPhoneE164(bought.phoneNumber) || bought.phoneNumber
       const { error: seedErr } = await supabaseAdmin
         .from("inbound_numbers")
-        .upsert({ e164, org_id: orgId, enabled: true }, { onConflict: "e164" })
+        .upsert(
+          {
+            e164,
+            org_id: orgId,
+            enabled: true,
+            provider: "twilio",
+            twilio_account_sid: bought.accountSid,
+            twilio_phone_number_sid: bought.sid,
+          },
+          { onConflict: "e164" },
+        )
       if (seedErr) console.error("[provisionMessaging] inbound_numbers seed failed", { orgId, e164, error: seedErr })
 
       // Point the number's Voice URL at the inbound-voice webhook so PSTN calls

@@ -5,8 +5,9 @@ import { buildVoiceIdentity } from "@/lib/providers/voice/identity"
 // validateRequest.
 const h = vi.hoisted(() => ({
   validateMock: vi.fn(() => true),
-  getOrgTwilioMock: vi.fn(),
+  loadRoutingStateMock: vi.fn(),
   createMock: vi.fn(),
+  clientForOrg: vi.fn(),
   inserted: [] as any[],
   updates: [] as any[],
 }))
@@ -16,10 +17,23 @@ vi.mock("twilio", async (importOriginal) => {
   const d = actual.default
   return { ...actual, default: { ...d, validateRequest: h.validateMock } }
 })
-vi.mock("@/lib/org-twilio/service", () => ({ getOrgTwilio: h.getOrgTwilioMock }))
-vi.mock("@/lib/providers/twilio/client", () => ({
-  getTwilioClient: () => ({ calls: { create: h.createMock } }),
+
+// Phase 2A: every Twilio webhook verifies through verifyTwilioWebhook. The
+// existing validateMock still decides pass/fail; vw.orgId is the org proven by
+// the signing subaccount (null = parent account, no org claim).
+const vw = vi.hoisted(() => ({ orgId: null as string | null }))
+vi.mock("@/lib/twilio/verify-webhook", () => ({
+  verifyTwilioWebhook: async (input: any) =>
+    (h.validateMock as any)(input)
+      ? vw.orgId
+        ? { ok: true, accountSid: "ACsub", account: "subaccount", orgId: vw.orgId }
+        : { ok: true, accountSid: "ACparent", account: "parent", orgId: null }
+      : { ok: false, reason: "bad_signature" },
 }))
+
+vi.mock("@/lib/providers/routing-state", () => ({ loadRoutingState: h.loadRoutingStateMock }))
+// The prospect dial-in uses the org's own subaccount client.
+vi.mock("@/lib/twilio/org-client", () => ({ getTwilioClientForOrg: h.clientForOrg }))
 vi.mock("@/lib/supabase", () => {
   const client = {
     from: (table: string) => {
@@ -62,15 +76,22 @@ function req(fields: Record<string, string>) {
 describe("twilio voice TwiML webhook (conference model)", () => {
   beforeEach(() => {
     h.validateMock.mockReset().mockReturnValue(true)
-    h.getOrgTwilioMock.mockReset().mockResolvedValue({
+    vw.orgId = null
+    // A fully live Twilio voice rail: subaccount credentials + voice API key +
+    // TwiML app + a number.
+    h.loadRoutingStateMock.mockReset().mockResolvedValue({
       voice_provider: "twilio",
       phone_number: "+18885551234",
+      subaccount_sid: "ACsub",
+      api_key_sid: "SK1",
+      twiml_app_sid: "AP1",
+      has_credentials: true,
     })
+    h.clientForOrg.mockReset().mockResolvedValue({ calls: { create: h.createMock } })
     h.createMock.mockReset().mockResolvedValue({ sid: "CA-prospect" })
     h.inserted = []
     h.updates = []
     process.env.NEXT_PUBLIC_BASE_URL = "https://app.listhit.io"
-    process.env.LISTHIT_TWILIO_AUTH_TOKEN = "AUTH"
     process.env.TELNYX_PINNED_ORG_IDS = ""
   })
 
@@ -102,6 +123,7 @@ describe("twilio voice TwiML webhook (conference model)", () => {
 
     // Prospect dialed into the SAME room via calls.create, ref'd status callback.
     expect(h.createMock).toHaveBeenCalledTimes(1)
+    expect(h.clientForOrg).toHaveBeenCalledWith(ORG)
     const arg = h.createMock.mock.calls[0][0]
     expect(arg.to).toBe("+12223334444")
     expect(arg.from).toBe("+18885551234")
@@ -126,6 +148,39 @@ describe("twilio voice TwiML webhook (conference model)", () => {
     expect(h.updates).toContainEqual({ far_leg_sid: "CA-prospect" })
   })
 
+  test("subaccount-signed request for its own org → dials with that org's client", async () => {
+    vw.orgId = ORG
+    const res = await POST(req({ From: `client:${IDENTITY}`, To: "+12223334444", CallSid: "CA1" }))
+    expect(res.status).toBe(200)
+    expect(await res.text()).toContain("<Conference")
+    expect(h.clientForOrg).toHaveBeenCalledWith(ORG)
+  })
+
+  test("verified subaccount org ≠ the identity's org → 403, no insert, no dial-out", async () => {
+    vw.orgId = "33333333-3333-3333-3333-333333333333"
+    const res = await POST(req({ From: `client:${IDENTITY}`, To: "+12223334444", CallSid: "CA1" }))
+    expect(res.status).toBe(403)
+    expect(h.inserted.length).toBe(0)
+    expect(h.createMock).not.toHaveBeenCalled()
+    expect(h.clientForOrg).not.toHaveBeenCalled()
+  })
+
+  test("tenant whose voice isn't live (no TwiML app) → blocked → hangup, no insert, no dial-out", async () => {
+    h.loadRoutingStateMock.mockResolvedValue({
+      voice_provider: "twilio",
+      phone_number: "+18885551234",
+      subaccount_sid: "ACsub",
+      api_key_sid: "SK1",
+      twiml_app_sid: null,
+      has_credentials: true,
+    })
+    const res = await POST(req({ From: `client:${IDENTITY}`, To: "+12223334444", CallSid: "CA1" }))
+    expect(res.status).toBe(200)
+    expect(await res.text()).toContain("<Hangup/>")
+    expect(h.inserted.length).toBe(0)
+    expect(h.createMock).not.toHaveBeenCalled()
+  })
+
   test("pinned org → hangup, no insert, no dial-out", async () => {
     process.env.TELNYX_PINNED_ORG_IDS = ORG
     const res = await POST(req({ From: `client:${IDENTITY}`, To: "+12223334444", CallSid: "CA1" }))
@@ -144,7 +199,7 @@ describe("twilio voice TwiML webhook (conference model)", () => {
     expect(xml).toContain("<Hangup/>")
     expect(h.inserted.length).toBe(0)
     expect(h.createMock).not.toHaveBeenCalled()
-    expect(h.getOrgTwilioMock).not.toHaveBeenCalled()
+    expect(h.loadRoutingStateMock).not.toHaveBeenCalled()
   })
 
   test("invalid destination → hangup, no insert, no dial-out", async () => {

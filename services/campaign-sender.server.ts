@@ -6,6 +6,7 @@ import { getTelnyxApiKey } from "@/lib/voice-env"
 import { resolveOutboundFrom, recordStickyFrom } from "@/lib/sender/sticky-sender"
 import { ensurePublicMediaUrls } from "@/utils/mms.server"
 import { resolveSmsProvider } from "@/lib/providers/sms"
+export { SmsNotReadyError } from "@/lib/providers/sms"
 export { sendEmailCampaign } from "./campaign-sender"
 
 const log = createLogger("campaign-sender")
@@ -38,7 +39,11 @@ interface SmsOptions {
 }
 
 export async function sendCampaignSMS({ buyerId, to, body, mediaUrls, dryRun, campaignId, isTest, orgId, sendingMarketId }: SmsOptions): Promise<SmsSendResult[]> {
-  if (!telnyxApiKey || !messagingProfileId) {
+  // Pick the org's rail first: a tenant whose texting isn't live throws
+  // SmsNotReadyError (callers map it to 409 sms_not_ready) and never reaches the
+  // Telnyx configuration check or a Telnyx send.
+  const provider = await resolveSmsProvider(orgId)
+  if (provider.name === "telnyx" && (!telnyxApiKey || !messagingProfileId)) {
     throw new Error("Telnyx environment variables are not properly configured")
   }
 
@@ -49,8 +54,6 @@ export async function sendCampaignSMS({ buyerId, to, body, mediaUrls, dryRun, ca
     }
     return to.map((num) => ({ to: formatPhoneE164(num) || num, sid: "dry-run", from: "" }))
   }
-
-  const provider = await resolveSmsProvider(orgId)
 
   const results: SmsSendResult[] = []
 
@@ -70,7 +73,7 @@ export async function sendCampaignSMS({ buyerId, to, body, mediaUrls, dryRun, ca
     const formatted = formatPhoneE164(num)
     if (!formatted) throw new Error(`Invalid phone number: ${num}`)
     // Deterministic caller ID, resolved per recipient so a sticky recorded for an
-    // earlier recipient in this batch is reused (sticky → DEFAULT_OUTBOUND_DID).
+    // earlier recipient in this batch is reused (sticky → pool; env DID for the owner org only).
     const fromNumber = await resolveOutboundFrom({
       client: supabaseAdmin,
       buyerId,

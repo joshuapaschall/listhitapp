@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase/admin"
 import { formatPhoneE164, normalizePhone } from "@/lib/dedup-utils"
-import { TELNYX_API_URL, telnyxHeaders } from "@/lib/telnyx"
+import { resolveSmsProvider, SmsNotReadyError, type SmsProvider } from "@/lib/providers/sms"
 import { FROM_EMAIL, resend } from "@/lib/resend"
 import { insertNotification } from "@/lib/notifications"
 import type { Buyer, Property, OfferWithRelations } from "@/lib/supabase"
@@ -16,29 +16,38 @@ async function sendOfferSms(offer: OfferWithRelations, buyer: Buyer, property: P
   const normalizedTo = normalizePhone(buyer.phone)
   if (!to || !normalizedTo) return
 
-  const from = await resolveFromNumber(buyer.id)
+  // No org, or an org whose texting isn't set up → skip the SMS. An offer must
+  // never fail because texting isn't available; the email still goes out.
   const orgId = await resolveBuyerOrgId(buyer.id)
-  if (!from) return
+  if (!orgId) return
+
+  let provider: SmsProvider
+  try {
+    provider = await resolveSmsProvider(orgId)
+  } catch (error) {
+    if (error instanceof SmsNotReadyError) {
+      console.warn(`[offer-sms] texting isn't set up for org ${orgId} — SMS skipped`)
+    } else {
+      console.error(`[offer-sms] provider resolution failed — SMS skipped`, error)
+    }
+    return
+  }
+
+  const resolvedFrom = await resolveFromNumber(buyer.id, orgId)
+  // Telnyx (owner org) needs an explicit sender; a Twilio Messaging Service picks its own.
+  if (!resolvedFrom && provider.name !== "twilio") return
 
   try {
-    const response = await fetch(`${TELNYX_API_URL}/messages`, {
-      method: "POST",
-      headers: telnyxHeaders(),
-      body: JSON.stringify({
-        from,
-        to,
-        text: messageBody,
-        messaging_profile_id: process.env.TELNYX_MESSAGING_PROFILE_ID,
-        type: "SMS",
-        use_profile_webhooks: true,
-      }),
+    const result = await provider.sendMessage({
+      from: resolvedFrom,
+      to,
+      text: messageBody,
+      messagingProfileId: process.env.TELNYX_MESSAGING_PROFILE_ID,
+      type: "SMS",
+      useProfileWebhooks: true,
     })
-
-    const responseText = await response.text()
-    if (!response.ok) throw new Error(`Telnyx send failed (${response.status}): ${responseText}`)
-
-    const payload = responseText ? JSON.parse(responseText) : {}
-    const providerId: string | null = payload?.data?.id || null
+    const providerId: string | null = result.id || null
+    const from = resolvedFrom || formatPhoneE164(result.from) || result.from || null
 
     const { data: existingThread } = await supabaseAdmin
       .from("message_threads")
@@ -54,10 +63,10 @@ async function sendOfferSms(offer: OfferWithRelations, buyer: Buyer, property: P
         .insert({
           buyer_id: buyer.id,
           phone_number: normalizedTo,
-          preferred_from_number: from,
+          ...(from ? { preferred_from_number: from } : {}),
           unread: false,
           updated_at: new Date().toISOString(),
-          ...(orgId ? { org_id: orgId } : {}),
+          org_id: orgId,
         })
         .select("id")
         .single()
@@ -66,7 +75,7 @@ async function sendOfferSms(offer: OfferWithRelations, buyer: Buyer, property: P
     } else {
       await supabaseAdmin
         .from("message_threads")
-        .update({ preferred_from_number: from, updated_at: new Date().toISOString() })
+        .update({ ...(from ? { preferred_from_number: from } : {}), updated_at: new Date().toISOString() })
         .eq("id", threadId)
     }
 
@@ -79,7 +88,7 @@ async function sendOfferSms(offer: OfferWithRelations, buyer: Buyer, property: P
       body: messageBody,
       provider_id: providerId,
       is_bulk: false,
-      ...(orgId ? { org_id: orgId } : {}),
+      org_id: orgId,
     })
   } catch (error) {
     console.error(`[offer-sms] Offer SMS notification failed for offer ${offer.id} (${property?.address || "unknown property"}):`, error)
