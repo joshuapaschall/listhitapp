@@ -11,29 +11,12 @@ import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { normalizeEmail } from "@/lib/dedup-utils"
 import { assertServer } from "@/utils/assert-server"
 import { requirePermission } from "@/lib/permissions/server"
+import { htmlToPlainText } from "@/lib/email/plain-text"
 
 assertServer()
 
 const defaultFromAddress = process.env.GMAIL_FROM || ""
 const MAX_TOTAL_SIZE_BYTES = 5 * 1024 * 1024
-
-function htmlToPlainText(html: string): string {
-  return html
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/p>/gi, "\n\n")
-    .replace(/<\/div>/gi, "\n")
-    .replace(/<\/li>/gi, "\n")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/\n{3,}/g, "\n\n")
-    .trim()
-}
 
 export async function POST(request: NextRequest) {
   const cookieStore = cookies()
