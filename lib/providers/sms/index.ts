@@ -6,6 +6,7 @@ import {
   resolveProviderName,
   parseTelnyxPinnedOrgIds,
   assertTelnyxPinConfigured,
+  isOrgTelnyxPinned,
   type SmsProviderName,
 } from "./routing"
 import type { SmsProvider } from "./types"
@@ -37,6 +38,10 @@ async function resolveName(orgId: string) {
 export async function resolveSmsProvider(orgId?: string | null): Promise<SmsProvider> {
   assertTelnyxPinConfigured()
   if (!orgId) throw new SmsNotReadyError()
+  // Owner org: Telnyx, decided before any database read.
+  if (isOrgTelnyxPinned(orgId, parseTelnyxPinnedOrgIds(process.env.TELNYX_PINNED_ORG_IDS))) {
+    return new TelnyxSmsProvider()
+  }
 
   const { state, name } = await resolveName(orgId)
   if (name === "telnyx") return new TelnyxSmsProvider()
@@ -52,6 +57,7 @@ export async function resolveSmsProvider(orgId?: string | null): Promise<SmsProv
 // Non-throwing readiness check for pre-queue gates and status endpoints.
 export async function getSmsReadiness(orgId?: string | null): Promise<SmsProviderName> {
   if (!orgId) return "blocked"
+  if (isOrgTelnyxPinned(orgId, parseTelnyxPinnedOrgIds(process.env.TELNYX_PINNED_ORG_IDS))) return "telnyx"
   try {
     return (await resolveName(orgId)).name
   } catch (err) {

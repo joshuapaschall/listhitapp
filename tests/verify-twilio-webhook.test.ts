@@ -20,7 +20,7 @@ vi.mock("@/lib/twilio/credentials", () => ({
   refreshSubaccountAuthToken: c.refresh,
 }))
 
-import { verifyTwilioWebhook } from "@/lib/twilio/verify-webhook"
+import { verifyTwilioWebhook, __resetRefreshThrottleForTests } from "@/lib/twilio/verify-webhook"
 
 const sign = (token: string, params: Record<string, string>) =>
   twilio.getExpectedTwilioSignature(token, URL, params)
@@ -36,6 +36,8 @@ const subCreds = (authToken: string) => ({
 
 describe("verifyTwilioWebhook", () => {
   beforeEach(() => {
+    // Refresh is throttled to once per org per minute (2B); start each test clean.
+    __resetRefreshThrottleForTests()
     process.env.LISTHIT_TWILIO_ACCOUNT_SID = PARENT_SID
     process.env.LISTHIT_TWILIO_AUTH_TOKEN = PARENT_TOKEN
     c.bySid.mockReset().mockImplementation(async (sid: string) => (sid === SUB_SID ? subCreds(SUB_TOKEN) : null))

@@ -1,6 +1,7 @@
 import crypto from "crypto"
 import { NextRequest, NextResponse } from "next/server"
 
+import { advanceRegistration } from "@/lib/org-twilio/engine"
 import { supabaseAdmin } from "@/lib/supabase"
 import { verifyTwilioWebhook } from "@/lib/twilio/verify-webhook"
 
@@ -53,12 +54,16 @@ export async function POST(request: NextRequest) {
     const sid = params.Sid || ""
     const status = params.Status || ""
 
-    if (!sid) return new NextResponse(null, { status: 204 })
+    // Trust Hub bundle SIDs are BU + 32 hex; anything else can't match (and is
+    // never interpolated into the filter below).
+    if (!/^BU[0-9a-f]{32}$/i.test(sid)) return new NextResponse(null, { status: 204 })
 
+    // The bundle is either the customer profile or the TrustProduct (both are also
+    // kept in provisioning_state).
     const { data: row } = await supabaseAdmin
       .from("org_twilio")
-      .select("id, org_id")
-      .eq("secondary_profile_sid", sid)
+      .select("id, org_id, secondary_profile_sid, trust_product_sid")
+      .or(`secondary_profile_sid.eq.${sid},trust_product_sid.eq.${sid}`)
       .maybeSingle()
 
     // Unknown SID → 204 (idempotent, don't leak whether the resource exists).
@@ -68,14 +73,17 @@ export async function POST(request: NextRequest) {
       return new NextResponse("Forbidden", { status: 403 })
     }
 
-    const update: Record<string, unknown> = {
-      customer_profile_status: status || null,
-      updated_at: new Date().toISOString(),
-    }
-    // CP rejection fails the pipeline; approval alone does NOT advance a2p_status.
-    if (status === "twilio-rejected") update.a2p_status = "failed"
-
+    // Record the status only; the registration engine owns every stage change.
+    const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
+    if (row.trust_product_sid === sid) update.trust_product_status = status || null
+    else update.customer_profile_status = status || null
     await supabaseAdmin.from("org_twilio").update(update).eq("id", row.id)
+
+    try {
+      await advanceRegistration(row.org_id, { reason: `trusthub:${status || "update"}` })
+    } catch (err) {
+      console.error("[twilio-trusthub webhook] advance failed", { orgId: row.org_id }, err)
+    }
 
     return new NextResponse(null, { status: 204 })
   } catch (err) {

@@ -7,8 +7,16 @@ import {
   validateProvisioningInputs,
   isValidEmail,
   summarizeEvaluationFailures,
-  DEFAULT_BUSINESS_TYPE,
   SECONDARY_CUSTOMER_PROFILE_POLICY_SID,
+  STARTER_CUSTOMER_PROFILE_POLICY_SID,
+  SOLE_PROPRIETOR_TRUST_PRODUCT_POLICY_SID,
+  normalizeBusinessType,
+  buildStarterProfileAttributes,
+  buildSoleProprietorAttributes,
+  validateSoleProprietorInputs,
+  buildMessageFlow,
+  CampaignContentError,
+  type SoleProprietorInputs,
   mapCompanyType,
   buildA2pMessagingProfileAttributes,
   mapUseCase,
@@ -20,11 +28,10 @@ import {
 const baseInputs: ProvisioningInputs = {
   legalBusinessName: "Acme Holdings LLC",
   ein: "423209251",
-  businessType: null,
+  businessType: "Limited Liability Corporation",
   contactFirstName: "Jane",
   contactLastName: "Doe",
   contactEmail: "jane@acme.com",
-  repEmail: "compliance@listhit.io",
   orgPhone: "5125550123",
   addressLine1: "123 Main St",
   addressLine2: "Suite 200",
@@ -66,6 +73,10 @@ describe("toE164", () => {
   test("throws on an unconvertible value", () => {
     expect(() => toE164("123")).toThrow()
   })
+
+  test("rejects a short +-prefixed value instead of passing it through", () => {
+    expect(() => toE164("+112")).toThrow()
+  })
 })
 
 describe("buildBusinessInformationAttributes", () => {
@@ -82,9 +93,14 @@ describe("buildBusinessInformationAttributes", () => {
     })
   })
 
-  test("uses DEFAULT_BUSINESS_TYPE when business_type is null", () => {
-    const attrs = buildBusinessInformationAttributes(baseInputs)
-    expect(attrs.business_type).toBe(DEFAULT_BUSINESS_TYPE)
+  // Behaviour change (2B): no silent default — an unknown/missing type is a validation error.
+  test("throws when business_type is null (never silently defaulted)", () => {
+    expect(() => buildBusinessInformationAttributes({ ...baseInputs, businessType: null })).toThrow(/business type/i)
+  })
+
+  test("normalizes an alias business_type to Twilio's enum", () => {
+    const attrs = buildBusinessInformationAttributes({ ...baseInputs, businessType: "llc" })
+    expect(attrs.business_type).toBe("Limited Liability Corporation")
   })
 
   test("honors a provided business_type", () => {
@@ -99,26 +115,61 @@ describe("buildBusinessInformationAttributes", () => {
 })
 
 describe("buildAuthorizedRepAttributes", () => {
-  test("returns rep fields with E.164 phone and the fixed defaults", () => {
+  test("returns rep fields with E.164 phone and the defaults (CEO / Owner)", () => {
     const attrs = buildAuthorizedRepAttributes(baseInputs)
     expect(attrs).toMatchObject({
       first_name: "Jane",
       last_name: "Doe",
-      email: "compliance@listhit.io",
+      email: "jane@acme.com",
       phone_number: "+15125550123",
-      job_position: "Other",
+      job_position: "CEO",
       business_title: "Owner",
     })
   })
 
-  test("email uses repEmail, not contactEmail", () => {
+  // Behaviour change (2B): the rep is the customer, not ListHit.
+  test("email is the customer's contactEmail, never a ListHit address", () => {
+    const attrs = buildAuthorizedRepAttributes({ ...baseInputs, contactEmail: "tenant@acme.com" })
+    expect(attrs.email).toBe("tenant@acme.com")
+    expect(attrs.email).not.toBe("compliance@listhit.io")
+  })
+
+  test("uses the customer's rep phone, title and job position when provided", () => {
     const attrs = buildAuthorizedRepAttributes({
       ...baseInputs,
-      contactEmail: "tenant@acme.com",
-      repEmail: "compliance@listhit.io",
+      repPhone: "(512) 555-9999",
+      repTitle: "Managing Member",
+      repJobPosition: "GM",
     })
-    expect(attrs.email).toBe("compliance@listhit.io")
-    expect(attrs.email).not.toBe("tenant@acme.com")
+    expect(attrs.phone_number).toBe("+15125559999")
+    expect(attrs.business_title).toBe("Managing Member")
+    expect(attrs.job_position).toBe("GM")
+  })
+
+  test("falls back to the org phone when repPhone is blank", () => {
+    const attrs = buildAuthorizedRepAttributes({ ...baseInputs, repPhone: "  " })
+    expect(attrs.phone_number).toBe("+15125550123")
+  })
+})
+
+describe("normalizeBusinessType", () => {
+  test.each([
+    ["llc", "Limited Liability Corporation"],
+    ["LLC", "Limited Liability Corporation"],
+    ["limited liability company", "Limited Liability Corporation"],
+    ["corp", "Corporation"],
+    ["inc", "Corporation"],
+    ["partnership", "Partnership"],
+    ["Corporation", "Corporation"],
+    ["Non-profit Corporation", "Non-profit Corporation"],
+  ])("maps %s → %s", (input, expected) => {
+    expect(normalizeBusinessType(input)).toBe(expected)
+  })
+
+  test("throws on unknown or empty input", () => {
+    expect(() => normalizeBusinessType("sole trader")).toThrow()
+    expect(() => normalizeBusinessType("")).toThrow()
+    expect(() => normalizeBusinessType(null)).toThrow()
   })
 })
 
@@ -141,10 +192,11 @@ describe("mapCompanyType", () => {
 })
 
 describe("buildA2pMessagingProfileAttributes", () => {
-  test("returns private company_type and the rep email as brand_contact_email", () => {
+  // Behaviour change (2B): brand contact is the customer's email.
+  test("returns private company_type and the customer's email as brand_contact_email", () => {
     const attrs = buildA2pMessagingProfileAttributes(baseInputs)
     expect(attrs.company_type).toBe("private")
-    expect(attrs.brand_contact_email).toBe(baseInputs.repEmail)
+    expect(attrs.brand_contact_email).toBe(baseInputs.contactEmail)
   })
 
   test("never emits stock ticker/exchange keys", () => {
@@ -186,7 +238,6 @@ describe("validateProvisioningInputs", () => {
       contactFirstName: "",
       contactLastName: "",
       contactEmail: "",
-      repEmail: "",
       orgPhone: "",
       addressLine1: "",
       addressLine2: null,
@@ -201,6 +252,7 @@ describe("validateProvisioningInputs", () => {
       expect(result.missing).toEqual([
         "legal_business_name",
         "ein",
+        "business_type",
         "contact_first_name",
         "contact_last_name",
         "contact_email",
@@ -286,6 +338,8 @@ describe("mapUseCase", () => {
 })
 
 describe("buildCampaignAttributes", () => {
+  const FLOW =
+    "Buyers opt in on the Acme signup form at https://acme.com with unchecked consent boxes. Reply STOP to opt out, HELP for help."
   const campaignBase: CampaignInputs = {
     brandRegistrationSid: "BN123",
     useCase: "marketing",
@@ -297,9 +351,13 @@ describe("buildCampaignAttributes", () => {
     ],
     optInUrl: "https://acme.com",
     legalBusinessName: "Acme Holdings LLC",
+    brandNames: ["Acme"],
+    messageFlow: FLOW,
+    privacyPolicyUrl: "https://acme.com/privacy",
+    termsUrl: "https://acme.com/terms",
   }
 
-  test("produces a valid payload with 2 samples and the mapped use case", () => {
+  test("produces a valid payload with 2 samples and the MARKETING use case", () => {
     const attrs = buildCampaignAttributes(campaignBase)
     expect(attrs.brandRegistrationSid).toBe("BN123")
     expect(attrs.usAppToPersonUsecase).toBe("MARKETING")
@@ -309,10 +367,15 @@ describe("buildCampaignAttributes", () => {
     expect(attrs.hasEmbeddedPhone).toBe(true)
   })
 
-  test("description and messageFlow meet the 40-char minimum", () => {
+  test("sole proprietor brand → SOLE_PROPRIETOR use case", () => {
+    const attrs = buildCampaignAttributes({ ...campaignBase, brandType: "SOLE_PROPRIETOR" })
+    expect(attrs.usAppToPersonUsecase).toBe("SOLE_PROPRIETOR")
+  })
+
+  test("description and messageFlow meet the 40-char minimum; messageFlow is the explicit one", () => {
     const attrs = buildCampaignAttributes(campaignBase)
     expect((attrs.description as string).length).toBeGreaterThanOrEqual(40)
-    expect((attrs.messageFlow as string).length).toBeGreaterThanOrEqual(40)
+    expect(attrs.messageFlow).toBe(FLOW)
   })
 
   test("duplicates the single sample when only one provided", () => {
@@ -322,10 +385,34 @@ describe("buildCampaignAttributes", () => {
     expect(samples[0]).toBe(samples[1])
   })
 
-  test("pads short samples to at least 20 chars", () => {
-    const attrs = buildCampaignAttributes({ ...campaignBase, samples: ["Hi", "Yo"] })
-    const samples = attrs.messageSamples as string[]
-    for (const s of samples) expect(s.length).toBeGreaterThanOrEqual(20)
+  // Behaviour change (2B): short samples are never padded with filler — they're an error.
+  test("short samples throw CampaignContentError instead of being padded", () => {
+    let caught: unknown
+    try {
+      buildCampaignAttributes({ ...campaignBase, samples: ["Acme hi", "Acme yo"] })
+    } catch (err) {
+      caught = err
+    }
+    expect(caught).toBeInstanceOf(CampaignContentError)
+    const issues = (caught as CampaignContentError).issues
+    expect(issues.length).toBeGreaterThanOrEqual(2)
+    expect(issues.every((i) => i.field === "samples")).toBe(true)
+    expect(issues[0].message).toMatch(/at least 20 characters/)
+  })
+
+  test("a sample without the brand name → CampaignContentError", () => {
+    expect(() =>
+      buildCampaignAttributes({
+        ...campaignBase,
+        samples: [campaignBase.samples[0], "New listing on Main St, 3bd/2ba. Reply STOP to opt out."],
+      }),
+    ).toThrow(CampaignContentError)
+  })
+
+  test("a sample longer than 1024 chars → CampaignContentError", () => {
+    expect(() =>
+      buildCampaignAttributes({ ...campaignBase, samples: [campaignBase.samples[0], `Acme ${"x".repeat(1100)}`] }),
+    ).toThrow(CampaignContentError)
   })
 
   test("emits all five samples when five are provided", () => {
@@ -351,49 +438,131 @@ describe("buildCampaignAttributes", () => {
     expect((attrs.description as string).length).toBeGreaterThanOrEqual(40)
   })
 
-  test("includes privacy/terms only when provided", () => {
-    const without = buildCampaignAttributes(campaignBase)
-    expect("privacyPolicyUrl" in without).toBe(false)
-    expect("termsAndConditionsUrl" in without).toBe(false)
+  // Behaviour change (2B): privacy + terms URLs are always sent; missing ones throw.
+  test("always includes the privacy and terms URLs", () => {
+    const attrs = buildCampaignAttributes(campaignBase)
+    expect(attrs.privacyPolicyUrl).toBe("https://acme.com/privacy")
+    expect(attrs.termsAndConditionsUrl).toBe("https://acme.com/terms")
+  })
 
-    const withUrls = buildCampaignAttributes({
-      ...campaignBase,
-      privacyPolicyUrl: "https://acme.com/privacy",
-      termsUrl: "https://acme.com/terms",
-    })
-    expect(withUrls.privacyPolicyUrl).toBe("https://acme.com/privacy")
-    expect(withUrls.termsAndConditionsUrl).toBe("https://acme.com/terms")
+  test("throws without a privacy policy URL", () => {
+    expect(() => buildCampaignAttributes({ ...campaignBase, privacyPolicyUrl: null })).toThrow(/privacyPolicyUrl/)
+  })
+
+  test("throws without a terms URL", () => {
+    expect(() => buildCampaignAttributes({ ...campaignBase, termsUrl: null })).toThrow(/termsUrl/)
   })
 
   test("throws when there is no sample text", () => {
-    expect(() =>
-      buildCampaignAttributes({ ...campaignBase, samples: [null, "  "] }),
-    ).toThrow(/sample message/i)
+    let caught: unknown
+    try {
+      buildCampaignAttributes({ ...campaignBase, samples: [null, "  "] })
+    } catch (err) {
+      caught = err
+    }
+    expect(caught).toBeInstanceOf(CampaignContentError)
+    expect((caught as Error).message).toMatch(/sample message/i)
   })
 
-  test("messageFlow describes checkbox consent, STOP/HELP, and the tenant's optInUrl", () => {
-    const flow = buildCampaignAttributes(campaignBase).messageFlow as string
-    expect(flow).toContain("checkbox")
+  test("a missing or too-short messageFlow → CampaignContentError on message_flow", () => {
+    let caught: unknown
+    try {
+      buildCampaignAttributes({ ...campaignBase, messageFlow: "too short" })
+    } catch (err) {
+      caught = err
+    }
+    expect(caught).toBeInstanceOf(CampaignContentError)
+    expect((caught as CampaignContentError).issues.some((i) => i.field === "message_flow")).toBe(true)
+  })
+})
+
+describe("buildMessageFlow", () => {
+  const args = {
+    brandName: "Acme Homes",
+    siteUrl: "https://acme.listhit.io",
+    privacyUrl: "https://acme.listhit.io/privacy",
+    termsUrl: "https://acme.listhit.io/terms",
+  }
+
+  test.each([true, false])("hasListHitSite=%s: 40–2048 chars with every compliance fact", (hasListHitSite) => {
+    const flow = buildMessageFlow({ ...args, hasListHitSite })
+    expect(flow.length).toBeGreaterThanOrEqual(40)
+    expect(flow.length).toBeLessThanOrEqual(2048)
     expect(flow).toContain("STOP")
     expect(flow).toContain("HELP")
-    expect(flow).toContain("https://acme.com")
-    expect(flow.length).toBeGreaterThanOrEqual(40)
+    expect(flow).toContain("rates may apply")
+    expect(flow).toContain(args.privacyUrl)
+    expect(flow).toContain(args.termsUrl)
+    expect(flow).toContain(args.siteUrl)
+    expect(flow.toLowerCase()).toContain("checkbox")
+  })
+})
+
+describe("sole proprietor builders", () => {
+  const sp: SoleProprietorInputs = {
+    firstName: "Sam",
+    lastName: "Seller",
+    email: "sam@example.com",
+    mobilePhone: "512-555-0199",
+    dbaName: null,
+    addressLine1: "9 Oak St",
+    city: "Austin",
+    state: "TX",
+    zip: "78702",
+    ein: null,
+  }
+
+  test("buildStarterProfileAttributes", () => {
+    expect(buildStarterProfileAttributes(sp)).toEqual({
+      first_name: "Sam",
+      last_name: "Seller",
+      email: "sam@example.com",
+      phone_number: "+15125550199",
+    })
   })
 
-  test("messageFlow falls back cleanly when optInUrl is null", () => {
-    const flow = buildCampaignAttributes({ ...campaignBase, optInUrl: null }).messageFlow as string
-    expect(flow).not.toContain("null")
-    expect(flow).not.toContain("undefined")
-    expect(flow).toContain("checkbox")
-    expect(flow).toContain("STOP")
-    expect(flow).toContain("HELP")
-    expect(flow.length).toBeGreaterThanOrEqual(40)
+  test("buildSoleProprietorAttributes uses First Last when there's no DBA", () => {
+    expect(buildSoleProprietorAttributes(sp)).toEqual({
+      brand_name: "Sam Seller",
+      mobile_phone_number: "+15125550199",
+      vertical: "REAL_ESTATE",
+    })
   })
 
-  test("omits privacyPolicyUrl/termsAndConditionsUrl when the inputs are null", () => {
-    const attrs = buildCampaignAttributes({ ...campaignBase, privacyPolicyUrl: null, termsUrl: null })
-    expect("privacyPolicyUrl" in attrs).toBe(false)
-    expect("termsAndConditionsUrl" in attrs).toBe(false)
+  test("buildSoleProprietorAttributes uses the DBA when present", () => {
+    expect(buildSoleProprietorAttributes({ ...sp, dbaName: "Sam Buys Houses" }).brand_name).toBe("Sam Buys Houses")
+  })
+
+  test("validateSoleProprietorInputs ok for complete inputs", () => {
+    expect(validateSoleProprietorInputs(sp)).toEqual({ ok: true })
+  })
+
+  test("validateSoleProprietorInputs requires the fields", () => {
+    const result = validateSoleProprietorInputs({
+      ...sp,
+      firstName: "",
+      lastName: "",
+      email: "bad",
+      mobilePhone: "12",
+      addressLine1: "",
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.missing).toEqual(
+        expect.arrayContaining(["contact_first_name", "contact_last_name", "contact_email", "rep_phone", "address_line1"]),
+      )
+    }
+  })
+
+  test("validateSoleProprietorInputs rejects an EIN", () => {
+    const result = validateSoleProprietorInputs({ ...sp, ein: "12-3456789" })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.missing).toContain("ein_must_be_empty")
+  })
+
+  test("policy SIDs match the Twilio docs values", () => {
+    expect(STARTER_CUSTOMER_PROFILE_POLICY_SID).toBe("RN806dd6cd175f314e1f96a9727ee271f4")
+    expect(SOLE_PROPRIETOR_TRUST_PRODUCT_POLICY_SID).toBe("RN670d5d2e282a6130ae063b234b6019c8")
   })
 })
 

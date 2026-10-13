@@ -14,6 +14,15 @@ export type VerifiedTwilioWebhook =
   | { ok: true; accountSid: string; account: "parent" | "subaccount"; orgId: string | null }
   | { ok: false; reason: "missing_signature" | "missing_account" | "unknown_account" | "bad_signature" }
 
+// Refreshing a token costs a parent-account API call. At most one per org per
+// minute, so a flood of forged webhooks can't hammer Twilio.
+const REFRESH_INTERVAL_MS = 60_000
+const lastRefreshAt = new Map<string, number>()
+
+export function __resetRefreshThrottleForTests() {
+  lastRefreshAt.clear()
+}
+
 function safeParentSid() {
   try {
     return getParentAccountSid()
@@ -55,10 +64,14 @@ export async function verifyTwilioWebhook(input: {
 
   // The subaccount's token may have been rotated — fetch it once and retry.
   let refreshed = null
-  try {
-    refreshed = await refreshSubaccountAuthToken(creds.orgId)
-  } catch (err) {
-    console.warn("[twilio-webhook] auth token refresh failed", { accountSid }, err instanceof Error ? err.message : err)
+  const last = lastRefreshAt.get(creds.orgId) ?? 0
+  if (Date.now() - last >= REFRESH_INTERVAL_MS) {
+    lastRefreshAt.set(creds.orgId, Date.now())
+    try {
+      refreshed = await refreshSubaccountAuthToken(creds.orgId)
+    } catch (err) {
+      console.warn("[twilio-webhook] auth token refresh failed", { accountSid }, err instanceof Error ? err.message : err)
+    }
   }
   if (refreshed && twilio.validateRequest(refreshed.authToken, signature, url, params)) {
     return { ok: true, accountSid, account: "subaccount", orgId: creds.orgId }

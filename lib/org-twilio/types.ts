@@ -5,6 +5,19 @@ export type OrgSmsProvider = "telnyx" | "twilio"
 
 export type OrgVoiceProvider = "telnyx" | "twilio"
 
+// The single customer-facing stage the registration engine drives.
+export type OrgTwilioSetupStage =
+  | "not_started"
+  | "awaiting_approval"
+  | "submitting"
+  | "in_review"
+  | "verify_mobile"
+  | "action_required"
+  | "live"
+  | "rejected"
+
+export type OrgTwilioBrandType = "STANDARD" | "SOLE_PROPRIETOR"
+
 export type OrgTwilioA2pStatus =
   | "not_started"
   | "provisioning"
@@ -45,6 +58,18 @@ export interface ProvisioningState {
   phone_number?: string
   campaign_sid?: string
   campaign_status?: string
+  // --- Phase 2B engine ---
+  trust_product_status?: string
+  tcr_id?: string
+  admin_notified_at?: string
+  issue_hash?: string
+  otp_requested_at?: string
+  trust_hub_submitted_at?: string
+  // Sole proprietor (starter profile + sole-prop TrustProduct)
+  starter_profile_enduser_sid?: string
+  starter_profile_enduser_attached?: boolean
+  sole_prop_enduser_sid?: string
+  sole_prop_enduser_attached?: boolean
 }
 
 // Mirrors the org_twilio table.
@@ -67,6 +92,28 @@ export interface OrgTwilio {
   customer_profile_status: string | null
   provisioning_state: ProvisioningState
   provisioning_error: string | null
+  setup_stage: OrgTwilioSetupStage
+  brand_type: OrgTwilioBrandType | null
+  submitted_at: string | null
+  spend_approved_at: string | null
+  spend_approved_by: string | null
+  mock_registration: boolean
+  desired_phone_number: string | null
+  desired_area_code: string | null
+  trust_product_status: string | null
+  brand_identity_status: string | null
+  brand_errors: unknown[] | null
+  campaign_errors: unknown[] | null
+  customer_issues: unknown[] | null
+  brand_update_count: number
+  event_sink_sid: string | null
+  event_subscription_sid: string | null
+  next_check_at: string | null
+  last_checked_at: string | null
+  advancing_until: string | null
+  live_at: string | null
+  live_notified_at: string | null
+  issue_notified_at: string | null
   created_at: string
   updated_at: string
 }
