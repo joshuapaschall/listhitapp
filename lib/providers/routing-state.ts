@@ -1,6 +1,7 @@
 import "server-only"
 
 import { getOrgTwilio } from "@/lib/org-twilio/service"
+import { isOrgTelnyxPinnedEnv } from "@/lib/providers/sms/routing"
 import type { ProviderRoutingRow } from "@/lib/providers/sms/routing"
 import type { VoiceRoutingRow } from "@/lib/providers/voice/routing"
 import { supabaseAdmin } from "@/lib/supabase"
@@ -15,6 +16,10 @@ export type RoutingState = ProviderRoutingRow &
   }
 
 export async function loadRoutingState(orgId: string): Promise<RoutingState | null> {
+  // The owner org always routes to Telnyx; never let a database hiccup stand
+  // between it and its phone system. The resolvers return "telnyx" for a pinned
+  // org regardless of the row.
+  if (isOrgTelnyxPinnedEnv(orgId)) return null
   const [row, credsResult] = await Promise.all([
     getOrgTwilio(orgId),
     supabaseAdmin

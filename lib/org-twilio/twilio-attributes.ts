@@ -1,5 +1,5 @@
-// Pure mapping + validation for TrustHub Secondary Customer Profile
-// provisioning. No server, DB, or vendor SDK imports — these are plain
+// Pure mapping + validation for Twilio ISV A2P 10DLC registration (Standard and
+// Sole Proprietor). No server, DB, or vendor SDK imports — these are plain
 // functions over plain inputs so they are fully unit-testable.
 
 // Twilio docs constant: the Secondary Customer Profile policy SID (ISV model).
@@ -8,11 +8,68 @@ export const SECONDARY_CUSTOMER_PROFILE_POLICY_SID = "RNdfbf3fae0e1107f8aded0e7c
 // Twilio docs constant: the A2P TrustProduct policy SID (create AND evaluate).
 export const TRUST_PRODUCT_POLICY_SID = "RNb0d4771c2c98518d916a3d4cd70a8f8b"
 
-// Standard A2P 10DLC brand type.
-export const BRAND_TYPE_STANDARD = "STANDARD"
+// Twilio docs constant: the Starter Customer Profile policy SID (sole proprietor).
+export const STARTER_CUSTOMER_PROFILE_POLICY_SID = "RN806dd6cd175f314e1f96a9727ee271f4"
 
-// business_type is not collected in the app yet; default when null.
-export const DEFAULT_BUSINESS_TYPE = "Limited Liability Corporation"
+// Twilio docs constant: the Sole Proprietor TrustProduct policy SID.
+export const SOLE_PROPRIETOR_TRUST_PRODUCT_POLICY_SID = "RN670d5d2e282a6130ae063b234b6019c8"
+
+// A2P 10DLC brand types.
+export const BRAND_TYPE_STANDARD = "STANDARD"
+export const BRAND_TYPE_SOLE_PROPRIETOR = "SOLE_PROPRIETOR"
+export type BrandType = typeof BRAND_TYPE_STANDARD | typeof BRAND_TYPE_SOLE_PROPRIETOR
+
+// Twilio's business_type enum (Secondary Customer Profile business information).
+export const BUSINESS_TYPES = [
+  "Co-operative",
+  "Corporation",
+  "Limited Liability Corporation",
+  "Non-profit Corporation",
+  "Partnership",
+] as const
+export type BusinessType = (typeof BUSINESS_TYPES)[number]
+
+// Twilio's job_position enum for the authorized representative.
+export const REP_JOB_POSITIONS = ["Director", "GM", "VP", "CEO", "CFO", "General Counsel", "Other"] as const
+
+const BUSINESS_TYPE_ALIASES: Record<string, BusinessType> = {
+  llc: "Limited Liability Corporation",
+  "limited liability company": "Limited Liability Corporation",
+  "limited liability corporation": "Limited Liability Corporation",
+  corp: "Corporation",
+  corporation: "Corporation",
+  inc: "Corporation",
+  "inc.": "Corporation",
+  incorporated: "Corporation",
+  partnership: "Partnership",
+  "co-operative": "Co-operative",
+  cooperative: "Co-operative",
+  "co-op": "Co-operative",
+  "non-profit corporation": "Non-profit Corporation",
+  "nonprofit corporation": "Non-profit Corporation",
+  "non-profit": "Non-profit Corporation",
+  nonprofit: "Non-profit Corporation",
+}
+
+// Map a stored/entered legal structure to Twilio's enum. Unknown or empty input
+// is a validation error — never silently defaulted.
+export function normalizeBusinessType(input: string | null | undefined): BusinessType {
+  const raw = (input ?? "").trim()
+  const exact = BUSINESS_TYPES.find((t) => t === raw)
+  if (exact) return exact
+  const alias = BUSINESS_TYPE_ALIASES[raw.toLowerCase()]
+  if (alias) return alias
+  throw new Error(`Unknown business type: "${raw}"`)
+}
+
+export function isValidBusinessType(input: string | null | undefined): boolean {
+  try {
+    normalizeBusinessType(input)
+    return true
+  } catch {
+    return false
+  }
+}
 
 // The merged tenant data the orchestrator assembles from business_verification +
 // organizations and passes into the builders below.
@@ -23,9 +80,11 @@ export interface ProvisioningInputs {
   contactFirstName: string
   contactLastName: string
   contactEmail: string
-  // ListHit-owned compliance address the orchestrators resolve from env and pass
-  // in. Routes carrier/TCR correspondence to ListHit, never the tenant.
-  repEmail: string
+  // Authorized representative details, entered by the customer. repPhone falls
+  // back to orgPhone; title/job position default to Owner/CEO.
+  repPhone?: string | null
+  repTitle?: string | null
+  repJobPosition?: string | null
   orgPhone: string
   addressLine1: string
   addressLine2?: string | null
@@ -54,10 +113,14 @@ export function isValidEmail(value: string): boolean {
   return /^[^\s@«»"]+@[^\s@«»"]+\.[^\s@«»"]+$/.test(s)
 }
 
-// Normalize a US phone to E.164. Keeps an already-"+"-prefixed value as-is.
+// Normalize a US phone to E.164. An already-"+"-prefixed value must be a full
+// US number (+1 and 10 digits).
 export function toE164(phone: string): string {
   const trimmed = (phone || "").trim()
-  if (trimmed.startsWith("+")) return trimmed
+  if (trimmed.startsWith("+")) {
+    if (/^\+1\d{10}$/.test(trimmed)) return trimmed
+    throw new Error(`Invalid phone number: "${phone}" is not a US E.164 number`)
+  }
   const digits = trimmed.replace(/[^0-9]/g, "")
   if (digits.length === 10) return `+1${digits}`
   if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`
@@ -69,7 +132,7 @@ export function buildBusinessInformationAttributes(inputs: ProvisioningInputs): 
     business_name: inputs.legalBusinessName,
     website_url: inputs.websiteUrl,
     business_regions_of_operation: "USA_AND_CANADA",
-    business_type: inputs.businessType ?? DEFAULT_BUSINESS_TYPE,
+    business_type: normalizeBusinessType(inputs.businessType),
     business_registration_identifier: "EIN",
     business_identity: "direct_customer",
     business_industry: "REAL_ESTATE",
@@ -80,14 +143,17 @@ export function buildBusinessInformationAttributes(inputs: ProvisioningInputs): 
   }
 }
 
+// The customer's own authorized representative — their email, phone and role.
+// (ListHit's notification address goes on the profile/TrustProduct `email`, not here.)
 export function buildAuthorizedRepAttributes(inputs: ProvisioningInputs): Record<string, unknown> {
+  const repPhone = (inputs.repPhone ?? "").trim()
   return {
     first_name: inputs.contactFirstName,
     last_name: inputs.contactLastName,
-    email: inputs.repEmail,
-    phone_number: toE164(inputs.orgPhone),
-    job_position: "Other",
-    business_title: "Owner",
+    email: inputs.contactEmail,
+    phone_number: toE164(repPhone || inputs.orgPhone),
+    job_position: (inputs.repJobPosition ?? "").trim() || "CEO",
+    business_title: (inputs.repTitle ?? "").trim() || "Owner",
   }
 }
 
@@ -103,7 +169,7 @@ export function mapCompanyType(businessType: string | null | undefined): string 
 export function buildA2pMessagingProfileAttributes(inputs: ProvisioningInputs): Record<string, unknown> {
   return {
     company_type: mapCompanyType(inputs.businessType),
-    brand_contact_email: inputs.repEmail,
+    brand_contact_email: inputs.contactEmail,
   }
 }
 
@@ -117,56 +183,120 @@ export function mapUseCase(useCase: string | null | undefined): string {
   return "MARKETING"
 }
 
-export interface CampaignInputs {
-  brandRegistrationSid: string
-  useCase: string | null
-  description: string | null
-  samples: Array<string | null | undefined>
-  optInUrl: string | null
-  legalBusinessName: string
-  privacyPolicyUrl?: string | null
-  termsUrl?: string | null
+// Thrown when the customer's campaign content can't be submitted as-is. Each
+// issue names the field to fix; nothing is padded with filler to get past Twilio.
+export class CampaignContentError extends Error {
+  readonly issues: Array<{ field: string; message: string }>
+  constructor(issues: Array<{ field: string; message: string }>) {
+    super(issues.map((i) => i.message).join(" "))
+    this.name = "CampaignContentError"
+    this.issues = issues
+  }
 }
 
-// Builds the UsAppToPerson.create payload. Applies minimum-length padding and guarantees
-// >= 2 samples so Twilio's validation passes; throws only if there is truly no sample text.
+export interface CampaignInputs {
+  brandRegistrationSid: string
+  brandType?: BrandType
+  useCase?: string | null
+  description: string | null
+  samples: Array<string | null | undefined>
+  optInUrl?: string | null
+  legalBusinessName: string
+  // Names a sample may use to identify the sender (legal name, DBA). Defaults to
+  // the legal business name.
+  brandNames?: string[]
+  messageFlow?: string | null
+  privacyPolicyUrl: string | null | undefined
+  termsUrl: string | null | undefined
+}
+
+const SAMPLE_MIN = 20
+const SAMPLE_MAX = 1024
+
+// Builds the UsAppToPerson.create payload. Description gets a consent sentence when
+// short; samples are never padded — each must be 20–1024 chars and name the brand,
+// or a CampaignContentError lists what to fix.
 export function buildCampaignAttributes(inputs: CampaignInputs): Record<string, unknown> {
+  if (!inputs.privacyPolicyUrl) throw new Error("privacyPolicyUrl is required for an A2P campaign.")
+  if (!inputs.termsUrl) throw new Error("termsUrl is required for an A2P campaign.")
+
+  const issues: Array<{ field: string; message: string }> = []
+  const brandNames = (inputs.brandNames?.length ? inputs.brandNames : [inputs.legalBusinessName])
+    .map((n) => (n ?? "").trim())
+    .filter(Boolean)
+
   const provided = (inputs.samples ?? []).map((v) => (v ?? "").trim()).filter((v) => v.length > 0)
   if (provided.length === 0) {
-    throw new Error("At least one campaign sample message is required.")
+    issues.push({ field: "samples", message: "Add at least one sample message." })
   }
-  // Ensure 2 samples (duplicate the first if only one was provided), cap at 5, and
-  // pad short ones to Twilio's 20-char minimum.
-  while (provided.length < 2) provided.push(provided[0])
-  const paddedSamples = provided.slice(0, 5).map((v) =>
-    v.length >= 20 ? v.slice(0, 1024) : `${v} — reply STOP to opt out.`.slice(0, 1024),
-  )
+  provided.slice(0, 5).forEach((sample, i) => {
+    const label = `Sample message ${i + 1}`
+    if (sample.length < SAMPLE_MIN) {
+      issues.push({ field: "samples", message: `${label} must be at least ${SAMPLE_MIN} characters.` })
+    } else if (sample.length > SAMPLE_MAX) {
+      issues.push({ field: "samples", message: `${label} must be ${SAMPLE_MAX} characters or fewer.` })
+    }
+    const lower = sample.toLowerCase()
+    if (brandNames.length && !brandNames.some((n) => lower.includes(n.toLowerCase()))) {
+      issues.push({ field: "samples", message: `${label} must include your business name (${brandNames[0]}).` })
+    }
+  })
+
+  const messageFlow = (inputs.messageFlow ?? "").trim()
+  if (messageFlow.length < 40 || messageFlow.length > 2048) {
+    issues.push({ field: "message_flow", message: "Describe how buyers opt in (40–2048 characters)." })
+  }
+
+  if (issues.length) throw new CampaignContentError(issues)
+
+  // Ensure 2 samples (duplicate the first if only one was provided), cap at 5.
+  const samples = provided.slice(0, 5)
+  while (samples.length < 2) samples.push(samples[0])
 
   const baseDescription =
     (inputs.description ?? "").trim() ||
     `${inputs.legalBusinessName} sends real estate offers, updates, and transactional messages to contacts who opted in.`
-  const description = baseDescription.length >= 40
-    ? baseDescription
-    : `${baseDescription} Recipients have consented to receive these messages.`.slice(0, 4096)
-
-  const optInSource = inputs.optInUrl ? `a lead capture form at ${inputs.optInUrl}` : "a lead capture form on our website"
-  const messageFlow =
-    `Recipients opt in by submitting their phone number through ${optInSource}. ` +
-    `The form includes a required checkbox stating they agree to receive automated marketing text messages from ` +
-    `${inputs.legalBusinessName}. The opt-in language discloses STOP and HELP instructions and links to the Terms ` +
-    `and Privacy Policy. Consent is captured and stored before any message is sent.`
+  const description = (
+    baseDescription.length >= 40
+      ? baseDescription
+      : `${baseDescription} Recipients have consented to receive these messages.`
+  ).slice(0, 4096)
 
   return {
     brandRegistrationSid: inputs.brandRegistrationSid,
     description,
-    messageFlow: messageFlow.length >= 40 ? messageFlow : `${messageFlow} Consent is captured and stored.`,
-    messageSamples: paddedSamples,
-    usAppToPersonUsecase: mapUseCase(inputs.useCase),
+    messageFlow,
+    messageSamples: samples,
+    usAppToPersonUsecase: inputs.brandType === BRAND_TYPE_SOLE_PROPRIETOR ? "SOLE_PROPRIETOR" : "MARKETING",
     hasEmbeddedLinks: true,
     hasEmbeddedPhone: true,
-    ...(inputs.privacyPolicyUrl ? { privacyPolicyUrl: inputs.privacyPolicyUrl } : {}),
-    ...(inputs.termsUrl ? { termsAndConditionsUrl: inputs.termsUrl } : {}),
+    privacyPolicyUrl: inputs.privacyPolicyUrl,
+    termsAndConditionsUrl: inputs.termsUrl,
   }
+}
+
+// The opt-in description carriers review. Every compliance fact is stated: where
+// buyers opt in, that consent boxes are unchecked and split by message type, the
+// policy links, frequency, rates, STOP/HELP, and that consent is recorded first.
+export function buildMessageFlow(args: {
+  brandName: string
+  siteUrl: string
+  privacyUrl: string
+  termsUrl: string
+  hasListHitSite: boolean
+}): string {
+  const { brandName, siteUrl, privacyUrl, termsUrl } = args
+  const where = args.hasListHitSite
+    ? `Buyers opt in on the ${brandName} signup form at ${siteUrl}.`
+    : `Buyers opt in on the signup form on the ${brandName} website at ${siteUrl}.`
+  const flow = [
+    where,
+    "The form has two separate consent checkboxes, one for marketing texts and one for non-marketing texts, and neither is checked by default.",
+    `Next to the checkboxes is the full consent language with links to the Privacy Policy (${privacyUrl}) and the Terms (${termsUrl}).`,
+    "The consent language says message frequency varies, message and data rates may apply, reply STOP to opt out, and reply HELP for help.",
+    "The consent text, timestamp and IP address are stored before any message is sent.",
+  ].join(" ")
+  return flow.length > 2048 ? flow.slice(0, 2048) : flow
 }
 
 export interface AddressParams {
@@ -180,15 +310,87 @@ export interface AddressParams {
 }
 
 export function buildAddressParams(inputs: ProvisioningInputs): AddressParams {
+  return addressParamsFor(inputs.legalBusinessName, inputs)
+}
+
+function addressParamsFor(
+  customerName: string,
+  a: { addressLine1: string; addressLine2?: string | null; city: string; state: string; zip: string },
+): AddressParams {
   return {
-    customerName: inputs.legalBusinessName,
-    street: inputs.addressLine1,
-    city: inputs.city,
-    region: inputs.state,
-    postalCode: inputs.zip,
+    customerName,
+    street: a.addressLine1,
+    city: a.city,
+    region: a.state,
+    postalCode: a.zip,
     isoCountry: "US",
-    ...(inputs.addressLine2 ? { streetSecondary: inputs.addressLine2 } : {}),
+    ...(a.addressLine2 ? { streetSecondary: a.addressLine2 } : {}),
   }
+}
+
+// ---- Sole proprietor (no EIN) ----------------------------------------------
+
+export interface SoleProprietorInputs {
+  firstName: string
+  lastName: string
+  email: string
+  mobilePhone: string
+  dbaName?: string | null
+  addressLine1: string
+  addressLine2?: string | null
+  city: string
+  state: string
+  zip: string
+  // Must be empty: a business with an EIN registers as Standard.
+  ein?: string | null
+}
+
+export function soleProprietorBrandName(inputs: SoleProprietorInputs): string {
+  return (inputs.dbaName ?? "").trim() || `${inputs.firstName} ${inputs.lastName}`.trim()
+}
+
+// starter_customer_profile_information EndUser.
+export function buildStarterProfileAttributes(inputs: SoleProprietorInputs): Record<string, unknown> {
+  return {
+    first_name: inputs.firstName,
+    last_name: inputs.lastName,
+    email: inputs.email,
+    phone_number: toE164(inputs.mobilePhone),
+  }
+}
+
+// sole_proprietor_information EndUser on the Sole Proprietor TrustProduct.
+export function buildSoleProprietorAttributes(inputs: SoleProprietorInputs): Record<string, unknown> {
+  return {
+    brand_name: soleProprietorBrandName(inputs),
+    mobile_phone_number: toE164(inputs.mobilePhone),
+    vertical: "REAL_ESTATE",
+  }
+}
+
+export function buildSoleProprietorAddressParams(inputs: SoleProprietorInputs): AddressParams {
+  return addressParamsFor(`${inputs.firstName} ${inputs.lastName}`.trim(), inputs)
+}
+
+export function validateSoleProprietorInputs(inputs: SoleProprietorInputs): ValidationResult {
+  const missing: string[] = []
+  const need = (val: unknown, label: string) => {
+    if (typeof val !== "string" || val.trim() === "") missing.push(label)
+  }
+  need(inputs.firstName, "contact_first_name")
+  need(inputs.lastName, "contact_last_name")
+  if (typeof inputs.email !== "string" || !isValidEmail(inputs.email)) missing.push("contact_email")
+  try {
+    toE164(inputs.mobilePhone)
+  } catch {
+    missing.push("rep_phone")
+  }
+  need(inputs.addressLine1, "address_line1")
+  need(inputs.city, "city")
+  need(inputs.state, "state")
+  need(inputs.zip, "zip")
+  if ((inputs.ein ?? "").replace(/[^0-9]/g, "").length > 0) missing.push("ein_must_be_empty")
+  return missing.length ? { ok: false, missing } : { ok: true }
 }
 
 export type ValidationResult = { ok: true } | { ok: false; missing: string[] }
@@ -205,12 +407,17 @@ export function validateProvisioningInputs(inputs: ProvisioningInputs): Validati
   if (typeof inputs.ein !== "string" || inputs.ein.replace(/[^0-9]/g, "").length !== 9) {
     missing.push("ein")
   }
+  if (!isValidBusinessType(inputs.businessType)) missing.push("business_type")
   need(inputs.contactFirstName, "contact_first_name")
   need(inputs.contactLastName, "contact_last_name")
   if (typeof inputs.contactEmail !== "string" || !isValidEmail(inputs.contactEmail)) {
     missing.push("contact_email")
   }
-  need(inputs.orgPhone, "phone")
+  try {
+    toE164((inputs.repPhone ?? "").trim() || inputs.orgPhone)
+  } catch {
+    missing.push("phone")
+  }
   need(inputs.addressLine1, "address_line1")
   need(inputs.city, "city")
   need(inputs.state, "state")

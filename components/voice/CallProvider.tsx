@@ -32,15 +32,39 @@ const VOICE_NOT_READY_MESSAGE = "Calling isn't set up for your account yet.";
 //
 // Exported (and parameterized on fetch/sleep/cancellation) so it can be unit-tested
 // without standing up a full CallProvider render harness.
+// The last provider this browser session committed to. Only an org the endpoint
+// has already identified as the Telnyx owner org may fall back to Telnyx when the
+// endpoint keeps failing; every other org stays "blocked".
+const VOICE_PROVIDER_SESSION_KEY = "listhit:voiceProvider";
+
+function readSessionProvider(): string | null {
+  try {
+    return window.sessionStorage.getItem(VOICE_PROVIDER_SESSION_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeSessionProvider(provider: VoiceProvider) {
+  try {
+    window.sessionStorage.setItem(VOICE_PROVIDER_SESSION_KEY, provider);
+  } catch {
+    // Storage unavailable — the fallback just stays conservative ("blocked").
+  }
+}
+
 export async function resolveVoiceProviderWithRetry(
   fetchImpl: typeof fetch = (...args: Parameters<typeof fetch>) => fetch(...args),
   opts: {
     maxAttempts?: number;
     sleep?: (ms: number) => Promise<void>;
     isCancelled?: () => boolean;
+    // What the endpoint previously returned this session (defaults to sessionStorage).
+    previousProvider?: string | null;
   } = {},
 ): Promise<VoiceProvider | null> {
   const maxAttempts = opts.maxAttempts ?? 8;
+  const previous = opts.previousProvider !== undefined ? opts.previousProvider : readSessionProvider();
   const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const isCancelled = opts.isCancelled ?? (() => false);
 
@@ -52,6 +76,7 @@ export async function resolveVoiceProviderWithRetry(
         const json = (await res.json().catch(() => null)) as { provider?: string } | null;
         if (json?.provider === "twilio" || json?.provider === "telnyx" || json?.provider === "blocked") {
           // The only thing we ever commit to: an exact provider on a 200.
+          writeSessionProvider(json.provider);
           return json.provider;
         }
         // 200 but unexpected body — inconclusive, retry.
@@ -63,11 +88,11 @@ export async function resolveVoiceProviderWithRetry(
     attempt += 1;
     if (attempt >= maxAttempts) {
       // After sustained failure (~seconds — many session-hydration windows) fall
-      // back to telnyx so the legacy dialer still works for genuinely-Telnyx orgs
-      // (the safe default) instead of spinning forever. A Twilio org would rather
-      // wait for a correct answer than be mis-routed, and 8 tries covers hydration
-      // many times over.
-      return "telnyx";
+      // back to telnyx ONLY for the owner org, i.e. when the endpoint already said
+      // "telnyx" earlier this session, so its legacy dialer keeps working. Any
+      // other org stays "blocked" ("Calling isn't set up") rather than being
+      // mis-routed to Telnyx.
+      return previous === "telnyx" ? "telnyx" : "blocked";
     }
     await sleep(Math.min(250 * 2 ** attempt, 2000));
   }

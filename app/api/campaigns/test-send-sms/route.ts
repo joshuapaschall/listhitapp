@@ -5,6 +5,7 @@ import { calculateSmsSegments } from "@/lib/sms-utils"
 import { renderTemplate } from "@/lib/utils"
 import { formatPhoneE164 } from "@/lib/dedup-utils"
 import { sendCampaignSMS } from "@/services/campaign-sender.server"
+import { SmsNotReadyError } from "@/lib/providers/sms"
 import { resolveSendingMarketId } from "@/lib/campaigns/resolve-sending-market"
 import { getUserMergeContext } from "@/lib/user-context"
 import { requirePermission } from "@/lib/permissions/server"
@@ -90,6 +91,9 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ ok: true, dryRun, formattedTo: formattedPhone, fromNumber: results[0]?.from ?? null, results })
   } catch (err: any) {
+    if (err instanceof SmsNotReadyError) {
+      return NextResponse.json({ error: err.message, code: err.code }, { status: err.status })
+    }
     const msg = err?.message || "Test send failed"
     return NextResponse.json({ error: msg }, { status: 400 })
   }

@@ -52,11 +52,37 @@ describe("resolveVoiceProviderWithRetry", () => {
     expect(result).toBe("twilio")
   })
 
-  it("falls back to telnyx only after sustained failure (maxAttempts 401s)", async () => {
+  // Behaviour change (2B): the Telnyx fallback is owner-only — it applies only when the
+  // endpoint already said "telnyx" earlier this session.
+  it("falls back to telnyx only after sustained failure (maxAttempts 401s) for a session that saw telnyx", async () => {
     const fetchImpl = fetchReturning(unauthorized)
-    const result = await resolveVoiceProviderWithRetry(fetchImpl, { sleep: noSleep, maxAttempts: 4 })
+    const result = await resolveVoiceProviderWithRetry(fetchImpl, {
+      sleep: noSleep,
+      maxAttempts: 4,
+      previousProvider: "telnyx",
+    })
     expect(result).toBe("telnyx")
     expect((fetchImpl as any).callCount()).toBe(4)
+  })
+
+  it("stays blocked after sustained failure when the session never saw telnyx", async () => {
+    const fetchImpl = fetchReturning(unauthorized)
+    const result = await resolveVoiceProviderWithRetry(fetchImpl, { sleep: noSleep, maxAttempts: 4, previousProvider: null })
+    expect(result).toBe("blocked")
+    expect((fetchImpl as any).callCount()).toBe(4)
+  })
+
+  it("a session that last saw twilio does not fall back to telnyx", async () => {
+    const fetchImpl = fetchReturning(serverError)
+    const result = await resolveVoiceProviderWithRetry(fetchImpl, { sleep: noSleep, maxAttempts: 3, previousProvider: "twilio" })
+    expect(result).toBe("blocked")
+  })
+
+  it("commits immediately to blocked on a 200 { provider: 'blocked' }", async () => {
+    const fetchImpl = fetchReturning(ok({ provider: "blocked" }))
+    const result = await resolveVoiceProviderWithRetry(fetchImpl, { sleep: noSleep })
+    expect(result).toBe("blocked")
+    expect((fetchImpl as any).callCount()).toBe(1)
   })
 
   it("commits immediately to telnyx on a 200 { provider: 'telnyx' }", async () => {

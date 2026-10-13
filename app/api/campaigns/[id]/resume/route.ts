@@ -5,6 +5,7 @@ import { processEmailQueue } from "@/services/campaign-sender"
 import { processSmsQueue } from "@/services/sms-campaign-sender"
 import { assertServer } from "@/utils/assert-server"
 import { resolveOrgIdForUser } from "@/lib/auth/org-context"
+import { getSmsReadiness, SmsNotReadyError } from "@/lib/providers/sms"
 
 assertServer()
 
@@ -62,7 +63,7 @@ export async function POST(
 
   let campaignQuery = supabaseAdmin
     .from("campaigns")
-    .select("id,status,user_id,channel")
+    .select("id,status,user_id,channel,org_id")
     .eq("id", params.id)
   if (authSource === "user_jwt" && orgId) {
     campaignQuery = campaignQuery.eq("org_id", orgId)
@@ -78,6 +79,13 @@ export async function POST(
       { error: "Campaign is not paused for safety" },
       { status: 409 },
     )
+  }
+
+  // An SMS campaign can only resume on an org whose texting is live; otherwise
+  // every resumed job would just fail as sms_not_ready.
+  if (campaign.channel === "sms" && (await getSmsReadiness(campaign.org_id)) === "blocked") {
+    const notReady = new SmsNotReadyError()
+    return NextResponse.json({ error: notReady.message, code: notReady.code }, { status: notReady.status })
   }
 
   const queueTable = campaign.channel === "sms" ? "sms_campaign_queue" : "email_campaign_queue"
