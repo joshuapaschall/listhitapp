@@ -43,7 +43,14 @@ type EmailSenderOption = {
   from_name: string | null
   reply_to: string | null
   is_default: boolean | null
-  domain_id: string
+}
+
+type SenderOptionResponse = {
+  id: string
+  fromEmail: string
+  fromName: string | null
+  replyTo: string | null
+  isDefault: boolean
 }
 
 function CardRow({ id, title, summary, valid, ctaText, expandedCard, setExpandedCard, children }: {
@@ -204,13 +211,22 @@ export default function CampaignComposeView({ initialCampaign }: { initialCampai
     if (campaign.channel !== "email") return
 
     let alive = true
-    fetch("/api/email/senders")
+    fetch("/api/email/sender-options")
       .then(async (response) => {
         const body = await response.json().catch(() => ({}))
-        if (!response.ok || !body?.ok) {
+        if (!response.ok) {
           throw new Error(body?.error || "Failed to load verified senders")
         }
-        return (body.senders || []) as EmailSenderOption[]
+        // The owner env fallback is resolved server-side at send time, not picked here.
+        return ((body.senders || []) as SenderOptionResponse[])
+          .filter((sender) => sender.id !== "owner-env")
+          .map((sender): EmailSenderOption => ({
+            id: sender.id,
+            from_email: sender.fromEmail,
+            from_name: sender.fromName,
+            reply_to: sender.replyTo,
+            is_default: sender.isDefault,
+          }))
       })
       .then((senders) => {
         if (!alive) return

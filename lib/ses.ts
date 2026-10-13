@@ -11,6 +11,8 @@ const log = createLogger("ses")
 
 export interface SendSesEmailParams {
   to: string
+  cc?: string[]
+  bcc?: string[]
   subject: string
   html: string
   text?: string
@@ -160,6 +162,8 @@ export async function sendSesEmail(params: SendSesEmailParams): Promise<
     FromEmailAddress: fromEmailAddress,
     Destination: {
       ToAddresses: [params.to],
+      ...(params.cc?.length ? { CcAddresses: params.cc } : {}),
+      ...(params.bcc?.length ? { BccAddresses: params.bcc } : {}),
     },
     Content: {
       Simple: {
