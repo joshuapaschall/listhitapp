@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
-import twilio from "twilio"
 
 import { processTwilioStatusEvent } from "@/lib/twilio-status-processor"
+import { getTwilioClientForOrg } from "@/lib/twilio/org-client"
+import { verifyTwilioWebhook } from "@/lib/twilio/verify-webhook"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 // Public callback URL Twilio signs against. Must match the statusCallback the
-// provider set on each message exactly, or validateRequest fails.
+// provider set on each message exactly, or signature verification fails.
 function callbackUrl(): string {
   const base = (process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/$/, "")
   return `${base}/api/webhooks/twilio-status`
@@ -20,23 +21,26 @@ export async function POST(request: NextRequest) {
     params[key] = value
   }
 
-  const authToken = process.env.LISTHIT_TWILIO_AUTH_TOKEN
-  if (!authToken) {
-    // Fail closed — never process an unvalidated status callback.
-    console.error("[twilio-status] LISTHIT_TWILIO_AUTH_TOKEN is not set; rejecting webhook")
+  // Fail closed — never process an unvalidated status callback.
+  const verified = await verifyTwilioWebhook({
+    signature: request.headers.get("x-twilio-signature") || "",
+    url: callbackUrl(),
+    params,
+  })
+  if (!verified.ok) {
+    console.warn("[twilio-status] rejected webhook", { reason: verified.reason })
     return new Response("Forbidden", { status: 403 })
-  }
-
-  const signature = request.headers.get("x-twilio-signature") || ""
-  if (!twilio.validateRequest(authToken, signature, callbackUrl(), params)) {
-    return new Response("Invalid signature", { status: 403 })
   }
 
   const messageSid = params.MessageSid
   const messageStatus = params.MessageStatus
   const errorCode = params.ErrorCode || null
 
-  return processTwilioStatusEvent({ messageSid, messageStatus, errorCode })
+  // The message lives in the signing subaccount; only its own client can fetch
+  // it for the cost/segment backfill.
+  const loadClient = verified.orgId ? () => getTwilioClientForOrg(verified.orgId as string) : null
+
+  return processTwilioStatusEvent({ messageSid, messageStatus, errorCode, loadClient })
 }
 
 export async function GET() {

@@ -1,4 +1,6 @@
 let sendCampaignSMS: any
+let realSendCampaignSMS: any
+const OWNER_ORG = "org-owner"
 
 let mappings: any[] = []
 let messages: any[] = []
@@ -18,8 +20,8 @@ vi.mock("../lib/sms-rate-limiter", () => {
   }
 })
 
-// Delegating mock: by default the real resolver runs (no orgId → TelnyxSmsProvider,
-// managesPacing:false) so every existing case is unchanged. A test can set
+// Delegating mock: by default the real resolver runs (the pinned owner org →
+// TelnyxSmsProvider, managesPacing:false) so every existing case is unchanged. A test can set
 // h.providerOverride to inject a managesPacing:true provider for the new cases.
 const h = vi.hoisted(() => ({ providerOverride: null as any }))
 vi.mock("../lib/providers/sms", async (importOriginal) => {
@@ -82,6 +84,10 @@ vi.mock("../lib/supabase", () => {
             update: () => ({ eq: async () => ({ data: null, error: null }) }),
           }
         }
+        // loadRoutingState: the owner org needs no Twilio rows; a tenant has none (blocked).
+        if (table === "org_twilio" || table === "org_twilio_credentials") {
+          return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) }
+        }
         if (table === "messages") {
           return {
             insert: async (rows: any) => {
@@ -115,8 +121,32 @@ describe("sendCampaignSMS sticky sender", () => {
     process.env.TELNYX_API_KEY = "KEY123"
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://cdn"
     process.env.TELNYX_MESSAGING_PROFILE_ID = "MP123"
+    process.env.TELNYX_PINNED_ORG_IDS = OWNER_ORG
     vi.resetModules()
-    sendCampaignSMS = (await import("../services/campaign-sender.server")).sendCampaignSMS
+    realSendCampaignSMS = (await import("../services/campaign-sender.server")).sendCampaignSMS
+    // Sending now always needs an org (no org → SmsNotReadyError). These cases
+    // exercise the pinned owner org's Telnyx path unless they pass their own org.
+    sendCampaignSMS = (args: any) => realSendCampaignSMS({ orgId: OWNER_ORG, ...args })
+  })
+
+  afterAll(() => {
+    delete process.env.TELNYX_PINNED_ORG_IDS
+  })
+
+  test("no org → SmsNotReadyError, never a Telnyx send", async () => {
+    const { SmsNotReadyError } = await import("../lib/providers/sms")
+    await expect(realSendCampaignSMS({ buyerId: "b1", to: ["+1222"], body: "hi" })).rejects.toBeInstanceOf(
+      SmsNotReadyError,
+    )
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  test("a non-pinned org whose texting isn't live → SmsNotReadyError, never a Telnyx send", async () => {
+    const { SmsNotReadyError } = await import("../lib/providers/sms")
+    await expect(sendCampaignSMS({ buyerId: "b1", to: ["+1222"], body: "hi", orgId: "org-tenant" })).rejects.toBeInstanceOf(
+      SmsNotReadyError,
+    )
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   test("uses stored number when mapping exists", async () => {
@@ -134,10 +164,8 @@ describe("sendCampaignSMS sticky sender", () => {
     const body = JSON.parse(fetchMock.mock.calls[0][1].body as string)
     expect(body.messaging_profile_id).toBe("MP123")
     expect(mappings.length).toBe(1)
-    // recordStickyFrom OMITS org_id when the org is unknown (this test invokes
-    // the sender without an orgId), so the column default applies — no explicit
-    // null, which would violate the NOT NULL column.
-    expect(mappings[0]).toEqual({ buyer_id: "b2", from_number: "+1444" })
+    // The sticky row is stamped with the sending org (sends now always carry one).
+    expect(mappings[0]).toEqual({ buyer_id: "b2", from_number: "+1444", org_id: OWNER_ORG })
   })
 
   test("includes media URLs when provided", async () => {

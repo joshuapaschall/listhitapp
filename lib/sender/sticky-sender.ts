@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { formatPhoneE164, normalizePhone } from "@/lib/dedup-utils"
-import { pickPoolFromNumber } from "./campaign-from-pool"
+import { isOrgTelnyxPinnedEnv } from "@/lib/providers/sms/routing"
+import { numberProviderForOrg, pickPoolFromNumber } from "./campaign-from-pool"
 
 interface ResolveArgs {
   client: SupabaseClient
@@ -21,24 +22,29 @@ interface RecordArgs {
   orgId: string
 }
 
-// Validate that a candidate number is one THIS ORG actually owns/operates.
-// Org-scoped: mirrors the inline check in app/api/messages/send/route.ts but
-// never validates a number against another tenant's inventory.
+// Validate that a candidate number is one THIS ORG actually owns/operates, on
+// the org's own rail (Telnyx for the pinned owner org, Twilio for everyone else).
+// Org-scoped: never validates a number against another tenant's inventory.
 async function isOwnedNumber(
   client: SupabaseClient,
   orgId: string,
   digits: string | null,
   e164: string | null,
 ): Promise<boolean> {
+  const provider = numberProviderForOrg(orgId)
   if (e164) {
     const { data: inbound, error } = await client
       .from("inbound_numbers")
       .select("e164")
       .eq("org_id", orgId)
+      .eq("provider", provider)
       .eq("enabled", true)
       .in("e164", [e164])
     if (!error && inbound && inbound.length) return true
   }
+
+  // voice_numbers is the owner's Telnyx inventory; a Twilio org never draws from it.
+  if (provider !== "telnyx") return false
 
   const matchValues = Array.from(
     new Set([digits, e164].filter((num): num is string => typeof num === "string")),
@@ -64,7 +70,11 @@ async function isOwnedNumber(
  *   3. newest inbound message's to_number on the thread
  *   4. buyer_sms_senders.from_number
  *   5a. campaign path (sendingMarketId + orgId): rotate the market's pool — no env fallback.
- *   5b. 1:1 / transactional path: process.env.DEFAULT_OUTBOUND_DID
+ *   5b. 1:1 / transactional path: process.env.DEFAULT_OUTBOUND_DID — pinned owner org ONLY.
+ *
+ * For a Twilio (non-pinned) org, the sticky candidates (2–4) count only when the
+ * number is in inbound_numbers for that org with provider = 'twilio'. Otherwise
+ * the result is null, which lets the org's Messaging Service pick the sender.
  */
 export async function resolveOutboundFrom({
   client,
@@ -74,6 +84,16 @@ export async function resolveOutboundFrom({
   sendingMarketId,
   orgId,
 }: ResolveArgs): Promise<string | null> {
+  const pinned = isOrgTelnyxPinnedEnv(orgId)
+  // Owner org: sticky candidates are trusted as before. Twilio orgs: each one
+  // must be a number the org owns on Twilio.
+  const usable = async (candidate: string | null): Promise<string | null> => {
+    if (!candidate) return null
+    if (pinned) return candidate
+    if (!orgId) return null
+    return (await isOwnedNumber(client, orgId, normalizePhone(candidate), candidate)) ? candidate : null
+  }
+
   // 1. Explicit pick — honored only if we know the org AND the org owns it.
   //    SECURITY: with no orgId we cannot prove ownership, so we do NOT honor
   //    the explicit pick (fail closed) and fall through to sticky resolution.
@@ -92,7 +112,7 @@ export async function resolveOutboundFrom({
       .select("preferred_from_number")
       .eq("id", threadId)
       .maybeSingle()
-    const pref = formatPhoneE164(thread?.preferred_from_number)
+    const pref = await usable(formatPhoneE164(thread?.preferred_from_number))
     if (pref) return pref
 
     // 3. The DID the buyer last texted in to.
@@ -104,7 +124,7 @@ export async function resolveOutboundFrom({
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle()
-    const lastTo = formatPhoneE164(lastIn?.to_number)
+    const lastTo = await usable(formatPhoneE164(lastIn?.to_number))
     if (lastTo) return lastTo
   }
 
@@ -115,7 +135,7 @@ export async function resolveOutboundFrom({
       .select("from_number")
       .eq("buyer_id", buyerId)
       .maybeSingle()
-    const stuck = formatPhoneE164(sticky?.from_number)
+    const stuck = await usable(formatPhoneE164(sticky?.from_number))
     if (stuck) return stuck
   }
 
@@ -125,8 +145,9 @@ export async function resolveOutboundFrom({
     return pickPoolFromNumber(orgId, sendingMarketId)
   }
 
-  // 5b. Env default — ONLY for 1:1 / transactional (no sendingMarketId).
-  if (process.env.DEFAULT_OUTBOUND_DID) {
+  // 5b. Env default — ONLY for 1:1 / transactional (no sendingMarketId), and
+  // ONLY for the pinned owner org: DEFAULT_OUTBOUND_DID is a Telnyx number.
+  if (pinned && process.env.DEFAULT_OUTBOUND_DID) {
     const def = formatPhoneE164(process.env.DEFAULT_OUTBOUND_DID)
     if (def) return def
   }

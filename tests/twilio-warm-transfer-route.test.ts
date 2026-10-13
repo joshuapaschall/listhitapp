@@ -47,7 +47,7 @@ vi.mock("@/lib/supabase", () => ({
 vi.mock("@/lib/org-twilio/service", () => ({
   getOrgTwilio: async () => (h.state.orgNumber ? { phone_number: h.state.orgNumber } : null),
 }));
-vi.mock("@/lib/providers/twilio/client", () => {
+vi.mock("@/lib/twilio/org-client", () => {
   const participants = (sid: string) => ({
     update: async (opts: any) => {
       if (h.state.updateThrows) throw h.state.updateThrows;
@@ -69,7 +69,7 @@ vi.mock("@/lib/providers/twilio/client", () => {
     return h.state.participantsList;
   };
   return {
-    getTwilioClient: () => ({
+    getTwilioClientForOrg: async (orgId: string) => ((h.state as any).clientOrgId = orgId, {
       conferences: (_confSid: string) => ({ participants }),
     }),
   };
@@ -157,6 +157,8 @@ describe("twilio warm-transfer route", () => {
     expect(h.state.createOpts.from).toBe("+15551230000");
     expect(h.state.createOpts.to).toBe("+13335557777");
     expect(h.state.createOpts.label).toBe("warm-transfer");
+    // The conference lives in the session org's own subaccount.
+    expect((h.state as any).clientOrgId).toBe("org-1");
   });
 
   test("start: when create throws → far party un-held and 502", async () => {

@@ -5,12 +5,13 @@ import { assertServer } from "@/utils/assert-server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { resolveOrgIdByDid } from "@/lib/inbound-numbers"
 import { formatPhoneE164 } from "@/lib/dedup-utils"
-import { getOrgTwilio } from "@/lib/org-twilio/service"
+import { loadRoutingState } from "@/lib/providers/routing-state"
 import { resolveVoiceProviderName, parseTelnyxPinnedOrgIds } from "@/lib/providers/voice/routing"
 import { buildVoiceIdentity } from "@/lib/providers/voice/identity"
 import { getRoutingConfig, getVoicemailGreetingUrl } from "@/lib/voice/routing"
 import { appendVoicemailTwiml } from "@/lib/voice/twilio-voicemail"
-import { getTwilioClient } from "@/lib/providers/twilio/client"
+import { getTwilioClientForOrg } from "@/lib/twilio/org-client"
+import { verifyTwilioWebhook } from "@/lib/twilio/verify-webhook"
 import { inboundConferenceRoomName, refCallbackUrl } from "@/lib/voice/twilio-conference"
 
 export const runtime = "nodejs"
@@ -88,14 +89,14 @@ export async function POST(request: NextRequest) {
   const rawBody = await request.text()
   const params = Object.fromEntries(new URLSearchParams(rawBody).entries())
 
-  const authToken = process.env.LISTHIT_TWILIO_AUTH_TOKEN
-  if (!authToken) {
-    console.error("[twilio-voice-incoming] LISTHIT_TWILIO_AUTH_TOKEN is not set; rejecting webhook")
+  const verified = await verifyTwilioWebhook({
+    signature: request.headers.get("x-twilio-signature") || "",
+    url: callbackUrl(),
+    params,
+  })
+  if (!verified.ok) {
+    console.warn("[twilio-voice-incoming] rejected webhook", { reason: verified.reason })
     return new NextResponse("Forbidden", { status: 403 })
-  }
-  const signature = request.headers.get("x-twilio-signature") || ""
-  if (!twilio.validateRequest(authToken, signature, callbackUrl(), params)) {
-    return new NextResponse("Invalid signature", { status: 403 })
   }
 
   const from = params.From ?? ""
@@ -105,15 +106,21 @@ export async function POST(request: NextRequest) {
     return sayHangup("This number is not available. Goodbye.")
   }
 
-  // Resolve the org from the inbound DID.
-  const orgId = await resolveOrgIdByDid(to)
+  // Resolve the org from the inbound DID. The verified subaccount is the
+  // authority: a DID mapped to another org is refused.
+  const didOrgId = await resolveOrgIdByDid(to)
+  if (verified.orgId && didOrgId && didOrgId !== verified.orgId) {
+    console.warn("[twilio-webhook] org mismatch", { route: "twilio-voice-incoming" })
+    return new NextResponse("Forbidden", { status: 403 })
+  }
+  const orgId = didOrgId ?? verified.orgId
   if (!orgId) {
     console.warn("[twilio-voice-incoming] no org for inbound DID — refusing", { to })
     return sayHangup("This number is not available. Goodbye.")
   }
 
   // Routing guard: only ring browsers for orgs actually routed to Twilio voice.
-  const row = await getOrgTwilio(orgId)
+  const row = await loadRoutingState(orgId)
   const provider = resolveVoiceProviderName(
     orgId,
     row,
@@ -189,6 +196,18 @@ export async function POST(request: NextRequest) {
     agentTargets.push(routing.forwardingNumber)
   }
 
+  // Verified subaccount org; the DID's org only for a parent-account number.
+  // Without a client no agent can be dialed in, so the caller goes to voicemail
+  // instead of waiting in an empty room.
+  const client = await getTwilioClientForOrg(verified.orgId ?? orgId).catch((err) => {
+    console.error("[twilio-voice-incoming] no Twilio client for org — voicemail", { orgId, error: String(err) })
+    return null
+  })
+  if (!client) {
+    await insertInboundRow(params, orgId, from, to)
+    return voicemailResponse(to)
+  }
+
   await insertInboundRow(params, orgId, from, to, {
     conference_name: room,
     agent_legs_remaining: agentTargets.length,
@@ -204,7 +223,7 @@ export async function POST(request: NextRequest) {
   const agentTwiml = `<Response><Dial><Conference startConferenceOnEnter="true" endConferenceOnExit="false">${room}</Conference></Dial></Response>`
   for (const target of agentTargets) {
     try {
-      await getTwilioClient().calls.create({
+      await client.calls.create({
         to: target,
         from,
         timeout: ringTimeout,

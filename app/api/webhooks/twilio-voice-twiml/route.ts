@@ -4,10 +4,11 @@ import twilio from "twilio"
 import { assertServer } from "@/utils/assert-server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatPhoneE164 } from "@/lib/dedup-utils"
-import { getOrgTwilio } from "@/lib/org-twilio/service"
+import { loadRoutingState } from "@/lib/providers/routing-state"
 import { resolveVoiceProviderName, parseTelnyxPinnedOrgIds } from "@/lib/providers/voice/routing"
 import { parseVoiceIdentity } from "@/lib/providers/voice/identity"
-import { getTwilioClient } from "@/lib/providers/twilio/client"
+import { getTwilioClientForOrg } from "@/lib/twilio/org-client"
+import { verifyTwilioWebhook } from "@/lib/twilio/verify-webhook"
 import { conferenceRoomName, refCallbackUrl } from "@/lib/voice/twilio-conference"
 
 export const runtime = "nodejs"
@@ -46,14 +47,14 @@ export async function POST(request: NextRequest) {
   const rawBody = await request.text()
   const params = Object.fromEntries(new URLSearchParams(rawBody).entries())
 
-  const authToken = process.env.LISTHIT_TWILIO_AUTH_TOKEN
-  if (!authToken) {
-    console.error("[twilio-voice-twiml] LISTHIT_TWILIO_AUTH_TOKEN is not set; rejecting webhook")
+  const verified = await verifyTwilioWebhook({
+    signature: request.headers.get("x-twilio-signature") || "",
+    url: callbackUrl(),
+    params,
+  })
+  if (!verified.ok) {
+    console.warn("[twilio-voice-twiml] rejected webhook", { reason: verified.reason })
     return new NextResponse("Forbidden", { status: 403 })
-  }
-  const signature = request.headers.get("x-twilio-signature") || ""
-  if (!twilio.validateRequest(authToken, signature, callbackUrl(), params)) {
-    return new NextResponse("Invalid signature", { status: 403 })
   }
 
   // Identity is signed into the JWT by us and delivered by Twilio as
@@ -66,7 +67,14 @@ export async function POST(request: NextRequest) {
   }
   const { orgId } = parsed
 
-  const row = await getOrgTwilio(orgId)
+  // The subaccount that signed the request owns the org; an identity for any
+  // other org is refused outright.
+  if (verified.orgId && verified.orgId !== orgId) {
+    console.warn("[twilio-webhook] org mismatch", { route: "twilio-voice-twiml" })
+    return new NextResponse("Forbidden", { status: 403 })
+  }
+
+  const row = await loadRoutingState(orgId)
 
   // Guard-first: re-run the routing decision. A pinned org can NEVER be dialed
   // through Twilio, even if a token was minted before a pin change.
@@ -122,7 +130,8 @@ export async function POST(request: NextRequest) {
   // callback is correlated back to the row via ?ref=<agentCallSid>. The prospect's
   // endConferenceOnExit=false keeps the room alive if they drop before the agent.
   try {
-    const leg = await getTwilioClient().calls.create({
+    const client = await getTwilioClientForOrg(verified.orgId ?? orgId)
+    const leg = await client.calls.create({
       to,
       from: callerId,
       twiml: `<Response><Dial><Conference startConferenceOnEnter="true" endConferenceOnExit="false">${room}</Conference></Dial></Response>`,

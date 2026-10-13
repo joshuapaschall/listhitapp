@@ -1,7 +1,9 @@
-import { getTwilioClient } from "@/lib/providers/twilio/client"
+import type { Twilio } from "twilio"
 import type { SendSmsInput, SendSmsResult, SmsProvider, SmsProviderError } from "./types"
 
 export interface TwilioSmsProviderOptions {
+  // The org's own subaccount client (getTwilioClientForOrg) — never a shared one.
+  client: Twilio
   messagingServiceSid: string
 }
 
@@ -17,14 +19,16 @@ export class TwilioSmsProvider implements SmsProvider {
   // The Messaging Service queues and paces sends server-side at the campaign's
   // approved throughput, so the app-side carrier lookup + Bottleneck are skipped.
   readonly managesPacing = true
+  private readonly client: Twilio
   private readonly messagingServiceSid: string
 
   constructor(opts: TwilioSmsProviderOptions) {
+    this.client = opts.client
     this.messagingServiceSid = opts.messagingServiceSid
   }
 
   async sendMessage(input: SendSmsInput): Promise<SendSmsResult> {
-    const client = getTwilioClient()
+    const client = this.client
     const base = (process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/$/, "")
     const statusCallback = base ? `${base}/api/webhooks/twilio-status` : undefined
     const from = input.from ? String(input.from).trim() : ""

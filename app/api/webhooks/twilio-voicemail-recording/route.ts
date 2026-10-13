@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
-import twilio from "twilio"
 
 import { assertServer } from "@/utils/assert-server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { getTwilioBasicAuthForAccount } from "@/lib/twilio/org-client"
+import { verifyTwilioWebhook } from "@/lib/twilio/verify-webhook"
 import { voicemailStoragePath } from "@/lib/voice/twilio-voicemail"
 
 export const runtime = "nodejs"
@@ -21,16 +22,17 @@ function callbackUrl(): string {
   return `${baseUrl()}/api/webhooks/twilio-voicemail-recording`
 }
 
-// Twilio media URLs require Basic auth (accountSid:authToken). Retry a few times —
-// the media can lag the callback slightly.
-async function downloadRecording(mp3Url: string): Promise<ArrayBuffer | null> {
-  const accountSid = process.env.LISTHIT_TWILIO_ACCOUNT_SID
-  const authToken = process.env.LISTHIT_TWILIO_AUTH_TOKEN
-  if (!accountSid || !authToken) return null
-  const auth = Buffer.from(`${accountSid}:${authToken}`).toString("base64")
+// Twilio media URLs require Basic auth for the account that owns the recording
+// (the tenant's subaccount). Retry a few times — the media can lag the callback.
+async function downloadRecording(mp3Url: string, accountSid: string): Promise<ArrayBuffer | null> {
+  const authorization = await getTwilioBasicAuthForAccount(accountSid)
+  if (!authorization) {
+    console.warn("[twilio-voicemail-recording] no credentials for recording account; skipping download")
+    return null
+  }
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const res = await fetch(mp3Url, { headers: { Authorization: `Basic ${auth}` }, cache: "no-store" })
+      const res = await fetch(mp3Url, { headers: { Authorization: authorization }, cache: "no-store" })
       if (res.ok) return await res.arrayBuffer()
       console.warn("[twilio-voicemail-recording] download non-ok", { attempt, status: res.status })
     } catch (err) {
@@ -48,14 +50,14 @@ export async function POST(request: NextRequest) {
   const rawBody = await request.text()
   const params = Object.fromEntries(new URLSearchParams(rawBody).entries())
 
-  const authToken = process.env.LISTHIT_TWILIO_AUTH_TOKEN
-  if (!authToken) {
-    console.error("[twilio-voicemail-recording] LISTHIT_TWILIO_AUTH_TOKEN is not set; rejecting webhook")
+  const verified = await verifyTwilioWebhook({
+    signature: request.headers.get("x-twilio-signature") || "",
+    url: callbackUrl(),
+    params,
+  })
+  if (!verified.ok) {
+    console.warn("[twilio-voicemail-recording] rejected webhook", { reason: verified.reason })
     return new NextResponse("Forbidden", { status: 403 })
-  }
-  const signature = request.headers.get("x-twilio-signature") || ""
-  if (!twilio.validateRequest(authToken, signature, callbackUrl(), params)) {
-    return new NextResponse("Invalid signature", { status: 403 })
   }
 
   const recordingSid = params.RecordingSid
@@ -66,6 +68,19 @@ export async function POST(request: NextRequest) {
 
   if (!callSid) {
     return new NextResponse("Missing CallSid", { status: 400 })
+  }
+
+  // The verified subaccount owns the org; never write onto another org's call.
+  if (verified.orgId) {
+    const { data: callRow } = await supabaseAdmin
+      .from("calls")
+      .select("org_id")
+      .eq("call_sid", callSid)
+      .maybeSingle()
+    if (callRow?.org_id && callRow.org_id !== verified.orgId) {
+      console.warn("[twilio-webhook] org mismatch", { route: "twilio-voicemail-recording", callSid })
+      return new NextResponse("Forbidden", { status: 403 })
+    }
   }
 
   // Discard empty/failed voicemails (mirror the Telnyx handler): mark missed.
@@ -79,7 +94,7 @@ export async function POST(request: NextRequest) {
 
   // Download the mp3. Storage hiccups must NOT 5xx (Twilio would retry+redownload) —
   // mark the state and 204.
-  const bytes = recordingUrl ? await downloadRecording(`${recordingUrl}.mp3`) : null
+  const bytes = recordingUrl ? await downloadRecording(`${recordingUrl}.mp3`, verified.accountSid) : null
   if (!bytes) {
     await supabaseAdmin.from("calls").update({ recording_state: "failed" }).eq("call_sid", callSid)
     return new NextResponse(null, { status: 204 })

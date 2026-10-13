@@ -7,7 +7,7 @@ import { normalizePhone, formatPhoneE164 } from "@/lib/dedup-utils"
 import { ensurePublicMediaUrls } from "@/utils/mms.server"
 import { getTelnyxApiKey } from "@/lib/voice-env"
 import { resolveOutboundFrom, recordStickyFrom } from "@/lib/sender/sticky-sender"
-import { resolveSmsProvider } from "@/lib/providers/sms"
+import { resolveSmsProvider, SmsNotReadyError, type SmsProvider } from "@/lib/providers/sms"
 
 // Errors whose message is safe to surface to the (authed, permission-gated)
 // operator — sanitized "Database error" strings and provider/carrier rejection
@@ -36,9 +36,22 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  // Pick the org's rail first. A tenant whose texting isn't set up is refused
+  // here — it never reaches the Telnyx configuration check or a Telnyx send.
+  let provider: SmsProvider
+  try {
+    provider = await resolveSmsProvider(orgId)
+  } catch (err) {
+    if (err instanceof SmsNotReadyError) {
+      return new Response(JSON.stringify({ error: err.message, code: err.code }), { status: err.status })
+    }
+    console.error("Failed to resolve SMS provider", err)
+    return new Response(JSON.stringify({ error: "Failed to send message" }), { status: 500 })
+  }
+
   const messagingProfileId = process.env.TELNYX_MESSAGING_PROFILE_ID
 
-  if (!getTelnyxApiKey() || !messagingProfileId) {
+  if (provider.name === "telnyx" && (!getTelnyxApiKey() || !messagingProfileId)) {
     return new Response(JSON.stringify({ error: "Telnyx not configured" }), {
       status: 500,
     })
@@ -139,7 +152,8 @@ export async function POST(request: NextRequest) {
     orgId,
   })
 
-  if (!replyFrom) {
+  // Twilio orgs may send without a from: the Messaging Service picks the sender.
+  if (!replyFrom && provider.name !== "twilio") {
     return new Response(JSON.stringify({ error: "No from number resolved" }), {
       status: 400,
     })
@@ -147,10 +161,9 @@ export async function POST(request: NextRequest) {
 
   const isMms = !!(finalMediaUrls && finalMediaUrls.length)
 
-  const provider = await resolveSmsProvider(orgId)
   const sendRequest = () =>
     provider.sendMessage({
-      from: replyFrom,
+      from: replyFrom ?? undefined,
       to: formatted,
       text: body,
       mediaUrls: finalMediaUrls,
@@ -292,13 +305,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Single sticky writer — keeps buyer_sms_senders + thread.preferred_from_number in lockstep.
-    await recordStickyFrom({
-      client: supabase,
-      buyerId,
-      threadId: activeThread.id,
-      from: replyFrom,
-      orgId,
-    })
+    const stickyFrom = replyFrom || formatPhoneE164(data.from) || data.from
+    if (stickyFrom) {
+      await recordStickyFrom({
+        client: supabase,
+        buyerId,
+        threadId: activeThread.id,
+        from: stickyFrom,
+        orgId,
+      })
+    }
 
     return new Response(JSON.stringify({ sid: data.id }), { status: 200 })
   } catch (err: any) {

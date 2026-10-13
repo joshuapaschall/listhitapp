@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
-import twilio from "twilio"
 
 import { assertServer } from "@/utils/assert-server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { verifyTwilioWebhook } from "@/lib/twilio/verify-webhook"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -23,16 +23,16 @@ export async function POST(request: NextRequest) {
   const rawBody = await request.text()
   const params = Object.fromEntries(new URLSearchParams(rawBody).entries())
 
-  const authToken = process.env.LISTHIT_TWILIO_AUTH_TOKEN
-  if (!authToken) {
-    console.error("[twilio-conference-events] LISTHIT_TWILIO_AUTH_TOKEN is not set; rejecting webhook")
-    return new NextResponse("Forbidden", { status: 403 })
-  }
   const url = new URL(request.url)
   const ref = url.searchParams.get("ref")
-  const signature = request.headers.get("x-twilio-signature") || ""
-  if (!twilio.validateRequest(authToken, signature, fullCallbackUrl(url), params)) {
-    return new NextResponse("Invalid signature", { status: 403 })
+  const verified = await verifyTwilioWebhook({
+    signature: request.headers.get("x-twilio-signature") || "",
+    url: fullCallbackUrl(url),
+    params,
+  })
+  if (!verified.ok) {
+    console.warn("[twilio-conference-events] rejected webhook", { reason: verified.reason })
+    return new NextResponse("Forbidden", { status: 403 })
   }
 
   const event = params.StatusCallbackEvent
@@ -45,12 +45,16 @@ export async function POST(request: NextRequest) {
 
   const { data: existing } = await supabaseAdmin
     .from("calls")
-    .select("id, ended_at, status, direction, answered_at, duration_seconds")
+    .select("id, org_id, ended_at, status, direction, answered_at, duration_seconds")
     .eq("call_sid", ref)
     .maybeSingle()
   if (!existing) {
     console.warn("[twilio-conference-events] no matching calls row", { ref, event })
     return new NextResponse(null, { status: 204 })
+  }
+  if (verified.orgId && existing.org_id && existing.org_id !== verified.orgId) {
+    console.warn("[twilio-webhook] org mismatch", { route: "twilio-conference-events", ref })
+    return new NextResponse("Forbidden", { status: 403 })
   }
 
   if (event === "conference-start" || event === "start") {

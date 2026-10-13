@@ -3,7 +3,8 @@
 // inventory to any caller — unauthenticated and un-org-scoped. It now requires a
 // session, resolves the caller's org, and returns only that org's numbers:
 //  - Twilio-voice orgs → their own org_twilio.phone_number (never Telnyx inventory)
-//  - Telnyx orgs       → their own inbound_numbers / voice_numbers rows (DB only)
+//  - Telnyx (owner) org → its own inbound_numbers (provider=telnyx) / voice_numbers rows
+//  - Blocked tenants    → no caller IDs at all (never the Telnyx list)
 const h = vi.hoisted(() => ({
   state: {
     user: { id: "u1" } as { id: string } | null,
@@ -21,9 +22,19 @@ vi.mock("@/lib/telnyx/numbers", () => ({
   listPurchasedNumbersForOrigin: telnyxInventoryMock,
 }));
 
-vi.mock("@/lib/org-twilio/service", () => ({
-  getOrgTwilio: async () => h.state.twilioRow,
+vi.mock("@/lib/providers/routing-state", () => ({
+  loadRoutingState: async () => h.state.twilioRow,
 }));
+
+const OWNER = "org-1";
+const liveVoice = (phone_number: string | null) => ({
+  voice_provider: "twilio",
+  phone_number,
+  has_credentials: true,
+  subaccount_sid: "AC-sub",
+  api_key_sid: "SK-key",
+  twiml_app_sid: "AP-app",
+});
 
 vi.mock("@/lib/auth/org-context", () => {
   // Minimal chainable that filters seeded rows by each .eq() and records the
@@ -65,7 +76,8 @@ describe("numbers-list route", () => {
     h.state.voice = [];
     h.state.eqCalls = {};
     telnyxInventoryMock.mockClear();
-    // Pin a DIFFERENT org so the resolver never forces "telnyx" for our test orgs.
+    // Pin a DIFFERENT org by default so the resolver never forces "telnyx";
+    // the Telnyx tests pin org-1 (the owner) explicitly.
     process.env.TELNYX_PINNED_ORG_IDS = "00000000-0000-0000-0000-000000000000";
   });
 
@@ -82,7 +94,7 @@ describe("numbers-list route", () => {
   });
 
   test("Twilio-voice org returns its own number and never touches Telnyx inventory", async () => {
-    h.state.twilioRow = { voice_provider: "twilio", phone_number: "+14705551234" };
+    h.state.twilioRow = liveVoice("+14705551234");
     const res = await GET();
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -95,7 +107,7 @@ describe("numbers-list route", () => {
   });
 
   test("Twilio-voice org with no phone_number returns empty, not a 500", async () => {
-    h.state.twilioRow = { voice_provider: "twilio", phone_number: null };
+    h.state.twilioRow = liveVoice(null);
     const res = await GET();
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -103,12 +115,27 @@ describe("numbers-list route", () => {
     expect(telnyxInventoryMock).not.toHaveBeenCalled();
   });
 
+  test("blocked tenant returns no caller IDs and never reads the Telnyx numbers", async () => {
+    // Non-pinned, no Twilio row: under the old rule this fell back to telnyx.
+    h.state.twilioRow = null;
+    h.state.inbound = [{ e164: "+18110000000", org_id: "org-1", enabled: true, provider: "telnyx" }];
+    h.state.voice = [{ phone_number: "+17010000000", org_id: "org-1" }];
+    const res = await GET();
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, items: [], defaultFrom: null });
+    expect(h.state.eqCalls.inbound_numbers).toBeUndefined();
+    expect(h.state.eqCalls.voice_numbers).toBeUndefined();
+    expect(telnyxInventoryMock).not.toHaveBeenCalled();
+  });
+
   test("Telnyx org returns only THIS org's inbound numbers (never another tenant's)", async () => {
-    h.state.twilioRow = null; // resolver → telnyx (default)
+    process.env.TELNYX_PINNED_ORG_IDS = OWNER; // the owner org is the only Telnyx org
+    h.state.twilioRow = null;
     h.state.inbound = [
-      { e164: "+18110000000", org_id: "org-1", enabled: true },
-      { e164: "+18220000000", org_id: "org-1", enabled: false }, // disabled — excluded
-      { e164: "+19990000000", org_id: "org-2", enabled: true }, // other tenant — excluded
+      { e164: "+18110000000", org_id: "org-1", enabled: true, provider: "telnyx" },
+      { e164: "+18220000000", org_id: "org-1", enabled: false, provider: "telnyx" }, // disabled — excluded
+      { e164: "+18330000000", org_id: "org-1", enabled: true, provider: "twilio" }, // other rail — excluded
+      { e164: "+19990000000", org_id: "org-2", enabled: true, provider: "telnyx" }, // other tenant — excluded
     ];
     const res = await GET();
     expect(res.status).toBe(200);
@@ -117,12 +144,14 @@ describe("numbers-list route", () => {
     expect(body.defaultFrom).toBe("+18110000000");
     expect(h.state.eqCalls.inbound_numbers).toContainEqual(["org_id", "org-1"]);
     expect(h.state.eqCalls.inbound_numbers).toContainEqual(["enabled", true]);
+    expect(h.state.eqCalls.inbound_numbers).toContainEqual(["provider", "telnyx"]);
     expect(telnyxInventoryMock).not.toHaveBeenCalled();
   });
 
   test("Telnyx org falls back to org-scoped voice_numbers when inbound is empty", async () => {
+    process.env.TELNYX_PINNED_ORG_IDS = OWNER;
     h.state.twilioRow = null;
-    h.state.inbound = [{ e164: "+19990000000", org_id: "org-2", enabled: true }]; // other org → filtered out
+    h.state.inbound = [{ e164: "+19990000000", org_id: "org-2", enabled: true, provider: "telnyx" }]; // other org → filtered out
     h.state.voice = [
       { phone_number: "+17010000000", org_id: "org-1" },
       { phone_number: "+17020000000", org_id: "org-2" }, // other tenant — excluded

@@ -37,8 +37,11 @@ const bodySchema = z.object({
   utm: z.record(z.string()).optional(),
 })
 
-async function sendWelcomeSms(buyerId: string, to: string, text: string) {
-  const from = (await resolveFromNumber(buyerId)) || formatPhoneE164(process.env.DEFAULT_OUTBOUND_DID)
+// Owner-org (Telnyx) welcome text only — the caller gates on the pin too.
+async function sendWelcomeSms(buyerId: string, orgId: string, to: string, text: string) {
+  if (!isOrgTelnyxPinnedEnv(orgId)) return
+  // resolveFromNumber falls back to DEFAULT_OUTBOUND_DID for the pinned org.
+  const from = await resolveFromNumber(buyerId, orgId)
   const messagingProfileId = process.env.TELNYX_MESSAGING_PROFILE_ID
   if (!from || !messagingProfileId) return
   await fetch(`${TELNYX_API_URL}/messages`, {
@@ -280,17 +283,16 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // resolveFromNumber() is NOT org-scoped: for a brand-new lead it falls back
-    // to the global DEFAULT_OUTBOUND_DID (the legacy/platform number). Texting a
-    // tenant lead from that number would cross orgs, so we only auto-send the
-    // welcome SMS on the legacy/static path (no resolved builder site). Tenant
-    // welcome SMS will be enabled once sending is org-scoped (later phase).
+    // The welcome SMS is a raw Telnyx send from the owner's number, so it only
+    // goes out for the pinned owner org on the legacy/static path (no resolved
+    // builder site). Tenant welcome SMS will be enabled once a later phase sends
+    // it through the tenant's own provider.
     const welcomeMessage = welcomeText(brandName)
     if (sendSms && !site && isOrgTelnyxPinnedEnv(orgId)) {
       // Awaited (not deferred): App Router route handlers have no waitUntil. A
       // Telnyx failure must never fail the signup, so it is fully guarded.
       try {
-        await sendWelcomeSms(buyerId, phoneE164, welcomeMessage)
+        await sendWelcomeSms(buyerId, orgId, phoneE164, welcomeMessage)
       } catch (smsError) {
         console.error("[public-buyers-signup] welcome sms failed", smsError)
       }

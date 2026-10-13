@@ -4,7 +4,7 @@ import { buildVoiceIdentity } from "@/lib/providers/voice/identity";
 // Keep the real twilio.twiml.VoiceResponse (assert real TwiML) but stub validateRequest.
 const h = vi.hoisted(() => ({
   validateMock: vi.fn(() => true),
-  getOrgTwilioMock: vi.fn(),
+  loadRoutingStateMock: vi.fn(),
   greetingMock: vi.fn(async () => null as string | null),
   routingMock: vi.fn(async () => ({
     routingMode: "browser_only" as string,
@@ -13,6 +13,7 @@ const h = vi.hoisted(() => ({
     voicemailGreetingUrl: null as string | null,
   })),
   createMock: vi.fn(async () => ({ sid: "CA-agent-leg" })),
+  clientForOrg: vi.fn(),
   state: {
     didOrg: null as string | null,
     members: [] as { id: string }[],
@@ -26,14 +27,27 @@ vi.mock("twilio", async (importOriginal) => {
   const d = actual.default;
   return { ...actual, default: { ...d, validateRequest: h.validateMock } };
 });
-vi.mock("@/lib/org-twilio/service", () => ({ getOrgTwilio: h.getOrgTwilioMock }));
+
+// Phase 2A: every Twilio webhook verifies through verifyTwilioWebhook. The
+// existing validateMock still decides pass/fail; vw.orgId is the org proven by
+// the signing subaccount (null = parent account, no org claim).
+const vw = vi.hoisted(() => ({ orgId: null as string | null }))
+vi.mock("@/lib/twilio/verify-webhook", () => ({
+  verifyTwilioWebhook: async (input: any) =>
+    (h.validateMock as any)(input)
+      ? vw.orgId
+        ? { ok: true, accountSid: "ACsub", account: "subaccount", orgId: vw.orgId }
+        : { ok: true, accountSid: "ACparent", account: "parent", orgId: null }
+      : { ok: false, reason: "bad_signature" },
+}))
+
+vi.mock("@/lib/providers/routing-state", () => ({ loadRoutingState: h.loadRoutingStateMock }));
 vi.mock("@/lib/voice/routing", () => ({
   getVoicemailGreetingUrl: h.greetingMock,
   getRoutingConfig: h.routingMock,
 }));
-vi.mock("@/lib/providers/twilio/client", () => ({
-  getTwilioClient: () => ({ calls: { create: h.createMock } }),
-}));
+// Agent legs are dialed with the org's own subaccount client.
+vi.mock("@/lib/twilio/org-client", () => ({ getTwilioClientForOrg: h.clientForOrg }));
 vi.mock("@/lib/supabase", () => {
   const client = {
     from: (table: string) => {
@@ -96,6 +110,16 @@ function req(fields: Record<string, string>) {
 
 const inbound = { From: "+12223334444", To: "+18885551234", CallSid: "CA-in-1" };
 
+// A fully live Twilio voice rail: subaccount credentials + voice API key + TwiML app + number.
+const LIVE_VOICE = {
+  voice_provider: "twilio",
+  phone_number: "+18885551234",
+  subaccount_sid: "ACsub",
+  api_key_sid: "SK1",
+  twiml_app_sid: "AP1",
+  has_credentials: true,
+};
+
 // Targets passed to calls.create across all agent legs.
 function dialedTargets(): string[] {
   return h.createMock.mock.calls.map((c: any[]) => c[0].to);
@@ -104,7 +128,9 @@ function dialedTargets(): string[] {
 describe("twilio voice incoming webhook (conference model)", () => {
   beforeEach(() => {
     h.validateMock.mockReset().mockReturnValue(true);
-    h.getOrgTwilioMock.mockReset().mockResolvedValue({ voice_provider: "twilio", phone_number: "+18885551234" });
+    vw.orgId = null;
+    h.loadRoutingStateMock.mockReset().mockResolvedValue(LIVE_VOICE);
+    h.clientForOrg.mockReset().mockResolvedValue({ calls: { create: h.createMock } });
     h.state.didOrg = ORG;
     h.state.members = [{ id: U1 }, { id: U2 }];
     h.state.online = [{ user_id: U1 }];
@@ -118,7 +144,6 @@ describe("twilio voice incoming webhook (conference model)", () => {
       voicemailGreetingUrl: null,
     });
     process.env.NEXT_PUBLIC_BASE_URL = "https://app.listhit.io";
-    process.env.LISTHIT_TWILIO_AUTH_TOKEN = "AUTH";
     process.env.TELNYX_PINNED_ORG_IDS = "";
   });
 
@@ -231,14 +256,59 @@ describe("twilio voice incoming webhook (conference model)", () => {
     expect(h.createMock).not.toHaveBeenCalled();
   });
 
-  test("org routed to telnyx → refused + hangup, no insert", async () => {
-    h.getOrgTwilioMock.mockResolvedValue({ voice_provider: "telnyx", phone_number: "+18885551234" });
+  test("tenant whose voice isn't live (no subaccount credentials) → blocked → refused + hangup, no insert", async () => {
+    // voice_provider is ignored for tenants; readiness alone decides.
+    h.loadRoutingStateMock.mockResolvedValue({ voice_provider: "twilio", phone_number: "+18885551234", has_credentials: false });
     const res = await POST(req(inbound));
     expect(res.status).toBe(200);
     const xml = await res.text();
     expect(xml).toContain("<Hangup/>");
     expect(xml).not.toContain("<Conference");
     expect(h.state.inserted.length).toBe(0);
+  });
+
+  test("pinned owner org → refused + hangup, no insert (never rung through Twilio)", async () => {
+    process.env.TELNYX_PINNED_ORG_IDS = ORG;
+    const res = await POST(req(inbound));
+    expect(res.status).toBe(200);
+    const xml = await res.text();
+    expect(xml).toContain("<Hangup/>");
+    expect(xml).not.toContain("<Conference");
+    expect(h.state.inserted.length).toBe(0);
+    expect(h.createMock).not.toHaveBeenCalled();
+  });
+
+  test("verified subaccount org ≠ the DID's org → 403, no insert, no dial-in", async () => {
+    vw.orgId = "44444444-4444-4444-4444-444444444444";
+    const res = await POST(req(inbound));
+    expect(res.status).toBe(403);
+    expect(h.state.inserted.length).toBe(0);
+    expect(h.createMock).not.toHaveBeenCalled();
+  });
+
+  test("subaccount-signed call to its own DID → agent legs dialed with that org's client", async () => {
+    vw.orgId = ORG;
+    const res = await POST(req(inbound));
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("<Conference");
+    expect(h.clientForOrg).toHaveBeenCalledWith(ORG);
+    expect(h.createMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("parent-account call → agent legs dialed with the DID org's client", async () => {
+    await POST(req(inbound));
+    expect(h.clientForOrg).toHaveBeenCalledWith(ORG);
+  });
+
+  test("no Twilio client for the org → voicemail instead of an empty room", async () => {
+    h.clientForOrg.mockRejectedValue(new Error("twilio_not_provisioned"));
+    const res = await POST(req(inbound));
+    expect(res.status).toBe(200);
+    const xml = await res.text();
+    expect(xml).toContain("<Record");
+    expect(xml).not.toContain("<Conference");
+    expect(h.createMock).not.toHaveBeenCalled();
+    expect(h.state.inserted.length).toBe(1);
   });
 
   test("invalid To → unavailable + hangup", async () => {

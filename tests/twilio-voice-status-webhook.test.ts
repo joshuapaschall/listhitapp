@@ -41,21 +41,36 @@ vi.mock("twilio", async (importOriginal) => {
   const d = actual.default
   return { ...actual, default: { ...d, validateRequest: h.validateMock } }
 })
+
+// Phase 2A: every Twilio webhook verifies through verifyTwilioWebhook. The
+// existing validateMock still decides pass/fail; vw.orgId is the org proven by
+// the signing subaccount (null = parent account, no org claim).
+const vw = vi.hoisted(() => ({ orgId: null as string | null }))
+vi.mock("@/lib/twilio/verify-webhook", () => ({
+  verifyTwilioWebhook: async (input: any) =>
+    (h.validateMock as any)(input)
+      ? vw.orgId
+        ? { ok: true, accountSid: "ACsub", account: "subaccount", orgId: vw.orgId }
+        : { ok: true, accountSid: "ACparent", account: "parent", orgId: null }
+      : { ok: false, reason: "bad_signature" },
+}))
+
 vi.mock("@/lib/supabase", () => ({ supabase: h.client, supabaseAdmin: h.client }))
 vi.mock("@/lib/voice/routing", () => ({ getVoicemailGreetingUrl: h.greetingMock }))
-vi.mock("@/lib/providers/twilio/client", () => ({
-  getTwilioClient: () => ({
-    calls: (sid: string) => {
-      h.state.redirectedSid = sid
-      return {
-        update: async (opts: any) => {
-          h.state.redirectTwiml = opts.twiml
-          return {}
-        },
-      }
-    },
-  }),
-}))
+// The voicemail redirect uses the org's own subaccount client.
+const oc = vi.hoisted(() => ({ clientForOrg: vi.fn() }))
+vi.mock("@/lib/twilio/org-client", () => ({ getTwilioClientForOrg: oc.clientForOrg }))
+const fakeClient = {
+  calls: (sid: string) => {
+    h.state.redirectedSid = sid
+    return {
+      update: async (opts: any) => {
+        h.state.redirectTwiml = opts.twiml
+        return {}
+      },
+    }
+  },
+}
 
 const { POST } = await import("../app/api/webhooks/twilio-voice-status/route")
 
@@ -77,6 +92,8 @@ function req(fields: Record<string, string>, ref?: string, role?: string) {
 describe("twilio voice status webhook", () => {
   beforeEach(() => {
     h.validateMock.mockReset().mockReturnValue(true)
+    vw.orgId = null
+    oc.clientForOrg.mockReset().mockResolvedValue(fakeClient)
     h.greetingMock.mockReset().mockResolvedValue(null)
     h.state.row = { id: "c1", answered_at: null }
     h.state.updates = null
@@ -86,7 +103,6 @@ describe("twilio voice status webhook", () => {
     h.state.redirectedSid = null
     h.state.redirectTwiml = null
     process.env.NEXT_PUBLIC_BASE_URL = "https://app.listhit.io"
-    process.env.LISTHIT_TWILIO_AUTH_TOKEN = "AUTH"
   })
 
   // --- outbound prospect legs (C1a), no role — unchanged ---
@@ -170,12 +186,51 @@ describe("twilio voice status webhook", () => {
 
   test("last agent leg ends unanswered → redirects the caller to voicemail", async () => {
     h.state.rpcResult = [{ remaining: 0, answered: false }]
-    h.state.row = { to_number: "+18885551234", status: "ringing" }
+    // Parent-account webhook: the redirect uses the call row's org client.
+    h.state.row = { to_number: "+18885551234", status: "ringing", org_id: "org-T" }
     const res = await POST(req({ CallSid: "CA-agent-leg", CallStatus: "no-answer" }, "CA-caller", "agent"))
     expect(res.status).toBe(204)
     expect(h.state.rpcArgs).toEqual({ p_call_sid: "CA-caller" })
+    expect(oc.clientForOrg).toHaveBeenCalledWith("org-T")
     expect(h.state.redirectedSid).toBe("CA-caller")
     expect(h.state.redirectTwiml).toContain("<Record")
+  })
+
+  test("subaccount webhook → the voicemail redirect uses the VERIFIED org's client", async () => {
+    vw.orgId = "org-A"
+    h.state.rpcResult = [{ remaining: 0, answered: false }]
+    h.state.row = { to_number: "+18885551234", status: "ringing", org_id: "org-A" }
+    const res = await POST(req({ CallSid: "CA-agent-leg", CallStatus: "no-answer" }, "CA-caller", "agent"))
+    expect(res.status).toBe(204)
+    expect(oc.clientForOrg).toHaveBeenCalledWith("org-A")
+    expect(h.state.redirectedSid).toBe("CA-caller")
+  })
+
+  test("parent-account webhook with no org on the call row → no redirect (never a shared client)", async () => {
+    h.state.rpcResult = [{ remaining: 0, answered: false }]
+    h.state.row = { to_number: "+18885551234", status: "ringing" }
+    const res = await POST(req({ CallSid: "CA-agent-leg", CallStatus: "no-answer" }, "CA-caller", "agent"))
+    expect(res.status).toBe(204)
+    expect(oc.clientForOrg).not.toHaveBeenCalled()
+    expect(h.state.redirectedSid).toBeNull()
+  })
+
+  test("agent leg: verified subaccount org ≠ the call row's org → 403, no update / rpc / redirect", async () => {
+    vw.orgId = "org-A"
+    h.state.row = { to_number: "+18885551234", status: "ringing", org_id: "org-B" }
+    const res = await POST(req({ CallSid: "CA-agent-leg", CallStatus: "no-answer" }, "CA-caller", "agent"))
+    expect(res.status).toBe(403)
+    expect(h.state.updates).toBeNull()
+    expect(h.state.rpcArgs).toBeNull()
+    expect(h.state.redirectedSid).toBeNull()
+  })
+
+  test("prospect leg: verified subaccount org ≠ the call row's org → 403, no update", async () => {
+    vw.orgId = "org-A"
+    h.state.row = { id: "c1", answered_at: null, org_id: "org-B" }
+    const res = await POST(req({ CallSid: "CH1", CallStatus: "completed", CallDuration: "42" }))
+    expect(res.status).toBe(403)
+    expect(h.state.updates).toBeNull()
   })
 
   test("agent leg ends but others still outstanding → no redirect", async () => {

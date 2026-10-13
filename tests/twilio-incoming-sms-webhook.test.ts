@@ -1,12 +1,12 @@
 import { NextRequest } from "next/server"
 
-// Twilio SDK: only validateRequest is used by the route. Default true; individual
-// tests flip it to false to exercise the 403 path.
-const validateRequestMock = vi.fn(() => true)
-vi.mock("twilio", () => ({
-  __esModule: true,
-  default: { validateRequest: validateRequestMock },
+// The route verifies through verifyTwilioWebhook (Phase 2A). `verifyResult`
+// is what the verifier returns; tests flip it to exercise the 403 paths.
+const vw = vi.hoisted(() => ({
+  verifyResult: { ok: true, accountSid: "ACparent", account: "parent", orgId: null } as any,
+  verifyMock: vi.fn(),
 }))
+vi.mock("@/lib/twilio/verify-webhook", () => ({ verifyTwilioWebhook: vw.verifyMock }))
 
 // The handler imports @/lib/telnyx for the HELP auto-reply path (not exercised here).
 vi.mock("../lib/telnyx", () => ({
@@ -236,7 +236,8 @@ describe("Twilio incoming SMS webhook", () => {
     threads = []
     threadId = 1
     recipients = []
-    validateRequestMock.mockReset().mockReturnValue(true)
+    vw.verifyResult = { ok: true, accountSid: "ACparent", account: "parent", orgId: null }
+    vw.verifyMock.mockReset().mockImplementation(async () => vw.verifyResult)
     fetchMock.mockReset()
     fetchMock.mockResolvedValue({
       ok: true,
@@ -248,7 +249,7 @@ describe("Twilio incoming SMS webhook", () => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://cdn"
     process.env.TELNYX_API_KEY = "KEY"
     process.env.SUPABASE_SERVICE_ROLE_KEY = "SKEY"
-    process.env.LISTHIT_TWILIO_AUTH_TOKEN = "AUTH"
+    process.env.NEXT_PUBLIC_BASE_URL = "https://app.listhit.io"
   })
 
   test("plain inbound inserts an inbound message with provider_id = MessageSid and replies TwiML", async () => {
@@ -265,6 +266,23 @@ describe("Twilio incoming SMS webhook", () => {
       expect.objectContaining({ direction: "inbound", provider_id: "SM123", body: "hi", buyer_id: "b1" }),
     )
     expect(threads.length).toBe(1)
+
+    // Verified against the exact public URL Twilio signed, with the posted params.
+    expect(vw.verifyMock).toHaveBeenCalledWith({
+      signature: "sig",
+      url: "https://app.listhit.io/api/webhooks/twilio-incoming-sms",
+      params: expect.objectContaining({ MessageSid: "SM123", To: "+18885551234" }),
+    })
+  })
+
+  test("subaccount-signed inbound for its own DID → processed under that org", async () => {
+    vw.verifyResult = { ok: true, accountSid: "ACsub", account: "subaccount", orgId: TWILIO_ORG }
+    const res = await POST(
+      twilioReq({ From: "+12223334444", To: "+18885551234", Body: "hi", MessageSid: "SM130" }),
+    )
+    expect(res.status).toBe(200)
+    expect(messages.length).toBe(1)
+    expect(messages[0]).toEqual(expect.objectContaining({ buyer_id: "b1", provider_id: "SM130" }))
   })
 
   test("MMS passes both media URLs through the media pipeline", async () => {
@@ -287,7 +305,7 @@ describe("Twilio incoming SMS webhook", () => {
   })
 
   test("signature failure → 403 and no DB writes", async () => {
-    validateRequestMock.mockReturnValue(false)
+    vw.verifyResult = { ok: false, reason: "bad_signature" }
     const res = await POST(
       twilioReq({ From: "+12223334444", To: "+18885551234", Body: "hi", MessageSid: "SM125" }),
     )
@@ -296,8 +314,8 @@ describe("Twilio incoming SMS webhook", () => {
     expect(threads.length).toBe(0)
   })
 
-  test("missing auth token → 403 fail-closed", async () => {
-    delete process.env.LISTHIT_TWILIO_AUTH_TOKEN
+  test("unknown signing account → 403 fail-closed", async () => {
+    vw.verifyResult = { ok: false, reason: "unknown_account" }
     const res = await POST(
       twilioReq({ From: "+12223334444", To: "+18885551234", Body: "hi", MessageSid: "SM126" }),
     )

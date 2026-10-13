@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase/admin"
 import { formatPhoneE164, normalizePhone } from "@/lib/dedup-utils"
-import { TELNYX_API_URL, telnyxHeaders } from "@/lib/telnyx"
+import { isOrgTelnyxPinnedEnv } from "@/lib/providers/sms/routing"
+import { resolveSmsProvider, SmsNotReadyError, type SmsProvider } from "@/lib/providers/sms"
 import { FROM_EMAIL, resend } from "@/lib/resend"
 import { insertNotification } from "@/lib/notifications"
 import type { Buyer, Property, Showing } from "@/lib/supabase"
@@ -11,8 +12,34 @@ const log = createLogger("showing-notifications")
 
 assertServer()
 
-export async function resolveFromNumber(buyerId: string): Promise<string | null> {
+// A Twilio org may only send from a number it owns on Twilio. Anything else
+// (a Telnyx-era thread number, another org's number) is not a usable sender.
+async function isOrgTwilioNumber(orgId: string, e164: string): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from("inbound_numbers")
+    .select("e164")
+    .eq("org_id", orgId)
+    .eq("provider", "twilio")
+    .eq("e164", e164)
+    .limit(1)
+  return !error && Array.isArray(data) && data.length > 0
+}
+
+/**
+ * The from-number for a buyer notification. The pinned owner org keeps the
+ * original order: thread sticky → buyer sticky → DEFAULT_OUTBOUND_DID. Every
+ * other org may only use a thread/sticky number it owns on Twilio, never the env
+ * DID; null lets the org's Messaging Service pick the sender.
+ */
+export async function resolveFromNumber(buyerId: string, orgId: string | null): Promise<string | null> {
   log(`[showing-sms] resolveFromNumber called for buyer ${buyerId}`)
+  const pinned = isOrgTelnyxPinnedEnv(orgId)
+  const usable = async (candidate: string | null) => {
+    if (!candidate) return null
+    if (pinned) return candidate
+    if (!orgId) return null
+    return (await isOrgTwilioNumber(orgId, candidate)) ? candidate : null
+  }
 
   const { data: recentThread } = await supabaseAdmin
     .from("message_threads")
@@ -22,7 +49,7 @@ export async function resolveFromNumber(buyerId: string): Promise<string | null>
     .limit(1)
     .maybeSingle()
 
-  const threadNumber = formatPhoneE164(recentThread?.preferred_from_number)
+  const threadNumber = await usable(formatPhoneE164(recentThread?.preferred_from_number))
   if (threadNumber) {
     log(`[showing-sms] resolved from thread.preferred_from_number: ${threadNumber}`)
     return threadNumber
@@ -34,10 +61,15 @@ export async function resolveFromNumber(buyerId: string): Promise<string | null>
     .eq("buyer_id", buyerId)
     .maybeSingle()
 
-  const stickyNumber = formatPhoneE164(stickySender?.from_number)
+  const stickyNumber = await usable(formatPhoneE164(stickySender?.from_number))
   if (stickyNumber) {
     log(`[showing-sms] resolved from sticky buyer_sms_senders: ${stickyNumber}`)
     return stickyNumber
+  }
+
+  if (!pinned) {
+    log(`[showing-sms] no owned Twilio sticky for buyer ${buyerId}; the Messaging Service picks the sender`)
+    return null
   }
 
   const fallback = formatPhoneE164(process.env.DEFAULT_OUTBOUND_DID)
@@ -103,45 +135,50 @@ async function sendShowingSms(showing: Showing, buyer: Buyer, property: Property
     return
   }
 
-  const from = await resolveFromNumber(buyer.id)
+  // No org → no provider to send through. Skip; a showing never fails on SMS.
   const orgId = await resolveBuyerOrgId(buyer.id)
-  if (!from) {
+  if (!orgId) {
+    console.warn(`[showing-sms] BAIL: buyer ${buyer.id} has no org — SMS skipped`)
+    return
+  }
+
+  let provider: SmsProvider
+  try {
+    provider = await resolveSmsProvider(orgId)
+  } catch (error) {
+    if (error instanceof SmsNotReadyError) {
+      console.warn(`[showing-sms] BAIL: texting isn't set up for org ${orgId} — SMS skipped`)
+    } else {
+      console.error(`[showing-sms] provider resolution failed — SMS skipped`, error)
+    }
+    return
+  }
+
+  const resolvedFrom = await resolveFromNumber(buyer.id, orgId)
+  // Telnyx (owner org) needs an explicit sender; a Twilio Messaging Service picks its own.
+  if (!resolvedFrom && provider.name !== "twilio") {
     console.warn(`[showing-sms] BAIL: no sender DID resolved for buyer ${buyer.id}`)
     return
   }
 
-  const messagingProfileId = process.env.TELNYX_MESSAGING_PROFILE_ID
-  log(`[showing-sms] About to send via Telnyx`, {
-    from,
+  log(`[showing-sms] About to send via ${provider.name}`, {
+    from: resolvedFrom,
     to,
     bodyPreview: messageBody.slice(0, 60),
-    hasMessagingProfileId: !!messagingProfileId,
   })
 
   try {
-    const response = await fetch(`${TELNYX_API_URL}/messages`, {
-      method: "POST",
-      headers: telnyxHeaders(),
-      body: JSON.stringify({
-        from,
-        to,
-        text: messageBody,
-        messaging_profile_id: messagingProfileId,
-        type: "SMS",
-        use_profile_webhooks: true,
-      }),
+    const result = await provider.sendMessage({
+      from: resolvedFrom,
+      to,
+      text: messageBody,
+      messagingProfileId: process.env.TELNYX_MESSAGING_PROFILE_ID,
+      type: "SMS",
+      useProfileWebhooks: true,
     })
-
-    const responseText = await response.text()
-    log(`[showing-sms] Telnyx responded`, { status: response.status, body: responseText.slice(0, 500) })
-
-    if (!response.ok) {
-      throw new Error(`Telnyx send failed (${response.status}): ${responseText}`)
-    }
-
-    const payload = responseText ? JSON.parse(responseText) : {}
-    const providerId: string | null = payload?.data?.id || null
-    log(`[showing-sms] Telnyx accepted, provider_id: ${providerId}`)
+    const providerId: string | null = result.id || null
+    const from = resolvedFrom || formatPhoneE164(result.from) || result.from || null
+    log(`[showing-sms] ${provider.name} accepted, provider_id: ${providerId}`)
 
     const { data: existingThread } = await supabaseAdmin
       .from("message_threads")
@@ -157,10 +194,10 @@ async function sendShowingSms(showing: Showing, buyer: Buyer, property: Property
         .insert({
           buyer_id: buyer.id,
           phone_number: normalizedTo,
-          preferred_from_number: from,
+          ...(from ? { preferred_from_number: from } : {}),
           unread: false,
           updated_at: new Date().toISOString(),
-          ...(orgId ? { org_id: orgId } : {}),
+          org_id: orgId,
         })
         .select("id")
         .single()
@@ -173,7 +210,7 @@ async function sendShowingSms(showing: Showing, buyer: Buyer, property: Property
     } else {
       await supabaseAdmin
         .from("message_threads")
-        .update({ preferred_from_number: from, updated_at: new Date().toISOString() })
+        .update({ ...(from ? { preferred_from_number: from } : {}), updated_at: new Date().toISOString() })
         .eq("id", threadId)
       log(`[showing-sms] Updated existing thread ${threadId}`)
     }
@@ -187,7 +224,7 @@ async function sendShowingSms(showing: Showing, buyer: Buyer, property: Property
       body: messageBody,
       provider_id: providerId,
       is_bulk: false,
-      ...(orgId ? { org_id: orgId } : {}),
+      org_id: orgId,
     })
     if (msgError) {
       console.error(`[showing-sms] Failed to insert message row:`, msgError)

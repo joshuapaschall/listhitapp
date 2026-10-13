@@ -36,8 +36,8 @@ vi.mock("@/lib/supabase", () => ({
   },
   supabase: {},
 }));
-vi.mock("@/lib/providers/twilio/client", () => ({
-  getTwilioClient: () => ({
+vi.mock("@/lib/twilio/org-client", () => ({
+  getTwilioClientForOrg: async (orgId: string) => ((h.state as any).clientOrgId = orgId, {
     conferences: (confSid: string) => {
       h.state.confSid = confSid;
       return {
@@ -119,6 +119,8 @@ describe("twilio voice-hold route", () => {
     expect(h.state.updateOpts).toEqual({ hold: true });
     const body = await res.json();
     expect(body).toEqual({ ok: true, hold: true });
+    // The call lives in the session org's own subaccount.
+    expect((h.state as any).clientOrgId).toBe("org-1");
   });
 
   test("inbound → holds the caller participant (row's own call_sid)", async () => {

@@ -1,19 +1,29 @@
+import crypto from "crypto"
 import { NextRequest, NextResponse } from "next/server"
 
 import { supabaseAdmin } from "@/lib/supabase"
+import { verifyTwilioWebhook } from "@/lib/twilio/verify-webhook"
 
 // Twilio TrustHub CustomerProfile status callback. Sessionless — uses
-// supabaseAdmin only. We CANNOT verify X-Twilio-Signature (we authenticate the
-// ISV account with an API key, not the account Auth Token), so the endpoint is
-// guarded by a shared-secret query token registered on the CP at create time.
+// supabaseAdmin only. A signed callback (AccountSid + X-Twilio-Signature) is
+// verified like every other Twilio webhook. Otherwise the only accepted proof is
+// the dedicated LISTHIT_TWILIO_STATUS_CALLBACK_TOKEN query token — never a cron
+// secret, which must not sit in a URL handed to Twilio.
 export const runtime = "nodejs"
 
-function authorized(request: NextRequest): boolean {
-  const expected =
-    process.env.LISTHIT_TWILIO_STATUS_CALLBACK_TOKEN || process.env.CRON_SECRET || ""
+// Public URL Twilio signed: the registered callback, including its query string.
+function callbackUrl(request: NextRequest): string {
+  const base = (process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/$/, "")
+  return `${base}/api/webhooks/twilio-trusthub${request.nextUrl.search}`
+}
+
+function tokenMatches(request: NextRequest): boolean {
+  const expected = process.env.LISTHIT_TWILIO_STATUS_CALLBACK_TOKEN || ""
   if (!expected) return false
-  const token = request.nextUrl.searchParams.get("token")
-  return token === expected
+  const provided = request.nextUrl.searchParams.get("token") || ""
+  const a = Buffer.from(provided)
+  const b = Buffer.from(expected)
+  return a.length === b.length && crypto.timingSafeEqual(a, b)
 }
 
 export async function GET() {
@@ -21,12 +31,27 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  if (!authorized(request)) return new NextResponse("Forbidden", { status: 403 })
-
   try {
-    const form = await request.formData()
-    const sid = String(form.get("Sid") || "")
-    const status = String(form.get("Status") || "")
+    const raw = await request.text()
+    const params: Record<string, string> = {}
+    for (const [key, value] of new URLSearchParams(raw)) params[key] = value
+
+    const signature = request.headers.get("x-twilio-signature") || ""
+    let verifiedOrgId: string | null = null
+    if (params.AccountSid && signature) {
+      const verified = await verifyTwilioWebhook({ signature, url: callbackUrl(request), params })
+      if (!verified.ok) {
+        console.warn("[twilio-trusthub] rejected webhook", { reason: verified.reason })
+        return new NextResponse("Forbidden", { status: 403 })
+      }
+      verifiedOrgId = verified.orgId
+    } else if (!tokenMatches(request)) {
+      console.warn("[twilio-trusthub] rejected webhook", { reason: "missing_signature" })
+      return new NextResponse("Forbidden", { status: 403 })
+    }
+
+    const sid = params.Sid || ""
+    const status = params.Status || ""
 
     if (!sid) return new NextResponse(null, { status: 204 })
 
@@ -38,6 +63,10 @@ export async function POST(request: NextRequest) {
 
     // Unknown SID → 204 (idempotent, don't leak whether the resource exists).
     if (!row) return new NextResponse(null, { status: 204 })
+    if (verifiedOrgId && row.org_id !== verifiedOrgId) {
+      console.warn("[twilio-webhook] org mismatch", { route: "twilio-trusthub" })
+      return new NextResponse("Forbidden", { status: 403 })
+    }
 
     const update: Record<string, unknown> = {
       customer_profile_status: status || null,

@@ -108,6 +108,11 @@ const h = vi.hoisted(() => {
 })
 
 vi.mock("@/lib/supabase", () => ({ supabaseAdmin: h.client, supabase: h.client }))
+
+// SMS readiness gate (getSmsReadiness → loadRoutingState). org-1 is pinned as the
+// owner org in beforeEach, so its SMS campaigns pass the gate on the Telnyx rail;
+// any other org has no Twilio rows and is blocked.
+vi.mock("@/lib/providers/routing-state", () => ({ loadRoutingState: async () => null }))
 vi.mock("@/services/campaign-sender", () => ({
   queueEmailCampaign: h.queueEmail,
   processEmailQueue: vi.fn(async () => 0),
@@ -150,6 +155,7 @@ const req = (campaignId: string) =>
 
 describe("email campaigns are gated on the org's CAN-SPAM address", () => {
   beforeEach(() => {
+    process.env.TELNYX_PINNED_ORG_IDS = "org-1"
     h.state.organization = { ...COMPLETE_ORG }
     h.state.campaigns = []
     h.state.buyers = []

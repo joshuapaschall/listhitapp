@@ -13,7 +13,7 @@ import { resolveOutboundFrom, recordStickyFrom } from "@/lib/sender/sticky-sende
 import { resolveSendingMarketId } from "@/lib/campaigns/resolve-sending-market"
 import { NoSendingPoolError } from "@/lib/sender/campaign-from-pool"
 import { ensurePublicMediaUrls } from "@/utils/mms.server"
-import { resolveSmsProvider } from "@/lib/providers/sms"
+import { resolveSmsProvider, SmsNotReadyError } from "@/lib/providers/sms"
 
 const log = createLogger("sms-campaign-sender")
 
@@ -224,7 +224,16 @@ async function sendSingleCampaignSms({
   // Campaign market pool for cold recipients (with orgId). Sticky always wins.
   sendingMarketId?: string
 }): Promise<TelnyxSendResult> {
-  if (!telnyxApiKey || !messagingProfileId) {
+  // Pick the org's rail first. A tenant whose texting isn't live fails with the
+  // non-retryable "sms_not_ready" — it never reaches a Telnyx send.
+  let provider
+  try {
+    provider = await resolveSmsProvider(orgId)
+  } catch (err) {
+    if (err instanceof SmsNotReadyError) throw new Error("sms_not_ready")
+    throw err
+  }
+  if (provider.name === "telnyx" && (!telnyxApiKey || !messagingProfileId)) {
     throw new Error("Telnyx environment variables are not properly configured")
   }
 
@@ -254,7 +263,6 @@ async function sendSingleCampaignSms({
     }
   }
 
-  const provider = await resolveSmsProvider(orgId)
   const data = await provider.sendMessage({
     from: fromNumber,
     to: formatted,
@@ -588,6 +596,7 @@ export async function processSmsQueue(limit = 5, opts: { leaseSeconds?: number; 
       }
       const retryable =
         errorDetails === "missing_org" ? false                // unqueueable row — retrying cannot add an org
+        : errorDetails === "sms_not_ready" ? false            // org's texting isn't set up — retrying cannot set it up
         : classification.kind === "bad_sender" ? true          // recipient is fine — retry gets a good pool number
         : classification.kind === "bad_recipient" ? false     // dead number — don't waste attempts
         : isRetryableError(err)

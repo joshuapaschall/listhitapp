@@ -11,10 +11,12 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import twilio from "twilio"
 
 import { assertServer } from "@/utils/assert-server"
+import { formatPhoneE164 } from "@/lib/dedup-utils"
+import { resolveOrgIdByDid } from "@/lib/inbound-numbers"
 import { handleInboundSms } from "@/lib/sms/inbound-handler"
+import { verifyTwilioWebhook } from "@/lib/twilio/verify-webhook"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -25,7 +27,7 @@ assertServer()
 const EMPTY_TWIML = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>'
 
 // Public callback URL Twilio signs against — must match the Messaging Service's
-// inboundRequestUrl exactly, or validateRequest fails.
+// inboundRequestUrl exactly, or signature verification fails.
 function callbackUrl(): string {
   const base = (process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/$/, "")
   return `${base}/api/webhooks/twilio-incoming-sms`
@@ -40,16 +42,25 @@ export async function POST(request: NextRequest) {
   const sp = new URLSearchParams(rawBody)
   const params = Object.fromEntries(sp.entries())
 
-  const authToken = process.env.LISTHIT_TWILIO_AUTH_TOKEN
-  if (!authToken) {
-    // Fail closed — never process an unvalidated inbound webhook.
-    console.error("[twilio-incoming-sms] LISTHIT_TWILIO_AUTH_TOKEN is not set; rejecting webhook")
+  // Fail closed — never process an unvalidated inbound webhook.
+  const verified = await verifyTwilioWebhook({
+    signature: request.headers.get("x-twilio-signature") || "",
+    url: callbackUrl(),
+    params,
+  })
+  if (!verified.ok) {
+    console.warn("[twilio-incoming-sms] rejected webhook", { reason: verified.reason })
     return new NextResponse("Forbidden", { status: 403 })
   }
 
-  const signature = request.headers.get("x-twilio-signature") || ""
-  if (!twilio.validateRequest(authToken, signature, callbackUrl(), params)) {
-    return new NextResponse("Invalid signature", { status: 403 })
+  // The subaccount that signed the webhook owns the org. A DID mapped to a
+  // different org must never receive this message.
+  if (verified.orgId) {
+    const didOrgId = await resolveOrgIdByDid(params.To ? formatPhoneE164(params.To) : null)
+    if (didOrgId && didOrgId !== verified.orgId) {
+      console.warn("[twilio-webhook] org mismatch", { route: "twilio-incoming-sms", accountSid: verified.accountSid })
+      return new NextResponse("Forbidden", { status: 403 })
+    }
   }
 
   const text = (params.Body ?? "").trim()
@@ -67,6 +78,7 @@ export async function POST(request: NextRequest) {
     text,
     rawMediaUrls,
     providerId: params.MessageSid,
+    verifiedOrgId: verified.orgId,
   })
 
   // Twilio treats any non-2xx as failure-and-retry, and a 2xx body as TwiML.

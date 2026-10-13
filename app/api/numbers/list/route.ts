@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { requireOrgContext } from "@/lib/auth/org-context";
-import { getOrgTwilio } from "@/lib/org-twilio/service";
+import { loadRoutingState } from "@/lib/providers/routing-state";
 import {
   parseTelnyxPinnedOrgIds,
   resolveVoiceProviderName,
@@ -18,7 +18,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!orgId) return NextResponse.json({ error: "Missing org" }, { status: 400 });
 
-  const row = await getOrgTwilio(orgId);
+  const row = await loadRoutingState(orgId);
   const pinned = parseTelnyxPinnedOrgIds(process.env.TELNYX_PINNED_ORG_IDS);
   const provider = resolveVoiceProviderName(orgId, row, pinned);
 
@@ -32,12 +32,18 @@ export async function GET() {
     return NextResponse.json({ ok: true, items, defaultFrom: e164 });
   }
 
-  // Telnyx orgs: list only THIS org's numbers from the database (RLS + explicit
+  // A tenant whose voice isn't set up has no caller IDs — never the Telnyx list.
+  if (provider === "blocked") {
+    return NextResponse.json({ ok: true, items: [], defaultFrom: null });
+  }
+
+  // The Telnyx (owner) org: list only THIS org's numbers from the database (RLS + explicit
   // filter), not the account-wide Telnyx inventory.
   const inbound = await supabase
     .from("inbound_numbers")
     .select("e164")
     .eq("org_id", orgId)
+    .eq("provider", "telnyx")
     .eq("enabled", true);
 
   let items = (inbound.data ?? [])
