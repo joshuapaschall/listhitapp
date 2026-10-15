@@ -34,8 +34,19 @@ const CARRIER_DECLINED_CODES = new Set(["30882", "30883", "30884", "30885"])
 function plain(reason: string): string {
   return reason
     .replace(/\b(TCR|TrustProduct|Trust Product|EndUser|End User|Customer Profile|Bundle)\b/gi, "registration")
+    .replace(/\bSecondary\s+/gi, "")
     .replace(/\s+/g, " ")
     .trim()
+}
+
+// Twilio sequencing failures (e.g. the A2P bundle evaluated before its customer
+// profile reached review) are ours to retry, never the customer's to fix.
+// Matched on both the raw and the plain() wording.
+function isSequencingFailure(reason: string): boolean {
+  const t = reason.toLowerCase()
+  if (/secondary\s+(customer\s+profile|registration)/.test(t)) return true
+  if (/registration\s+proof/.test(t)) return true
+  return /must be in/.test(t) && /review/.test(t)
 }
 
 function fieldFor(text: string): CustomerIssueField {
@@ -66,15 +77,17 @@ function friendlyEvaluationMessage(field: CustomerIssueField, reason: string): s
 
 // Collect each failing requirement's reason from a Trust Hub evaluation and map
 // it to the field the customer should fix. Reuses summarizeEvaluationFailures'
-// traversal so both stay in step.
+// traversal so both stay in step. Returns [] when every failure is internal
+// sequencing — the engine retries instead of asking the customer for anything.
 export function issuesFromEvaluation(results: unknown): CustomerIssue[] {
   const summary = summarizeEvaluationFailures(results)
   const marker = "noncompliant:"
   const idx = summary.indexOf(marker)
-  const reasons = idx >= 0 ? summary.slice(idx + marker.length).split(";").map((r) => r.trim()).filter(Boolean) : []
-  if (!reasons.length) {
+  const all = idx >= 0 ? summary.slice(idx + marker.length).split(";").map((r) => r.trim()).filter(Boolean) : []
+  if (!all.length) {
     return [{ field: "other", message: "Some of your business details need another look. Contact support if this keeps happening.", fixable: true }]
   }
+  const reasons = all.filter((reason) => !isSequencingFailure(reason))
   return reasons.map((reason) => {
     const field = fieldFor(reason)
     return { field, message: friendlyEvaluationMessage(field, reason), fixable: true }

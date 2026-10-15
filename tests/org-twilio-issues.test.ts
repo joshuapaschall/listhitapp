@@ -1,6 +1,7 @@
 import {
   CARRIER_DECLINED_MESSAGE,
   LEGAL_NAME_MISMATCH_MESSAGE,
+  RESUBMISSIONS_EXHAUSTED_MESSAGE,
   issuesFromBrandErrors,
   issuesFromCampaignErrors,
   issuesFromEvaluation,
@@ -84,6 +85,65 @@ describe("issuesFromEvaluation", () => {
     const issues = issuesFromEvaluation([])
     expect(issues).toHaveLength(1)
     expect(issues[0].fixable).toBe(true)
+  })
+
+  const sequencing = {
+    friendly_name: "Secondary Customer Profile",
+    passed: false,
+    fields: [
+      { object_field: "status", passed: false, failure_reason: "Secondary Customer Profile registration Proof" },
+      { object_field: "status", passed: false, failure_reason: "The status of the Secondary Customer Profile must be in atleast review state" },
+      { object_field: "status", passed: false, failure_reason: "Secondary registration registration Proof" },
+      { object_field: "status", passed: false, failure_reason: "The status of the Secondary registration must be in atleast review state" },
+    ],
+  }
+
+  test("only Twilio sequencing failures → no customer issues (internal retry)", () => {
+    expect(issuesFromEvaluation([sequencing])).toEqual([])
+  })
+
+  test("sequencing failures are dropped but real ones are kept", () => {
+    const issues = issuesFromEvaluation([sequencing, { passed: false, failure_reason: "Address street is missing." }])
+    expect(issues).toHaveLength(1)
+    expect(issues[0].field).toBe("address")
+  })
+})
+
+describe("customer-facing messages never contain Twilio jargon", () => {
+  const FORBIDDEN = /Secondary|registration Proof|TrustProduct|EndUser|TCR/i
+  const jargon = [
+    "TCR rejected the TrustProduct EndUser",
+    "Secondary Customer Profile is missing the Business Information EndUser",
+    "Trust Product website URL is invalid for the TCR brand",
+    "Bundle email is invalid",
+    "End User first_name is missing",
+  ]
+
+  test("every mapper, every branch", () => {
+    const codes = [30893, 30882, 30883, 30884, 30885, 30794, 30799, 30800, 99999, undefined]
+    const descriptions = [
+      ...jargon,
+      "Too many brands registered with this EIN",
+      "Tax ID does not match",
+      "Website privacy policy TrustProduct is unreachable",
+      "",
+    ]
+    const errors = codes.flatMap((error_code) => descriptions.map((description) => ({ error_code, description })))
+    const evaluations = jargon.map((failure_reason) => [{ passed: false, failure_reason }])
+
+    const messages = [
+      ...issuesFromBrandErrors(errors),
+      ...issuesFromCampaignErrors(errors),
+      ...issuesFromBrandErrors([]),
+      ...issuesFromCampaignErrors([]),
+      ...issuesFromEvaluation([]),
+      ...evaluations.flatMap((e) => issuesFromEvaluation(e)),
+    ].map((i) => i.message)
+    expect(messages.length).toBeGreaterThan(50)
+    for (const m of messages) expect(m).not.toMatch(FORBIDDEN)
+    for (const m of [CARRIER_DECLINED_MESSAGE, LEGAL_NAME_MISMATCH_MESSAGE, RESUBMISSIONS_EXHAUSTED_MESSAGE]) {
+      expect(m).not.toMatch(FORBIDDEN)
+    }
   })
 })
 

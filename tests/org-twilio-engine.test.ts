@@ -22,6 +22,7 @@ const h = vi.hoisted(() => {
     desiredFails: false,
     campaignSeq: 0,
     inserts: [] as any[],
+    tpEval: { status: "compliant", results: [] } as any,
   }
 
   const copy = () => ({ ...state.row, provisioning_state: { ...(state.row?.provisioning_state ?? {}) } })
@@ -100,7 +101,7 @@ const h = vi.hoisted(() => {
           (sid: string) => ({
             trustProductsEntityAssignments: { create: async (a: any) => (rec("trustProducts.assign", a), {}) },
             trustProductsEvaluations: {
-              create: async (a: any) => (rec("trustProducts.evaluate", a), { status: "compliant", results: [] }),
+              create: async (a: any) => (rec("trustProducts.evaluate", a), state.tpEval),
             },
             update: async (a: any) => (rec("trustProducts.update", { sid, ...a }), { status: a.status }),
           }),
@@ -307,6 +308,7 @@ beforeEach(() => {
     desiredFails: false,
     campaignSeq: 0,
     inserts: [],
+    tpEval: { status: "compliant", results: [] },
   })
   notify.notifyLive.mockClear()
   notify.notifyActionRequired.mockClear()
@@ -348,23 +350,99 @@ describe("advanceRegistration — spend gate", () => {
     expect(first.stage).toBe("awaiting_approval")
     expect(state.row.setup_stage).toBe("awaiting_approval")
 
-    // Free: Messaging Service + Trust Hub drafts (+ Event Streams).
+    // Free: Messaging Service + Trust Hub drafts submitted for review (+ Event Streams).
     expect(count("services.create")).toBe(1)
     expect(count("customerProfiles.create")).toBe(1)
     expect(count("trustProducts.create")).toBe(1)
     expect(count("sinks.create")).toBe(1)
-    // Nothing that costs money, and nothing submitted for review.
+    // Twilio's ISV order: the profile is in review before the TrustProduct is built.
+    const order = [
+      "customerProfiles.create",
+      "customerProfiles.evaluate",
+      "customerProfiles.update",
+      "trustProducts.create",
+      "trustProducts.evaluate",
+      "trustProducts.update",
+    ].map(idx)
+    order.forEach((i) => expect(i).toBeGreaterThanOrEqual(0))
+    expect(order).toEqual([...order].sort((a, b) => a - b))
+    expect(state.args["customerProfiles.update"][0]).toMatchObject({ status: "pending-review" })
+    expect(state.args["trustProducts.update"][0]).toMatchObject({ status: "pending-review" })
+    expect(state.row.provisioning_state.trust_hub_submitted_at).toBeTruthy()
+    expect(state.row.customer_profile_status).toBe("pending-review")
+    // Nothing that costs money.
     expect(count("incomingPhoneNumbers.create")).toBe(0)
     expect(count("brandRegistrations.create")).toBe(0)
     expect(count("usAppToPerson.create")).toBe(0)
-    expect(count("customerProfiles.update")).toBe(0)
-    expect(count("trustProducts.update")).toBe(0)
 
     const second = await advanceRegistration(ORG, { reason: "cron" })
     expect(second.stage).toBe("awaiting_approval")
     expect(notify.notifyPlatformAdminsAwaitingApproval).toHaveBeenCalledTimes(1)
     expect(count("incomingPhoneNumbers.create")).toBe(0)
     expect(count("brandRegistrations.create")).toBe(0)
+    // Already submitted: no second submit.
+    expect(count("customerProfiles.update")).toBe(1)
+    expect(count("trustProducts.update")).toBe(1)
+  })
+
+  test("profile already in-review on a re-run → no second profile submit, TrustProduct still submitted", async () => {
+    state.row = baseRow({
+      customer_profile_status: "in-review",
+      provisioning_state: {
+        secondary_profile_sid: "BU" + "a".repeat(32),
+        business_info_enduser_sid: "IT-biz",
+        business_info_attached: true,
+        authorized_rep_enduser_sid: "IT-rep",
+        authorized_rep_attached: true,
+        address_sid: "AD1",
+        supporting_document_sid: "RD1",
+        supporting_document_attached: true,
+        primary_profile_assigned: true,
+        submitted: true,
+      },
+    })
+    const res = await advanceRegistration(ORG, { reason: "cron" })
+
+    expect(res.stage).toBe("awaiting_approval")
+    expect(count("customerProfiles.update")).toBe(0)
+    // Not re-synced either: editing a profile in review sends it back to draft.
+    expect(count("endUsers.update")).toBe(0)
+    expect(count("trustProducts.create")).toBe(1)
+    expect(count("trustProducts.update")).toBe(1)
+    expect(state.row.provisioning_state.trust_hub_submitted_at).toBeTruthy()
+  })
+
+  test("TrustProduct evaluation fails only on Twilio sequencing → retried, not action_required, no email", async () => {
+    state.tpEval = {
+      status: "noncompliant",
+      results: [
+        {
+          friendly_name: "Secondary Customer Profile",
+          passed: false,
+          fields: [
+            { object_field: "status", passed: false, failure_reason: "Secondary Customer Profile registration Proof" },
+            {
+              object_field: "status",
+              passed: false,
+              failure_reason: "The status of the Secondary Customer Profile must be in atleast review state",
+            },
+          ],
+        },
+      ],
+    }
+    const before = Date.now()
+    const res = await advanceRegistration(ORG, { reason: "submit" })
+
+    expect(res.stage).not.toBe("action_required")
+    expect(state.row.setup_stage).toBe("submitting")
+    expect(state.row.customer_issues ?? null).toBeNull()
+    const next = Date.parse(state.row.next_check_at)
+    expect(next - before).toBeGreaterThanOrEqual(4.5 * 60_000)
+    expect(next - before).toBeLessThanOrEqual(5.5 * 60_000)
+    expect(notify.notifyActionRequired).not.toHaveBeenCalled()
+    expect(count("trustProducts.update")).toBe(0)
+    expect(state.row.provisioning_state.trust_hub_submitted_at).toBeUndefined()
+    expect(count("incomingPhoneNumbers.create")).toBe(0)
   })
 })
 
@@ -476,6 +554,29 @@ describe("advanceRegistration — Standard path", () => {
 })
 
 describe("advanceRegistration — Sole Proprietor path", () => {
+  test("not approved: starter profile submitted before the sole-prop TrustProduct is built, both before the spend gate", async () => {
+    state.data = soleData()
+    state.row = baseRow({ brand_type: "SOLE_PROPRIETOR" })
+
+    const res = await advanceRegistration(ORG, { reason: "submit" })
+
+    expect(res.stage).toBe("awaiting_approval")
+    const order = [
+      "customerProfiles.create",
+      "customerProfiles.evaluate",
+      "customerProfiles.update",
+      "trustProducts.create",
+      "trustProducts.evaluate",
+      "trustProducts.update",
+    ].map(idx)
+    order.forEach((i) => expect(i).toBeGreaterThanOrEqual(0))
+    expect(order).toEqual([...order].sort((a, b) => a - b))
+    expect(state.args["customerProfiles.create"][0].friendlyName).toContain("Starter Customer Profile")
+    expect(state.args["trustProducts.create"][0].friendlyName).toContain("Sole Proprietor Trust Product")
+    expect(count("incomingPhoneNumbers.create")).toBe(0)
+    expect(count("brandRegistrations.create")).toBe(0)
+  })
+
   test("APPROVED + UNVERIFIED → verify_mobile, no campaign; VERIFIED → SOLE_PROPRIETOR campaign; one number", async () => {
     state.data = soleData()
     state.row = baseRow({ brand_type: "SOLE_PROPRIETOR", spend_approved_at: "2026-10-14T01:00:00Z" })

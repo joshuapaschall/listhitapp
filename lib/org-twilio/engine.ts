@@ -27,7 +27,13 @@ import {
   type CustomerIssue,
 } from "@/lib/org-twilio/issues"
 import { notifyActionRequired, notifyLive, notifyPlatformAdminsAwaitingApproval } from "@/lib/org-twilio/notify"
-import { ensureSoleProprietorDrafts, ensureStandardDrafts, submitTrustHub, type DraftResult } from "@/lib/org-twilio/trusthub"
+import {
+  ensureSoleProprietorDrafts,
+  ensureStandardDrafts,
+  isInOrPastReview,
+  submitTrustHub,
+  type DraftResult,
+} from "@/lib/org-twilio/trusthub"
 import {
   BRAND_TYPE_SOLE_PROPRIETOR,
   BRAND_TYPE_STANDARD,
@@ -48,7 +54,8 @@ import type { UsAppToPersonListInstanceCreateOptions } from "twilio/lib/rest/mes
 //
 // Spend gate: everything that costs money (number, brand, campaign) waits for a
 // platform admin's approval. Free resources (subaccount, Messaging Service,
-// Trust Hub drafts, Event Streams) are built before it.
+// Trust Hub drafts and their submission for review, Event Streams) are built
+// before it.
 
 const LEASE_MS = 90_000
 const MINUTE = 60_000
@@ -247,15 +254,28 @@ async function ensureMessagingService(client: Twilio, orgId: string, row: OrgTwi
 async function ensureDrafts(
   client: Twilio,
   orgId: string,
+  row: OrgTwilio,
   state: ProvisioningState,
   brandType: BrandType,
   data: RegistrationData,
   websiteUrl: string,
   sync: boolean,
 ): Promise<DraftResult> {
+  const opts = { sync, profileStatus: row.customer_profile_status, trustProductStatus: row.trust_product_status }
   return brandType === BRAND_TYPE_SOLE_PROPRIETOR
-    ? ensureSoleProprietorDrafts(client, orgId, state, soleProprietorInputsFrom(data), { sync })
-    : ensureStandardDrafts(client, orgId, state, standardInputsFrom(data, websiteUrl), { sync })
+    ? ensureSoleProprietorDrafts(client, orgId, state, soleProprietorInputsFrom(data), opts)
+    : ensureStandardDrafts(client, orgId, state, standardInputsFrom(data, websiteUrl), opts)
+}
+
+// A failed draft evaluation. When every reason is Twilio sequencing (e.g. the
+// TrustProduct ran before the profile reached review) there is nothing for the
+// customer to fix: log it, stay in submitting, and retry shortly.
+async function draftNotCompliant(orgId: string, row: OrgTwilio, results: unknown): Promise<OrgTwilioSetupStage> {
+  const issues = issuesFromEvaluation(results)
+  if (issues.length) return actionRequired(orgId, row, issues)
+  console.warn("[org-twilio-engine] Trust Hub evaluation hit a sequencing failure; retrying", { orgId })
+  await setStage(orgId, row, "submitting", { next_check_at: inMinutes(5) })
+  return "submitting"
 }
 
 // ---- Entry point -----------------------------------------------------------------
@@ -305,7 +325,9 @@ async function runSteps(orgId: string, row: OrgTwilio, reason: string): Promise<
     // 3. Messaging Service (free).
     const mgSid = await ensureMessagingService(client, orgId, row, displayName)
 
-    // 4. Trust Hub drafts + evaluation (free). Skipped once submitted.
+    // 4. Trust Hub drafts, evaluation and submission for review (free). Skipped
+    //    once both are submitted. Data is only re-synced before the profile is
+    //    submitted; later edits go through resubmitRegistration.
     if (!state.trust_hub_submitted_at) {
       let websiteUrl = String(data.org?.website_url ?? "").trim()
       if (brandType === BRAND_TYPE_STANDARD) {
@@ -317,8 +339,9 @@ async function runSteps(orgId: string, row: OrgTwilio, reason: string): Promise<
         }
         websiteUrl = urls.websiteUrl
       }
-      const draft = await ensureDrafts(client, orgId, state, brandType, data, websiteUrl, true)
-      if (!draft.compliant) return actionRequired(orgId, row, issuesFromEvaluation(draft.results))
+      const sync = !isInOrPastReview(row.customer_profile_status)
+      const draft = await ensureDrafts(client, orgId, row, state, brandType, data, websiteUrl, sync)
+      if (!draft.compliant) return draftNotCompliant(orgId, row, draft.results)
     }
 
     // 5. SPEND GATE — nothing that costs money happens before a platform admin approves.
@@ -340,9 +363,12 @@ async function runSteps(orgId: string, row: OrgTwilio, reason: string): Promise<
       await setStage(orgId, row, "submitting")
     }
 
-    // 6. Submit Trust Hub for review.
+    // 6. Safety net: step 4 already submits Trust Hub; this only runs if it didn't finish.
     if (!state.trust_hub_submitted_at) {
-      await submitTrustHub(client, orgId, state)
+      await submitTrustHub(client, orgId, state, {
+        profileStatus: row.customer_profile_status,
+        trustProductStatus: row.trust_product_status,
+      })
     }
 
     // 7. Number — buy early so calls work while texting is in review.
@@ -679,12 +705,12 @@ export async function resubmitRegistration(orgId: string): Promise<AdvanceResult
           const urls = await resolveComplianceUrls(orgId)
           if (!("error" in urls)) websiteUrl = urls.websiteUrl
         }
-        const draft = await ensureDrafts(client, orgId, state, brandType, data, websiteUrl, true)
+        // Synced bundles are re-submitted inside ensureDrafts.
+        const draft = await ensureDrafts(client, orgId, row, state, brandType, data, websiteUrl, true)
         if (!draft.compliant) {
-          stop = await actionRequired(orgId, row, issuesFromEvaluation(draft.results))
+          stop = await draftNotCompliant(orgId, row, draft.results)
           return { stage: stop, changed: true }
         }
-        if (row.spend_approved_at) await submitTrustHub(client, orgId, state)
       }
 
       // A failed brand gets up to 3 free resubmissions (needs a TCR id).
