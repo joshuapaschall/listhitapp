@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import type { SetupSummary } from "@/lib/onboarding/outcome-types"
 import { useRouter, useSearchParams } from "next/navigation"
 import MainLayout from "@/components/layout/main-layout"
 import QuickActionButtons from "@/components/dashboard/QuickActionButtons"
@@ -166,7 +167,7 @@ export default function DashboardPage() {
     queryFn: async () => {
       const res = await fetch("/api/onboarding")
       if (!res.ok) throw new Error("Failed to load onboarding")
-      return res.json() as Promise<{ doneCount: number; totalCount: number; completed: boolean }>
+      return res.json() as Promise<SetupSummary>
     },
     refetchOnWindowFocus: false,
   })
@@ -193,19 +194,30 @@ export default function DashboardPage() {
   return (
     <MainLayout>
       <div className="min-h-full bg-muted/40 p-4 sm:p-6 space-y-4">
-        {onboarding && !onboarding.completed && (
+        {onboarding?.banner === "setup" && (
           <Link
             href="/getting-started"
             className="flex items-center gap-3 rounded-xl border border-border bg-card p-3.5 shadow-sm transition-colors hover:bg-muted/40"
           >
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-medium text-foreground">Finish setting up your account</div>
+              <div className="text-sm font-medium text-foreground">Finish setting up</div>
               <p className="text-xs text-muted-foreground">
-                {onboarding.doneCount} of {onboarding.totalCount} steps complete
+                {onboarding.readyCount} of {onboarding.totalCount} ready
               </p>
             </div>
             <span className="flex items-center gap-1 text-sm font-medium text-brand">
               Continue <ArrowRight className="h-4 w-4" />
+            </span>
+          </Link>
+        )}
+        {onboarding?.banner === "texting_review" && (
+          <Link
+            href="/getting-started/texting"
+            className="flex items-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-xs text-muted-foreground transition-colors hover:bg-muted/40"
+          >
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+            <span className="min-w-0 flex-1">
+              <span className="font-medium text-foreground">Texting is in carrier review</span> · We&apos;ll email you
             </span>
           </Link>
         )}

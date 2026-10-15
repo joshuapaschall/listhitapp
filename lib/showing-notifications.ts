@@ -2,7 +2,10 @@ import { supabaseAdmin } from "@/lib/supabase/admin"
 import { formatPhoneE164, normalizePhone } from "@/lib/dedup-utils"
 import { isOrgTelnyxPinnedEnv } from "@/lib/providers/sms/routing"
 import { resolveSmsProvider, SmsNotReadyError, type SmsProvider } from "@/lib/providers/sms"
-import { FROM_EMAIL, resend } from "@/lib/resend"
+import { sendPlatformEmail } from "@/lib/email/send-platform-email"
+import { showingEmail } from "@/lib/email/templates"
+import { brandFromIdentity } from "@/lib/email-templates/brand"
+import { getOrgIdentity } from "@/lib/org-identity.server"
 import { insertNotification } from "@/lib/notifications"
 import type { Buyer, Property, Showing } from "@/lib/supabase"
 import { assertServer } from "@/utils/assert-server"
@@ -236,38 +239,30 @@ async function sendShowingSms(showing: Showing, buyer: Buyer, property: Property
   }
 }
 
-async function sendShowingEmail(subject: string, buyer: Buyer, html: string) {
+async function sendShowingEmail(
+  showing: Showing,
+  buyer: Buyer,
+  property: Property | null | undefined,
+  kind: "confirmed" | "reminder",
+  when: string,
+) {
   if (!buyer.email || buyer.can_receive_email === false) {
     log("Skipping showing email: no email or email opt-out", { email: buyer.email, canReceive: buyer.can_receive_email })
     return
   }
-  if (!resend) {
-    console.warn("Skipping showing email: Resend not configured (missing RESEND_API_KEY)")
-    return
-  }
-  try {
-    log("Sending showing email:", { to: buyer.email, subject, from: FROM_EMAIL })
-    const result = await resend.emails.send({ from: FROM_EMAIL, to: buyer.email, subject, html })
-    log("Showing email sent successfully:", result)
-  } catch (error) {
-    console.error("Showing email notification failed:", error)
-  }
-}
-
-function baseEmailHtml(title: string, intro: string, property: Property | null | undefined, when: string) {
-  return `
-    <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; color: #111827;">
-      <div style="background: #0f172a; color: white; padding: 16px 20px; font-size: 20px; font-weight: 700;">ListHit</div>
-      <div style="padding: 24px 20px; background: #ffffff;">
-        <h1 style="font-size: 22px; margin: 0 0 12px;">${title}</h1>
-        <p style="margin: 0 0 16px; line-height: 1.6;">${intro}</p>
-        <p style="margin: 0 0 8px;"><strong>Property:</strong> ${property?.address || "Unknown property"}</p>
-        <p style="margin: 0 0 18px;"><strong>Date & Time:</strong> ${when}</p>
-        <p style="margin: 0; line-height: 1.6;">Reply to this email or call us if you need to reschedule.</p>
-      </div>
-      <div style="padding: 14px 20px; font-size: 12px; color: #6b7280; background: #f3f4f6;">Sent by ListHit</div>
-    </div>
-  `
+  // Buyer-facing: always the tenant's brand, never ListHit's.
+  const identity = showing.org_id ? await getOrgIdentity(showing.org_id) : null
+  const email = showingEmail({
+    brand: brandFromIdentity(identity),
+    address: identity?.hasCompleteAddress ? identity.addressSingleLine : null,
+    kind,
+    buyerFirstName: buyer.fname,
+    propertyAddress: property?.address || "Unknown property",
+    when,
+  })
+  log("Sending showing email:", { to: buyer.email, subject: email.subject })
+  const result = await sendPlatformEmail({ to: buyer.email, ...email, category: "showing" })
+  if (!result.sent) console.error("Showing email notification failed:", result.error)
 }
 
 export async function sendShowingConfirmation(showing: Showing, buyer?: Buyer | null, property?: Property | null) {
@@ -300,11 +295,7 @@ export async function sendShowingConfirmation(showing: Showing, buyer?: Buyer | 
       `Hi ${buyer.fname || "there"}! Your showing at ${property?.address || "our property"} is confirmed for ${formattedDateTime}. Reply to this message if you need to reschedule.`,
     )
 
-    await sendShowingEmail(
-      `Showing Confirmed — ${property?.address || "Property Showing"}`,
-      buyer,
-      baseEmailHtml("Your showing has been confirmed", "Your showing has been confirmed.", property, formattedDateTime),
-    )
+    await sendShowingEmail(showing, buyer, property, "confirmed", formattedDateTime)
   }
 }
 
@@ -338,10 +329,6 @@ export async function sendShowingReminder(showing: Showing, buyer?: Buyer | null
       `Reminder: Your showing at ${property?.address || "the property"} is in about 1 hour (${formattedDateTime}). See you there!`,
     )
 
-    await sendShowingEmail(
-      `Reminder: Showing in 1 Hour — ${property?.address || "Property Showing"}`,
-      buyer,
-      baseEmailHtml("Your showing is coming up!", "This is a reminder that your showing is coming up in about an hour.", property, formattedDateTime),
-    )
+    await sendShowingEmail(showing, buyer, property, "reminder", formattedDateTime)
   }
 }

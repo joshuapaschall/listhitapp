@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { requireOrgContext } from "@/lib/auth/org-context"
 import { apiError } from "@/lib/api-error"
+import { checkHttps } from "@/lib/dns/inspect"
+import { notifyWebsiteLiveOnce } from "@/lib/onboarding/notify-connected"
 import {
   dnsRecordsFor,
   domainStatusFrom,
@@ -59,9 +61,16 @@ export async function POST(_request: Request, context: RouteContext) {
       .single()
     if (error) throw error
 
+    // Live = active (DNS points at us) AND the site loads over https. SSL is
+    // issued a little after DNS resolves; until then the card says "securing".
+    const httpsOk = updated.status === "active" ? (await checkHttps(updated.domain)).ok : false
+    if (httpsOk && !updated.live_notified_at) {
+      if (await notifyWebsiteLiveOnce(orgId, updated.id, updated.domain)) updated.live_notified_at = new Date().toISOString()
+    }
+
     return NextResponse.json({
       ok: true,
-      domain: { ...updated, dns_records: dnsRecordsFor(updated.domain, updated.verification) },
+      domain: { ...updated, https_ok: httpsOk, dns_records: dnsRecordsFor(updated.domain, updated.verification) },
     })
   } catch (err) {
     return apiError(err, 500, undefined, { ok: false })

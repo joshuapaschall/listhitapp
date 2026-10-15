@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
-import { AlertCircle, ArrowLeft, Check, Clock, Copy, Loader2, Plus, RefreshCcw, ShieldCheck } from "lucide-react"
+import { AlertCircle, ArrowLeft, Clock, Loader2, Plus, RefreshCcw, ShieldCheck } from "lucide-react"
 import { toast } from "sonner"
 
 import { PermissionGate } from "@/components/auth/PermissionGate"
@@ -12,9 +12,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { DnsAssistant } from "@/components/dns/dns-assistant"
 import type { DnsRecord, EmailDomain, EmailSender } from "@/types/email-identities"
 
 type DomainDetails = EmailDomain & {
@@ -22,56 +22,12 @@ type DomainDetails = EmailDomain & {
   senders?: EmailSender[]
 }
 
-type Provider = "godaddy" | "cloudflare" | "namecheap" | "squarespace" | "other"
-type RecordGroup = {
-  title: string
-  description: string
-  records: DnsRecord[]
-}
-
 const wrapStyle = { overflowWrap: "anywhere", wordBreak: "break-all" } as const
-
-const providerTips: Record<Provider, string> = {
-  godaddy: "GoDaddy auto-appends your domain to the Host, so enter only the part BEFORE .{domain}.",
-  cloudflare: "Cloudflare tip: set proxy status to DNS only.",
-  namecheap: "Namecheap auto-appends your domain to the Host, so enter only the part BEFORE .{domain}.",
-  squarespace: "Squarespace / Google tip: open DNS settings for this domain, then add each record by Type, Host/Name, and Value.",
-  other: "Other provider tip: find DNS/Manage DNS; if it appends your domain to the Host, omit your domain from what you paste.",
-}
 
 function statusLabel(status: EmailDomain["status"]) {
   if (status === "verified") return "Verified"
   if (status === "failed") return "Needs attention"
   return "Pending"
-}
-
-function getProviderTip(provider: Provider | "", domain: string) {
-  if (!provider) return null
-  return providerTips[provider].replace("{domain}", domain)
-}
-
-function getRecordGroups(records: DnsRecord[]): RecordGroup[] {
-  const dkimRecords = records.filter((record) => record.type === "CNAME" && record.name.includes("._domainkey."))
-  const dmarcRecords = records.filter((record) => record.name.startsWith("_dmarc."))
-  const bounceRecords = records.filter((record) => !dkimRecords.includes(record) && !dmarcRecords.includes(record))
-
-  return [
-    {
-      title: "DKIM signature",
-      description: "Proves the email is genuinely from you. Add all three.",
-      records: dkimRecords,
-    },
-    {
-      title: "Bounce handling / MAIL FROM",
-      description: "Routes bounces and authenticates your mail.",
-      records: bounceRecords,
-    },
-    {
-      title: "DMARC",
-      description: "Optional, but improves inbox placement.",
-      records: dmarcRecords,
-    },
-  ].filter((group) => group.records.length > 0)
 }
 
 export default function EmailDomainDetailPage({ params }: { params: { id: string } }) {
@@ -80,20 +36,16 @@ export default function EmailDomainDetailPage({ params }: { params: { id: string
   const [manualChecking, setManualChecking] = useState(false)
   const [autoChecking, setAutoChecking] = useState(false)
   const [activeTab, setActiveTab] = useState("dns")
-  const [provider, setProvider] = useState<Provider | "">("")
   const [open, setOpen] = useState(false)
   const [mailbox, setMailbox] = useState("")
   const [fromName, setFromName] = useState("")
   const [replyTo, setReplyTo] = useState("")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [copied, setCopied] = useState<string | null>(null)
   const verifyInFlightRef = useRef(false)
 
   const previewAddress = useMemo(() => `${mailbox.trim() || "deals"}@${domain?.domain || "yourdomain.com"}`, [domain?.domain, mailbox])
   const remainingName = 100 - fromName.length
-  const recordGroups = useMemo(() => getRecordGroups(domain?.dns_records || []), [domain?.dns_records])
-  const providerTip = useMemo(() => getProviderTip(provider, domain?.domain || "yourdomain.com"), [domain?.domain, provider])
   const checking = manualChecking || autoChecking
 
   const loadDomain = useCallback(async () => {
@@ -121,12 +73,12 @@ export default function EmailDomainDetailPage({ params }: { params: { id: string
 
       if (manual) {
         if (nextDomain.status === "verified") toast.success("Verified — ready to send")
-        else if (nextDomain.status === "pending") toast.message("Not verified yet — DNS can take a few minutes to a few hours to propagate.")
-        else toast.error("Needs attention — check the DNS records below and try again.")
+        else if (nextDomain.status === "pending") toast.message("Not verified yet. Changes usually show up within 5–30 minutes.")
+        else toast.error("Needs attention — check the records below and try again.")
       } else if (previousStatus === "pending" && nextDomain.status === "verified") {
         toast.success("Verified — ready to send")
       } else if (previousStatus === "pending" && nextDomain.status === "failed") {
-        toast.error("Needs attention — check the DNS records below and try again.")
+        toast.error("Needs attention — check the records below and try again.")
       }
 
       return nextDomain
@@ -153,12 +105,6 @@ export default function EmailDomainDetailPage({ params }: { params: { id: string
 
     return () => window.clearInterval(interval)
   }, [activeTab, domain?.status, runVerification])
-
-  async function copyValue(key: string, value: string) {
-    await navigator.clipboard.writeText(value)
-    setCopied(key)
-    window.setTimeout(() => setCopied(null), 1200)
-  }
 
   async function addSender(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -236,23 +182,23 @@ export default function EmailDomainDetailPage({ params }: { params: { id: string
   const statusBanner = checking ? {
     className: "border-blue-200 bg-blue-50 text-blue-950",
     icon: <Loader2 className="mt-0.5 size-5 shrink-0 animate-spin text-blue-700" />,
-    title: "Verifying… checking your DNS records with SES.",
+    title: "Checking your email sending setup…",
     description: "This usually finishes quickly once your DNS provider has published the records.",
   } : domain.status === "verified" ? {
     className: "border-[#059669]/20 bg-[#ECFDF5] text-[#064E3B]",
     icon: <ShieldCheck className="mt-0.5 size-5 shrink-0 text-[#059669]" />,
-    title: "Verified — ready to send. Add from-addresses next.",
-    description: "Your sending domain is verified and available for campaign from-addresses.",
+    title: "Ready to send. Add a from address next.",
+    description: "Your domain is verified. Choose the address your emails come from on the From addresses tab.",
   } : domain.status === "failed" ? {
     className: "border-rose-200 bg-rose-50 text-rose-950",
     icon: <AlertCircle className="mt-0.5 size-5 shrink-0 text-rose-700" />,
-    title: "Needs attention — DNS verification failed.",
-    description: "Review the records below, fix any mismatches, then check verification again.",
+    title: "Needs attention — we couldn't verify your domain.",
+    description: "Fix any record marked below, then check again.",
   } : {
     className: "border-amber-200 bg-amber-50 text-amber-950",
     icon: <Clock className="mt-0.5 size-5 shrink-0 text-amber-700" />,
-    title: "Not verified yet — add the records below; we check automatically every 10s.",
-    description: "DNS updates can take a few minutes to a few hours depending on your provider.",
+    title: "Not connected yet — add the records below. We check automatically.",
+    description: "Changes usually show up within 5–30 minutes. We'll email you when it's set up.",
   }
 
   return (
@@ -270,12 +216,12 @@ export default function EmailDomainDetailPage({ params }: { params: { id: string
           <h1 className="text-2xl font-semibold tracking-tight" style={wrapStyle}>{domain.domain}</h1>
           <Badge variant={domain.status === "verified" ? "default" : "secondary"}>{statusLabel(domain.status)}</Badge>
         </div>
-        <p className="text-sm text-muted-foreground">Add these DNS records at your domain provider, then verify when they have propagated.</p>
+        <p className="text-sm text-muted-foreground">Connect your domain so emails come from your own address and land in the inbox.</p>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="h-auto rounded-none border-b bg-transparent p-0">
-          <TabsTrigger value="dns" className="rounded-none border-b-2 border-transparent data-[state=active]:border-foreground data-[state=active]:text-foreground">DNS setup</TabsTrigger>
+          <TabsTrigger value="dns" className="rounded-none border-b-2 border-transparent data-[state=active]:border-foreground data-[state=active]:text-foreground">Connect your domain</TabsTrigger>
           <TabsTrigger value="senders" className="rounded-none border-b-2 border-transparent data-[state=active]:border-foreground data-[state=active]:text-foreground">From addresses</TabsTrigger>
         </TabsList>
 
@@ -285,102 +231,27 @@ export default function EmailDomainDetailPage({ params }: { params: { id: string
             <div className="space-y-1">
               <p className="font-medium">{statusBanner.title}</p>
               <p className="text-sm opacity-80">{statusBanner.description}</p>
-              {autoChecking ? <p className="text-xs opacity-75">Checking…</p> : null}
             </div>
           </div>
 
           <Card>
-            <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <CardTitle>How to add these</CardTitle>
-                <CardDescription>Use the copy buttons below to avoid typos.</CardDescription>
-              </div>
-              <Button className={domain.status === "verified" ? "text-white" : ""} disabled={manualChecking} onClick={() => void runVerification({ manual: true })} variant={domain.status === "verified" ? "default" : "outline"}>
-                {manualChecking ? <Loader2 className="size-4 animate-spin" /> : <RefreshCcw className="size-4" />}
-                Check verification
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="grid gap-3 md:grid-cols-3">
-                {[
-                  "Open your DNS provider, wherever you manage the domain — usually where you bought it.",
-                  "Create each record below by Type, Host/Name (left) and Value (right), using the copy buttons.",
-                  "Come back and click Check verification, or just wait — it re-checks automatically.",
-                ].map((step, index) => (
-                  <div className="rounded-md border bg-muted/20 p-3" key={step}>
-                    <div className="mb-2 flex size-7 items-center justify-center rounded-full bg-muted text-sm font-semibold text-foreground">{index + 1}</div>
-                    <p className="text-sm text-muted-foreground">{step}</p>
-                  </div>
-                ))}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="provider">Where is your domain registered?</Label>
-                <Select onValueChange={(value) => setProvider(value as Provider)} value={provider}>
-                  <SelectTrigger className="max-w-sm" id="provider">
-                    <SelectValue placeholder="Choose your provider" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="godaddy">GoDaddy</SelectItem>
-                    <SelectItem value="cloudflare">Cloudflare</SelectItem>
-                    <SelectItem value="namecheap">Namecheap</SelectItem>
-                    <SelectItem value="squarespace">Squarespace / Google</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-                {providerTip ? <p className="max-w-2xl rounded-md bg-muted/40 p-3 text-sm text-muted-foreground">{providerTip}</p> : null}
-              </div>
+            <CardContent className="p-4 sm:p-6">
+              <DnsAssistant
+                kind="email"
+                id={domain.id}
+                domain={domain.domain}
+                onAllOk={() => void runVerification({ manual: false })}
+                headerExtra={
+                  domain.status === "verified" ? null : (
+                    <Button disabled={manualChecking} onClick={() => void runVerification({ manual: true })} size="sm" variant="outline">
+                      {manualChecking ? <Loader2 className="size-4 animate-spin" /> : <RefreshCcw className="size-4" />}
+                      Check sending status
+                    </Button>
+                  )
+                }
+              />
             </CardContent>
           </Card>
-
-          <div className="space-y-4">
-            {recordGroups.map((group) => (
-              <Card key={group.title}>
-                <CardHeader>
-                  <CardTitle>{group.title}</CardTitle>
-                  <CardDescription>{group.description}</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {group.records.map((record, index) => {
-                    const key = `${group.title}-${record.type}-${index}`
-                    return (
-                      <div className="rounded-md border p-4" key={key}>
-                        <div className="mb-3 flex flex-wrap items-center gap-2">
-                          <Badge variant="outline">{record.type}</Badge>
-                        </div>
-                        <div className="grid gap-4 md:grid-cols-2">
-                          <div className="space-y-2">
-                            <Label>Host/Name</Label>
-                            <div className="flex items-start gap-2 rounded-md bg-muted/30 p-3">
-                              <code className="font-mono text-xs" style={wrapStyle}>{record.name}</code>
-                              <Button className="shrink-0 self-start" onClick={() => copyValue(`${key}-host`, record.name)} size="icon" type="button" variant="ghost">
-                                {copied === `${key}-host` ? <Check className="size-4" /> : <Copy className="size-4" />}
-                              </Button>
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <Label>Value</Label>
-                              {record.priority ? <span className="text-xs text-muted-foreground">priority {record.priority}</span> : null}
-                            </div>
-                            <div className="flex items-start gap-2 rounded-md bg-muted/30 p-3">
-                              <code className="font-mono text-xs" style={wrapStyle}>{record.value}</code>
-                              <Button className="shrink-0 self-start" onClick={() => copyValue(`${key}-value`, record.value)} size="icon" type="button" variant="ghost">
-                                {copied === `${key}-value` ? <Check className="size-4" /> : <Copy className="size-4" />}
-                              </Button>
-                            </div>
-                            {record.name.startsWith("_dmarc.") ? (
-                              <p className="text-xs text-muted-foreground">Already have a DMARC record on this domain? Keep your existing one — don&apos;t add a second.</p>
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
         </TabsContent>
 
         <TabsContent className="pt-6" value="senders">

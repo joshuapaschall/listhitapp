@@ -8,6 +8,72 @@ const SHORT_LINK_DOMAINS = (process.env.SHORT_LINK_DOMAINS || "")
   .map((s) => s.trim().toLowerCase())
   .filter(Boolean)
 
+// API routes that never use a user session (provider webhooks, cron/secret-
+// authenticated jobs, public endpoints). They skip the session refresh below.
+const SESSIONLESS_API_PREFIXES = [
+  "/api/webhooks/",
+  "/api/cron/",
+  "/api/public/",
+  "/api/sms-campaigns/process",
+  "/api/sms-campaigns/requeue-stuck",
+  "/api/email-campaigns/process",
+  "/api/email-campaigns/requeue-stuck",
+  "/api/gmail/sync-cron",
+  "/api/recordings/sync",
+  "/api/sync/voice-numbers",
+  "/api/telnyx/cleanup",
+  "/api/csp-report",
+  "/api/health",
+  "/api/m/",
+  "/api/short-links/clicks",
+  "/api/unsubscribe",
+]
+
+export function isSessionlessApiPath(pathname: string): boolean {
+  return SESSIONLESS_API_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+}
+
+// Refresh the Supabase session once for an API request. Route handlers read the
+// session from the REQUEST cookies, so refreshed cookies are written to both the
+// response (for the browser) and the forwarded request (for this handler) —
+// otherwise the handler still sees the expired access token and returns 401.
+async function refreshApiSession(req: NextRequest): Promise<NextResponse> {
+  const probe = NextResponse.next()
+  try {
+    await createMiddlewareClient({ req, res: probe }).auth.getSession()
+  } catch (err) {
+    console.error("[middleware] api session refresh failed", err)
+    return NextResponse.next()
+  }
+
+  const setCookies = probe.headers.getSetCookie()
+  if (!setCookies.length) return probe
+
+  // Forward the refreshed values on the request's Cookie header (raw, still
+  // encoded, exactly as the browser would send them next time).
+  const jar = new Map<string, string>()
+  for (const part of (req.headers.get("cookie") || "").split(";")) {
+    const i = part.indexOf("=")
+    if (i > 0) jar.set(part.slice(0, i).trim(), part.slice(i + 1).trim())
+  }
+  for (const raw of setCookies) {
+    const pair = raw.split(";")[0]
+    const i = pair.indexOf("=")
+    if (i <= 0) continue
+    const name = pair.slice(0, i).trim()
+    const value = pair.slice(i + 1).trim()
+    const expired = /;\s*max-age=0\b/i.test(raw) || !value
+    if (expired) jar.delete(name)
+    else jar.set(name, value)
+  }
+  const headers = new Headers(req.headers)
+  headers.set("cookie", Array.from(jar, ([name, value]) => `${name}=${value}`).join("; "))
+
+  const res = NextResponse.next({ request: { headers } })
+  for (const raw of setCookies) res.headers.append("set-cookie", raw)
+  return res
+}
+
 export async function middleware(req: NextRequest) {
   // ============================================================
   // (1) SHORT-LINK HOSTNAME ROUTING (must run BEFORE auth checks)
@@ -121,6 +187,11 @@ export async function middleware(req: NextRequest) {
   const isAllowedPath = allowedPrefixes.some((prefix) =>
     pathname.startsWith(prefix),
   )
+
+  // Never redirect an API request; just keep its session fresh.
+  if (pathname.startsWith("/api/")) {
+    return isSessionlessApiPath(pathname) ? NextResponse.next() : refreshApiSession(req)
+  }
 
   if (isAllowedPath) {
     return NextResponse.next()

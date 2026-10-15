@@ -1,7 +1,10 @@
 import { supabaseAdmin } from "@/lib/supabase/admin"
 import { formatPhoneE164, normalizePhone } from "@/lib/dedup-utils"
 import { resolveSmsProvider, SmsNotReadyError, type SmsProvider } from "@/lib/providers/sms"
-import { FROM_EMAIL, resend } from "@/lib/resend"
+import { sendPlatformEmail } from "@/lib/email/send-platform-email"
+import { offerEmail } from "@/lib/email/templates"
+import { brandFromIdentity } from "@/lib/email-templates/brand"
+import { getOrgIdentity } from "@/lib/org-identity.server"
 import { insertNotification } from "@/lib/notifications"
 import type { Buyer, Property, OfferWithRelations } from "@/lib/supabase"
 import { resolveFromNumber, resolveBuyerOrgId } from "@/lib/showing-notifications"
@@ -95,27 +98,29 @@ async function sendOfferSms(offer: OfferWithRelations, buyer: Buyer, property: P
   }
 }
 
-async function sendOfferEmail(subject: string, buyer: Buyer, html: string) {
-  if (!buyer.email || buyer.can_receive_email === false) return
-  if (!resend) return
-  await resend.emails.send({ from: FROM_EMAIL, to: buyer.email, subject, html })
-}
+type OfferEmailContent = { subject: string; title: string; message: string; tone: "success" | "warning" | "neutral" }
 
-function offerEmailHtml(title: string, intro: string, property: Property | null | undefined, offerPrice: string, offerType: string) {
-  return `
-    <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; color: #111827;">
-      <div style="background: #0f172a; color: white; padding: 16px 20px; font-size: 20px; font-weight: 700;">ListHit</div>
-      <div style="padding: 24px 20px; background: #ffffff;">
-        <h1 style="font-size: 22px; margin: 0 0 12px;">${title}</h1>
-        <p style="margin: 0 0 16px; line-height: 1.6;">${intro}</p>
-        <p style="margin: 0 0 8px;"><strong>Property:</strong> ${property?.address || "Unknown property"}</p>
-        <p style="margin: 0 0 8px;"><strong>Offer Price:</strong> ${offerPrice}</p>
-        <p style="margin: 0 0 18px;"><strong>Offer Type:</strong> ${offerType}</p>
-        <p style="margin: 0; line-height: 1.6;">Reply to this email or contact us with any questions.</p>
-      </div>
-      <div style="padding: 14px 20px; font-size: 12px; color: #6b7280; background: #f3f4f6;">Sent by ListHit</div>
-    </div>
-  `
+async function sendOfferEmail(
+  offer: OfferWithRelations,
+  buyer: Buyer,
+  property: Property | null | undefined,
+  offerPrice: string,
+  offerType: string,
+  content: OfferEmailContent,
+) {
+  if (!buyer.email || buyer.can_receive_email === false) return
+  // Buyer-facing: always the tenant's brand, never ListHit's.
+  const identity = offer.org_id ? await getOrgIdentity(offer.org_id) : null
+  const email = offerEmail({
+    brand: brandFromIdentity(identity),
+    address: identity?.hasCompleteAddress ? identity.addressSingleLine : null,
+    propertyAddress: property?.address || "Unknown property",
+    offerPrice,
+    offerType,
+    ...content,
+  })
+  const result = await sendPlatformEmail({ to: buyer.email, ...email, category: "offer" })
+  if (!result.sent) console.error(`[offer-email] Offer email failed for offer ${offer.id}:`, result.error)
 }
 
 export async function sendOfferStatusNotification(offer: OfferWithRelations, newStatus: string) {
@@ -148,7 +153,7 @@ export async function sendOfferStatusNotification(offer: OfferWithRelations, new
     const sms = `Great news, ${firstName}! Your offer of ${offerPrice} on ${address} has been accepted! We'll be in touch with next steps.`
     const subject = `Offer Accepted — ${address}`
     await sendOfferSms(offer, buyer, property, sms)
-    await sendOfferEmail(subject, buyer, offerEmailHtml("Offer Accepted", sms, property, offerPrice, offerType))
+    await sendOfferEmail(offer, buyer, property, offerPrice, offerType, { subject, title: "Offer Accepted", message: sms, tone: "success" })
     return
   }
 
@@ -156,7 +161,7 @@ export async function sendOfferStatusNotification(offer: OfferWithRelations, new
     const sms = `Hi ${firstName}, unfortunately your offer on ${address} was not accepted. Feel free to submit a new offer or reach out with questions.`
     const subject = `Offer Update — ${address}`
     await sendOfferSms(offer, buyer, property, sms)
-    await sendOfferEmail(subject, buyer, offerEmailHtml("Offer Update", sms, property, offerPrice, offerType))
+    await sendOfferEmail(offer, buyer, property, offerPrice, offerType, { subject, title: "Offer Update", message: sms, tone: "neutral" })
     return
   }
 
@@ -164,7 +169,7 @@ export async function sendOfferStatusNotification(offer: OfferWithRelations, new
     const sms = `Hi ${firstName}, we have a counter offer on ${address}. Please check your email or contact us to discuss.`
     const subject = `Counter Offer — ${address}`
     await sendOfferSms(offer, buyer, property, sms)
-    await sendOfferEmail(subject, buyer, offerEmailHtml("Counter Offer", sms, property, offerPrice, offerType))
+    await sendOfferEmail(offer, buyer, property, offerPrice, offerType, { subject, title: "Counter Offer", message: sms, tone: "warning" })
     return
   }
 
@@ -172,7 +177,7 @@ export async function sendOfferStatusNotification(offer: OfferWithRelations, new
     const sms = `Congratulations ${firstName}! The deal on ${address} is officially closed. Thank you for working with us!`
     const subject = `Deal Closed — ${address}`
     await sendOfferSms(offer, buyer, property, sms)
-    await sendOfferEmail(subject, buyer, offerEmailHtml("Deal Closed", sms, property, offerPrice, offerType))
+    await sendOfferEmail(offer, buyer, property, offerPrice, offerType, { subject, title: "Deal Closed", message: sms, tone: "success" })
     return
   }
 
@@ -180,6 +185,6 @@ export async function sendOfferStatusNotification(offer: OfferWithRelations, new
     const sms = `Hi ${firstName}, we've received your offer on ${address}. We'll review it and get back to you soon.`
     const subject = `Offer Received — ${address}`
     await sendOfferSms(offer, buyer, property, sms)
-    await sendOfferEmail(subject, buyer, offerEmailHtml("Offer Received", sms, property, offerPrice, offerType))
+    await sendOfferEmail(offer, buyer, property, offerPrice, offerType, { subject, title: "Offer Received", message: sms, tone: "neutral" })
   }
 }

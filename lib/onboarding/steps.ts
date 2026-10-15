@@ -1,5 +1,6 @@
-// Single source of truth for the onboarding flow. Pure data + types — no DB
-// access here, so it is safe to import from both server and client code.
+// Legacy onboarding steps, kept for the onboarding_progress table's history.
+// The setup hub no longer reads these — it derives four outcomes from real data
+// (lib/onboarding/outcome-types.ts). Pure data + types, safe on client and server.
 
 export type OnboardingStepKey =
   | "profile"
@@ -9,7 +10,6 @@ export type OnboardingStepKey =
   | "a2p_registration"
   | "phone_number"
   | "import_buyers"
-  | "connect_gmail"
   | "email_domain"
 
 export type OnboardingSection = "account" | "approval" | "prep"
@@ -24,7 +24,7 @@ export interface OnboardingStepDef {
   optional: boolean // prep items are optional
   dependsOn: OnboardingStepKey | null // step is "locked" until dependency is done
   href: string | null // navigation target; null = no destination yet (locked items)
-  countsTowardProgress: boolean // exclude tour-style/help items; all 9 below = true
+  countsTowardProgress: boolean // exclude tour-style/help items
 }
 
 export const ONBOARDING_STEPS: OnboardingStepDef[] = [
@@ -70,8 +70,8 @@ export const ONBOARDING_STEPS: OnboardingStepDef[] = [
   },
   {
     key: "a2p_registration",
-    label: "Register for texting (A2P 10DLC)",
-    description: "Carrier review takes about 7–10 days. We handle the filing.",
+    label: "Register for texting",
+    description: "Carrier review usually takes a few business days. We handle the filing.",
     section: "approval",
     optional: false,
     dependsOn: "website",
@@ -99,19 +99,9 @@ export const ONBOARDING_STEPS: OnboardingStepDef[] = [
     countsTowardProgress: true,
   },
   {
-    key: "connect_gmail",
-    label: "Connect Gmail",
-    description: "Optional — send and reply from your inbox.",
-    section: "prep",
-    optional: true,
-    dependsOn: null,
-    href: "/gmail",
-    countsTowardProgress: true,
-  },
-  {
     key: "email_domain",
-    label: "Authenticate your email domain",
-    description: "For email deliverability — add two DNS records.",
+    label: "Set up email sending",
+    description: "Send email from your own domain so it lands in the inbox.",
     section: "prep",
     optional: true,
     dependsOn: null,

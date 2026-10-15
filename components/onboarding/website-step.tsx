@@ -1,173 +1,138 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
-import {
-  ArrowLeft,
-  ArrowRight,
-  Check,
-  Copy,
-  ExternalLink,
-  Loader2,
-  AlertCircle,
-} from "lucide-react"
+import { useQueryClient } from "@tanstack/react-query"
+import { AlertCircle, ArrowLeft, ArrowRight, Check, CheckCircle2, ExternalLink, Globe, Loader2, Sparkles, XCircle } from "lucide-react"
+import { toast } from "sonner"
+
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { CustomDomainCard } from "@/components/websites/custom-domain-card"
 import { cn } from "@/lib/utils"
 
 type Site = { id: string; name: string; slug: string; status: string }
+type UrlField = "url" | "privacyUrl" | "termsUrl"
+type Check = { state: "idle" | "checking" | "ok" | "bad"; message?: string }
 
-const OPT_IN_BLOCKS = [
-  {
-    label: "Opt-in notice (near your form)",
-    text: "By submitting your information, you agree to receive recurring text messages from [Your Business] about properties, offers, and updates. Message frequency varies. Msg & data rates may apply. Reply STOP to opt out, HELP for help. Consent is not a condition of any purchase. View our Privacy Policy and Terms of Service.",
-  },
-  {
-    label: "Consent checkbox label (on your form)",
-    text: "I agree to receive text messages from [Your Business] at the number provided. Msg & data rates may apply. Reply STOP to opt out.",
-  },
-  {
-    label: "Privacy policy clause (on your privacy page)",
-    text: "No mobile information will be shared with third parties or affiliates for marketing or promotional purposes. Text messaging opt-in data and consent are never shared with anyone.",
-  },
+const CARRIER_CHECKLIST = [
+  "A working website that loads",
+  "A privacy policy that says phone numbers are never shared or sold",
+  "Terms of service",
+  "A sign-up form with an SMS consent box that starts unchecked",
 ]
 
-function CopyBlock({ label, text }: { label: string; text: string }) {
-  const [copied, setCopied] = useState(false)
+function OptionCard({ selected, onClick, icon, title, body, badge }: { selected: boolean; onClick: () => void; icon: ReactNode; title: string; body: string; badge?: string }) {
   return (
-    <div className="rounded-lg border border-border bg-muted/30 p-3">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className="h-7 gap-1.5"
-          onClick={() => {
-            navigator.clipboard?.writeText(text).catch(() => {})
-            setCopied(true)
-            setTimeout(() => setCopied(false), 1500)
-          }}
-        >
-          {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-          {copied ? "Copied" : "Copy"}
-        </Button>
-      </div>
-      <p className="text-xs leading-relaxed text-foreground">{text}</p>
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={selected}
+      className={cn(
+        "flex w-full items-start gap-3 rounded-xl border p-4 text-left transition-colors",
+        selected ? "border-brand bg-brand/5 ring-1 ring-brand/30" : "border-border bg-card hover:bg-muted/40",
+      )}
+    >
+      <span className={cn("mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full", selected ? "bg-brand text-brand-fg" : "bg-muted text-muted-foreground")}>{icon}</span>
+      <span className="min-w-0">
+        <span className="flex flex-wrap items-center gap-2 text-sm font-semibold text-foreground">
+          {title}
+          {badge ? <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand">{badge}</span> : null}
+        </span>
+        <span className="mt-0.5 block text-xs text-muted-foreground">{body}</span>
+      </span>
+    </button>
   )
 }
 
-function ExternalSiteCard({
-  brandAccent,
-  onError,
-  onSaved,
-}: {
-  brandAccent: boolean
-  onError: (msg: string) => void
-  onSaved: () => void
-}) {
-  const [url, setUrl] = useState("")
-  const [hasOptIn, setHasOptIn] = useState(false)
-  const [hasPrivacy, setHasPrivacy] = useState(false)
-  const [showLanguage, setShowLanguage] = useState(false)
-  const [saving, setSaving] = useState(false)
+function CheckBadge({ check }: { check: Check }) {
+  if (check.state === "checking") return <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+  if (check.state === "ok") return <CheckCircle2 className="h-4 w-4 text-emerald-600" aria-label="Page opens" />
+  if (check.state === "bad") return <XCircle className="h-4 w-4 text-destructive" aria-label="Page didn't open" />
+  return null
+}
 
-  const canSave = url.trim().length > 0 && hasOptIn && hasPrivacy
-
-  async function save() {
-    setSaving(true)
-    onError("")
-    try {
-      const res = await fetch("/api/onboarding/website", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source: "external", url: url.trim(), attested: true }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok || !data?.ok) throw new Error(data?.error || "Failed to save")
-      onSaved()
-    } catch (e: any) {
-      onError(e?.message || "Failed to save")
-      setSaving(false)
-    }
-  }
-
+function LiveSite({ site, url }: { site: Site; url: string }) {
+  const router = useRouter()
+  const [showDomain, setShowDomain] = useState(false)
   return (
-    <Card
-      className={cn("space-y-3 p-5", brandAccent ? "border-2 border-brand" : "border-border")}
-    >
-      <div>
-        <h2 className="text-sm font-semibold text-foreground">I already have a website</h2>
-        <p className="text-xs text-muted-foreground">Use a site you already have.</p>
-      </div>
-
-      <Input placeholder="https://..." value={url} onChange={(e) => setUrl(e.target.value)} />
-
-      <label className="flex items-start gap-2.5 text-sm text-foreground">
-        <Checkbox
-          checked={hasOptIn}
-          onCheckedChange={(v) => setHasOptIn(v === true)}
-          className="mt-0.5"
-        />
-        <span>My site shows an SMS opt-in notice where people submit their info</span>
-      </label>
-      <label className="flex items-start gap-2.5 text-sm text-foreground">
-        <Checkbox
-          checked={hasPrivacy}
-          onCheckedChange={(v) => setHasPrivacy(v === true)}
-          className="mt-0.5"
-        />
-        <span>My site has a privacy policy page</span>
-      </label>
-
-      <button
-        type="button"
-        onClick={() => setShowLanguage((s) => !s)}
-        className="text-xs font-medium text-muted-foreground hover:text-foreground"
-      >
-        {showLanguage ? "Hide the opt-in language" : "Show the opt-in language to add"}
-      </button>
-      {showLanguage ? (
-        <div className="space-y-2">
-          {OPT_IN_BLOCKS.map((b) => (
-            <CopyBlock key={b.label} label={b.label} text={b.text} />
-          ))}
+    <div className="space-y-4">
+      <Card className="space-y-3 border-emerald-200 p-5 dark:border-emerald-900">
+        <div className="flex items-start gap-3">
+          <CheckCircle2 className="mt-0.5 h-6 w-6 shrink-0 text-emerald-600" />
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-foreground">Your buyer website is live</h2>
+            <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 break-all text-sm font-medium text-brand hover:underline">
+              {url.replace(/^https:\/\//, "")} <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+            </a>
+            <p className="mt-1 text-xs text-muted-foreground">Includes the privacy policy, terms and buyer sign-up form carriers require.</p>
+          </div>
         </div>
-      ) : null}
+        <div className="flex flex-wrap gap-2">
+          <Button variant="brand" onClick={() => router.push("/getting-started")}>
+            Back to setup <ArrowRight className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant="outline" onClick={() => router.push(`/websites/${site.id}`)}>
+            Customize your site
+          </Button>
+        </div>
+      </Card>
 
-      <div className="pt-1">
-        <Button type="button" variant="outline" onClick={save} disabled={!canSave || saving}>
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save and continue"}
-        </Button>
-      </div>
-    </Card>
+      <Card className="p-5">
+        {showDomain ? (
+          <CustomDomainCard siteId={site.id} slug={site.slug} embedded />
+        ) : (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-sm font-semibold text-foreground">Use your own domain</div>
+              <p className="text-xs text-muted-foreground">Optional. Put your site on a domain you own, like yourbrand.com.</p>
+            </div>
+            <Button variant="ghost" onClick={() => setShowDomain(true)}>
+              <Globe className="h-4 w-4" /> Connect your domain
+            </Button>
+          </div>
+        )}
+      </Card>
+    </div>
   )
 }
 
 export function WebsiteStep() {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const [sites, setSites] = useState<Site[]>([])
+  const [liveUrl, setLiveUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [choice, setChoice] = useState<"create" | "existing">("create")
+  const [creating, setCreating] = useState(false)
   const [error, setError] = useState("")
-  const [usingListhit, setUsingListhit] = useState(false)
+  const [fields, setFields] = useState<Record<UrlField, string>>({ url: "", privacyUrl: "", termsUrl: "" })
+  const [checks, setChecks] = useState<Record<UrlField, Check>>({ url: { state: "idle" }, privacyUrl: { state: "idle" }, termsUrl: { state: "idle" } })
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     let active = true
     ;(async () => {
       try {
-        const [sitesRes] = await Promise.all([
-          fetch("/api/sites"),
-          fetch("/api/organization").catch(() => null),
-        ])
-        const sitesBody = sitesRes.ok ? await sitesRes.json() : { sites: [] }
+        const res = await fetch("/api/sites")
+        const body = res.ok ? await res.json() : { sites: [] }
         if (!active) return
-        setSites(Array.isArray(sitesBody?.sites) ? sitesBody.sites : [])
+        const list: Site[] = Array.isArray(body?.sites) ? body.sites : []
+        setSites(list)
+        const published = list.find((s) => s.status === "published")
+        if (published) {
+          const r = await fetch("/api/onboarding/website", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ source: "listhit" }),
+          }).catch(() => null)
+          const b = r && r.ok ? await r.json().catch(() => null) : null
+          if (active) setLiveUrl(b?.website_url || `https://${published.slug}.listhit.io`)
+        }
       } catch {
-        if (active) setError("Couldn't load your sites. Try refreshing.")
+        if (active) setError("We couldn't load your website. Try refreshing the page.")
       } finally {
         if (active) setLoading(false)
       }
@@ -177,132 +142,176 @@ export function WebsiteStep() {
     }
   }, [])
 
-  const published = sites.find((s) => s.status === "published")
-  const hasDrafts = sites.length > 0 && !published
+  const published = sites.find((s) => s.status === "published") ?? null
 
-  async function useListhit() {
-    setUsingListhit(true)
+  async function createSite() {
+    setCreating(true)
+    setError("")
+    try {
+      const res = await fetch("/api/onboarding/website/create", { method: "POST" })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok || !body?.ok) throw new Error(body?.error || "We couldn't create your website. Try again in a minute.")
+      setSites([{ ...body.site, status: "published" }])
+      setLiveUrl(body.website_url)
+      await queryClient.invalidateQueries({ queryKey: ["onboarding"] })
+      toast.success("Your website is live")
+    } catch (e: any) {
+      setError(e?.message || "We couldn't create your website. Try again in a minute.")
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  async function checkField(k: UrlField) {
+    const value = fields[k].trim()
+    if (!value) return setChecks((c) => ({ ...c, [k]: { state: "idle" } }))
+    setChecks((c) => ({ ...c, [k]: { state: "checking" } }))
+    try {
+      const res = await fetch("/api/onboarding/website/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: value }),
+      })
+      const body = await res.json().catch(() => ({}))
+      setChecks((c) => ({ ...c, [k]: body?.ok ? { state: "ok" } : { state: "bad", message: body?.error || "We couldn't open this page" } }))
+    } catch {
+      setChecks((c) => ({ ...c, [k]: { state: "bad", message: "We couldn't open this page" } }))
+    }
+  }
+
+  async function saveExisting() {
+    setSaving(true)
     setError("")
     try {
       const res = await fetch("/api/onboarding/website", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source: "listhit" }),
+        body: JSON.stringify({ source: "external", ...fields }),
       })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok || !data?.ok) throw new Error(data?.error || "Failed to save")
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok || !body?.ok) {
+        const fe = (body?.fieldErrors ?? {}) as Partial<Record<UrlField, string>>
+        setChecks((c) => {
+          const next = { ...c }
+          for (const k of Object.keys(fe) as UrlField[]) next[k] = { state: "bad", message: fe[k] }
+          return next
+        })
+        throw new Error(body?.error || "We couldn't save your website.")
+      }
+      await queryClient.invalidateQueries({ queryKey: ["onboarding"] })
+      toast.success("Website saved")
       router.push("/getting-started")
     } catch (e: any) {
-      setError(e?.message || "Failed to save")
-      setUsingListhit(false)
+      setError(e?.message || "We couldn't save your website.")
+      setSaving(false)
     }
   }
 
+  const urlInput = (k: UrlField, label: string, placeholder: string) => (
+    <div className="space-y-1.5">
+      <Label htmlFor={`web-${k}`}>{label}</Label>
+      <div className="relative">
+        <Input
+          id={`web-${k}`}
+          inputMode="url"
+          placeholder={placeholder}
+          value={fields[k]}
+          onChange={(e) => {
+            setFields((f) => ({ ...f, [k]: e.target.value }))
+            setChecks((c) => ({ ...c, [k]: { state: "idle" } }))
+          }}
+          onBlur={() => checkField(k)}
+          aria-invalid={checks[k].state === "bad"}
+          className="pr-9"
+        />
+        <span className="absolute right-3 top-1/2 -translate-y-1/2">
+          <CheckBadge check={checks[k]} />
+        </span>
+      </div>
+      {checks[k].state === "bad" ? <p className="text-xs font-medium text-destructive">{checks[k].message}</p> : null}
+    </div>
+  )
+
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="mx-auto max-w-2xl space-y-5 pb-10">
       <div>
-        <button
-          type="button"
-          onClick={() => router.push("/getting-started")}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
-        >
+        <button type="button" onClick={() => router.push("/getting-started")} className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-4 w-4" /> Back to setup
         </button>
-        <h1 className="mt-3 text-lg font-semibold text-foreground">Get your website</h1>
-        <p className="text-sm text-muted-foreground">
-          Carriers require a public site with an SMS opt-in notice and a privacy policy before they
-          approve texting.
+        <h1 className="mt-3 text-xl font-semibold tracking-tight text-foreground">Your website</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Carriers check your website before they approve texting. Buyers sign up there too.
         </p>
       </div>
 
       {error ? (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
+        <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> {error}
+        </div>
       ) : null}
 
       {loading ? (
         <div className="flex items-center justify-center py-24 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin" />
         </div>
-      ) : published ? (
-        // A) A published ListHit site exists
-        <Card className="space-y-3 border-2 border-brand p-5">
-          <div>
-            <h2 className="text-sm font-semibold text-foreground">{published.name}</h2>
-            <a
-              href={`https://${published.slug}.listhit.io`}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-brand hover:underline"
-            >
-              {published.slug}.listhit.io
-              <ExternalLink className="h-3.5 w-3.5" />
-            </a>
-            <p className="mt-1 text-xs text-muted-foreground">This site is set up for texting approval.</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <Button type="button" variant="brand" onClick={useListhit} disabled={usingListhit}>
-              {usingListhit ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <>
-                  Use this site for texting <ArrowRight className="h-3.5 w-3.5" />
-                </>
-              )}
-            </Button>
-            <button
-              type="button"
-              onClick={() => router.push(`/websites/${published.id}`)}
-              className="text-xs font-medium text-muted-foreground hover:text-foreground"
-            >
-              Manage site
-            </button>
-          </div>
-        </Card>
-      ) : hasDrafts ? (
-        // B) Only draft site(s) exist
-        <div className="space-y-4">
-          <Card className="space-y-3 p-5">
-            <div>
-              <h2 className="text-sm font-semibold text-foreground">Finish your site</h2>
-              <p className="text-xs text-muted-foreground">Publish it to use it for texting.</p>
-            </div>
-            <Button type="button" variant="outline" onClick={() => router.push(`/websites/${sites[0].id}`)}>
-              Manage &amp; publish
-            </Button>
-          </Card>
-          <ExternalSiteCard
-            brandAccent={false}
-            onError={setError}
-            onSaved={() => router.push("/getting-started")}
-          />
-        </div>
+      ) : published && liveUrl ? (
+        <LiveSite site={published} url={liveUrl} />
       ) : (
-        // C) No site — two-path choice
-        <div className="grid grid-cols-1 gap-4">
-          <Card className="space-y-3 border-2 border-brand p-5">
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold text-foreground">Build one with ListHit</h2>
-              <span className="rounded-full bg-brand px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-fg">
-                Recommended
-              </span>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Free, and live in minutes. Opt-in notice, privacy policy, and terms are built in — and we
-              pull in your business info automatically.
-            </p>
-            <Button type="button" variant="brand" onClick={() => router.push("/websites/new?from=onboarding")}>
-              Build my site <ArrowRight className="h-3.5 w-3.5" />
-            </Button>
-          </Card>
-          <ExternalSiteCard
-            brandAccent={false}
-            onError={setError}
-            onSaved={() => router.push("/getting-started")}
-          />
-        </div>
+        <>
+          <div className="grid gap-2.5">
+            <OptionCard
+              selected={choice === "create"}
+              onClick={() => setChoice("create")}
+              icon={<Sparkles className="h-4 w-4" />}
+              title="Create my buyer website"
+              badge="Recommended · 1 minute"
+              body="We build it from your business details and publish it for you."
+            />
+            <OptionCard
+              selected={choice === "existing"}
+              onClick={() => setChoice("existing")}
+              icon={<Globe className="h-4 w-4" />}
+              title="I already have a website"
+              body="Use your own site. It needs a privacy policy and terms page."
+            />
+          </div>
+
+          {choice === "create" ? (
+            <Card className="space-y-3 p-5">
+              <ul className="space-y-1.5 text-sm text-muted-foreground">
+                {["Your business name, phone and email, already filled in", "Privacy policy, terms and buyer sign-up form carriers require", "A free web address you can swap for your own domain later"].map((t) => (
+                  <li key={t} className="flex items-start gap-2">
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /> {t}
+                  </li>
+                ))}
+              </ul>
+              <Button variant="brand" onClick={createSite} disabled={creating}>
+                {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                {creating ? "Building your website…" : sites.length ? "Publish my website" : "Create my website"}
+              </Button>
+            </Card>
+          ) : (
+            <Card className="space-y-4 p-5">
+              {urlInput("url", "Website address", "https://yourbrand.com")}
+              {urlInput("privacyUrl", "Privacy policy page", "https://yourbrand.com/privacy")}
+              {urlInput("termsUrl", "Terms page", "https://yourbrand.com/terms")}
+              <div className="rounded-lg bg-muted/50 p-3">
+                <div className="mb-1.5 text-xs font-semibold text-foreground">What carriers look for</div>
+                <ul className="space-y-1 text-xs text-muted-foreground">
+                  {CARRIER_CHECKLIST.map((t) => (
+                    <li key={t} className="flex items-start gap-2">
+                      <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" /> {t}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <Button variant="brand" onClick={saveExisting} disabled={saving || !fields.url.trim() || !fields.privacyUrl.trim() || !fields.termsUrl.trim()}>
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {saving ? "Checking your pages…" : "Save my website"}
+              </Button>
+            </Card>
+          )}
+        </>
       )}
     </div>
   )

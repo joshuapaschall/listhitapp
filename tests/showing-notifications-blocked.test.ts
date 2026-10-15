@@ -35,7 +35,17 @@ const h = vi.hoisted(() => {
 
 vi.mock("@/lib/supabase/admin", () => ({ supabaseAdmin: h.client }))
 vi.mock("@/lib/supabase", () => ({ supabaseAdmin: h.client, supabase: h.client }))
-vi.mock("@/lib/resend", () => ({ FROM_EMAIL: "from@test.com", resend: { emails: { send: h.sendEmail } } }))
+vi.mock("@/lib/email/send-platform-email", () => ({ sendPlatformEmail: h.sendEmail }))
+vi.mock("@/lib/org-identity.server", () => ({
+  getOrgIdentity: async () => ({
+    companyName: "Acme Homes",
+    addressLines: ["1 Main St", "Austin, TX 78701"],
+    addressSingleLine: "1 Main St, Austin, TX 78701",
+    hasCompleteAddress: true,
+    phone: null,
+    websiteUrl: null,
+  }),
+}))
 vi.mock("@/lib/notifications", () => ({ insertNotification: h.insertNotification }))
 
 // @ts-ignore
@@ -58,7 +68,7 @@ const property: any = { id: "p1", address: "1 Main St" }
 describe("showing notifications for a blocked tenant", () => {
   beforeEach(() => {
     h.writes.length = 0
-    h.sendEmail.mockReset().mockResolvedValue({ id: "em1" })
+    h.sendEmail.mockReset().mockResolvedValue({ sent: true })
     h.fetchMock.mockReset()
     h.insertNotification.mockReset()
     process.env.TELNYX_PINNED_ORG_IDS = "org-owner"
@@ -80,7 +90,9 @@ describe("showing notifications for a blocked tenant", () => {
     expect(h.fetchMock).not.toHaveBeenCalled()
     expect(h.writes).toEqual([])
     expect(h.sendEmail).toHaveBeenCalledTimes(1)
-    expect(h.sendEmail).toHaveBeenCalledWith(expect.objectContaining({ to: "jane@buyer.test" }))
+    expect(h.sendEmail).toHaveBeenCalledWith(expect.objectContaining({ to: "jane@buyer.test", category: "showing" }))
+    // Buyer-facing: the tenant's brand, not ListHit's.
+    expect(h.sendEmail.mock.calls[0][0].html).toContain("Acme Homes")
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("texting isn't set up"))
     warn.mockRestore()
   })

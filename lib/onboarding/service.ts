@@ -22,9 +22,16 @@ export interface OnboardingState {
   completed: boolean
 }
 
-// Statuses a client is allowed to write. profile/organization are derived and
-// never writable.
+// Statuses the server may record. profile/organization are derived and never
+// writable. Customers may only skip optional items (see canClientWriteStep).
 const WRITABLE_STATUSES: OnboardingStatus[] = ["in_progress", "done", "skipped"]
+
+// The only write the steps API accepts from a customer: skipping an optional
+// item. Everything else is derived from real data or recorded by the server.
+export function canClientWriteStep(stepKey: string, status: unknown): boolean {
+  const def = getStepDef(stepKey)
+  return Boolean(def && def.optional && status === "skipped")
+}
 
 function isNonEmpty(v: unknown): boolean {
   return typeof v === "string" && v.trim().length > 0
