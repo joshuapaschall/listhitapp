@@ -35,8 +35,13 @@ export interface A2pAssembledState {
   program: {
     useCaseLabel: string
     campaignDescription: string
+    // How buyers opt in, as submitted for carrier review. Stored text when the
+    // customer edited it, otherwise the default we'd generate.
+    messageFlow: string
     optInUrl: string
   }
+  // Names a sample may use to identify the sender (DBA, legal, business name).
+  brandNames: string[]
   samples: {
     sample1: string
     sample2: string

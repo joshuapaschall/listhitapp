@@ -16,6 +16,10 @@ export interface BusinessVerification {
   contact_last_name: string | null
   contact_email: string | null
   ein_letter_path: string | null
+  business_type: string | null
+  rep_title: string | null
+  rep_job_position: string | null
+  rep_phone: string | null
   status: VerificationStatus
   created_at: string
   updated_at: string
@@ -24,6 +28,7 @@ export interface BusinessVerification {
 // Shape the client form works with: verification fields + the org-sourced
 // address/phone fields (the organization remains the single source of truth).
 export interface VerificationFormState {
+  entity_type: EntityType
   legal_business_name: string
   ein: string
   dba_name: string
@@ -31,6 +36,10 @@ export interface VerificationFormState {
   contact_last_name: string
   contact_email: string
   ein_letter_path: string | null
+  business_type: string
+  rep_title: string
+  rep_job_position: string
+  rep_phone: string // the mobile used for carrier verification texts
   // Org-sourced (saved back to organizations on write).
   address_line1: string
   address_line2: string

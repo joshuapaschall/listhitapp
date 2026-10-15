@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server"
 
 import { requireOrgContext } from "@/lib/auth/org-context"
 import { apiError } from "@/lib/api-error"
-import { getOnboardingState, upsertStepStatus } from "@/lib/onboarding/service"
+import { canClientWriteStep, upsertStepStatus } from "@/lib/onboarding/service"
+import { getSetupSummary } from "@/lib/onboarding/outcomes"
+import { supabaseAdmin } from "@/lib/supabase"
 
 export const dynamic = "force-dynamic"
 
@@ -13,6 +15,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
   if (!user) return apiError("Unauthorized", 401)
   if (!orgId) return apiError("Missing org", 400)
 
+  const { data: profile } = await supabaseAdmin.from("profiles").select("role").eq("id", user.id).maybeSingle()
+  const role = (profile as { role?: string } | null)?.role
+  if (role !== "owner" && role !== "admin") return apiError("Forbidden", 403)
+
   const { key } = await context.params
 
   let body: { status?: unknown }
@@ -22,11 +28,15 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return apiError("Invalid JSON body", 400)
   }
 
+  // Progress is derived from real data; a customer may only skip optional items.
+  if (!canClientWriteStep(key, body?.status)) {
+    return NextResponse.json({ error: "Only optional items can be skipped." }, { status: 400 })
+  }
+
   try {
-    const result = await upsertStepStatus(orgId, key, body?.status)
+    const result = await upsertStepStatus(orgId, key, "skipped")
     if (!result.ok) return apiError(result.error, 400)
-    const state = await getOnboardingState(orgId, user.id)
-    return NextResponse.json(state)
+    return NextResponse.json(await getSetupSummary(orgId, user.id))
   } catch (err) {
     return apiError(err, 500)
   }

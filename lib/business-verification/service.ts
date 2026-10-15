@@ -2,6 +2,8 @@ import "server-only"
 
 import { supabaseAdmin } from "@/lib/supabase"
 import { upsertStepStatus } from "@/lib/onboarding/service"
+import { formatPhoneE164, isValidPhone } from "@/lib/dedup-utils"
+import { REP_JOB_POSITIONS, isValidBusinessType, normalizeBusinessType } from "@/lib/org-twilio/twilio-attributes"
 import type {
   EntityType,
   VerificationMergedState,
@@ -43,6 +45,7 @@ export async function getVerification(orgId: string): Promise<VerificationMerged
   const businessName = s(org?.business_name)
 
   return {
+    entity_type: row?.entity_type === "sole_proprietor" ? "sole_proprietor" : "ein_business",
     legal_business_name: s(row?.legal_business_name),
     ein: s(row?.ein),
     dba_name: s(row?.dba_name),
@@ -50,6 +53,10 @@ export async function getVerification(orgId: string): Promise<VerificationMerged
     contact_last_name: s(row?.contact_last_name),
     contact_email: s(row?.contact_email),
     ein_letter_path: (row?.ein_letter_path as string | null) ?? null,
+    business_type: s(row?.business_type),
+    rep_title: s(row?.rep_title),
+    rep_job_position: s(row?.rep_job_position),
+    rep_phone: s(row?.rep_phone),
     address_line1: s(org?.address_line1),
     address_line2: s(org?.address_line2),
     city: s(org?.city),
@@ -70,43 +77,54 @@ export interface SaveResult {
 export async function saveVerification(orgId: string, payload: unknown): Promise<SaveResult> {
   const body = (payload && typeof payload === "object" ? payload : {}) as Record<string, unknown>
 
-  // Standardized on the EIN (Standard / Low-Volume Standard) path for v1 —
-  // entity_type is always ein_business. The column stays for future use.
-  const entityType: EntityType = "ein_business"
+  // Two paths: a business with an EIN (LLC, corporation, …) or a sole
+  // proprietor without one. The registration engine reads the same columns.
+  const entityType: EntityType = body.entity_type === "sole_proprietor" ? "sole_proprietor" : "ein_business"
+  const sole = entityType === "sole_proprietor"
 
   // Never accept/store an SSN — drop the field entirely if a client sends one.
   // (No `ssn` / `social_security` is ever read from the body.)
 
-  const parsed = normalizeEin(s(body.ein))
+  const parsed = normalizeEin(sole ? "" : s(body.ein))
   if (!parsed.ok) return { ok: false, error: "EIN must be 9 digits (XX-XXXXXXX)" }
   const ein = parsed.value
 
-  const legalBusinessName = s(body.legal_business_name)
-  const dbaName = s(body.dba_name)
   const contactFirst = s(body.contact_first_name)
   const contactLast = s(body.contact_last_name)
   const contactEmail = s(body.contact_email)
-  const einLetterPath = s(body.ein_letter_path) || null
+  const dbaName = s(body.dba_name)
+  // A sole proprietor's legal name is their own name.
+  const legalBusinessName = sole ? [contactFirst, contactLast].filter(Boolean).join(" ") : s(body.legal_business_name)
+  const einLetterPath = sole ? null : s(body.ein_letter_path) || null
+
+  const businessTypeRaw = s(body.business_type)
+  const businessType = !sole && businessTypeRaw && isValidBusinessType(businessTypeRaw) ? normalizeBusinessType(businessTypeRaw) : null
+  const repTitle = s(body.rep_title)
+  const repJobPosition = (REP_JOB_POSITIONS as readonly string[]).includes(s(body.rep_job_position)) ? s(body.rep_job_position) : ""
+  const repPhoneRaw = s(body.rep_phone)
+  const repPhone = repPhoneRaw && isValidPhone(repPhoneRaw) ? formatPhoneE164(repPhoneRaw) : null
 
   const addressLine1 = s(body.address_line1)
   const addressLine2 = s(body.address_line2)
   const city = s(body.city)
   const state = s(body.state)
   const zip = s(body.zip)
-  const phone = s(body.phone)
+  // A sole proprietor's business phone defaults to their mobile.
+  const phone = s(body.phone) || (sole && repPhone ? repPhone : "")
 
   // Completeness → "ready". CP-575 is NOT required.
-  const baseComplete =
-    isNonEmpty(legalBusinessName) &&
+  const common =
     isNonEmpty(contactFirst) &&
     isNonEmpty(contactLast) &&
     isNonEmpty(contactEmail) &&
+    !!repPhone &&
     isNonEmpty(addressLine1) &&
     isNonEmpty(city) &&
     isNonEmpty(state) &&
-    isNonEmpty(zip) &&
-    isNonEmpty(phone) &&
-    !!ein
+    isNonEmpty(zip)
+  const baseComplete = sole
+    ? common
+    : common && isNonEmpty(legalBusinessName) && !!ein && !!businessType && isNonEmpty(repTitle) && isNonEmpty(repJobPosition) && isNonEmpty(phone)
   const status: VerificationStatus = baseComplete ? "ready" : "draft"
 
   const now = new Date().toISOString()
@@ -121,6 +139,10 @@ export async function saveVerification(orgId: string, payload: unknown): Promise
       contact_last_name: contactLast || null,
       contact_email: contactEmail || null,
       ein_letter_path: einLetterPath,
+      business_type: businessType,
+      rep_title: sole ? null : repTitle || null,
+      rep_job_position: sole ? null : repJobPosition || null,
+      rep_phone: repPhone,
       status,
       updated_at: now,
     },
@@ -128,10 +150,13 @@ export async function saveVerification(orgId: string, payload: unknown): Promise
   )
   if (upsertErr) return { ok: false, error: upsertErr.message }
 
-  // Keep the organization as the single source of truth for address + phone.
+  // The organization stays the single source of truth for the business name,
+  // address and phone shown everywhere else (emails, website, settings).
+  const displayName = dbaName || legalBusinessName
   const { error: orgErr } = await supabaseAdmin
     .from("organizations")
     .update({
+      ...(displayName ? { business_name: displayName } : {}),
       address_line1: addressLine1 || null,
       address_line2: addressLine2 || null,
       city: city || null,
@@ -142,7 +167,7 @@ export async function saveVerification(orgId: string, payload: unknown): Promise
     .eq("id", orgId)
   if (orgErr) return { ok: false, error: orgErr.message }
 
-  // Reflect into onboarding: in_progress on any save, done when ready.
+  // Reflect into the legacy onboarding table: in_progress on any save, done when ready.
   await upsertStepStatus(orgId, "verify_business", "in_progress")
   if (status === "ready") await upsertStepStatus(orgId, "verify_business", "done")
 

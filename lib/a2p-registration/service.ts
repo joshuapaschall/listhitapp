@@ -3,6 +3,7 @@ import "server-only"
 import { supabaseAdmin } from "@/lib/supabase"
 import { upsertStepStatus } from "@/lib/onboarding/service"
 import type { A2pAssembledState, A2pStatus } from "@/lib/a2p-registration/types"
+import { buildMessageFlow } from "@/lib/org-twilio/twilio-attributes"
 
 const USE_CASE_LABEL = "Marketing — property alerts"
 
@@ -108,6 +109,12 @@ export async function getA2pState(orgId: string): Promise<A2pAssembledState> {
       }
     : defaultSamples(brandToken)
 
+  const privacyUrl = s(row?.privacy_policy_url) || (website ? `${website.replace(/\/$/, "")}/privacy` : "")
+  const termsUrl = s(row?.terms_url) || (website ? `${website.replace(/\/$/, "")}/terms` : "")
+  const messageFlow =
+    s(row?.message_flow) ||
+    buildMessageFlow({ brandName: brandToken, siteUrl: website || "our website", privacyUrl, termsUrl, hasListHitSite: /\.listhit\.io/.test(website) })
+
   return {
     brand: {
       legalDisplay,
@@ -119,9 +126,11 @@ export async function getA2pState(orgId: string): Promise<A2pAssembledState> {
     },
     program: {
       useCaseLabel: USE_CASE_LABEL,
-      campaignDescription: buildCampaignDescription(brandToken, website || "your website"),
+      campaignDescription: s(row?.campaign_description) || buildCampaignDescription(brandToken, website || "your website"),
+      messageFlow,
       optInUrl: website,
     },
+    brandNames: Array.from(new Set([dba, legalName, businessName].filter(Boolean))),
     samples,
     status: (row?.status as A2pStatus) ?? "draft",
     ready: {
@@ -162,7 +171,10 @@ export async function saveA2p(orgId: string, payload: unknown): Promise<SaveResu
   const brandToken =
     s(ver?.dba_name) || s(org?.business_name) || s(ver?.legal_business_name) || "your business"
   const website = s(org?.website_url)
-  const campaignDescription = buildCampaignDescription(brandToken, website || "your website")
+  // Description and opt-in text: the customer's edit when given, otherwise our
+  // generated default (assembled from our own records).
+  const campaignDescription = s(body.campaign_description) || buildCampaignDescription(brandToken, website || "your website")
+  const messageFlow = s(body.message_flow)
 
   // Samples 1 AND 2 are required for "ready"; 3–5 are optional and never affect status.
   const status: A2pStatus = isNonEmpty(sample1) && isNonEmpty(sample2) ? "ready" : "draft"
@@ -179,6 +191,7 @@ export async function saveA2p(orgId: string, payload: unknown): Promise<SaveResu
       sample_message_4: sample4 || null,
       sample_message_5: sample5 || null,
       opt_in_url: website || null,
+      ...(messageFlow ? { message_flow: messageFlow } : {}),
       status,
       updated_at: now,
     },

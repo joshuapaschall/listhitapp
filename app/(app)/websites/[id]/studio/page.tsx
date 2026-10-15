@@ -10,7 +10,7 @@ import { SiteStudioEditor } from "@/components/websites/site-studio-editor"
 
 export const dynamic = "force-dynamic"
 
-// Home plus the legal/compliance pages required for A2P/10DLC — never toggleable.
+// Home plus the legal/compliance pages carriers require for texting — never toggleable.
 const LOCKED_PATHS = new Set(["/", "/terms", "/privacy", "/contact"])
 
 export default async function StudioPage({ params }: { params: Promise<{ id: string }> }) {

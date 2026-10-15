@@ -21,6 +21,7 @@ import {
   Phone,
   Target,
   Globe,
+  ListChecks,
 } from "lucide-react"
 import {
   Accordion,
@@ -34,6 +35,7 @@ import { supabase } from "@/lib/supabase"
 import { NotificationItem } from "@/components/notifications/notification-item"
 import { useNotifications } from "@/hooks/use-notifications"
 import AddBuyerModal from "@/components/buyers/add-buyer-modal"
+import type { SetupSummary } from "@/lib/onboarding/outcome-types"
 import CreateOfferModal from "@/components/offers/CreateOfferModal"
 
 const navigation = [
@@ -119,6 +121,18 @@ export function Sidebar({ className }: SidebarProps) {
     queryFn: countUnreadEmailThreads,
   })
 
+  // Same query key as the dashboard banner and the setup hub, so it's shared.
+  const { data: setup } = useQuery({
+    queryKey: ["onboarding"],
+    queryFn: async (): Promise<SetupSummary | null> => {
+      const res = await fetch("/api/onboarding")
+      return res.ok ? res.json() : null
+    },
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  })
+  const setupRemaining = setup && !setup.pinned && !setup.allReady ? setup.totalCount - setup.readyCount : 0
+
   useEffect(() => {
     setMounted(true)
   }, [])
@@ -183,7 +197,7 @@ export function Sidebar({ className }: SidebarProps) {
     { label: "Create Offer", icon: DollarSign, onClick: () => setShowCreateOfferModal(true) },
   ]
 
-  const navItems = navigation.map((item) => {
+  const baseNavItems = navigation.map((item) => {
     if (item.title === "Inbox") {
       return {
         ...item,
@@ -207,6 +221,16 @@ export function Sidebar({ className }: SidebarProps) {
     }
     return item
   })
+
+  // "Get set up" shows until all four setup outcomes are ready; never for the owner org.
+  const navItems =
+    setupRemaining > 0
+      ? [
+          baseNavItems[0],
+          { title: "Get set up", icon: ListChecks, href: "/getting-started", badge: String(setupRemaining) as string | null, items: undefined },
+          ...baseNavItems.slice(1),
+        ]
+      : baseNavItems
 
   return (
     <>

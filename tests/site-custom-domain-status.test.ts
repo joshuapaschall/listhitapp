@@ -40,8 +40,12 @@ const h = vi.hoisted(() => {
     verifyProjectDomain: vi.fn(),
     getDomainConfig: vi.fn(),
   }
-  return { state, supabase, vercel }
+  const https = { checkHttps: vi.fn(), notifyWebsiteLiveOnce: vi.fn() }
+  return { state, supabase, vercel, https }
 })
+
+vi.mock("@/lib/dns/inspect", () => ({ checkHttps: h.https.checkHttps }))
+vi.mock("@/lib/onboarding/notify-connected", () => ({ notifyWebsiteLiveOnce: h.https.notifyWebsiteLiveOnce }))
 
 vi.mock("@/lib/auth/org-context", () => ({
   requireOrgContext: vi.fn(async () => ({ user: { id: "u1" }, orgId: "org-1", supabase: h.supabase })),
@@ -67,6 +71,8 @@ beforeEach(() => {
   Object.values(h.vercel).forEach((f) => f.mockReset())
   h.vercel.verifyProjectDomain.mockResolvedValue({})
   h.vercel.addProjectRedirectDomain.mockResolvedValue(undefined)
+  h.https.checkHttps.mockReset().mockResolvedValue({ ok: false })
+  h.https.notifyWebsiteLiveOnce.mockReset().mockResolvedValue(true)
 })
 
 describe("verify route", () => {
@@ -83,7 +89,28 @@ describe("verify route", () => {
     h.vercel.getProjectDomain.mockResolvedValue({ name: "example.com", verified: true })
     h.vercel.getDomainConfig.mockResolvedValue({ misconfigured: false })
     const res = await verifyDomain(new Request("http://x", { method: "POST" }), verifyCtx)
-    expect((await res.json()).domain.status).toBe("active")
+    const json = await res.json()
+    expect(json.domain.status).toBe("active")
+    // Active but https not loading yet → "securing", no live email.
+    expect(json.domain.https_ok).toBe(false)
+    expect(h.https.notifyWebsiteLiveOnce).not.toHaveBeenCalled()
+  })
+
+  test("active + https loads → live, the website-live email is sent once", async () => {
+    h.vercel.getProjectDomain.mockResolvedValue({ name: "example.com", verified: true })
+    h.vercel.getDomainConfig.mockResolvedValue({ misconfigured: false })
+    h.https.checkHttps.mockResolvedValue({ ok: true })
+    const json = await (await verifyDomain(new Request("http://x", { method: "POST" }), verifyCtx)).json()
+    expect(json.domain.https_ok).toBe(true)
+    expect(h.https.notifyWebsiteLiveOnce).toHaveBeenCalledWith("org-1", "dom-1", "example.com")
+  })
+
+  test("pending domains never check https or send the live email", async () => {
+    h.vercel.getProjectDomain.mockResolvedValue({ name: "example.com", verified: true })
+    h.vercel.getDomainConfig.mockResolvedValue({ misconfigured: true })
+    await verifyDomain(new Request("http://x", { method: "POST" }), verifyCtx)
+    expect(h.https.checkHttps).not.toHaveBeenCalled()
+    expect(h.https.notifyWebsiteLiveOnce).not.toHaveBeenCalled()
   })
 
   test("config check failing → pending, never active", async () => {

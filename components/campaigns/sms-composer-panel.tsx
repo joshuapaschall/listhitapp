@@ -207,7 +207,7 @@ export default function SmsComposerPanel({ message, onMessageChange, buyerIds, r
       </div>
       <div className="flex items-center gap-3 rounded-md border p-3">
         <Switch checked={hasStopFooter} onCheckedChange={toggleStopFooter} />
-        <span className="text-sm">Append &apos;Reply STOP to opt out&apos; (10DLC compliance)</span>
+        <span className="text-sm">Append &apos;Reply STOP to opt out&apos; (required by carriers)</span>
       </div>
     </div>
     <div className="md:col-span-5"><SmsPhonePreview message={message} buyerIds={buyerIds} mediaUrls={mediaUrls} shortenActive={shortenActive} shortDomain={shortConfig.domain} slugLength={shortConfig.slugLength} /></div>

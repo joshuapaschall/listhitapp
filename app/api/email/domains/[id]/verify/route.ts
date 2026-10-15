@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/permissions/server";
 import { requireOrgContext } from "@/lib/auth/org-context";
 import { buildDnsRecords, deriveDomainStatus, getDomainIdentityStatus } from "@/lib/ses-identities";
+import { notifyEmailReadyOnce } from "@/lib/onboarding/notify-connected";
 
 export const dynamic = "force-dynamic";
 
@@ -18,5 +19,9 @@ export async function POST(_: Request, { params }: { params: { id: string } }) {
   const status = await getDomainIdentityStatus(existing.domain);
   const { data: domain, error: updateError } = await supabase.from("email_domains").update({ dkim_status: status.dkimStatus, verified_for_sending: status.verifiedForSending, mail_from_status: status.mailFromStatus, status: deriveDomainStatus(status.dkimStatus, status.verifiedForSending), last_checked_at: new Date().toISOString(), dkim_tokens: status.dkimTokens, mail_from_domain: status.mailFromDomain }).eq("org_id", orgId).eq("id", params.id).select("*").maybeSingle();
   if (updateError) return NextResponse.json({ ok: false, error: updateError.message }, { status: 500 });
+  // "Your email sending is set up" — once, the first time it verifies.
+  if (domain.status === "verified" && !domain.ready_notified_at) {
+    if (await notifyEmailReadyOnce(orgId, domain.id, domain.domain)) domain.ready_notified_at = new Date().toISOString();
+  }
   return NextResponse.json({ ok: true, domain: { ...domain, dns_records: buildDnsRecords(domain.domain, domain.dkim_tokens || [], domain.ses_region) } });
 }
