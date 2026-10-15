@@ -32,24 +32,49 @@ const VOICE_NOT_READY_MESSAGE = "Calling isn't set up for your account yet.";
 //
 // Exported (and parameterized on fetch/sleep/cancellation) so it can be unit-tested
 // without standing up a full CallProvider render harness.
-// The last provider this browser session committed to. Only an org the endpoint
-// has already identified as the Telnyx owner org may fall back to Telnyx when the
-// endpoint keeps failing; every other org stays "blocked".
-const VOICE_PROVIDER_SESSION_KEY = "listhit:voiceProvider";
+// The last provider this browser session committed to, per signed-in user. Only
+// a user the endpoint has already identified as on the Telnyx owner org may fall
+// back to Telnyx when the endpoint keeps failing; every other user stays
+// "blocked". Keyed by user id (and cleared on sign-out) so switching accounts in
+// one tab never inherits the previous account's provider.
+const VOICE_PROVIDER_KEY_PREFIX = "listhit.voiceProvider.";
+// Pre-2C.1 unkeyed entry; never read, only cleared.
+const LEGACY_VOICE_PROVIDER_KEY = "listhit:voiceProvider";
 
-function readSessionProvider(): string | null {
+export function voiceProviderKey(userId: string): string {
+  return `${VOICE_PROVIDER_KEY_PREFIX}${userId}`;
+}
+
+function readSessionProvider(userId: string | null | undefined): string | null {
+  if (!userId) return null;
   try {
-    return window.sessionStorage.getItem(VOICE_PROVIDER_SESSION_KEY);
+    return window.sessionStorage.getItem(voiceProviderKey(userId));
   } catch {
     return null;
   }
 }
 
-function writeSessionProvider(provider: VoiceProvider) {
+function writeSessionProvider(userId: string | null | undefined, provider: VoiceProvider) {
+  if (!userId) return;
   try {
-    window.sessionStorage.setItem(VOICE_PROVIDER_SESSION_KEY, provider);
+    window.sessionStorage.setItem(voiceProviderKey(userId), provider);
   } catch {
     // Storage unavailable — the fallback just stays conservative ("blocked").
+  }
+}
+
+// Drop every cached provider (all users). Called on sign-out.
+export function clearVoiceProviderCache() {
+  try {
+    const store = window.sessionStorage;
+    const keys: string[] = [];
+    for (let i = 0; i < store.length; i += 1) {
+      const key = store.key(i);
+      if (key && (key.startsWith(VOICE_PROVIDER_KEY_PREFIX) || key === LEGACY_VOICE_PROVIDER_KEY)) keys.push(key);
+    }
+    for (const key of keys) store.removeItem(key);
+  } catch {
+    // Storage unavailable — nothing cached to clear.
   }
 }
 
@@ -59,12 +84,15 @@ export async function resolveVoiceProviderWithRetry(
     maxAttempts?: number;
     sleep?: (ms: number) => Promise<void>;
     isCancelled?: () => boolean;
-    // What the endpoint previously returned this session (defaults to sessionStorage).
+    // The signed-in user; the session cache is read and written under their id.
+    userId?: string | null;
+    // What the endpoint previously returned this session for this user
+    // (defaults to the user's sessionStorage entry).
     previousProvider?: string | null;
   } = {},
 ): Promise<VoiceProvider | null> {
   const maxAttempts = opts.maxAttempts ?? 8;
-  const previous = opts.previousProvider !== undefined ? opts.previousProvider : readSessionProvider();
+  const previous = opts.previousProvider !== undefined ? opts.previousProvider : readSessionProvider(opts.userId);
   const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const isCancelled = opts.isCancelled ?? (() => false);
 
@@ -76,7 +104,7 @@ export async function resolveVoiceProviderWithRetry(
         const json = (await res.json().catch(() => null)) as { provider?: string } | null;
         if (json?.provider === "twilio" || json?.provider === "telnyx" || json?.provider === "blocked") {
           // The only thing we ever commit to: an exact provider on a 200.
-          writeSessionProvider(json.provider);
+          writeSessionProvider(opts.userId, json.provider);
           return json.provider;
         }
         // 200 but unexpected body — inconclusive, retry.
@@ -223,7 +251,14 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      const supabase = supabaseBrowser();
+      const userId = await supabase.auth
+        ?.getSession()
+        .then(({ data }) => data.session?.user?.id ?? null)
+        .catch(() => null);
+      if (cancelled) return;
       const provider = await resolveVoiceProviderWithRetry(undefined, {
+        userId,
         isCancelled: () => cancelled,
       });
       if (!cancelled && provider) setVoiceProvider(provider);
@@ -231,6 +266,15 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // Signing out (from any tab or control) drops every cached provider so the
+  // next account in this tab resolves its own.
+  useEffect(() => {
+    const sub = supabaseBrowser().auth?.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") clearVoiceProviderCache();
+    });
+    return () => sub?.data.subscription.unsubscribe();
   }, []);
 
   useEffect(() => {

@@ -113,6 +113,7 @@ vi.mock("../lib/supabase-browser", () => ({
 vi.mock("@/components/voice/CallProvider", () => ({
   CallProvider: ({ children }: any) => children,
   useCall: () => new Proxy({}, { get: () => () => {} }),
+  clearVoiceProviderCache: () => {},
 }))
 
 vi.mock("@/hooks/use-notifications", () => ({

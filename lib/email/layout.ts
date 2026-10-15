@@ -5,7 +5,10 @@
 //
 // Rules: table layout, inline CSS only, every input escaped (no raw HTML in), a
 // bulletproof button with a VML fallback for Outlook, and colors that stay
-// legible when Gmail/Apple Mail invert them for dark mode.
+// legible when Gmail/Apple Mail invert them for dark mode. The button paints its
+// background twice (color + same-color gradient) because Gmail inverts colors
+// but not background images, and paints its white label as a gradient clipped
+// to the text (Gmail iOS) so it can't be darkened either.
 
 import type { BrandConfig } from "@/lib/email-templates/brand"
 
@@ -113,13 +116,13 @@ function buttonHtml(label: string, url: string, accent: string): string {
   <!--[if mso]>
   <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${href}" style="height:46px;v-text-anchor:middle;width:260px;" arcsize="18%" stroke="f" fillcolor="${accent}">
     <w:anchorlock/>
-    <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:15px;font-weight:bold;">${text}</center>
+    <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:16px;font-weight:bold;">${text}</center>
   </v:roundrect>
   <![endif]-->
   <!--[if !mso]><!-->
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" class="btn-table"><tr>
-    <td class="btn-cell" style="border-radius:8px;background-color:${accent};" bgcolor="${accent}">
-      <a href="${href}" target="_blank" class="btn" style="display:inline-block;padding:13px 24px;font-family:${FONT};font-size:15px;line-height:20px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;background-color:${accent};">${text}</a>
+    <td class="btn-cell" style="border-radius:8px;background-color:${accent};background-image:linear-gradient(${accent},${accent});" bgcolor="${accent}">
+      <a href="${href}" target="_blank" class="btn" style="display:inline-block;padding:13px 24px;font-family:${FONT};font-size:16px;line-height:20px;font-weight:600;color:#FFFFFF;text-decoration:none;border-radius:8px;background-color:${accent};background-image:linear-gradient(${accent},${accent});"><span class="btn-text gm-btn-text" style="color:#FFFFFF;">${text}</span></a>
     </td>
   </tr></table>
   <!--<![endif]-->
@@ -213,6 +216,9 @@ export function renderEmail(input: EmailInput): { html: string; text: string } {
   table { border-collapse:collapse; mso-table-lspace:0; mso-table-rspace:0; }
   img { -ms-interpolation-mode:bicubic; }
   a[x-apple-data-detectors] { color:inherit !important; text-decoration:none !important; }
+  u + .body .gm-btn-text { background-image: linear-gradient(#ffffff,#ffffff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  [data-ogsc] .btn-text { color:#FFFFFF !important; }
+  [data-ogsb] .btn-cell { background-color:${t.accent} !important; }
   @media only screen and (max-width:480px) {
     .container { width:100% !important; }
     .outer { padding:16px 8px !important; }
@@ -225,7 +231,7 @@ export function renderEmail(input: EmailInput): { html: string; text: string } {
   }
 </style>
 </head>
-<body style="margin:0;padding:0;background-color:${PAGE_BG};" bgcolor="${PAGE_BG}">
+<body class="body" style="margin:0;padding:0;background-color:${PAGE_BG};" bgcolor="${PAGE_BG}">
 <div style="display:none;max-height:0;max-width:0;overflow:hidden;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:${PAGE_BG};">${escapeHtml(preheader)}${"&#8203;&nbsp;".repeat(30)}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:${PAGE_BG};" bgcolor="${PAGE_BG}">
 <tr><td align="center" style="padding:32px 16px;" class="outer">

@@ -22,6 +22,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/components/voice/CallProvider", () => ({
   CallProvider: ({ children }: any) => children,
   useCall: () => new Proxy({}, { get: () => () => {} }),
+  clearVoiceProviderCache: () => {},
 }))
 
 // Header consumes useNotifications() (react-query + supabase realtime) — stub it.

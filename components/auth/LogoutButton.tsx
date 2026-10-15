@@ -5,6 +5,7 @@ import type { MouseEvent, ReactNode } from "react"
 import { Loader2 } from "lucide-react"
 
 import { supabaseBrowser } from "@/lib/supabase-browser"
+import { clearVoiceProviderCache } from "@/components/voice/CallProvider"
 import { Button, type ButtonProps } from "@/components/ui/button"
 
 interface LogoutButtonProps extends ButtonProps {
@@ -29,6 +30,8 @@ export function LogoutButton({
       return
     }
 
+    // The dialer's cached voice provider belongs to this account only.
+    clearVoiceProviderCache()
     window.location.href = "/login"
   }
 

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { apiError } from "@/lib/api-error"
 import { formatPhoneE164 } from "@/lib/dedup-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { searchLocalNumbers } from "@/lib/org-twilio/number-search"
 import { getParentAccountClient } from "@/lib/twilio/parent"
 import { requireRegistrationContext } from "../../_shared"
 
@@ -21,11 +22,11 @@ export async function GET(request: Request) {
   let areaCode = (params.get("areaCode") ?? "").trim()
   const contains = (params.get("contains") ?? "").trim()
 
-  if (!areaCode) {
-    const { data: org } = await supabaseAdmin.from("organizations").select("phone").eq("id", ctx.orgId).maybeSingle()
-    const e164 = formatPhoneE164((org as { phone?: string | null } | null)?.phone ?? "")
-    areaCode = e164?.match(/^\+1(\d{3})\d{7}$/)?.[1] ?? ""
-  }
+  // The org's phone/ZIP/state widen the search when the area code has nothing.
+  const { data: org } = await supabaseAdmin.from("organizations").select("phone, zip, state").eq("id", ctx.orgId).maybeSingle()
+  const orgRow = (org ?? {}) as { phone?: string | null; zip?: string | null; state?: string | null }
+  const orgPhone = formatPhoneE164(orgRow.phone ?? "")
+  if (!areaCode) areaCode = orgPhone?.match(/^\+1(\d{3})\d{7}$/)?.[1] ?? ""
   if (!AREA_CODE_RE.test(areaCode)) {
     return NextResponse.json({ error: "Enter a 3-digit area code." }, { status: 400 })
   }
@@ -34,23 +35,24 @@ export async function GET(request: Request) {
   }
 
   try {
-    const results = await getParentAccountClient()
-      .availablePhoneNumbers("US")
-      .local.list({
-        areaCode: Number(areaCode),
-        ...(contains ? { contains } : {}),
-        smsEnabled: true,
-        voiceEnabled: true,
-        limit: 10,
-      })
-    return NextResponse.json(
-      results.map((n) => ({
+    const { results, matchedBy } = await searchLocalNumbers(getParentAccountClient(), {
+      areaCode,
+      contains,
+      nearPhone: orgPhone,
+      postalCode: orgRow.zip ?? null,
+      state: orgRow.state ?? null,
+      limit: 10,
+    })
+    return NextResponse.json({
+      results: results.map((n) => ({
         phoneNumber: n.phoneNumber,
-        friendly: n.friendlyName,
+        friendly: n.friendlyName ?? null,
         locality: n.locality ?? null,
         region: n.region ?? null,
       })),
-    )
+      matchedBy,
+      searchedAreaCode: areaCode,
+    })
   } catch (err) {
     return apiError(err, 502, "Number search is unavailable right now. Try again.")
   }
