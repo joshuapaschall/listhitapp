@@ -49,6 +49,17 @@ describe("renderEmail", () => {
     expect(text).toContain(`Send your first deal: ${url}`)
   })
 
+  test("button survives dark-mode inversion: gradient background, white gradient-clipped label", () => {
+    const { html } = renderEmail({ ...base, button: { label: "Open ListHit", url: "https://app.listhit.io" } })
+    expect(html).toContain(`background-color:${LISTHIT_RED};background-image:linear-gradient(${LISTHIT_RED},${LISTHIT_RED});`)
+    expect(html).toContain('<span class="btn-text gm-btn-text" style="color:#FFFFFF;">Open ListHit</span>')
+    expect(html).toContain("u + .body .gm-btn-text { background-image: linear-gradient(#ffffff,#ffffff);")
+    expect(html).toContain("[data-ogsc] .btn-text { color:#FFFFFF !important; }")
+    expect(html).toContain(`[data-ogsb] .btn-cell { background-color:${LISTHIT_RED} !important; }`)
+    expect(html).toContain('<body class="body"')
+    expect(html).toMatch(/class="btn" style="[^"]*font-size:16px;[^"]*font-weight:600;/)
+  })
+
   test("unsafe URLs never reach an href", () => {
     const { html } = renderEmail({ ...base, button: { label: "Go", url: "javascript:alert(1)" } })
     expect(html).not.toContain("javascript:")

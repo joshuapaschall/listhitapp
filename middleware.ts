@@ -29,6 +29,16 @@ const SESSIONLESS_API_PREFIXES = [
   "/api/unsubscribe",
 ]
 
+// Static files from public/ are never auth-gated: email clients (Gmail's image
+// proxy), Twilio/Telnyx and browsers fetch them without a session. Keep this in
+// sync with the config.matcher lookahead below (which must stay a literal).
+const PUBLIC_ASSET_RE =
+  /^\/(?:brand|email-assets|email-templates|sounds)\/|\.(?:png|jpe?g|gif|svg|webp|ico|mp3|wav|css|js|txt|xml|woff2?)$/i
+
+export function isPublicAssetPath(pathname: string): boolean {
+  return PUBLIC_ASSET_RE.test(pathname)
+}
+
 export function isSessionlessApiPath(pathname: string): boolean {
   return SESSIONLESS_API_PREFIXES.some((prefix) => pathname.startsWith(prefix))
 }
@@ -193,7 +203,7 @@ export async function middleware(req: NextRequest) {
     return isSessionlessApiPath(pathname) ? NextResponse.next() : refreshApiSession(req)
   }
 
-  if (isAllowedPath) {
+  if (isAllowedPath || isPublicAssetPath(pathname)) {
     return NextResponse.next()
   }
 
@@ -211,6 +221,6 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)",
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|brand/|email-assets/|email-templates/|sounds/|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|mp3|wav|css|js|txt|xml|woff2?)$).*)",
   ],
 }

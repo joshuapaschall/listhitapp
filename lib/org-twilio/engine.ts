@@ -26,6 +26,7 @@ import {
   issuesHash,
   type CustomerIssue,
 } from "@/lib/org-twilio/issues"
+import { searchLocalNumbers } from "@/lib/org-twilio/number-search"
 import { notifyActionRequired, notifyLive, notifyPlatformAdminsAwaitingApproval } from "@/lib/org-twilio/notify"
 import {
   ensureSoleProprietorDrafts,
@@ -531,14 +532,13 @@ async function ensureNumber(client: Twilio, orgId: string, row: OrgTwilio, mgSid
 
   if (!bought) {
     const areaCode = (row.desired_area_code ?? "").trim() || areaCodeOf(desired) || null
-    const search = { smsEnabled: true, voiceEnabled: true, limit: 1 }
-    let candidates = areaCode
-      ? await client.availablePhoneNumbers("US").local.list({ ...search, areaCode: Number(areaCode) })
-      : []
-    const zip = String(data.org?.zip ?? "").trim()
-    if (!candidates.length && zip) {
-      candidates = await client.availablePhoneNumbers("US").local.list({ ...search, inPostalCode: zip })
-    }
+    const { results: candidates } = await searchLocalNumbers(client, {
+      areaCode,
+      nearPhone: formatPhoneE164(String(data.org?.phone ?? "")),
+      postalCode: String(data.org?.zip ?? "").trim(),
+      state: String(data.org?.state ?? "").trim(),
+      limit: 1,
+    })
     if (!candidates.length) throw Object.assign(new Error("No available numbers for the requested area."), { status: 503 })
     bought = await buy(candidates[0].phoneNumber)
   }

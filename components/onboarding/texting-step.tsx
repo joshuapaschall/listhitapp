@@ -394,6 +394,7 @@ function NumberScreen({
   const [picked, setPicked] = useState<string | null>(null)
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState("")
+  const [searchNote, setSearchNote] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [issues, setIssues] = useState<CustomerIssue[]>([])
   const [submitError, setSubmitError] = useState("")
@@ -405,16 +406,20 @@ function NumberScreen({
     }
     setSearching(true)
     setSearchError("")
+    setSearchNote("")
     try {
       const qs = new URLSearchParams({ areaCode, ...(contains.trim() ? { contains: contains.trim() } : {}) })
       const res = await fetch(`/api/org-twilio/numbers/available?${qs}`)
       const body = await res.json().catch(() => null)
       if (!res.ok) throw new Error(body?.error || "Number search isn't available right now. Try again.")
-      const list = (Array.isArray(body) ? body : []) as Available[]
+      const list = (Array.isArray(body?.results) ? body.results : []) as Available[]
       setResults(list)
       setPicked(list[0]?.phoneNumber ?? null)
       setShowAll(false)
-      if (!list.length) setSearchError("No numbers match. Try a nearby area code or clear the digits.")
+      if (!list.length) setSearchError("Twilio has no numbers in this area right now. Try a nearby area code.")
+      else if (body?.matchedBy && body.matchedBy !== "area_code") {
+        setSearchNote(`No ${body.searchedAreaCode || areaCode} numbers are free right now. These are the closest available in your area.`)
+      }
     } catch (e: any) {
       setSearchError(e?.message || "Number search isn't available right now. Try again.")
     } finally {
@@ -483,6 +488,7 @@ function NumberScreen({
           </Button>
         </div>
         {searchError ? <p className="text-sm text-destructive">{searchError}</p> : null}
+        {searchNote ? <p className="text-sm text-muted-foreground">{searchNote}</p> : null}
 
         {visible.length ? (
           <div role="radiogroup" aria-label="Available numbers" className="space-y-2">

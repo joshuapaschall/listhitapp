@@ -63,9 +63,11 @@ describe("GET /api/org-twilio/numbers/available", () => {
     expect(h.list).toHaveBeenCalledWith(
       expect.objectContaining({ areaCode: 512, contains: "7777", smsEnabled: true, voiceEnabled: true, limit: 10 }),
     )
-    expect(await res.json()).toEqual([
-      { phoneNumber: "+14045557777", friendly: "(404) 555-7777", locality: "Atlanta", region: "GA" },
-    ])
+    expect(await res.json()).toEqual({
+      results: [{ phoneNumber: "+14045557777", friendly: "(404) 555-7777", locality: "Atlanta", region: "GA" }],
+      matchedBy: "area_code",
+      searchedAreaCode: "512",
+    })
   })
 
   test("the default area code comes from the org's phone", async () => {
