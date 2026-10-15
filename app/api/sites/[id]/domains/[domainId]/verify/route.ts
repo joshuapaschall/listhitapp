@@ -1,7 +1,14 @@
 import { NextResponse } from "next/server"
 import { requireOrgContext } from "@/lib/auth/org-context"
 import { apiError } from "@/lib/api-error"
-import { dnsRecordsFor, getProjectDomain, verifyProjectDomain, vercelConfigured } from "@/lib/vercel/domains"
+import {
+  dnsRecordsFor,
+  domainStatusFrom,
+  getDomainConfig,
+  getProjectDomain,
+  verifyProjectDomain,
+  vercelConfigured,
+} from "@/lib/vercel/domains"
 
 export const dynamic = "force-dynamic"
 
@@ -35,11 +42,14 @@ export async function POST(_request: Request, context: RouteContext) {
     await verifyProjectDomain(row.domain).catch(() => null)
     const result = await getProjectDomain(row.domain)
     const verified = Boolean(result.verified)
+    // `verified` only proves ownership; active also needs misconfigured === false
+    // (DNS really points at Vercel). A failed config check leaves it pending.
+    const config = verified ? await getDomainConfig(row.domain).catch(() => null) : null
 
     const { data: updated, error } = await supabase
       .from("site_domains")
       .update({
-        status: verified ? "active" : "pending",
+        status: domainStatusFrom(verified, config),
         verification: result.verification ?? row.verification,
         updated_at: new Date().toISOString(),
       })

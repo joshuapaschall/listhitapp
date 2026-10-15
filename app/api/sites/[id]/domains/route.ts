@@ -1,7 +1,15 @@
 import { NextResponse } from "next/server"
 import { requireOrgContext } from "@/lib/auth/org-context"
 import { apiError } from "@/lib/api-error"
-import { addProjectDomain, dnsRecordsFor, vercelConfigured } from "@/lib/vercel/domains"
+import {
+  addProjectDomain,
+  addProjectRedirectDomain,
+  dnsRecordsFor,
+  domainStatusFrom,
+  getDomainConfig,
+  isApex,
+  vercelConfigured,
+} from "@/lib/vercel/domains"
 
 export const dynamic = "force-dynamic"
 
@@ -104,6 +112,21 @@ export async function POST(request: Request, context: RouteContext) {
       )
     }
 
+    // An apex also serves www.<apex> as a 308 redirect to it. Non-fatal.
+    if (isApex(domain)) {
+      await addProjectRedirectDomain(`www.${domain}`, domain).catch((e: any) => {
+        console.error("[site-domains] www redirect add failed", { domain, error: e?.message })
+      })
+    }
+
+    // Ownership `verified` alone isn't live — DNS must also point at Vercel.
+    const config = result.verified
+      ? await getDomainConfig(domain).catch((e: any) => {
+          console.error("[site-domains] domain config check failed", { domain, error: e?.message })
+          return null
+        })
+      : null
+
     const { data: inserted, error } = await supabase
       .from("site_domains")
       .insert({
@@ -113,7 +136,8 @@ export async function POST(request: Request, context: RouteContext) {
         type: "custom",
         vercel_domain_id: result.name,
         verification: result.verification ?? null,
-        status: result.verified ? "active" : "pending",
+        // misconfigured must be false too: verified only proves ownership.
+        status: domainStatusFrom(Boolean(result.verified), config),
       })
       .select("*")
       .single()

@@ -86,6 +86,39 @@ export async function verifyProjectDomain(name: string): Promise<VercelDomainRes
   })
 }
 
+// Adds `name` to the project as a permanent redirect to `redirectTo` (used for
+// www.<apex> → <apex>). Already attached counts as success.
+export async function addProjectRedirectDomain(name: string, redirectTo: string): Promise<void> {
+  try {
+    await vercelFetch(`/v10/projects/${projectId()}/domains${teamQuery()}`, {
+      method: "POST",
+      body: JSON.stringify({ name, redirect: redirectTo, redirectStatusCode: 308 }),
+    })
+  } catch (e: any) {
+    if (e?.status !== 409 && e?.code !== "domain_already_exists") throw e
+  }
+}
+
+// `verified` on a project domain only proves ownership; DNS can still point
+// elsewhere. The domain config reports whether DNS actually reaches Vercel.
+export interface VercelDomainConfig {
+  misconfigured: boolean
+  configuredBy?: string | null
+}
+
+export async function getDomainConfig(name: string): Promise<VercelDomainConfig> {
+  const json = await vercelFetch(`/v6/domains/${enc(name)}/config${teamQuery()}`, { method: "GET" })
+  return {
+    misconfigured: typeof json?.misconfigured === "boolean" ? json.misconfigured : true,
+    configuredBy: json?.configuredBy ?? null,
+  }
+}
+
+// Live only when ownership is verified AND DNS points at Vercel.
+export function domainStatusFrom(verified: boolean, config: VercelDomainConfig | null): "active" | "pending" {
+  return verified && config?.misconfigured === false ? "active" : "pending"
+}
+
 export async function removeProjectDomain(name: string): Promise<void> {
   // 404 is fine on delete — treat "already gone" as success.
   try {
@@ -105,11 +138,12 @@ export interface DnsRecord {
   value: string
 }
 
-function isApex(name: string): boolean {
+export function isApex(name: string): boolean {
   return name.split(".").filter(Boolean).length <= 2
 }
 
-// Routing record (points the host at Vercel) + any Vercel ownership TXT records.
+// Routing records (point the host at Vercel; an apex also gets www, which is
+// redirected to the apex) + any Vercel ownership TXT records.
 export function dnsRecordsFor(
   name: string,
   verification?: VercelVerification[] | null,
@@ -117,6 +151,7 @@ export function dnsRecordsFor(
   const records: DnsRecord[] = []
   if (isApex(name)) {
     records.push({ kind: "routing", type: "A", host: "@", value: "76.76.21.21" })
+    records.push({ kind: "routing", type: "CNAME", host: "www", value: "cname.vercel-dns.com" })
   } else {
     records.push({
       kind: "routing",

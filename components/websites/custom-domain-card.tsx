@@ -26,6 +26,10 @@ function registrable(d: string): string {
   return p.length <= 2 ? d : p.slice(-2).join(".")
 }
 
+function isApexDomain(d: string): boolean {
+  return d.split(".").filter(Boolean).length <= 2
+}
+
 export function CustomDomainCard({
   siteId,
   slug,
@@ -46,6 +50,7 @@ export function CustomDomainCard({
   const [addingAnother, setAddingAnother] = useState(false)
   const domainsRef = useRef<DomainRow[]>([])
   domainsRef.current = domains
+  const recheckedRef = useRef(false)
 
   const load = useCallback(async () => {
     try {
@@ -90,6 +95,14 @@ export function CustomDomainCard({
     },
     [siteId],
   )
+
+  // Re-check every domain once on mount — active ones too, so a row marked live
+  // before DNS was actually checked gets corrected.
+  useEffect(() => {
+    if (loading || recheckedRef.current) return
+    recheckedRef.current = true
+    domainsRef.current.forEach((d) => verify(d.id, false))
+  }, [loading, verify])
 
   useEffect(() => {
     const iv = setInterval(() => {
@@ -217,6 +230,57 @@ export function CustomDomainCard({
           </button>
         </div>
       </div>
+    )
+  }
+
+  function copyChip(text: string) {
+    const isCopied = copied === text
+    return (
+      <span className="mx-0.5 inline-flex items-center gap-1 rounded border bg-background px-1.5 py-0.5 align-middle">
+        <span className="font-mono text-xs font-semibold text-foreground">{text}</span>
+        <button
+          type="button"
+          onClick={() => copy(text)}
+          aria-label={`Copy ${text}`}
+          className={isCopied ? "text-emerald-600" : "text-muted-foreground hover:text-brand"}
+        >
+          {isCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+        </button>
+      </span>
+    )
+  }
+
+  function godaddySteps(url: string) {
+    const b = (t: string) => <span className="font-semibold text-foreground">{t}</span>
+    return (
+      <ol className="mb-3 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-muted-foreground">
+        <li>
+          Open{" "}
+          <a href={url} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand hover:underline">
+            GoDaddy
+          </a>{" "}
+          → {b("My Products")} → next to your domain click {b("DNS")}.
+        </li>
+        <li>
+          Under {b("DNS Records")}, look for an existing {b("A")} record with Name {b("@")} (often &ldquo;Parked&rdquo;).
+          If there is one, click the pencil to {b("edit")} it. Otherwise click {b("Add New Record")}.
+        </li>
+        <li>
+          Type {copyChip("A")}, Name {copyChip("@")}, Value {copyChip("76.76.21.21")}, TTL {b("1/2 Hour")}. Click{" "}
+          {b("Save")}.
+        </li>
+        <li>
+          If a {b("CNAME")} record named {b("www")} exists, edit it. Otherwise {b("Add New Record")}: Type{" "}
+          {copyChip("CNAME")}, Name {copyChip("www")}, Value {copyChip("cname.vercel-dns.com")}, TTL {b("1/2 Hour")}.
+          Click {b("Save")}.
+        </li>
+        <li>
+          Check the {b("Forwarding")} tab and make sure domain forwarding is {b("off")}.
+        </li>
+        <li>
+          Come back here. We check automatically every few seconds; most changes show up within 5–30 minutes.
+        </li>
+      </ol>
     )
   }
 
@@ -360,10 +424,15 @@ export function CustomDomainCard({
                 </div>
 
                 <div>
-                  <div className="mb-2 text-sm font-semibold">Add this record</div>
-                  <p className="mb-2.5 text-sm text-muted-foreground">
-                    In your DNS settings, add a new record with these exact values:
-                  </p>
+                  <div className="mb-2 text-sm font-semibold">{records.length > 1 ? "Add these records" : "Add this record"}</div>
+                  {reg === "godaddy" && isApexDomain(d.domain) ? (
+                    godaddySteps(REGISTRARS.find((r) => r.key === "godaddy")!.url)
+                  ) : (
+                    <p className="mb-2.5 text-sm text-muted-foreground">
+                      In your DNS settings, add {records.length > 1 ? "new records" : "a new record"} with these exact
+                      values:
+                    </p>
+                  )}
                   <div className="space-y-2.5 rounded-xl border border-brand/30 bg-brand/5 p-3.5">
                     {records.map((rec, i) => (
                       <div key={i} className="space-y-2.5">
@@ -399,6 +468,9 @@ export function CustomDomainCard({
                       </span>
                     </div>
                   </div>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Don&rsquo;t touch your MX or TXT records. Your email keeps working.
+                  </p>
 
                   <details className="mt-2.5">
                     <summary className="cursor-pointer text-xs font-semibold text-muted-foreground hover:text-foreground">
